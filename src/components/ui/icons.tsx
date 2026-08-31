@@ -1,0 +1,72 @@
+/**
+ * Icon set for the product app (`/app`).
+ *
+ * A plain, curated re-export of `lucide-react`: icons are static, with no
+ * hover motion. Keeping the barrel (rather than importing `lucide-react` at
+ * each call site) means the app's icon vocabulary is visible in one place, and
+ * swapping the set — or reintroducing motion — stays a single-file change
+ * instead of touching ~37 components.
+ *
+ * `src/components/landing/**`, `ui/NavigationMenu.tsx` and `ui/Drawer.tsx`
+ * import `lucide-react` directly and are unaffected.
+ */
+export {
+  Archive,
+  ArrowLeft,
+  ArrowUp,
+  ArrowUpRight,
+  Brain,
+  Calendar,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Circle,
+  CircleHelp,
+  Clock,
+  Copy,
+  Eye,
+  EyeOff,
+  File,
+  FileStack,
+  FileText,
+  Folder,
+  FolderClosed,
+  FolderInput,
+  FolderMinus,
+  Info,
+  Lightbulb,
+  ListChecks,
+  Loader2,
+  Maximize2,
+  Megaphone,
+  MessagesSquare,
+  Mic,
+  MoreHorizontal,
+  NotebookText,
+  PanelLeft,
+  Paperclip,
+  Pause,
+  Pencil,
+  Pin,
+  PinOff,
+  Play,
+  Plug,
+  PlugZap,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings,
+  Settings2,
+  Share2,
+  SlidersHorizontal,
+  Square,
+  SquarePen,
+  Sun,
+  Telescope,
+  ThumbsDown,
+  ThumbsUp,
+  Trash2,
+  User,
+  Wand2,
+  X,
+} from "lucide-react";

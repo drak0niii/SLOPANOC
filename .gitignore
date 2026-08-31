@@ -1,0 +1,12 @@
+node_modules
+dist
+dist-ssr
+*.local
+*.tsbuildinfo
+.DS_Store
+
+# Local / secrets
+.env
+.env.*
+!.env.example
+.claude/

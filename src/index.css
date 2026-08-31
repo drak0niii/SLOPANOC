@@ -1,0 +1,447 @@
+@import "tailwindcss";
+
+:root {
+  --app-bg: #fafaf9;
+  --app-surface: #ffffff;
+  --app-surface-raised: #ffffff;
+  --app-surface-hover: #f2f1ef;
+  --app-sidebar: #f7f6f4;
+  --app-border-subtle: #e8e6e2;
+  --app-text-primary: #1c1b1a;
+  --app-text-secondary: #57534e;
+  --app-text-tertiary: #8a8580;
+  --app-inverse-bg: #1c1b1a;
+  --app-inverse-text: #fafaf9;
+  --app-accent: #5b55d6;
+  --app-accent-glow: rgba(91, 85, 214, 0.45);
+  --app-on-accent: #ffffff;
+  --app-success: #1f8a5f;
+  --app-warning: #b7791f;
+  --app-danger: #c0392b;
+  --app-info: #2f6feb;
+  --app-automation: #7c3aed;
+  --app-focus-glow: rgba(91, 85, 214, 0.14);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --app-bg: #17161a;
+    --app-surface: #1d1c21;
+    --app-surface-raised: #24232a;
+    --app-surface-hover: #2b2a32;
+    --app-sidebar: #131217;
+    --app-border-subtle: #2e2d34;
+    --app-text-primary: #f2f1ef;
+    --app-text-secondary: #b4b0ac;
+    --app-text-tertiary: #8d8983;
+    --app-inverse-bg: #f2f1ef;
+    --app-inverse-text: #1c1b1a;
+    --app-accent: #8c86ff;
+    --app-accent-glow: rgba(140, 134, 255, 0.55);
+    --app-on-accent: #131217;
+    --app-success: #3fbe8a;
+    --app-warning: #e0a93a;
+    --app-danger: #e2564a;
+    --app-info: #6ea8ff;
+    --app-automation: #c4b5fd;
+    --app-focus-glow: rgba(140, 134, 255, 0.18);
+  }
+}
+
+@theme {
+  --color-bg: var(--app-bg);
+  --color-surface: var(--app-surface);
+  --color-surface-raised: var(--app-surface-raised);
+  --color-surface-hover: var(--app-surface-hover);
+  --color-sidebar: var(--app-sidebar);
+  --color-subtle: var(--app-border-subtle);
+  --color-primary: var(--app-text-primary);
+  --color-secondary: var(--app-text-secondary);
+  --color-tertiary: var(--app-text-tertiary);
+  --color-inverse: var(--app-inverse-bg);
+  --color-on-inverse: var(--app-inverse-text);
+  --color-accent: var(--app-accent);
+  --color-on-accent: var(--app-on-accent);
+  --color-success: var(--app-success);
+  --color-warning: var(--app-warning);
+  --color-danger: var(--app-danger);
+  --color-info: var(--app-info);
+  --color-automation: var(--app-automation);
+
+  /* Ericsson Hilda is the corporate typeface, referenced from the reader's
+     locally installed fonts rather than bundled — it is licensed, so shipping
+     the .ttf files in this repo would redistribute it. Anyone without it
+     installed falls through to the rest of the stack and the app still looks
+     correct, just not on-brand.
+     Installed weights: 300 Light, 400 Regular, 500 Medium, 700 Bold,
+     800 ExtraBold (each with an italic). There is no 600, so `font-semibold`
+     resolves to Bold. */
+  --font-sans:
+    "Ericsson Hilda", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+
+  --ease-premium: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Crisper, iOS-style travel curve for controls that physically move a
+     distance (the thinking-effort knob). Leaves the start decisively and
+     settles hard at the end with no overshoot — a knob that overshot would
+     visibly push past its track. */
+  --ease-slide: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Magnetic snap for the effort knob: hangs at the start, then accelerates
+     hard into the target so the stop reads as pulling the knob towards it,
+     rather than the knob merely gliding to a halt. */
+  --ease-magnet: cubic-bezier(0.7, 0, 0.2, 1);
+
+  /* Used by the landing hero's headline size step between the base and `sm:`
+     breakpoints; not used elsewhere in the app. */
+  --breakpoint-xs: 400px;
+}
+
+@layer base {
+  html {
+    color-scheme: light dark;
+  }
+
+  body {
+    @apply bg-bg text-primary antialiased;
+    font-family: var(--font-sans);
+  }
+
+  * {
+    scrollbar-color: var(--app-text-tertiary) transparent;
+    scrollbar-width: thin;
+  }
+}
+
+@layer utilities {
+  .anim-pop {
+    animation: anim-pop-in 120ms var(--ease-premium);
+  }
+
+  .anim-pop-in {
+    animation: anim-pop-in 150ms var(--ease-premium) both;
+  }
+
+  .anim-pop-out {
+    animation: anim-pop-out 110ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  .anim-fade {
+    animation: anim-fade-in 180ms var(--ease-premium) both;
+  }
+
+  .anim-effort-in {
+    animation: anim-effort-in 200ms var(--ease-premium) both;
+  }
+
+  .anim-effort-out {
+    animation: anim-effort-out 120ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  /* Reveals a truncated label on hover: hold, slide to the end, hold so it
+     can be read, slide back. Distance and duration are measured per label
+     and passed in as custom properties (see ScrollingText). */
+  @media (prefers-reduced-motion: no-preference) {
+    .anim-scroll-text {
+      animation: anim-scroll-text var(--scroll-duration, 2s) ease-in-out;
+    }
+  }
+
+  .anim-breathe-dot {
+    animation: anim-breathe-dot 1.4s ease-in-out infinite;
+  }
+
+  .anim-overlay-in {
+    animation: anim-overlay-in 160ms ease-out both;
+  }
+
+  .anim-overlay-out {
+    animation: anim-overlay-out 120ms ease-in both;
+  }
+
+  .anim-drawer-in {
+    animation: anim-drawer-in 220ms var(--ease-premium) both;
+  }
+
+  .anim-drawer-out {
+    animation: anim-drawer-out 160ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  /* Restrained "AI is active" cue: a faint breathing border/glow around the
+     surface currently doing work (composer while a response is generating).
+     Mounted only while activity is in flight, so it never runs idle. The
+     base rule below is a static (non-animated) accent ring — it's what
+     reduced-motion users see for the whole duration of the activity, so the
+     state stays legible without any motion. Motion is layered on top only
+     when the user hasn't asked to reduce it. */
+  .anim-intelligence-pulse {
+    box-shadow:
+      0 0 0 1px var(--app-accent-glow),
+      0 0 14px 1px var(--app-focus-glow);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .anim-intelligence-pulse {
+      animation: anim-intelligence-pulse 2.2s var(--ease-premium) infinite;
+    }
+  }
+
+  /* Sidebar labels that appear once the rail has started expanding — fades
+     in slightly after the width transition begins so text never appears to
+     wrap/flash before there is room for it. */
+  .anim-label-in {
+    animation: anim-fade-in 200ms var(--ease-premium) both;
+    animation-delay: 60ms;
+  }
+
+  .anim-check-in {
+    animation: anim-check-in 220ms var(--ease-premium) both;
+  }
+
+  /* Mega menu / nav dropdown panels: small fade + vertical settle, matching
+     the same premium easing as the rest of the overlay system. */
+  .anim-mega-in {
+    animation: anim-mega-in 200ms var(--ease-premium) both;
+  }
+
+  .anim-mega-out {
+    animation: anim-mega-out 150ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  /* "You're already here" nudge — played on the composer when New chat is
+     clicked while already on a fresh, empty chat. Reduced-motion users still
+     get the glow (no shake) as a static cue for the same brief window; the
+     class itself is added/removed by PromptComposer via a timeout. */
+  .anim-nudge {
+    box-shadow:
+      0 0 0 1px var(--app-accent-glow),
+      0 0 14px 1px var(--app-focus-glow);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .anim-nudge {
+      animation:
+        anim-nudge 480ms var(--ease-premium),
+        anim-nudge-shake 480ms var(--ease-premium);
+    }
+  }
+}
+
+@keyframes anim-mega-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes anim-mega-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes anim-check-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes anim-intelligence-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px var(--app-border-subtle),
+      0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px var(--app-accent-glow),
+      0 0 20px 1px var(--app-focus-glow);
+  }
+}
+
+@keyframes anim-nudge {
+  /* Glow rises once, holds steady, fades once — no oscillation/pulsing. */
+  0% {
+    box-shadow:
+      0 0 0 1px var(--app-border-subtle),
+      0 0 0 0 transparent;
+  }
+  35%,
+  65% {
+    box-shadow:
+      0 0 0 1px var(--app-accent-glow),
+      0 0 12px 1px var(--app-focus-glow);
+  }
+  100% {
+    box-shadow:
+      0 0 0 1px var(--app-border-subtle),
+      0 0 0 0 transparent;
+  }
+}
+
+@keyframes anim-nudge-shake {
+  /* Very small, quickly-decaying tremble. */
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-1.5px);
+  }
+  40% {
+    transform: translateX(1.5px);
+  }
+  60% {
+    transform: translateX(-0.75px);
+  }
+  80% {
+    transform: translateX(0.75px);
+  }
+}
+
+@keyframes anim-scroll-text {
+  0%,
+  10% {
+    transform: translateX(0);
+  }
+  55%,
+  75% {
+    transform: translateX(calc(-1 * var(--scroll-distance, 0px)));
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes anim-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes anim-drawer-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes anim-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes anim-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes anim-breathe-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@keyframes anim-effort-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes anim-effort-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@keyframes anim-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes anim-pop-out {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+}
+
+@keyframes anim-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
