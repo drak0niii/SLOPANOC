@@ -1,3 +1,5 @@
+import type { PendingActionDTO, PendingSelectionDTO, SourceReferenceDTO, TraceStepSafeMetadata } from "./api/types";
+
 /** Stops on one axis, ordered from fastest to most thorough. The slider
  * derives its geometry from this order, so adding a stop is a one-line change
  * here plus a label. */
@@ -60,7 +62,7 @@ export interface Citation {
   scopeLabel: string;
 }
 
-export type MessageStatus = "pending" | "complete";
+export type MessageStatus = "pending" | "streaming" | "complete" | "error";
 
 export type GroundingResult = "insufficient";
 
@@ -132,6 +134,11 @@ export interface Message {
   createdAt: number;
   /** Optional speaker name shown above the message. Not used by current mock content. */
   speakerLabel?: string;
+  /** Present only when status === "error" (a real backend run failure, or
+   * a transport/network failure before any backend error event existed).
+   * Already sanitized/safe to render directly — falls back to a generic
+   * string in the renderer if absent. */
+  errorMessage?: string;
 }
 
 /** Identifies which deterministic executive-demo script a chat is following. */
@@ -167,6 +174,222 @@ export interface Chat {
   /** Set when this chat is owned by a scheduled task. Owned chats are listed
    * under Tasks in the sidebar, never under Chats — one task, one row. */
   scheduledTaskId?: string;
+  /** Phase 4F — set once, the first time a real backend send happens for
+   * this chat (general workspace scope only). Never restored from
+   * history/localStorage; a brand-new chat always gets a brand-new
+   * backend session on its own first send, and Project-scoped chats never
+   * set this at all (they stay on the mock system). */
+  backendSessionId?: string;
+  /** Phase 4F — present ONLY while a real backend run is in flight for
+   * this chat; its mere presence IS the "is this chat currently running a
+   * backend turn" signal. Cleared (undefined) on run.completed or a fatal
+   * transport error. */
+  run?: ChatRunState;
+  /** Phase 4F — the most recent action.pending event's DTO, if any.
+   * Durable across run.completed (a pending action is NOT cleared just
+   * because a new run starts) — only ever replaced by a newer
+   * action.pending event. Phase 4G hardening: this remains useful as
+   * *authoritative current backend state* (which proposal, if any, is
+   * presently approvable) — used to gate whether an individual
+   * `actionCards` entry is still actionable — but it is deliberately NOT
+   * used for transcript placement/rendering. See `actionCards` below. */
+  pendingAction?: PendingActionDTO | null;
+  /** Phase 4G — which message currently owns the chat's live
+   * `pendingAction` (i.e. `actionCards[pendingActionMessageId].proposalId
+   * === pendingAction.proposal_id`). Reset together with `pendingAction`
+   * on a genuinely new proposal. Not used for rendering (see
+   * `actionCards`) — only to resolve which card an approve/reject success
+   * response should update. */
+  pendingActionMessageId?: string;
+  /** Phase 4G hardening pass — one action-card record per assistant
+   * message that ever emitted an action.pending event, keyed by that
+   * message's id. This is what transcript rendering reads from: an
+   * action card belongs permanently to the message/turn that created it
+   * and must never move, even after newer turns/proposals arrive. Each
+   * record freezes its own `pendingAction` snapshot and lifecycle
+   * (`approvalCard`) state; only the record whose `proposalId` still
+   * matches `pendingAction.proposal_id` is live/mutable going forward —
+   * older records become read-only history once superseded. See
+   * src/lib/approvalCard.ts's `deriveApprovalCardView`. */
+  actionCards?: Record<string, ActionCardRecord>;
+  /** Interaction-capability extension — the most recent selection.pending
+   * event's DTO, if any, mirroring `pendingAction` exactly. Cleared
+   * (unlike `pendingAction`) whenever a later run completes without
+   * re-affirming this SAME selection — see BACKEND_RUN_COMPLETED in
+   * AppState.tsx. A Teams disambiguation is only meaningful to act on
+   * while the conversation hasn't already moved past it (e.g. via an
+   * exact-match resolution elsewhere — backend supersedes it
+   * server-side too, see supersede_active_selection). */
+  pendingSelection?: PendingSelectionDTO | null;
+  /** Which message currently owns `pendingSelection` — mirrors
+   * `pendingActionMessageId`. */
+  pendingSelectionMessageId?: string;
+  /** Which run (`ChatRunState.runToken`) most recently affirmed
+   * `pendingSelection` — used only to detect "a later run completed
+   * without re-affirming this selection," never rendered. */
+  pendingSelectionRunToken?: string;
+  /** One selection-card record per assistant message that ever emitted
+   * a selection.pending event, keyed by that message's id — mirrors
+   * `actionCards` exactly (one selection_id = one card = one originating
+   * message; never moves; never duplicates). */
+  selectionCards?: Record<string, SelectionCardRecord>;
+  /** Expandable, sanitized run trace (pre-4H milestone) — one record per
+   * assistant message that ever owned a real backend run, keyed by that
+   * message's id. Mirrors `actionCards`/`selectionCards`'s ownership
+   * model exactly: one run_id = one trace = one originating message,
+   * permanently — never moves to a later message, never duplicated, and
+   * a user's own expand/collapse choice on a historical trace is never
+   * reset by a later turn (see RunTrace.tsx). */
+  runTraces?: Record<string, RunTraceRecord>;
+  /** Pre-4H UX/provenance milestone — one structured Teams source
+   * reference per assistant message that ever produced grounded
+   * evidence, keyed by that message's id. Mirrors `actionCards`/
+   * `selectionCards`/`runTraces`'s exact same ownership model: one
+   * source belongs permanently to the message/turn that produced it,
+   * never moves to a later message, never duplicated. Kept in the
+   * backend's own wire/snake_case shape (`SourceReferenceDTO`), same
+   * rationale as `PendingActionDTO` — no translation layer needed. */
+  sources?: Record<string, SourceReferenceDTO>;
+}
+
+/** Expandable, sanitized run trace (pre-4H milestone) — see Chat.runTraces
+ * module docstring. Never model chain-of-thought: every `label` here is
+ * a deterministic, past-tense, already-sanitized fact the backend
+ * decided to report (see RunTrace.tsx). */
+export interface RunTraceStep {
+  stepId: string;
+  category: string;
+  label: string;
+  status: "completed" | "warning" | "failed";
+  safeMetadata?: TraceStepSafeMetadata;
+}
+
+export interface RunTraceRecord {
+  /** The backend's own run_id, once known — diagnostics only, mirrors
+   * `ChatRunState.serverRunId`. */
+  serverRunId?: string;
+  /** Chronological — steps are appended as trace.step events arrive,
+   * never reordered/sorted client-side. */
+  steps: RunTraceStep[];
+  /** Frozen at run.completed — `elapsedSecondsSince(runStartedAt)` at
+   * that moment, reusing the same timing source as the live counter
+   * (see lib/elapsedTime.ts). `undefined` while the run this trace
+   * belongs to is still active — that's the "live" vs. "completed"
+   * presentation switch (see RunTrace.tsx). Never re-incremented once
+   * set. */
+  finalDurationSeconds?: number;
+  /** Set together with `finalDurationSeconds` — which terminal header
+   * ("Worked for Xs" vs. "Stopped after Xs") the completed trace uses.
+   * `undefined` while still live. `"stopped"` is a user-initiated abort
+   * (the Stop control) — distinct from `"error"` (a genuine backend/
+   * transport failure) even though both currently render the same
+   * "Stopped after Xs" text; kept as its own value so the distinction is
+   * available without re-deriving it from anything else. */
+  outcome?: "ok" | "error" | "stopped";
+  /** Local, presentation-only expand/collapse choice — never sent to the
+   * backend, never reset by a later user message (unlike actionCards/
+   * selectionCards' auto-collapse-on-new-message behavior — instruction
+   * section 36 explicitly asks that a RunTrace's own expand/collapse
+   * choice be preserved instead). Starts collapsed. */
+  expanded: boolean;
+}
+
+/** Interaction-capability extension — see Chat.selectionCards. */
+export interface SelectionCardRecord {
+  /** Which selection this specific card represents. */
+  selectionId: string;
+  /** Snapshot of the backend DTO for this card. Kept in sync while this
+   * selection remains current; frozen at its last known value once a
+   * later turn moves past it. */
+  pendingSelection: PendingSelectionDTO;
+  /** Frontend-only in-flight/terminal presentation state for this card —
+   * see `SelectionCardState`. */
+  selectionCard?: SelectionCardState | null;
+  /** Collapsed to a one-line status summary — same rules as
+   * ActionCardRecord.collapsed (auto-collapsed on a new user message,
+   * toggled manually, never timer-based). */
+  collapsed: boolean;
+}
+
+export type SelectionCardPhase = "choosing" | "skipping" | "resolved" | "skipped" | "failed";
+
+export interface SelectionCardState {
+  /** Which selection this lifecycle state tracks. */
+  selectionId: string;
+  phase: SelectionCardPhase;
+  /** Only for "failed" — the real backend message, or a fixed fallback. */
+  message?: string;
+  /** Only for "resolved" — the chosen candidate's human-readable label,
+   * exactly as ChooseSelectionResponse.selected_label returned it. */
+  selectedLabel?: string;
+}
+
+/** Phase 4G hardening pass — see Chat.actionCards. */
+export interface ActionCardRecord {
+  /** Which proposal this specific card represents — used to find this
+   * record again (from an approve/reject/execute response) and to decide
+   * whether it's still the chat's currently actionable proposal (compare
+   * against `Chat.pendingAction.proposal_id`). */
+  proposalId: string;
+  /** Snapshot of the backend DTO for this card. Kept in sync while this
+   * proposal remains the chat's live one; frozen at its last known value
+   * once a newer proposal (attached to a different message) supersedes
+   * it — an older card's historical status is never silently updated by
+   * an unrelated conversation turn. */
+  pendingAction: PendingActionDTO;
+  /** Frontend-only in-flight/terminal presentation state for this card —
+   * see `ApprovalCardState`. */
+  approvalCard?: ApprovalCardState | null;
+  /** Collapsed to a one-line status summary. Set automatically when a
+   * newer user message is sent (every OTHER card collapses; a
+   * brand-new card starts expanded) and toggled manually by clicking the
+   * card's own header. Never timer-based. */
+  collapsed: boolean;
+}
+
+/** Phase 4G — see ActionCardRecord.approvalCard. */
+export type ApprovalCardPhase = "approving" | "executing" | "completed" | "rejecting" | "expired" | "failed" | "unconfirmed";
+
+export interface ApprovalCardState {
+  /** Which proposal this lifecycle state tracks — matches the owning
+   * ActionCardRecord.proposalId. */
+  proposalId: string;
+  phase: ApprovalCardPhase;
+  /** Only for "expired"/"failed"/"unconfirmed" — the real backend
+   * `userMessage`, or a fixed, pre-written fallback string. Never
+   * frontend-invented beyond that fallback. */
+  message?: string;
+  /** Only for "completed" — mirrors ExecuteActionResponse.executed_action;
+   * never fabricated. */
+  executedAction?: { chatId: string | null; title: string | null; webUrl: string | null } | null;
+}
+
+/** Phase 4F — ephemeral per-chat state for one in-flight real backend
+ * run. See Chat.run. */
+export interface ChatRunState {
+  /** Client-minted guard token (created before any network call — the
+   * backend's own run_id isn't known until run.started arrives, so it
+   * can't gate synchronous state at send time). Every backend-driven
+   * state update carries this; a stale/mismatched token is dropped. */
+  runToken: string;
+  /** The backend's own run_id, once known — diagnostics only, never used
+   * for the staleness guard above. */
+  serverRunId?: string;
+  /** Which placeholder assistant message this run is filling. */
+  assistantMessageId: string;
+  /** The single "current activity" line — replaced (never appended) on
+   * each status event, cleared on status.clear or the first
+   * message.delta. null before the first status event arrives. */
+  currentActivity: { stage: string; label: string } | null;
+  /** Client `Date.now()` at the moment this run began (SEND_MESSAGE/
+   * EDIT_MESSAGE dispatch, before any network call) — the sole source
+   * for the elapsed-time counter (Phase 4G interaction-capability
+   * extension). Deliberately client time, not the backend's own
+   * `run.started` timestamp: elapsed timing starts when the user
+   * submits, not once the server acknowledges. Survives unchanged across
+   * every `currentActivity` replacement for this run — never reset by a
+   * status change. Has nothing to do with proposal/approval expiry. */
+  runStartedAt: number;
 }
 
 export interface Project {

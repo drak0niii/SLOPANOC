@@ -168,25 +168,6 @@
     animation: anim-drawer-out 160ms cubic-bezier(0.4, 0, 1, 1) both;
   }
 
-  /* Restrained "AI is active" cue: a faint breathing border/glow around the
-     surface currently doing work (composer while a response is generating).
-     Mounted only while activity is in flight, so it never runs idle. The
-     base rule below is a static (non-animated) accent ring — it's what
-     reduced-motion users see for the whole duration of the activity, so the
-     state stays legible without any motion. Motion is layered on top only
-     when the user hasn't asked to reduce it. */
-  .anim-intelligence-pulse {
-    box-shadow:
-      0 0 0 1px var(--app-accent-glow),
-      0 0 14px 1px var(--app-focus-glow);
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .anim-intelligence-pulse {
-      animation: anim-intelligence-pulse 2.2s var(--ease-premium) infinite;
-    }
-  }
-
   /* Sidebar labels that appear once the rail has started expanding — fades
      in slightly after the width transition begins so text never appears to
      wrap/flash before there is room for it. */
@@ -226,6 +207,24 @@
         anim-nudge-shake 480ms var(--ease-premium);
     }
   }
+
+  /* ApprovalCard body/detail/error typography ONLY (Phase 4G hardening
+     pass) — scoped to this one component, never applied globally. The
+     card title and buttons deliberately keep --font-sans. No external
+     font is loaded: "Courier Sans" is used if the reader happens to have
+     it installed locally, falling through to widely-available monospace
+     fonts otherwise. */
+  .approval-card-mono {
+    font-family: "Courier Sans", "Courier New", monospace;
+  }
+
+  .action-card-chevron {
+    transition: transform 200ms var(--ease-premium);
+  }
+
+  .action-card-chevron.is-expanded {
+    transform: rotate(180deg);
+  }
 }
 
 @keyframes anim-mega-in {
@@ -258,20 +257,6 @@
   to {
     opacity: 1;
     transform: scale(1);
-  }
-}
-
-@keyframes anim-intelligence-pulse {
-  0%,
-  100% {
-    box-shadow:
-      0 0 0 1px var(--app-border-subtle),
-      0 0 0 0 transparent;
-  }
-  50% {
-    box-shadow:
-      0 0 0 1px var(--app-accent-glow),
-      0 0 20px 1px var(--app-focus-glow);
   }
 }
 

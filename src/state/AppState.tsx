@@ -2,11 +2,14 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useReducer,
+  useRef,
   type ReactNode,
 } from "react";
 import type {
+  ActionCardRecord,
   ActionProposal,
   ActionProposalStatus,
   Attachment,
@@ -18,7 +21,9 @@ import type {
   Project,
   ProjectFile,
   ProjectSettingsSection,
+  RunTraceRecord,
   ScheduledTask,
+  SelectionCardRecord,
   SettingsSection,
   Skill,
   TaskRun,
@@ -26,6 +31,19 @@ import type {
   ThinkingEffort,
   WorkspaceScope,
 } from "../types";
+import type { PendingActionDTO, PendingSelectionDTO, SourceReferenceDTO, TraceStepDTO } from "../api/types";
+import { elapsedSecondsSince } from "../lib/elapsedTime";
+import { cancelRun, createSession, rewindSession } from "../api/sessions";
+import { ApiError } from "../api/client";
+import { runBackendChat } from "../api/runBackendChat";
+// `approveAction` is aliased -- an unrelated, pre-existing mock function
+// of the same name already exists further down in this file (the OLD
+// mock ActionProposal system, `state.actionProposals`/`cancelAction`) and
+// would otherwise shadow this import.
+import { approveAction as approveActionApi, executeApprovedAction, rejectAction as rejectActionApi } from "../api/approval";
+import { chooseSelection as chooseSelectionApi, skipSelection as skipSelectionApi } from "../api/selections";
+import { classifyApprovalFailure } from "../lib/approvalCard";
+import { classifySelectionFailure } from "../lib/selectionCard";
 import { createId } from "../lib/id";
 import { LONG_PASTE_THRESHOLD } from "../lib/constants";
 import {
@@ -132,7 +150,7 @@ function freshDraft(): DraftState {
   };
 }
 
-interface AppState {
+export interface AppState {
   chats: Record<string, Chat>;
   chatOrder: string[];
   messages: Record<string, Message>;
@@ -161,7 +179,10 @@ interface AppState {
   draft: DraftState;
 }
 
-const initialState: AppState = {
+// Exported (alongside `reducer` below) so AppState.reducer.test.ts can
+// drive the real reducer with the real starting state, rather than a
+// hand-maintained fixture that risks drifting from AppState's actual shape.
+export const initialState: AppState = {
   chats: {},
   chatOrder: [],
   messages: {},
@@ -184,7 +205,7 @@ const initialState: AppState = {
   draft: freshDraft(),
 };
 
-type Action =
+export type Action =
   | {
       type: "SEND_MESSAGE";
       payload: {
@@ -197,6 +218,13 @@ type Action =
         sources?: TaskSource[];
         timestamp: number;
         demoRun?: DemoRun;
+        /** Phase 4F — present only when this send takes the real-backend
+         * path (general workspace scope, no attached sources, no active
+         * demo script). Establishes chat.run synchronously in this same
+         * dispatch, before any network call, so the composer's
+         * duplicate-send guard and activity indicator are live
+         * immediately. */
+        runToken?: string;
       };
     }
   | {
@@ -246,6 +274,11 @@ type Action =
         /** True when editing the chat's first message — re-derives the
          * chat title and drops any demo script, same as a fresh opening. */
         retitle: boolean;
+        /** Present only for a backend-sourced chat (mirrors SEND_MESSAGE's
+         * own `runToken`) — seeds a fresh `chat.run` so the truncated
+         * chat immediately shows the new assistant placeholder as
+         * in-flight, exactly like a normal backend send. */
+        runToken?: string;
       };
     }
   | { type: "NEW_CHAT" }
@@ -357,13 +390,243 @@ type Action =
   | { type: "SET_SETTINGS_SECTION"; payload: { section: SettingsSection } }
   | { type: "OPEN_PROJECT_SETTINGS"; payload: { section?: ProjectSettingsSection } }
   | { type: "CLOSE_PROJECT_SETTINGS" }
-  | { type: "SET_PROJECT_SETTINGS_SECTION"; payload: { section: ProjectSettingsSection } };
+  | { type: "SET_PROJECT_SETTINGS_SECTION"; payload: { section: ProjectSettingsSection } }
+  // --- Phase 4F: real backend streaming (general-scope chats only) ---
+  | { type: "BACKEND_SESSION_CREATED"; payload: { chatId: string; runToken: string; sessionId: string } }
+  | { type: "BACKEND_RUN_STARTED"; payload: { chatId: string; runToken: string; serverRunId: string } }
+  | {
+      type: "BACKEND_STATUS_UPDATE";
+      payload: { chatId: string; runToken: string; stage: string; label: string };
+    }
+  | { type: "BACKEND_STATUS_CLEAR"; payload: { chatId: string; runToken: string } }
+  | {
+      type: "BACKEND_MESSAGE_DELTA";
+      payload: { chatId: string; runToken: string; messageId: string; textDelta: string };
+    }
+  | {
+      type: "BACKEND_MESSAGE_COMPLETED";
+      payload: { chatId: string; runToken: string; messageId: string; content: string; source?: SourceReferenceDTO };
+    }
+  | {
+      type: "BACKEND_ACTION_PENDING";
+      payload: { chatId: string; runToken: string; messageId: string; action: PendingActionDTO };
+    }
+  | {
+      type: "BACKEND_SELECTION_PENDING";
+      payload: { chatId: string; runToken: string; messageId: string; selection: PendingSelectionDTO };
+    }
+  // Hardening pass: begins a resumed READ turn after a Teams chat
+  // selection resolves — mirrors SEND_MESSAGE's run-seeding, but
+  // deliberately creates ONLY a new assistant placeholder message, never
+  // a paired user message (selecting a candidate is a UI interaction,
+  // not a new conversational user utterance — see AppState.tsx's
+  // `chooseSelectionOption`).
+  | {
+      type: "BEGIN_READ_RESUME";
+      payload: { chatId: string; assistantMessageId: string; runToken: string; timestamp: number };
+    }
+  | {
+      type: "BACKEND_RUN_ERROR";
+      payload: { chatId: string; runToken: string; messageId: string; message: string };
+    }
+  | {
+      type: "BACKEND_RUN_COMPLETED";
+      payload: { chatId: string; runToken: string; outcome: "ok" | "error" };
+    }
+  // --- Expandable, sanitized run trace (pre-4H milestone) ---
+  | {
+      type: "BACKEND_TRACE_STEP";
+      payload: { chatId: string; runToken: string; messageId: string; step: TraceStepDTO };
+    }
+  | { type: "TOGGLE_RUN_TRACE_EXPANDED"; payload: { chatId: string; messageId: string } }
+  // User-initiated Stop control (pre-4H refinement) — client transport
+  // abort only; see `stopActiveRun`'s own docstring for what this can
+  // and cannot guarantee about backend execution.
+  | { type: "RUN_STOPPED"; payload: { chatId: string; runToken: string } }
+  // --- Phase 4G: real approval card (approve -> execute lifecycle) ---
+  | { type: "APPROVAL_APPROVE_STARTED"; payload: { chatId: string; proposalId: string } }
+  | {
+      type: "APPROVAL_APPROVE_SUCCEEDED";
+      payload: { chatId: string; proposalId: string; pendingAction: PendingActionDTO | null };
+    }
+  | {
+      type: "APPROVAL_EXECUTE_SUCCEEDED";
+      payload: {
+        chatId: string;
+        proposalId: string;
+        pendingAction: PendingActionDTO | null;
+        executedAction: { chatId: string | null; title: string | null; webUrl: string | null } | null;
+      };
+    }
+  | { type: "APPROVAL_REJECT_STARTED"; payload: { chatId: string; proposalId: string } }
+  | {
+      type: "APPROVAL_REJECT_SUCCEEDED";
+      payload: { chatId: string; proposalId: string; pendingAction: PendingActionDTO | null };
+    }
+  | {
+      type: "APPROVAL_REQUEST_FAILED";
+      payload: { chatId: string; proposalId: string; phase: "expired" | "failed" | "unconfirmed"; message: string };
+    }
+  | { type: "TOGGLE_ACTION_CARD_COLLAPSED"; payload: { chatId: string; messageId: string } }
+  // --- Interaction-capability extension: Teams chat-name selection ---
+  | { type: "SELECTION_CHOOSE_STARTED"; payload: { chatId: string; selectionId: string } }
+  | {
+      type: "SELECTION_CHOOSE_SUCCEEDED";
+      payload: {
+        chatId: string;
+        selectionId: string;
+        selectedLabel: string;
+        pendingAction: PendingActionDTO | null;
+      };
+    }
+  | { type: "SELECTION_SKIP_STARTED"; payload: { chatId: string; selectionId: string } }
+  | { type: "SELECTION_SKIP_SUCCEEDED"; payload: { chatId: string; selectionId: string } }
+  | { type: "SELECTION_REQUEST_FAILED"; payload: { chatId: string; selectionId: string; message: string } }
+  | { type: "TOGGLE_SELECTION_CARD_COLLAPSED"; payload: { chatId: string; messageId: string } };
 
-function reducer(state: AppState, action: Action): AppState {
+/** Phase 4F reducer guard: drops the update if `chatId` no longer exists,
+ * or its active run's token doesn't match `runToken` (a stale/superseded
+ * run — see ChatRunState's docstring in types.ts) — never mutates state
+ * on behalf of a run that isn't (or is no longer) the chat's current one. */
+function withActiveRun(
+  state: AppState,
+  chatId: string,
+  runToken: string,
+  mutate: (chat: Chat) => Chat,
+): AppState {
+  const chat = state.chats[chatId];
+  if (!chat || !chat.run || chat.run.runToken !== runToken) return state;
+  return { ...state, chats: { ...state.chats, [chatId]: mutate(chat) } };
+}
+
+/** Phase 4G reducer guard: drops the update if `chatId` no longer exists,
+ * or its current `pendingAction.proposal_id` doesn't match `proposalId` —
+ * a stale in-flight approve/reject/execute request (superseded by a
+ * newer proposal while it was in flight) can never mutate a different
+ * proposal's card.
+ *
+ * Hardening pass: the card itself now lives in `chat.actionCards`, keyed
+ * by the message that owns it — resolved via `chat.pendingActionMessageId`
+ * (always in sync with `chat.pendingAction`, see BACKEND_ACTION_PENDING).
+ * `mutateCard` updates that one record; `mutateChat`, if given, also
+ * updates chat-level fields (kept as the authoritative "current backend
+ * state" per the frozen `pendingAction` field — never itself used for
+ * transcript rendering). */
+function withMatchingProposal(
+  state: AppState,
+  chatId: string,
+  proposalId: string,
+  mutateCard: (record: ActionCardRecord) => ActionCardRecord,
+  mutateChat?: (chat: Chat) => Chat,
+): AppState {
+  const chat = state.chats[chatId];
+  if (!chat || chat.pendingAction?.proposal_id !== proposalId) return state;
+  const messageId = chat.pendingActionMessageId;
+  const record = messageId ? chat.actionCards?.[messageId] : undefined;
+  if (!messageId || !record) return state;
+
+  const baseChat = mutateChat ? mutateChat(chat) : chat;
+  return {
+    ...state,
+    chats: {
+      ...state.chats,
+      [chatId]: {
+        ...baseChat,
+        actionCards: { ...baseChat.actionCards, [messageId]: mutateCard(record) },
+      },
+    },
+  };
+}
+
+/** Phase 4G hardening pass — returns a new actionCards map with every
+ * entry's `collapsed` flag set to true. Used only when a new user message
+ * is sent (never a timer); a fresh card for a brand-new proposal is added
+ * separately, already expanded (see BACKEND_ACTION_PENDING). A no-op
+ * (referentially, per-entry) for any entry already collapsed. */
+function collapseAllActionCards(actionCards: Record<string, ActionCardRecord>): Record<string, ActionCardRecord> {
+  const next: Record<string, ActionCardRecord> = {};
+  for (const [messageId, record] of Object.entries(actionCards)) {
+    next[messageId] = record.collapsed ? record : { ...record, collapsed: true };
+  }
+  return next;
+}
+
+/** Interaction-capability extension — mirrors `withMatchingProposal`
+ * exactly, using `pendingSelection`/`selectionCards`/
+ * `pendingSelectionMessageId` in place of the approval equivalents. */
+function withMatchingSelection(
+  state: AppState,
+  chatId: string,
+  selectionId: string,
+  mutateCard: (record: SelectionCardRecord) => SelectionCardRecord,
+  mutateChat?: (chat: Chat) => Chat,
+): AppState {
+  const chat = state.chats[chatId];
+  if (!chat || chat.pendingSelection?.selection_id !== selectionId) return state;
+  const messageId = chat.pendingSelectionMessageId;
+  const record = messageId ? chat.selectionCards?.[messageId] : undefined;
+  if (!messageId || !record) return state;
+
+  const baseChat = mutateChat ? mutateChat(chat) : chat;
+  return {
+    ...state,
+    chats: {
+      ...state.chats,
+      [chatId]: {
+        ...baseChat,
+        selectionCards: { ...baseChat.selectionCards, [messageId]: mutateCard(record) },
+      },
+    },
+  };
+}
+
+/** Mirrors `collapseAllActionCards` — see its own docstring. */
+function collapseAllSelectionCards(
+  selectionCards: Record<string, SelectionCardRecord>,
+): Record<string, SelectionCardRecord> {
+  const next: Record<string, SelectionCardRecord> = {};
+  for (const [messageId, record] of Object.entries(selectionCards)) {
+    next[messageId] = record.collapsed ? record : { ...record, collapsed: true };
+  }
+  return next;
+}
+
+/** Anchors a just-created ActionProposal (from a resolved WRITE-kind
+ * Teams chat selection — see selection_service.py's `choose`) to an
+ * actionCards record, exactly like BACKEND_ACTION_PENDING's own
+ * "find existing owner or mint a fresh one" upsert -- but there is no
+ * live assistant message for this call (it's a direct API response, not
+ * a streamed turn), so `fallbackMessageId` (the selection's own owning
+ * message) anchors a genuinely new proposal instead. */
+function upsertActionCardForProposal(chat: Chat, fallbackMessageId: string, pendingAction: PendingActionDTO): Chat {
+  const existingOwnerId = Object.keys(chat.actionCards ?? {}).find(
+    (id) => chat.actionCards![id].proposalId === pendingAction.proposal_id,
+  );
+  const ownerId = existingOwnerId ?? fallbackMessageId;
+  const existingRecord = existingOwnerId ? chat.actionCards![existingOwnerId] : undefined;
+
+  return {
+    ...chat,
+    pendingAction,
+    pendingActionMessageId: ownerId,
+    actionCards: {
+      ...chat.actionCards,
+      [ownerId]: {
+        proposalId: pendingAction.proposal_id,
+        pendingAction,
+        approvalCard: existingRecord ? existingRecord.approvalCard : undefined,
+        collapsed: existingRecord ? existingRecord.collapsed : false,
+      },
+    },
+  };
+}
+
+export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "SEND_MESSAGE": {
       const {
         chatId, isNewChat, userMessageId, assistantMessageId, text, attachments, sources, timestamp, demoRun,
+        runToken,
       } = action.payload;
 
       const chat: Chat = isNewChat
@@ -404,6 +667,32 @@ function reducer(state: AppState, action: Action): AppState {
       const updatedChat: Chat = {
         ...chat,
         messageIds: [...chat.messageIds, userMessageId, assistantMessageId],
+        // Phase 4F: seed the run only — deliberately never touches
+        // pendingAction here. A prior action.pending stays visible in
+        // state until a newer action.pending event authoritatively
+        // replaces it (or Phase 4G's approval flow resolves it) — a new
+        // run starting is not itself a resolution.
+        ...(runToken ? { run: { runToken, assistantMessageId, currentActivity: null, runStartedAt: timestamp } } : null),
+        // Phase 4G hardening pass: a new user message auto-collapses
+        // every existing action card to its compact one-line status row
+        // (never a timer) — but never moves, edits, or removes any of
+        // them. Cards remain fully actionable once expanded again; see
+        // ApprovalCard.tsx's `canAct`.
+        ...(chat.actionCards
+          ? { actionCards: collapseAllActionCards(chat.actionCards) }
+          : null),
+        ...(chat.selectionCards
+          ? { selectionCards: collapseAllSelectionCards(chat.selectionCards) }
+          : null),
+        // Expandable, sanitized run trace (pre-4H milestone) — seeds an
+        // empty record owned by this run's assistant message. Unlike
+        // actionCards/selectionCards, existing trace records are never
+        // touched here (instruction section 36: a user's own
+        // expand/collapse choice on a HISTORICAL trace survives a later
+        // message untouched, never auto-collapsed).
+        ...(runToken
+          ? { runTraces: { ...chat.runTraces, [assistantMessageId]: { steps: [], expanded: false } } }
+          : null),
       };
 
       return {
@@ -530,6 +819,534 @@ function reducer(state: AppState, action: Action): AppState {
       };
     }
 
+    // --- Phase 4F: real backend streaming ---
+
+    case "BACKEND_SESSION_CREATED": {
+      const { chatId, runToken, sessionId } = action.payload;
+      return withActiveRun(state, chatId, runToken, (chat) => ({ ...chat, backendSessionId: sessionId }));
+    }
+
+    case "BACKEND_RUN_STARTED": {
+      const { chatId, runToken, serverRunId } = action.payload;
+      return withActiveRun(state, chatId, runToken, (chat) => ({
+        ...chat,
+        run: chat.run ? { ...chat.run, serverRunId } : chat.run,
+      }));
+    }
+
+    case "BACKEND_STATUS_UPDATE": {
+      const { chatId, runToken, stage, label } = action.payload;
+      return withActiveRun(state, chatId, runToken, (chat) => ({
+        ...chat,
+        run: chat.run ? { ...chat.run, currentActivity: { stage, label } } : chat.run,
+      }));
+    }
+
+    case "BACKEND_STATUS_CLEAR": {
+      const { chatId, runToken } = action.payload;
+      return withActiveRun(state, chatId, runToken, (chat) => ({
+        ...chat,
+        run: chat.run ? { ...chat.run, currentActivity: null } : chat.run,
+      }));
+    }
+
+    case "BACKEND_MESSAGE_DELTA": {
+      const { chatId, runToken, messageId, textDelta } = action.payload;
+      const chat = state.chats[chatId];
+      if (!chat || !chat.run || chat.run.runToken !== runToken) return state;
+      const existing = state.messages[messageId];
+      if (!existing) return state;
+      return {
+        ...state,
+        // Defensive: the activity line disappears the instant the first
+        // delta arrives even if status.clear was somehow missed.
+        chats: { ...state.chats, [chatId]: { ...chat, run: { ...chat.run, currentActivity: null } } },
+        messages: {
+          ...state.messages,
+          [messageId]: { ...existing, text: existing.text + textDelta, status: "streaming" },
+        },
+      };
+    }
+
+    case "BACKEND_MESSAGE_COMPLETED": {
+      const { chatId, runToken, messageId, content, source } = action.payload;
+      const chat = state.chats[chatId];
+      if (!chat || !chat.run || chat.run.runToken !== runToken) return state;
+      const existing = state.messages[messageId];
+      if (!existing) return state;
+      return {
+        ...state,
+        // Authoritative overwrite — reconciles with, never appends to,
+        // whatever accumulated delta text preceded this.
+        messages: { ...state.messages, [messageId]: { ...existing, text: content, status: "complete" } },
+        chats: source
+          ? {
+              ...state.chats,
+              // Pre-4H UX/provenance milestone — permanently owned by
+              // THIS message, mirroring actionCards/selectionCards/
+              // runTraces (never moves, never duplicated). Omitted
+              // entirely when this turn produced no grounded evidence.
+              [chatId]: { ...chat, sources: { ...chat.sources, [messageId]: source } },
+            }
+          : state.chats,
+      };
+    }
+
+    case "BACKEND_ACTION_PENDING": {
+      const { chatId, runToken, messageId, action: pendingAction } = action.payload;
+      // Deliberately not attached to the message's own fields, and never
+      // mixed with the existing mock ActionProposal/actionProposalId
+      // system (which already has live Approve/Cancel controls) — see
+      // ApprovalCard.tsx (Phase 4G).
+      return withActiveRun(state, chatId, runToken, (chat) => {
+        // HARDENING PASS: `proposal_id` is the durable identity of a
+        // proposal — a card belongs to whichever message FIRST reported
+        // it, permanently, never to "whichever message most recently
+        // reported it." Some later, unrelated turn can legitimately
+        // arrive with an `action.pending` event carrying the SAME
+        // `proposal_id` as an earlier, already-resolved (or still
+        // pending) one — e.g. the agent re-surfacing the current backend
+        // state of an existing proposal rather than proposing a new one.
+        // Blindly upserting at `messageId` in that case would create a
+        // SECOND card for the same proposal under the new message —
+        // violating the "one proposal, one card" invariant. So: find
+        // whichever message (if any) already owns this proposal_id
+        // first, and update THAT record in place; only mint a brand-new
+        // record, anchored to `messageId`, for a genuinely new
+        // proposal_id never seen before in this chat.
+        const existingOwnerId = Object.keys(chat.actionCards ?? {}).find(
+          (id) => chat.actionCards![id].proposalId === pendingAction.proposal_id,
+        );
+        const ownerId = existingOwnerId ?? messageId;
+        const existingRecord = existingOwnerId ? chat.actionCards![existingOwnerId] : undefined;
+
+        return {
+          ...chat,
+          pendingAction,
+          // Ownership never moves to the new message — it stays with
+          // whichever message originally introduced this proposal_id.
+          pendingActionMessageId: ownerId,
+          actionCards: {
+            ...chat.actionCards,
+            [ownerId]: {
+              proposalId: pendingAction.proposal_id,
+              pendingAction,
+              // A refresh of an already-known proposal preserves its
+              // existing lifecycle/collapse state untouched — a genuinely
+              // new proposal_id always starts fresh and expanded.
+              approvalCard: existingRecord ? existingRecord.approvalCard : undefined,
+              collapsed: existingRecord ? existingRecord.collapsed : false,
+            },
+          },
+        };
+      });
+    }
+
+    case "BACKEND_SELECTION_PENDING": {
+      // Mirrors BACKEND_ACTION_PENDING's "find existing owner or mint a
+      // fresh one" upsert exactly — same "one selection_id, one card,
+      // never moves" invariant.
+      const { chatId, runToken, messageId, selection } = action.payload;
+      return withActiveRun(state, chatId, runToken, (chat) => {
+        const existingOwnerId = Object.keys(chat.selectionCards ?? {}).find(
+          (id) => chat.selectionCards![id].selectionId === selection.selection_id,
+        );
+        const ownerId = existingOwnerId ?? messageId;
+        const existingRecord = existingOwnerId ? chat.selectionCards![existingOwnerId] : undefined;
+
+        return {
+          ...chat,
+          pendingSelection: selection,
+          pendingSelectionMessageId: ownerId,
+          pendingSelectionRunToken: runToken,
+          selectionCards: {
+            ...chat.selectionCards,
+            [ownerId]: {
+              selectionId: selection.selection_id,
+              pendingSelection: selection,
+              selectionCard: existingRecord ? existingRecord.selectionCard : undefined,
+              collapsed: existingRecord ? existingRecord.collapsed : false,
+            },
+          },
+        };
+      });
+    }
+
+    // --- Expandable, sanitized run trace (pre-4H milestone) -------------
+
+    case "BACKEND_TRACE_STEP": {
+      const { chatId, runToken, messageId, step } = action.payload;
+      return withActiveRun(state, chatId, runToken, (chat) => {
+        const existing = chat.runTraces?.[messageId];
+        const runTraceStep: RunTraceRecord["steps"][number] = {
+          stepId: step.step_id,
+          category: step.category,
+          label: step.label,
+          status: step.status,
+          safeMetadata: step.safe_metadata,
+        };
+        return {
+          ...chat,
+          runTraces: {
+            ...chat.runTraces,
+            [messageId]: existing
+              ? { ...existing, steps: [...existing.steps, runTraceStep] }
+              : { steps: [runTraceStep], expanded: false },
+          },
+        };
+      });
+    }
+
+    case "TOGGLE_RUN_TRACE_EXPANDED": {
+      const { chatId, messageId } = action.payload;
+      const chat = state.chats[chatId];
+      const record = chat?.runTraces?.[messageId];
+      if (!chat || !record) return state;
+      return {
+        ...state,
+        chats: {
+          ...state.chats,
+          [chatId]: {
+            ...chat,
+            runTraces: { ...chat.runTraces, [messageId]: { ...record, expanded: !record.expanded } },
+          },
+        },
+      };
+    }
+
+    case "BEGIN_READ_RESUME": {
+      // Hardening pass: seeds a resumed-read run exactly like SEND_MESSAGE
+      // does (chat.run, elapsed timer, card auto-collapse), but appends
+      // ONLY a new assistant placeholder message — deliberately never a
+      // paired user message/id, and chat.messageIds gains no user entry.
+      // See this action's own docstring above (Action union) for why.
+      const { chatId, assistantMessageId, runToken, timestamp } = action.payload;
+      const chat = state.chats[chatId];
+      if (!chat) return state;
+
+      const assistantMessage: Message = {
+        id: assistantMessageId,
+        chatId,
+        role: "assistant",
+        text: "",
+        status: "pending",
+        createdAt: timestamp,
+      };
+
+      return {
+        ...state,
+        chats: {
+          ...state.chats,
+          [chatId]: {
+            ...chat,
+            messageIds: [...chat.messageIds, assistantMessageId],
+            run: { runToken, assistantMessageId, currentActivity: null, runStartedAt: timestamp },
+            ...(chat.actionCards ? { actionCards: collapseAllActionCards(chat.actionCards) } : null),
+            ...(chat.selectionCards ? { selectionCards: collapseAllSelectionCards(chat.selectionCards) } : null),
+            runTraces: { ...chat.runTraces, [assistantMessageId]: { steps: [], expanded: false } },
+          },
+        },
+        messages: { ...state.messages, [assistantMessageId]: assistantMessage },
+      };
+    }
+
+    case "BACKEND_RUN_ERROR": {
+      const { chatId, runToken, messageId, message } = action.payload;
+      const chat = state.chats[chatId];
+      if (!chat || !chat.run || chat.run.runToken !== runToken) return state;
+      const existing = state.messages[messageId];
+      if (!existing) return state;
+      return {
+        ...state,
+        // Never clobbers whatever partial text already streamed in.
+        messages: { ...state.messages, [messageId]: { ...existing, status: "error", errorMessage: message } },
+      };
+    }
+
+    case "BACKEND_RUN_COMPLETED": {
+      const { chatId, runToken, outcome } = action.payload;
+      const chat = state.chats[chatId];
+      if (!chat || !chat.run || chat.run.runToken !== runToken) return state;
+
+      const { assistantMessageId } = chat.run;
+      // Interaction-capability extension: unlike `pendingAction` (durable
+      // across turns until explicitly replaced/approved/rejected), a
+      // pending Teams chat selection is only meaningful to act on while
+      // this SAME run is the one that created/reaffirmed it —
+      // `pendingSelectionRunToken` records which run that was. A run
+      // that completes without having (re)set it means a LATER turn
+      // moved past the selection without resolving it through this
+      // card (e.g. an exact-match resolution elsewhere) — the card
+      // becomes stale/non-actionable (see selectionCard.ts's
+      // `deriveSelectionCardView`) rather than remaining forever
+      // clickable, mirroring the backend's own `supersede_active_selection`.
+      const staleSelection = Boolean(chat.pendingSelection) && chat.pendingSelectionRunToken !== runToken;
+      // Expandable, sanitized run trace (pre-4H milestone): freeze this
+      // run's owning trace record's duration NOW, from the same
+      // client-side `runStartedAt` the live counter already used (see
+      // ChatRunState.runStartedAt's own docstring) — reusing the existing
+      // elapsed-timing source, never a second/unrelated timer. Once set,
+      // `finalDurationSeconds` is never recomputed/incremented again;
+      // this is the one and only place it's ever assigned.
+      const existingTrace = chat.runTraces?.[assistantMessageId];
+      const updatedRunTraces = existingTrace
+        ? {
+            ...chat.runTraces,
+            [assistantMessageId]: {
+              ...existingTrace,
+              finalDurationSeconds: elapsedSecondsSince(chat.run.runStartedAt),
+              outcome,
+            },
+          }
+        : chat.runTraces;
+      const updatedChat: Chat = {
+        ...chat,
+        run: undefined, // pendingAction intentionally untouched
+        runTraces: updatedRunTraces,
+        ...(staleSelection
+          ? { pendingSelection: null, pendingSelectionMessageId: undefined, pendingSelectionRunToken: undefined }
+          : null),
+      };
+
+      let nextMessages = state.messages;
+      if (outcome === "error") {
+        // Defensive edge case: a run that ended in error but never
+        // produced an explicit `error` event (no backend contract path
+        // does this today, but a message must never be left stuck
+        // showing an active/streaming state after its run is over).
+        const existing = state.messages[assistantMessageId];
+        if (existing && (existing.status === "pending" || existing.status === "streaming")) {
+          nextMessages = {
+            ...state.messages,
+            [assistantMessageId]: {
+              ...existing,
+              status: "error",
+              errorMessage: existing.errorMessage ?? "Something went wrong. Please try again.",
+            },
+          };
+        }
+      }
+
+      return { ...state, chats: { ...state.chats, [chatId]: updatedChat }, messages: nextMessages };
+    }
+
+    // --- User-initiated Stop control (pre-4H refinement) -----------------
+
+    case "RUN_STOPPED": {
+      const { chatId, runToken } = action.payload;
+      const chat = state.chats[chatId];
+      if (!chat || !chat.run || chat.run.runToken !== runToken) return state;
+
+      const { assistantMessageId, runStartedAt } = chat.run;
+      // Same freeze mechanism as BACKEND_RUN_COMPLETED — one elapsed-time
+      // source of truth, reused rather than a second timer — but a
+      // distinct `outcome` ("stopped", never "error"): this was not a
+      // backend/transport failure, the user chose to interrupt it.
+      const existingTrace = chat.runTraces?.[assistantMessageId];
+      const updatedRunTraces = existingTrace
+        ? {
+            ...chat.runTraces,
+            [assistantMessageId]: {
+              ...existingTrace,
+              finalDurationSeconds: elapsedSecondsSince(runStartedAt),
+              outcome: "stopped" as const,
+            },
+          }
+        : chat.runTraces;
+
+      // A deliberate stop is not a failure — whatever text had already
+      // streamed in (if any) is kept as the message's final content,
+      // never overwritten with an error notice. An empty (still-pending)
+      // message simply completes empty, same as any other terminal state
+      // a message can reach.
+      const existingMessage = state.messages[assistantMessageId];
+      const nextMessages =
+        existingMessage && (existingMessage.status === "pending" || existingMessage.status === "streaming")
+          ? { ...state.messages, [assistantMessageId]: { ...existingMessage, status: "complete" as const } }
+          : state.messages;
+
+      return {
+        ...state,
+        chats: { ...state.chats, [chatId]: { ...chat, run: undefined, runTraces: updatedRunTraces } },
+        messages: nextMessages,
+      };
+    }
+
+    // --- Phase 4G: real approval card (approve -> execute lifecycle) ---
+
+    case "APPROVAL_APPROVE_STARTED": {
+      const { chatId, proposalId } = action.payload;
+      return withMatchingProposal(state, chatId, proposalId, (record) => ({
+        ...record,
+        approvalCard: { proposalId, phase: "approving" },
+      }));
+    }
+
+    case "APPROVAL_APPROVE_SUCCEEDED": {
+      const { chatId, proposalId, pendingAction } = action.payload;
+      return withMatchingProposal(
+        state,
+        chatId,
+        proposalId,
+        (record) => ({
+          ...record,
+          // Authoritative sync (instruction: local approvalCard state is
+          // presentation state only) — never left stale after a successful
+          // backend transition.
+          pendingAction: pendingAction ?? record.pendingAction,
+          approvalCard: { proposalId, phase: "executing" },
+        }),
+        (chat) => ({ ...chat, pendingAction: pendingAction ?? chat.pendingAction }),
+      );
+    }
+
+    case "APPROVAL_EXECUTE_SUCCEEDED": {
+      const { chatId, proposalId, pendingAction, executedAction } = action.payload;
+      return withMatchingProposal(
+        state,
+        chatId,
+        proposalId,
+        (record) => ({
+          ...record,
+          pendingAction: pendingAction ?? record.pendingAction,
+          approvalCard: { proposalId, phase: "completed", executedAction },
+        }),
+        (chat) => ({ ...chat, pendingAction: pendingAction ?? chat.pendingAction }),
+      );
+    }
+
+    case "APPROVAL_REJECT_STARTED": {
+      const { chatId, proposalId } = action.payload;
+      return withMatchingProposal(state, chatId, proposalId, (record) => ({
+        ...record,
+        approvalCard: { proposalId, phase: "rejecting" },
+      }));
+    }
+
+    case "APPROVAL_REJECT_SUCCEEDED": {
+      const { chatId, proposalId, pendingAction } = action.payload;
+      return withMatchingProposal(
+        state,
+        chatId,
+        proposalId,
+        (record) => ({
+          ...record,
+          pendingAction: pendingAction ?? record.pendingAction,
+          // "rejected" is derived straight from pendingAction.status (see
+          // deriveApprovalCardView) — no local phase needed for it.
+          approvalCard: undefined,
+        }),
+        (chat) => ({ ...chat, pendingAction: pendingAction ?? chat.pendingAction }),
+      );
+    }
+
+    case "APPROVAL_REQUEST_FAILED": {
+      const { chatId, proposalId, phase, message } = action.payload;
+      return withMatchingProposal(state, chatId, proposalId, (record) => ({
+        ...record,
+        approvalCard: { proposalId, phase, message },
+      }));
+    }
+
+    case "TOGGLE_ACTION_CARD_COLLAPSED": {
+      const { chatId, messageId } = action.payload;
+      const chat = state.chats[chatId];
+      const record = chat?.actionCards?.[messageId];
+      if (!chat || !record) return state;
+      return {
+        ...state,
+        chats: {
+          ...state.chats,
+          [chatId]: {
+            ...chat,
+            actionCards: { ...chat.actionCards, [messageId]: { ...record, collapsed: !record.collapsed } },
+          },
+        },
+      };
+    }
+
+    // --- Interaction-capability extension: Teams chat-name selection ---
+
+    case "SELECTION_CHOOSE_STARTED": {
+      const { chatId, selectionId } = action.payload;
+      return withMatchingSelection(state, chatId, selectionId, (record) => ({
+        ...record,
+        selectionCard: { selectionId, phase: "choosing" },
+      }));
+    }
+
+    case "SELECTION_CHOOSE_SUCCEEDED": {
+      const { chatId, selectionId, selectedLabel, pendingAction } = action.payload;
+      return withMatchingSelection(
+        state,
+        chatId,
+        selectionId,
+        (record) => ({
+          ...record,
+          selectionCard: { selectionId, phase: "resolved", selectedLabel },
+        }),
+        (chat) => {
+          // Resolved: no longer the chat's "current" selection to act on
+          // — the choice succeeded, whether it was a read or a write.
+          const cleared: Chat = { ...chat, pendingSelection: null, pendingSelectionMessageId: undefined };
+          // A WRITE-kind resolution deterministically produced a normal
+          // ActionProposal (see selection_service.py's `choose`) —
+          // anchor its own new card to the selection's own owning
+          // message (there is no live assistant message for this direct
+          // API call). A READ-kind resolution carries no `pendingAction`
+          // at all; the orchestration layer (chooseSelectionOption)
+          // handles re-sending the original request as a new turn.
+          return pendingAction
+            ? upsertActionCardForProposal(cleared, chat.pendingSelectionMessageId!, pendingAction)
+            : cleared;
+        },
+      );
+    }
+
+    case "SELECTION_SKIP_STARTED": {
+      const { chatId, selectionId } = action.payload;
+      return withMatchingSelection(state, chatId, selectionId, (record) => ({
+        ...record,
+        selectionCard: { selectionId, phase: "skipping" },
+      }));
+    }
+
+    case "SELECTION_SKIP_SUCCEEDED": {
+      const { chatId, selectionId } = action.payload;
+      return withMatchingSelection(
+        state,
+        chatId,
+        selectionId,
+        (record) => ({ ...record, selectionCard: { selectionId, phase: "skipped" } }),
+        (chat) => ({ ...chat, pendingSelection: null, pendingSelectionMessageId: undefined }),
+      );
+    }
+
+    case "SELECTION_REQUEST_FAILED": {
+      const { chatId, selectionId, message } = action.payload;
+      return withMatchingSelection(state, chatId, selectionId, (record) => ({
+        ...record,
+        selectionCard: { selectionId, phase: "failed", message },
+      }));
+    }
+
+    case "TOGGLE_SELECTION_CARD_COLLAPSED": {
+      const { chatId, messageId } = action.payload;
+      const chat = state.chats[chatId];
+      const record = chat?.selectionCards?.[messageId];
+      if (!chat || !record) return state;
+      return {
+        ...state,
+        chats: {
+          ...state.chats,
+          [chatId]: {
+            ...chat,
+            selectionCards: { ...chat.selectionCards, [messageId]: { ...record, collapsed: !record.collapsed } },
+          },
+        },
+      };
+    }
+
     case "REGENERATE_MESSAGE": {
       const existing = state.messages[action.payload.messageId];
       if (!existing || existing.role !== "assistant") return state;
@@ -552,7 +1369,7 @@ function reducer(state: AppState, action: Action): AppState {
     }
 
     case "EDIT_MESSAGE": {
-      const { chatId, messageId, text, assistantMessageId, retitle } = action.payload;
+      const { chatId, messageId, text, assistantMessageId, retitle, runToken } = action.payload;
       const chat = state.chats[chatId];
       const message = state.messages[messageId];
       if (!chat || !message) return state;
@@ -564,6 +1381,7 @@ function reducer(state: AppState, action: Action): AppState {
       // conversation continues fresh from the edited text.
       const keptIds = chat.messageIds.slice(0, editIndex);
       const removedIds = chat.messageIds.slice(editIndex);
+      const removedIdSet = new Set(removedIds);
 
       const remainingMessages = { ...state.messages };
       const remainingActionProposals = { ...state.actionProposals };
@@ -583,6 +1401,75 @@ function reducer(state: AppState, action: Action): AppState {
         createdAt: Date.now(),
       };
 
+      // Phase 4G hardening pass: an action card owned by a message that
+      // no longer exists must be discarded along with it — never left as
+      // orphaned state referencing a deleted message id (ownership is by
+      // stable message id, never by array position, so this is an exact
+      // set-membership check, unaffected by any index shift from the
+      // truncation above).
+      let nextActionCards = chat.actionCards;
+      let nextPendingAction = chat.pendingAction;
+      let nextPendingActionMessageId = chat.pendingActionMessageId;
+      if (chat.actionCards) {
+        const survivingEntries = Object.entries(chat.actionCards).filter(([ownerId]) => !removedIdSet.has(ownerId));
+        nextActionCards =
+          survivingEntries.length === Object.keys(chat.actionCards).length
+            ? chat.actionCards
+            : Object.fromEntries(survivingEntries);
+        if (chat.pendingActionMessageId && removedIdSet.has(chat.pendingActionMessageId)) {
+          nextPendingAction = null;
+          nextPendingActionMessageId = undefined;
+        }
+      }
+
+      // Same cleanup, mirrored for selection cards — a discarded
+      // PendingSelection (edited/rewound away) must disappear from the
+      // active branch, never linger referencing a deleted message.
+      let nextSelectionCards = chat.selectionCards;
+      let nextPendingSelection = chat.pendingSelection;
+      let nextPendingSelectionMessageId = chat.pendingSelectionMessageId;
+      let nextPendingSelectionRunToken = chat.pendingSelectionRunToken;
+      if (chat.selectionCards) {
+        const survivingSelectionEntries = Object.entries(chat.selectionCards).filter(
+          ([ownerId]) => !removedIdSet.has(ownerId),
+        );
+        nextSelectionCards =
+          survivingSelectionEntries.length === Object.keys(chat.selectionCards).length
+            ? chat.selectionCards
+            : Object.fromEntries(survivingSelectionEntries);
+        if (chat.pendingSelectionMessageId && removedIdSet.has(chat.pendingSelectionMessageId)) {
+          nextPendingSelection = null;
+          nextPendingSelectionMessageId = undefined;
+          nextPendingSelectionRunToken = undefined;
+        }
+      }
+
+      // Expandable, sanitized run trace (pre-4H milestone) — same
+      // cleanup, mirrored exactly: a discarded assistant turn's trace
+      // must disappear from the active branch along with it (instruction
+      // section 37 — never replayed, never left dangling on a deleted
+      // message id). A surviving prefix message's own trace is untouched.
+      let nextRunTraces = chat.runTraces;
+      if (chat.runTraces) {
+        const survivingTraceEntries = Object.entries(chat.runTraces).filter(([ownerId]) => !removedIdSet.has(ownerId));
+        nextRunTraces =
+          survivingTraceEntries.length === Object.keys(chat.runTraces).length
+            ? chat.runTraces
+            : Object.fromEntries(survivingTraceEntries);
+      }
+
+      // Pre-4H UX/provenance milestone — same cleanup, mirrored exactly:
+      // a discarded assistant turn's Teams source reference must
+      // disappear from the active branch along with it.
+      let nextSources = chat.sources;
+      if (chat.sources) {
+        const survivingSourceEntries = Object.entries(chat.sources).filter(([ownerId]) => !removedIdSet.has(ownerId));
+        nextSources =
+          survivingSourceEntries.length === Object.keys(chat.sources).length
+            ? chat.sources
+            : Object.fromEntries(survivingSourceEntries);
+      }
+
       return {
         ...state,
         messages: remainingMessages,
@@ -594,6 +1481,24 @@ function reducer(state: AppState, action: Action): AppState {
             title: retitle ? deriveChatTitle(text) : chat.title,
             demoRun: retitle ? undefined : chat.demoRun,
             messageIds: [...keptIds, messageId, assistantMessageId],
+            actionCards: nextActionCards,
+            pendingAction: nextPendingAction,
+            pendingActionMessageId: nextPendingActionMessageId,
+            selectionCards: nextSelectionCards,
+            pendingSelection: nextPendingSelection,
+            pendingSelectionMessageId: nextPendingSelectionMessageId,
+            pendingSelectionRunToken: nextPendingSelectionRunToken,
+            runTraces: nextRunTraces,
+            sources: nextSources,
+            // Backend-sourced chats: seed a fresh run exactly like
+            // SEND_MESSAGE does, so the truncated chat immediately shows
+            // the new assistant placeholder as in-flight.
+            ...(runToken
+              ? {
+                  run: { runToken, assistantMessageId, currentActivity: null, runStartedAt: Date.now() },
+                  runTraces: { ...nextRunTraces, [assistantMessageId]: { steps: [], expanded: false } },
+                }
+              : null),
           },
         },
       };
@@ -1458,6 +2363,42 @@ interface AppContextValue {
   skillList: Skill[];
   sendMessage: (overrideText?: string) => void;
   startScheduledTaskSetup: (options?: { seedPrompt?: string }) => void;
+  /** Phase 4G — approves the given proposal (which must still be the
+   * chat's current backend-active `pendingAction.proposal_id` — a stale
+   * click from a superseded historical card is a safe no-op, mirroring
+   * the reducer's own `withMatchingProposal` guard), then immediately
+   * attempts to execute it. Named distinctly from the pre-existing mock
+   * `approveAction`/`cancelAction` pair (a different, older system
+   * operating on `state.actionProposals`) to avoid any collision. Takes
+   * only `chatId`/`proposalId` — both structured identifiers, no
+   * free-text parameter exists anywhere in this path. */
+  approvePendingAction: (chatId: string, proposalId: string) => void;
+  rejectPendingAction: (chatId: string, proposalId: string) => void;
+  /** Phase 4G hardening pass — toggles one action card's `collapsed` flag
+   * in place. Never moves, edits, or removes the card; never timer-driven. */
+  toggleActionCardCollapsed: (chatId: string, messageId: string) => void;
+  /** Interaction-capability extension — chooses one candidate for the
+   * chat's current active Teams chat selection (must still be
+   * `chatId`'s `pendingSelection.selection_id` — a stale click is a safe
+   * no-op, mirroring `approvePendingAction`). NOT approval: for a
+   * pending write, this only produces a normal `ActionProposal` — a
+   * separate `ApprovalCard` then requires its own explicit Approve. */
+  chooseSelectionOption: (chatId: string, selectionId: string, optionId: string) => void;
+  /** Skips the chat's current active Teams chat selection — no candidate
+   * is chosen, nothing is sent, no proposal is created. */
+  skipSelectionOption: (chatId: string, selectionId: string) => void;
+  /** Toggles one selection card's `collapsed` flag — mirrors
+   * `toggleActionCardCollapsed`. */
+  toggleSelectionCardCollapsed: (chatId: string, messageId: string) => void;
+  /** Expandable, sanitized run trace (pre-4H milestone) — toggles one
+   * run trace's local `expanded` flag in place. Purely local presentation
+   * state: never calls the backend, never reruns anything (instruction
+   * section 35). */
+  toggleRunTraceExpanded: (chatId: string, messageId: string) => void;
+  /** Pre-4H refinement — the composer's Stop control. Aborts the active
+   * run's client transport and marks it stopped locally; see
+   * `stopActiveRun`'s own docstring for what this can/cannot guarantee. */
+  stopActiveRun: (chatId: string) => void;
   regenerateMessage: (messageId: string) => void;
   editMessage: (messageId: string, newText: string) => void;
   newChat: () => void;
@@ -1520,6 +2461,243 @@ const ASSISTANT_DELAY_MS = 900;
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
+  // Phase 4F — one AbortController per chat with an in-flight real backend
+  // run, tracked so it can never be silently garbage-collected mid-turn.
+  // Aborted on true AppStateProvider unmount (see the effect below) —
+  // never on a mere chat switch, since Phase 4E already established that
+  // disconnecting the HTTP client doesn't cancel the backend's logical
+  // turn anyway, so tearing the connection down on chat switch would only
+  // leave that chat's message stuck at "pending" forever with no code
+  // path left to resume it.
+  //
+  // Pre-4H refinement: `stopActiveRun` below is the one OTHER place this
+  // is aborted — a genuine user-facing Stop control. Same caveat applies
+  // there even more explicitly: aborting this controller only tears down
+  // THIS client's HTTP connection to the SSE endpoint; it does not, and
+  // cannot, cancel whatever the backend's own turn/ADK Runner is doing
+  // server-side (see chat_service.py's own module docstring — verified
+  // against the installed Starlette source that a dropped connection is
+  // never proactively observed by the streaming response at all). Stop
+  // is therefore always an honest "stop listening and show this as
+  // stopped locally," never a claim that backend execution itself halted.
+  const runControllersRef = useRef(new Map<string, AbortController>());
+
+  useEffect(() => {
+    return () => {
+      for (const controller of runControllersRef.current.values()) controller.abort();
+    };
+  }, []);
+
+  // Phase 4F — drives one real backend turn. Takes `existingSessionId` as
+  // a parameter (rather than reading `state` itself) so it never risks a
+  // stale closure over `state.chats`; `sendMessage` below always reads
+  // that value fresh from its own (dependency-array-correct) closure
+  // before calling this.
+  const beginBackendRun = useCallback(
+    async (
+      chatId: string,
+      runToken: string,
+      assistantMessageId: string,
+      rawText: string,
+      existingSessionId: string | undefined,
+    ) => {
+      const controller = new AbortController();
+      runControllersRef.current.set(chatId, controller);
+      try {
+        let sessionId = existingSessionId;
+        if (!sessionId) {
+          const created = await createSession();
+          sessionId = created.session_id;
+          dispatch({ type: "BACKEND_SESSION_CREATED", payload: { chatId, runToken, sessionId } });
+        }
+        await runBackendChat(
+          sessionId,
+          rawText,
+          {
+            onRunStarted: (serverRunId) =>
+              dispatch({ type: "BACKEND_RUN_STARTED", payload: { chatId, runToken, serverRunId } }),
+            onStatus: (stage, label) =>
+              dispatch({ type: "BACKEND_STATUS_UPDATE", payload: { chatId, runToken, stage, label } }),
+            onStatusClear: () => dispatch({ type: "BACKEND_STATUS_CLEAR", payload: { chatId, runToken } }),
+            onDelta: (textDelta) =>
+              dispatch({
+                type: "BACKEND_MESSAGE_DELTA",
+                payload: { chatId, runToken, messageId: assistantMessageId, textDelta },
+              }),
+            onCompleted: (content, source) =>
+              dispatch({
+                type: "BACKEND_MESSAGE_COMPLETED",
+                payload: { chatId, runToken, messageId: assistantMessageId, content, source },
+              }),
+            onActionPending: (action: PendingActionDTO) =>
+              dispatch({
+                type: "BACKEND_ACTION_PENDING",
+                payload: { chatId, runToken, messageId: assistantMessageId, action },
+              }),
+            onSelectionPending: (selection: PendingSelectionDTO) =>
+              dispatch({
+                type: "BACKEND_SELECTION_PENDING",
+                payload: { chatId, runToken, messageId: assistantMessageId, selection },
+              }),
+            onError: (info) =>
+              dispatch({
+                type: "BACKEND_RUN_ERROR",
+                payload: { chatId, runToken, messageId: assistantMessageId, message: info.message },
+              }),
+            onRunCompleted: (outcome) =>
+              dispatch({ type: "BACKEND_RUN_COMPLETED", payload: { chatId, runToken, outcome } }),
+            onTraceStep: (step: TraceStepDTO) =>
+              dispatch({
+                type: "BACKEND_TRACE_STEP",
+                payload: { chatId, runToken, messageId: assistantMessageId, step },
+              }),
+          },
+          controller.signal,
+        );
+      } catch {
+        // createSession() itself failing, before any SSE stream ever opened.
+        dispatch({
+          type: "BACKEND_RUN_ERROR",
+          payload: {
+            chatId,
+            runToken,
+            messageId: assistantMessageId,
+            message: "The assistant could not be reached right now. Please try again.",
+          },
+        });
+        dispatch({ type: "BACKEND_RUN_COMPLETED", payload: { chatId, runToken, outcome: "error" } });
+      } finally {
+        runControllersRef.current.delete(chatId);
+      }
+    },
+    [],
+  );
+
+  /** Pre-4H refinement — the Stop control's implementation. Stops the
+   * frontend's own transport/UI IMMEDIATELY and synchronously: aborts
+   * this chat's `AbortController` and dispatches `RUN_STOPPED` (see that
+   * reducer case — it reuses the same `runToken` ownership guard every
+   * other BACKEND_* dispatch already relies on, so any event from this
+   * run still in flight at abort time is safely ignored from here on).
+   *
+   * THEN, best-effort and fire-and-forget from this function's own point
+   * of view, asks the backend to really cancel the tracked logical run
+   * too (`cancelRun` / `ChatService.cancel_run` — see those docstrings
+   * for exactly what server-side cancellation can and cannot guarantee:
+   * a synchronous, already-in-flight worker-thread call is not forcibly
+   * interruptible). This call is never awaited by the caller and its
+   * outcome never changes anything the user sees — the frontend has
+   * already stopped locally regardless of whether it succeeds, and
+   * nothing here may claim more than is actually known to be true.
+   *
+   * Only issued once the backend's own `run_id` is actually known
+   * (`chat.run.serverRunId`, set once `run.started` arrives) — a Stop
+   * clicked before that still stops the frontend immediately; there is
+   * simply no `run_id` yet for a server-side cancel call to target.
+   *
+   * A no-op if `chatId` has no active run. */
+  const stopActiveRun = useCallback(
+    (chatId: string) => {
+      const chat = state.chats[chatId];
+      if (!chat?.run) return;
+      const { runToken, serverRunId } = chat.run;
+      const sessionId = chat.backendSessionId;
+      runControllersRef.current.get(chatId)?.abort();
+      dispatch({ type: "RUN_STOPPED", payload: { chatId, runToken } });
+      if (sessionId && serverRunId) {
+        cancelRun(sessionId, serverRunId).catch(() => {
+          // Best-effort only — the frontend already stopped locally
+          // above regardless of this call's outcome.
+        });
+      }
+    },
+    [state.chats],
+  );
+
+  // Phase 4G — double-click guard for approve/reject/execute, keyed by
+  // "chatId:proposalId". These are short single POST requests (not a
+  // long-lived SSE stream like runControllersRef above), so no
+  // AbortController/unmount cleanup is needed here — a resolved fetch
+  // after unmount just dispatches into a reducer that's still valid.
+  const approvalInFlightRef = useRef(new Set<string>());
+
+  const approvePendingAction = useCallback(
+    async (chatId: string, proposalId: string) => {
+      const chat = state.chats[chatId];
+      const sessionId = chat?.backendSessionId;
+      // The card that requested this must still be the chat's current
+      // backend-active proposal — a click on a superseded historical
+      // card (ApprovalCard.tsx's own `canAct` should already have
+      // disabled its button, but this is checked again here as the real
+      // guard) is a safe no-op, never sent to the backend.
+      if (!chat || !sessionId || !proposalId || chat.pendingAction?.proposal_id !== proposalId) return;
+
+      const key = `${chatId}:${proposalId}`;
+      if (approvalInFlightRef.current.has(key)) return;
+      approvalInFlightRef.current.add(key);
+
+      dispatch({ type: "APPROVAL_APPROVE_STARTED", payload: { chatId, proposalId } });
+      try {
+        const approveResponse = await approveActionApi(sessionId, proposalId);
+        dispatch({
+          type: "APPROVAL_APPROVE_SUCCEEDED",
+          payload: { chatId, proposalId, pendingAction: approveResponse.pending_action },
+        });
+
+        const executeResponse = await executeApprovedAction(sessionId, proposalId);
+        const executedAction = executeResponse.executed_action;
+        dispatch({
+          type: "APPROVAL_EXECUTE_SUCCEEDED",
+          payload: {
+            chatId,
+            proposalId,
+            pendingAction: executeResponse.pending_action,
+            executedAction: executedAction
+              ? { chatId: executedAction.chat_id, title: executedAction.title, webUrl: executedAction.web_url }
+              : null,
+          },
+        });
+      } catch (error) {
+        const { phase, message } = classifyApprovalFailure(error);
+        dispatch({ type: "APPROVAL_REQUEST_FAILED", payload: { chatId, proposalId, phase, message } });
+      } finally {
+        approvalInFlightRef.current.delete(key);
+      }
+    },
+    [state.chats],
+  );
+
+  const rejectPendingAction = useCallback(
+    async (chatId: string, proposalId: string) => {
+      const chat = state.chats[chatId];
+      const sessionId = chat?.backendSessionId;
+      if (!chat || !sessionId || !proposalId || chat.pendingAction?.proposal_id !== proposalId) return;
+
+      const key = `${chatId}:${proposalId}`;
+      if (approvalInFlightRef.current.has(key)) return;
+      approvalInFlightRef.current.add(key);
+
+      dispatch({ type: "APPROVAL_REJECT_STARTED", payload: { chatId, proposalId } });
+      try {
+        const rejectResponse = await rejectActionApi(sessionId, proposalId);
+        dispatch({
+          type: "APPROVAL_REJECT_SUCCEEDED",
+          payload: { chatId, proposalId, pendingAction: rejectResponse.pending_action },
+        });
+      } catch (error) {
+        const { phase, message } = classifyApprovalFailure(error);
+        dispatch({ type: "APPROVAL_REQUEST_FAILED", payload: { chatId, proposalId, phase, message } });
+      } finally {
+        approvalInFlightRef.current.delete(key);
+      }
+    },
+    [state.chats],
+  );
+
+  const toggleActionCardCollapsed = useCallback((chatId: string, messageId: string) => {
+    dispatch({ type: "TOGGLE_ACTION_CARD_COLLAPSED", payload: { chatId, messageId } });
+  }, []);
+
   const sendMessage = useCallback((overrideText?: string) => {
     const typedText = (overrideText ?? state.draft.text).trim();
 
@@ -1572,6 +2750,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     const draftSources = state.draft.sources;
 
+    // Phase 4F: the real backend only ever handles the plain/generic
+    // fallback path — never when the user attached an ad-hoc source (that
+    // stays the existing mock "read this chat room" feature) or while a
+    // chat is following a scripted demo, and never for a Project-scoped
+    // chat (the backend has no Project-context equivalent yet; wiring it
+    // would silently drop the Project's instructions/connector scoping —
+    // a confirmed product decision, not an oversight).
+    const isBackendBranch =
+      draftSources.length === 0 && !activeDemoRun && state.workspaceScope.type === "general";
+    const runToken = isBackendBranch ? createId("run") : undefined;
+    const existingBackendSessionId = state.chats[chatId]?.backendSessionId;
+
     dispatch({
       type: "SEND_MESSAGE",
       payload: {
@@ -1584,8 +2774,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         sources: draftSources,
         timestamp,
         demoRun: newChatDemoRun,
+        runToken,
       },
     });
+
+    if (isBackendBranch) {
+      void beginBackendRun(chatId, runToken!, assistantMessageId, rawText, existingBackendSessionId);
+      return;
+    }
 
     // Attaching a chat room is an explicit instruction to go read it, so it
     // takes precedence over the generic keyword heuristics.
@@ -1653,7 +2849,104 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     state.projects,
     state.connectors,
     state.chats,
+    beginBackendRun,
   ]);
+
+  // Interaction-capability extension — double-click guard for
+  // choose/skip, keyed by "chatId:selectionId". Same short-single-POST
+  // reasoning as `approvalInFlightRef` — no AbortController needed.
+  const selectionInFlightRef = useRef(new Set<string>());
+
+  const chooseSelectionOption = useCallback(
+    async (chatId: string, selectionId: string, optionId: string) => {
+      const chat = state.chats[chatId];
+      const sessionId = chat?.backendSessionId;
+      // The card that requested this must still be the chat's current
+      // selection — a click on a stale/superseded card (SelectionCard's
+      // own `canAct` should already have disabled its button, but this
+      // is checked again here as the real guard) is a safe no-op.
+      if (!chat || !sessionId || chat.pendingSelection?.selection_id !== selectionId) return;
+      const ownerMessageId = chat.pendingSelectionMessageId;
+      const record = ownerMessageId ? chat.selectionCards?.[ownerMessageId] : undefined;
+      if (!record) return;
+
+      const key = `${chatId}:${selectionId}`;
+      if (selectionInFlightRef.current.has(key)) return;
+      selectionInFlightRef.current.add(key);
+
+      dispatch({ type: "SELECTION_CHOOSE_STARTED", payload: { chatId, selectionId } });
+      try {
+        const response = await chooseSelectionApi(sessionId, selectionId, optionId);
+        dispatch({
+          type: "SELECTION_CHOOSE_SUCCEEDED",
+          payload: {
+            chatId,
+            selectionId,
+            selectedLabel: response.selected_label,
+            pendingAction: response.pending_action,
+          },
+        });
+        // Hardening pass: READ-kind resolution resumes via the backend's
+        // own deterministic, destination-free `resume_message` (see
+        // selection/read_resume.py) — a real new backend turn, but
+        // deliberately NOT `sendMessage` (that would replay the user's
+        // original raw text, which still names the OLD, unresolved
+        // destination and previously reopened the exact same ambiguity;
+        // it would also create a second, synthetic user bubble, which
+        // selecting a candidate must never do). `BEGIN_READ_RESUME`
+        // seeds only a new assistant placeholder; `beginBackendRun` is
+        // the SAME function every normal turn already uses, so
+        // streaming/status/elapsed-timer all work identically.
+        if (response.resume_message) {
+          const resumeAssistantMessageId = createId("msg");
+          const resumeRunToken = createId("run");
+          dispatch({
+            type: "BEGIN_READ_RESUME",
+            payload: { chatId, assistantMessageId: resumeAssistantMessageId, runToken: resumeRunToken, timestamp: Date.now() },
+          });
+          void beginBackendRun(chatId, resumeRunToken, resumeAssistantMessageId, response.resume_message, sessionId);
+        }
+      } catch (error) {
+        const { message } = classifySelectionFailure(error);
+        dispatch({ type: "SELECTION_REQUEST_FAILED", payload: { chatId, selectionId, message } });
+      } finally {
+        selectionInFlightRef.current.delete(key);
+      }
+    },
+    [state.chats, beginBackendRun],
+  );
+
+  const skipSelectionOption = useCallback(
+    async (chatId: string, selectionId: string) => {
+      const chat = state.chats[chatId];
+      const sessionId = chat?.backendSessionId;
+      if (!chat || !sessionId || chat.pendingSelection?.selection_id !== selectionId) return;
+
+      const key = `${chatId}:${selectionId}`;
+      if (selectionInFlightRef.current.has(key)) return;
+      selectionInFlightRef.current.add(key);
+
+      dispatch({ type: "SELECTION_SKIP_STARTED", payload: { chatId, selectionId } });
+      try {
+        await skipSelectionApi(sessionId, selectionId);
+        dispatch({ type: "SELECTION_SKIP_SUCCEEDED", payload: { chatId, selectionId } });
+      } catch (error) {
+        const { message } = classifySelectionFailure(error);
+        dispatch({ type: "SELECTION_REQUEST_FAILED", payload: { chatId, selectionId, message } });
+      } finally {
+        selectionInFlightRef.current.delete(key);
+      }
+    },
+    [state.chats],
+  );
+
+  const toggleSelectionCardCollapsed = useCallback((chatId: string, messageId: string) => {
+    dispatch({ type: "TOGGLE_SELECTION_CARD_COLLAPSED", payload: { chatId, messageId } });
+  }, []);
+
+  const toggleRunTraceExpanded = useCallback((chatId: string, messageId: string) => {
+    dispatch({ type: "TOGGLE_RUN_TRACE_EXPANDED", payload: { chatId, messageId } });
+  }, []);
 
   /**
    * Always starts a brand-new chat, regardless of whatever was active before
@@ -1716,6 +3009,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       if (!message || message.role !== "assistant") return;
       const chat = state.chats[message.chatId];
       if (!chat) return;
+      // Phase 4F: no regenerate-turn endpoint exists on the real backend
+      // yet — silently running the mock generator over a real message
+      // would fabricate a misleading "regenerated" answer. The
+      // Regenerate control itself is hidden for backend messages
+      // (Message.tsx's AssistantMessageActions); this is a defensive
+      // guard against any other call site reaching this function.
+      if (chat.backendSessionId) return;
 
       const messageIndex = chat.messageIds.indexOf(messageId);
       const precedingUserMessageId = messageIndex > 0 ? chat.messageIds[messageIndex - 1] : null;
@@ -1774,6 +3074,64 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       const assistantMessageId = createId("msg");
       const isFirstMessage = chat.messageIds[0] === messageId;
 
+      // Phase 4G hardening pass: restores editing for backend-sourced
+      // chats too (previously hidden entirely). CRITICAL correction over
+      // the first restoration attempt: reusing the same session and
+      // simply appending the edited text is NOT a true edit — the
+      // backend's ADK session history still contains the original
+      // message and everything that followed it, so Gemini would see
+      // BOTH the old and the new text as stale, hidden context (traced
+      // and confirmed against the installed ADK 1.33.0 source: `Runner
+      // .run_async` always builds the model's context from the
+      // session's full stored event history). The fix: first call the
+      // backend's `POST /sessions/{id}/rewind` (a thin wrapper around
+      // ADK's own, first-class `Runner.rewind_async` — see
+      // chat_service.py's `rewind_before_user_turn`), which marks the
+      // edited turn and everything after it as excluded from all future
+      // model context on this SAME session (never a new session — there
+      // is nothing to switch `backendSessionId` onto). Only once that
+      // call has genuinely succeeded do we truncate the visible
+      // conversation locally and start the new turn — fail-before-commit,
+      // so a rewind failure never leaves the frontend showing a
+      // truncated conversation the backend never actually branched.
+      if (chat.backendSessionId) {
+        const editIndex = chat.messageIds.indexOf(messageId);
+        const beforeUserTurnIndex = chat.messageIds
+          .slice(0, editIndex)
+          .filter((id) => state.messages[id]?.role === "user").length;
+        const backendSessionId = chat.backendSessionId;
+
+        void (async () => {
+          try {
+            await rewindSession(backendSessionId, beforeUserTurnIndex);
+          } catch (error) {
+            // Nothing was mutated, locally or on the backend — the
+            // conversation is left exactly as it was.
+            const message =
+              error instanceof ApiError
+                ? error.message
+                : "This message could not be edited right now. Please try again.";
+            window.alert(message);
+            return;
+          }
+
+          const runToken = createId("run");
+          dispatch({
+            type: "EDIT_MESSAGE",
+            payload: {
+              chatId: chat.id,
+              messageId,
+              text: trimmed,
+              assistantMessageId,
+              retitle: isFirstMessage,
+              runToken,
+            },
+          });
+          void beginBackendRun(chat.id, runToken, assistantMessageId, trimmed, backendSessionId);
+        })();
+        return;
+      }
+
       dispatch({
         type: "EDIT_MESSAGE",
         payload: { chatId: chat.id, messageId, text: trimmed, assistantMessageId, retitle: isFirstMessage },
@@ -1798,7 +3156,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         dispatchMockResponse(dispatch, assistantMessageId, response, connector);
       }, ASSISTANT_DELAY_MS);
     },
-    [state.messages, state.chats, state.projects, state.connectors],
+    [state.messages, state.chats, state.projects, state.connectors, beginBackendRun],
   );
 
   const newChat = useCallback(() => {
@@ -2213,6 +3571,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     skillList,
     sendMessage,
     startScheduledTaskSetup,
+    approvePendingAction,
+    rejectPendingAction,
+    toggleActionCardCollapsed,
+    chooseSelectionOption,
+    skipSelectionOption,
+    toggleSelectionCardCollapsed,
+    toggleRunTraceExpanded,
+    stopActiveRun,
     regenerateMessage,
     editMessage,
     newChat,

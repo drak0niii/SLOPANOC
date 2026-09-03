@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
-import { ArrowUp } from "../ui/icons";
+import { ArrowUp, Square } from "../ui/icons";
 import { useAppState } from "../../state/AppState";
 import { ComposerPlusMenu } from "./ComposerPlusMenu";
 import { ThinkingEffortSelector } from "./ThinkingEffortSelector";
@@ -14,7 +14,8 @@ import { LONG_PASTE_THRESHOLD } from "../../lib/constants";
 const MAX_TEXTAREA_HEIGHT = 240;
 
 export function PromptComposer() {
-  const { state, activeMessages, setDraftText, addAttachments, sendMessage } = useAppState();
+  const { state, activeChat, activeMessages, setDraftText, addAttachments, sendMessage, stopActiveRun } =
+    useAppState();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [nudge, setNudge] = useState(false);
   // composerNudgeAt lives in global state, not on this component — a
@@ -46,12 +47,26 @@ export function PromptComposer() {
     };
   }, [state.composerNudgeAt]);
 
-  const canSend =
-    state.draft.text.trim().length > 0 ||
-    state.draft.attachments.length > 0 ||
-    state.draft.sources.length > 0;
   const lastMessage = activeMessages[activeMessages.length - 1];
-  const isGenerating = lastMessage?.role === "assistant" && lastMessage.status === "pending";
+  // Phase 4F: covers both the existing mock paths (status "pending") and
+  // a real backend run (chat.run present, or the last message actively
+  // "streaming") — a second send must be blocked in either case, since
+  // the backend would serialize it anyway and silently queueing a
+  // submission against one session would be confusing UX.
+  const isRunActive =
+    Boolean(activeChat?.run) ||
+    (lastMessage?.role === "assistant" && (lastMessage.status === "pending" || lastMessage.status === "streaming"));
+  // Pre-4H refinement: only a REAL backend run (`chat.run` present) has
+  // an actual client transport to abort — a mock/demo-path "pending"
+  // message (no `chat.run`) has nothing for Stop to do, so it keeps the
+  // existing disabled-Send treatment instead of offering a Stop control
+  // that would silently do nothing when clicked.
+  const hasAbortableRun = Boolean(activeChat?.run);
+  const canSend =
+    (state.draft.text.trim().length > 0 ||
+      state.draft.attachments.length > 0 ||
+      state.draft.sources.length > 0) &&
+    !isRunActive;
 
   function resize() {
     const el = textareaRef.current;
@@ -76,6 +91,11 @@ export function PromptComposer() {
     requestAnimationFrame(resize);
   }
 
+  function handleStopClick() {
+    if (!activeChat) return;
+    stopActiveRun(activeChat.id);
+  }
+
   /** A paste over the threshold becomes a "Pasted text.txt" attachment
    * immediately, rather than dumping a wall of text into the composer —
    * whatever's already typed is left alone. */
@@ -98,12 +118,17 @@ export function PromptComposer() {
   return (
     <div className="mx-auto w-full max-w-[900px] px-6">
       <div
+        data-testid="composer-frame"
         className={cn(
           "rounded-2xl border bg-surface shadow-md shadow-black/5",
           "transition-all duration-150 ease-premium",
-          isGenerating
-            ? "anim-intelligence-pulse border-transparent"
-            : "border-subtle/70 focus-within:border-accent/40 focus-within:shadow-[0_0_0_3px_var(--app-focus-glow)]",
+          // Resting/focus treatment is driven ONLY by real keyboard/pointer
+          // focus (:focus-within) — never by whether a response is
+          // streaming, whether text has been typed, or any other state.
+          // Previously this also switched to a permanent pulsing glow for
+          // the whole duration of a run, making the composer look
+          // continuously "active" regardless of real focus — removed.
+          "border-subtle/70 focus-within:border-accent/40 focus-within:shadow-[0_0_0_3px_var(--app-focus-glow)]",
           nudge && "anim-nudge border-transparent",
         )}
       >
@@ -136,21 +161,36 @@ export function PromptComposer() {
           <div className="ml-auto flex items-center gap-2">
             <ThinkingEffortSelector />
             <MicrophoneButton />
-            <button
-              type="button"
-              onClick={handleSendClick}
-              disabled={!canSend}
-              aria-label="Send message"
-              className={cn(
-                "inline-flex h-9 w-9 items-center justify-center rounded-full border transition-all duration-150 ease-premium",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface",
-                canSend
-                  ? "border-transparent bg-accent text-on-accent shadow-sm hover:opacity-90 active:scale-95"
-                  : "border-subtle text-tertiary",
-              )}
-            >
-              <ArrowUp className="h-[18px] w-[18px]" />
-            </button>
+            {hasAbortableRun ? (
+              <button
+                type="button"
+                onClick={handleStopClick}
+                aria-label="Stop generating"
+                className={cn(
+                  "inline-flex h-9 w-9 items-center justify-center rounded-full border transition-all duration-150 ease-premium",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface",
+                  "border-transparent bg-accent text-on-accent shadow-sm hover:opacity-90 active:scale-95",
+                )}
+              >
+                <Square className="h-[13px] w-[13px] fill-current" aria-hidden="true" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSendClick}
+                disabled={!canSend}
+                aria-label={isRunActive ? "Waiting for the assistant to finish responding" : "Send message"}
+                className={cn(
+                  "inline-flex h-9 w-9 items-center justify-center rounded-full border transition-all duration-150 ease-premium",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface",
+                  canSend
+                    ? "border-transparent bg-accent text-on-accent shadow-sm hover:opacity-90 active:scale-95"
+                    : "border-subtle text-tertiary",
+                )}
+              >
+                <ArrowUp className="h-[18px] w-[18px]" />
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -10,3 +10,17 @@ dist-ssr
 .env.*
 !.env.example
 .claude/
+
+# Python (backend/)
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local session persistence (backend/api/, Phase 4C) -- the default
+# SLOPANOC_DATABASE_URL is a local SQLite file; never commit real
+# conversational/approval data.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+request.json

@@ -16,16 +16,28 @@ import { Chip } from "../ui/Chip";
 import { ScrollingText } from "../ui/ScrollingText";
 import { SOURCE_KIND_BY_ID } from "../../data/workspaceSources";
 import { SourceCitation } from "./SourceCitation";
+import { SourceChip } from "./SourceChip";
 import { ActionProposalCard } from "./ActionProposalCard";
 import { ConnectorUnavailableCard } from "./ConnectorUnavailableCard";
 import { ConnectorSuggestionsCard } from "./ConnectorSuggestionsCard";
 import { DistributeMenu } from "./DistributeMenu";
 import { NoAnswerNotice } from "./NoAnswerNotice";
+import { RunTrace } from "./RunTrace";
+import { ApprovalCard } from "./ApprovalCard";
+import { SelectionCard } from "./SelectionCard";
+import { MessageMarkdown } from "./MessageMarkdown";
 import { cn } from "../../lib/cn";
 import { useAppState } from "../../state/AppState";
 import { Tooltip } from "../ui/Tooltip";
 import { formatFullTimestamp, formatShortDate } from "../../lib/format";
 
+/** Neutral "working on it" indicator — three plain animated dots, no text.
+ * Used both by the existing mock paths (pending → complete, unchanged)
+ * and, for a real backend run, in the brief window before its first
+ * `status` event has arrived (see Message()'s render branch below) —
+ * deliberately never a hardcoded string like "Thinking…" in either case;
+ * once the backend supplies a real activity label, CurrentActivity takes
+ * over instead. */
 function ThinkingIndicator() {
   return (
     <div className="flex items-center gap-1.5 py-1">
@@ -35,6 +47,18 @@ function ThinkingIndicator() {
         <span className="anim-breathe-dot h-1.5 w-1.5 rounded-full bg-tertiary [animation-delay:400ms]" />
       </span>
     </div>
+  );
+}
+
+/** Inline, safe error state for a failed real backend run (Phase 4F) —
+ * `text` is already backend-sanitized (or a generic transport-failure
+ * string), never a raw exception/stack trace. Renders above/alongside
+ * whatever partial text had already streamed in before the failure. */
+function AssistantErrorNotice({ text }: { text: string }) {
+  return (
+    <p role="status" className="anim-fade mt-2 text-sm text-tertiary">
+      {text || "Something went wrong. Please try again."}
+    </p>
   );
 }
 
@@ -329,7 +353,13 @@ function loadTextIntoComposer(setDraftText: (text: string) => void, text: string
   });
 }
 
-function UserMessageActions({ message, onEdit }: { message: MessageType; onEdit: () => void }) {
+function UserMessageActions({
+  message,
+  onEdit,
+}: {
+  message: MessageType;
+  onEdit: () => void;
+}) {
   const { state, setDraftText } = useAppState();
   const hasAttachments = Boolean(message.attachments && message.attachments.length > 0);
   const pastedTextAttachment = message.attachments?.find((a) => a.isPastedText);
@@ -462,15 +492,26 @@ function ResponseFeedbackButtons() {
   );
 }
 
-function AssistantMessageActions({ message }: { message: MessageType }) {
+function AssistantMessageActions({
+  message,
+  isBackendMessage,
+}: {
+  message: MessageType;
+  isBackendMessage: boolean;
+}) {
   const { regenerateMessage } = useAppState();
   return (
     <div className={cn(MESSAGE_ACTIONS_ROW_CLASS, "-ml-1.5 mt-2")}>
       <CopyMessageButton text={message.text} />
       <ResponseFeedbackButtons />
-      <ActionIconButton label="Regenerate" onClick={() => regenerateMessage(message.id)}>
-        <RefreshCw className="h-3.5 w-3.5" />
-      </ActionIconButton>
+      {/* Phase 4F: no regenerate-turn endpoint exists on the real backend
+       * yet (see AppState.tsx's regenerateMessage guard) — hidden rather
+       * than left to silently do nothing. */}
+      {!isBackendMessage && (
+        <ActionIconButton label="Regenerate" onClick={() => regenerateMessage(message.id)}>
+          <RefreshCw className="h-3.5 w-3.5" />
+        </ActionIconButton>
+      )}
       <DistributeMenu messageId={message.id} />
       <Tooltip label={formatFullTimestamp(message.createdAt)}>
         <span className="ml-1 cursor-default text-xs text-tertiary">{formatShortDate(message.createdAt)}</span>
@@ -528,6 +569,44 @@ export function Message({ message }: { message: MessageType }) {
   const isUser = message.role === "user";
   const { revealed, done } = useProgressiveReveal(message);
   const [isEditing, setIsEditing] = useState(false);
+  const { activeChat, toggleRunTraceExpanded } = useAppState();
+  const isBackendMessage = Boolean(activeChat?.backendSessionId);
+  // Only the message a real run is actively targeting shows the backend's
+  // live activity label — a different (e.g. older) pending message never
+  // borrows it.
+  const isRunTarget = activeChat?.run?.assistantMessageId === message.id;
+  const currentActivityLabel = isRunTarget ? (activeChat!.run!.currentActivity?.label ?? null) : null;
+  // Expandable, sanitized run trace (pre-4H milestone) — permanently
+  // owned by this message once a real backend run has ever targeted it
+  // (see AppState.tsx's ownership model, mirroring actionCards/
+  // selectionCards). `undefined` for a mock-path message or a chat with
+  // no real backend run yet.
+  const runTrace = activeChat?.runTraces?.[message.id];
+  const runTraceCompleted = runTrace?.finalDurationSeconds !== undefined && runTrace.outcome !== undefined;
+  const toggleThisRunTrace = () => {
+    if (activeChat) toggleRunTraceExpanded(activeChat.id, message.id);
+  };
+  // The live trace must stay mounted for the run's ENTIRE lifetime — not
+  // just while `status === "pending"` — so it survives the
+  // pending -> streaming transition (status.clear firing / the first
+  // message.delta arriving) instead of disappearing the moment real text
+  // starts flowing. It still steps aside once a terminal status
+  // ("complete"/"error") has actually been reached on THIS message, even
+  // if `chat.run`/the owning trace record technically haven't been torn
+  // down/frozen yet (an existing, intentionally tested transitional
+  // window — see Message.test.tsx) — at that point either the completed
+  // trace (once frozen) or nothing (during the brief gap before it
+  // freezes) takes over, never both/neither at once by design.
+  const showLiveTrace = isRunTarget && (message.status === "pending" || message.status === "streaming");
+  // Once the backend's own current-activity label is cleared (status.clear
+  // fired after the first token) but the run is still active, fall back
+  // to one neutral, deterministic label — never stale status text, never
+  // a chain-of-thought-flavored phrase ("Thinking"/"Thought"/"Reasoning"),
+  // and never per-operation-specific wording (instruction section 4/8).
+  // "Thinking…" is reserved for the genuine pre-status window only (no
+  // token has streamed yet); once real text has started streaming,
+  // "Working" is what's actually true.
+  const liveLabel = currentActivityLabel ?? (message.status === "streaming" ? "Working" : "Thinking…");
 
   if (isUser) {
     const hasAttachments = Boolean(message.attachments && message.attachments.length > 0);
@@ -582,41 +661,89 @@ export function Message({ message }: { message: MessageType }) {
 
   return (
     <div className="group anim-fade max-w-[720px]">
-      {message.status === "pending" ? (
-        <ThinkingIndicator />
+      {showLiveTrace && activeChat?.run ? (
+        <RunTrace
+          mode="live"
+          label={liveLabel}
+          startedAt={activeChat.run.runStartedAt}
+          steps={runTrace?.steps ?? []}
+          expanded={runTrace?.expanded ?? false}
+          onToggle={toggleThisRunTrace}
+        />
       ) : (
+        message.status === "pending" && <ThinkingIndicator />
+      )}
+      {message.status !== "pending" && (
         <>
-          {message.speakerLabel && <SpeakerLabel label={message.speakerLabel} />}
-          <div className="space-y-3">
-            <MessageBody
-              text={revealed}
-              proseClassName="whitespace-pre-wrap break-words text-base leading-relaxed text-primary"
-              messageId={message.id}
+          {isBackendMessage && runTraceCompleted && (
+            <RunTrace
+              mode="completed"
+              outcome={runTrace!.outcome!}
+              durationSeconds={runTrace!.finalDurationSeconds!}
+              steps={runTrace!.steps}
+              expanded={runTrace!.expanded}
+              onToggle={toggleThisRunTrace}
             />
-          </div>
-          {done && message.groundingResult === "insufficient" && (
+          )}
+          {message.speakerLabel && <SpeakerLabel label={message.speakerLabel} />}
+          {message.text.length > 0 &&
+            (isBackendMessage ? (
+              // Real backend text — rendered as Markdown (frontend Markdown
+              // pass). Mock/demo messages (below) keep the existing
+              // block-tag system (```check/action/output/... — authored
+              // only in src/data/demoScript.ts, never model output) exactly
+              // as before; the two are mutually exclusive per message, so
+              // there is no double-rendering.
+              <MessageMarkdown content={revealed} />
+            ) : (
+              <div className="space-y-3">
+                <MessageBody
+                  text={revealed}
+                  proseClassName="whitespace-pre-wrap break-words text-base leading-relaxed text-primary"
+                  messageId={message.id}
+                />
+              </div>
+            ))}
+          {message.status === "error" && <AssistantErrorNotice text={message.errorMessage ?? ""} />}
+          {done && message.status === "complete" && message.groundingResult === "insufficient" && (
             <NoAnswerNotice searchedScope={message.searchedScope} />
           )}
-          {done && message.citations && message.citations.length > 0 && (
+          {done && message.status === "complete" && message.citations && message.citations.length > 0 && (
             <div className="anim-fade mt-4 flex flex-wrap gap-1.5">
               {message.citations.map((c) => (
                 <SourceCitation key={c.id} citation={c} />
               ))}
             </div>
           )}
-          {done && message.connectorUnavailable && (
+          {done && message.status === "complete" && isBackendMessage && activeChat?.sources?.[message.id] && (
+            <div className="anim-fade mt-4 flex flex-wrap gap-1.5">
+              <SourceChip kind="teams" source={activeChat.sources[message.id]} />
+            </div>
+          )}
+          {done && message.status === "complete" && message.connectorUnavailable && (
             <ConnectorUnavailableCard info={message.connectorUnavailable} />
           )}
-          {done && message.suggestedConnectorIds && message.suggestedConnectorIds.length > 0 && (
-            <ConnectorSuggestionsCard connectorIds={message.suggestedConnectorIds} />
-          )}
-          {done && message.actionProposalId && (
+          {done &&
+            message.status === "complete" &&
+            message.suggestedConnectorIds &&
+            message.suggestedConnectorIds.length > 0 && (
+              <ConnectorSuggestionsCard connectorIds={message.suggestedConnectorIds} />
+            )}
+          {done && message.status === "complete" && message.actionProposalId && (
             <ActionProposalCard proposalId={message.actionProposalId} />
           )}
-          {done && message.distributionProposalId && (
+          {done && message.status === "complete" && message.distributionProposalId && (
             <ActionProposalCard proposalId={message.distributionProposalId} />
           )}
-          {done && <AssistantMessageActions message={message} />}
+          {done && message.status === "complete" && isBackendMessage && activeChat?.selectionCards?.[message.id] && (
+            <SelectionCard chatId={activeChat.id} messageId={message.id} />
+          )}
+          {done && message.status === "complete" && isBackendMessage && activeChat?.actionCards?.[message.id] && (
+            <ApprovalCard chatId={activeChat.id} messageId={message.id} />
+          )}
+          {done && message.status === "complete" && (
+            <AssistantMessageActions message={message} isBackendMessage={isBackendMessage} />
+          )}
         </>
       )}
     </div>
