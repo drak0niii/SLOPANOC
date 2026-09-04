@@ -186,6 +186,37 @@ Team Manager, which delegates to Incident Manager, which uses Teams tools
 through Power Automate. Nothing about today's runtime changes until each
 labeled phase is actually built.
 
+## Troubleshooting Product Strategy
+
+SLOPANOC's long-term core troubleshooting experience is a non-negotiable
+product principle, defined in full in
+[`docs/TROUBLESHOOTING_STRATEGY.md`](docs/TROUBLESHOOTING_STRATEGY.md): an
+iterative, evidence-driven, conversational diagnostic loop — one useful
+step at a time — rather than a chatbot that answers an operational problem
+with a long, generic checklist. The central question the assistant is
+working toward is:
+
+> **What should I check next, and why?**
+
+Conceptually: the user identifies the bridge/incident → SLOPANOC retrieves
+current context → the user describes the problem → SLOPANOC determines the
+next-best diagnostic check → the user provides the resulting
+command/output/evidence → SLOPANOC interprets it, updates its hypotheses,
+and retrieves additional context if needed → the next check is selected →
+the loop repeats until the fault is resolved, sufficiently narrowed, or
+clearly escalated.
+
+- **CURRENT:** Team Manager, Incident Manager, Teams integration, Case
+  context.
+- **NEXT (Phase 5.1):** the Generic KM Layer, providing Knowledge Context.
+- **FUTURE:** a Troubleshooting Manager, the Context Engineering Layer, a
+  persistent troubleshooting state, a next-best-diagnostic-action loop, and
+  expanded operational integrations (see [Roadmap](#roadmap)).
+
+None of the iterative troubleshooting loop described above is implemented
+today — see `docs/TROUBLESHOOTING_STRATEGY.md` for the full strategy every
+future architecture decision in this area must be evaluated against.
+
 ## Microsoft Teams integration
 
 Read operations (`teams.listChats`, `teams.getMessages`, `teams.getMembers`)

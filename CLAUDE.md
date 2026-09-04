@@ -176,6 +176,53 @@ includes" or "the system does" — those phrasings are reserved for what
   early.
 
 ===================================================================
+NON-NEGOTIABLE TROUBLESHOOTING PRODUCT STRATEGY
+===================================================================
+
+The full strategy lives in docs/TROUBLESHOOTING_STRATEGY.md — a
+NON-NEGOTIABLE product principle, not one option among several. Read it
+before implementing Phase 5.1, any troubleshooting functionality, Context
+Engineering, any future agent, an operational integration, state-changing
+automation, or a security control that touches troubleshooting UX.
+
+Mandatory principles from that document, restated here only as a governing
+summary (do not treat this bullet list as a substitute for reading it):
+
+- Troubleshooting is iterative, not checklist-driven.
+- The central UX question is: "What should I check next, and why?"
+- Every new evidence item must be interpreted before the next step is
+  selected — never queue up another step without interpreting the last
+  result first.
+- Context must be continuously re-evaluated — new evidence can change what
+  knowledge/operational/case context is relevant; it is never fetched once
+  and reused for the rest of a session.
+- Troubleshooting continuity must be preserved — a session is a persistent
+  investigation, not a sequence of isolated questions.
+- Only relevant, valid, authoritative context should reach the reasoning
+  layer — never dump all available context/documents into the model.
+- Operational commands should be grounded in approved knowledge wherever
+  possible, never recalled from general model knowledge and presented as
+  authoritative.
+- Diagnostic reads/checks and production-changing actions are different
+  trust classes.
+- State-changing actions remain behind deterministic approval — this
+  extends the existing ActionProposal/ApprovalCard boundary (§"TRUST /
+  CONTROL PRINCIPLES" above), never a new, separately-reasoned mechanism.
+- Generic KM (Phase 5.1) must support this future flow without becoming the
+  troubleshooting loop itself — it provides governed Knowledge Context; it
+  is not a Troubleshooting Manager, a Troubleshooting State runtime, or a
+  next-best-action reasoner.
+
+Governing rule: if an implementation decision conflicts with
+docs/TROUBLESHOOTING_STRATEGY.md, stop and reconsider the design rather
+than silently weakening the product principle.
+
+This governs the same invariant already stated above: "Can the Knowledge
+layer still work without knowing Incident Manager exists?" — if the answer
+becomes no, the architecture is too coupled, independent of whether it
+also satisfies the troubleshooting strategy.
+
+===================================================================
 TRUST / CONTROL PRINCIPLES
 ===================================================================
 

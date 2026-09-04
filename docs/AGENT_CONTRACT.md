@@ -100,6 +100,39 @@ current capability.
   service today. See §12 for how Phase 5.1's Generic Knowledge Management
   Layer relates to it.
 
+**Normative reference:** any future Troubleshooting Manager implementation
+must comply with `docs/TROUBLESHOOTING_STRATEGY.md` (a NON-NEGOTIABLE
+product principle, not optional guidance), in particular its iterative
+diagnostic loop, troubleshooting state, continuous context re-evaluation,
+next-best-diagnostic-action behavior, grounded-operational-commands
+principle, one-step-at-a-time UX, evidence interpreted before proceeding,
+deterministic approval for state-changing actions, and provenance
+preservation. Concretely, the future Troubleshooting Manager is not a plain
+`question → retrieve documents → generate answer` agent — its eventual
+conceptual behavior is:
+
+```text
+Current troubleshooting state
+        ↓
+new evidence
+        ↓
+interpretation
+        ↓
+hypothesis update
+        ↓
+context re-evaluation
+        ↓
+next-best diagnostic action
+        ↓
+request specific evidence
+        ↓
+repeat
+```
+
+None of this loop is designed or implemented here — this is a forward
+reference for whoever eventually builds the Troubleshooting Manager, not a
+runtime this pass introduces.
+
 ---
 
 ## 3. Agent vs. tool
