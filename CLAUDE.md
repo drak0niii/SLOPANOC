@@ -110,6 +110,72 @@ FROZEN ARCHITECTURE — do not casually rework
   unless a real, currently-observed defect requires it.
 
 ===================================================================
+TARGET FUTURE ARCHITECTURE (not implemented — planning guardrail only)
+===================================================================
+
+The frozen architecture above is what runs today. The diagram below is
+where the architecture is headed — it exists to keep Phase 5.1A and later
+phases pointed at a consistent destination, not to describe anything
+currently running. Nothing in this section may be treated as implemented,
+and nothing in it changes the frozen architecture above.
+
+    Head of Automated Operations        [FUTURE]
+    Supervision / Efficiency / Governance
+                |
+                v
+           Team Manager                 [CURRENT — user-facing orchestrator]
+                |
+       +--------+--------+
+       v                 v
+    Incident Manager   Troubleshooting Manager
+     [CURRENT]            [FUTURE]
+       |                   |
+       +--------+----------+
+                v
+      Context Engineering Layer         [FUTURE]
+                |
+       +--------+--------+--------+
+       v                 v                 v
+    Operational       Knowledge          Case
+     Context            Context          Context
+       |                 |                 |
+     Teams          Generic KM Layer     Cases
+    [CURRENT]           [NEXT]          [CURRENT]
+                         |
+                +--------+--------+--------+
+                v        v        v        v
+               MOP      SOP      RCA      KB
+                    (all behind Generic KM — [NEXT])
+
+Key architectural statement (governs Phase 5.1 design):
+
+"The Generic Knowledge Management Layer is one provider of Knowledge
+Context within the broader Context Engineering architecture. It must
+remain independent of individual specialist agents and expose governed,
+validated knowledge through generic contracts."
+
+Read this section as CURRENT / NEXT / FUTURE labels, never as "the runtime
+includes" or "the system does" — those phrasings are reserved for what
+`git`/tests actually prove exists. In particular:
+
+- MOP/SOP/RCA/KB are never peer raw sources alongside Teams and Cases —
+  they sit behind the Generic KM Layer, which itself sits behind Knowledge
+  Context, which is one of three context domains the future Context
+  Engineering Layer would assemble (Operational, Knowledge, Case).
+- The Context Engineering Layer is a future conceptual abstraction, not a
+  concrete implemented runtime service — do not build one, or a stub of
+  one, during Phase 5.1A.
+- Troubleshooting Manager and Head of Automated Operations are FUTURE only.
+  Do not add either during Phase 5.1A, do not change the current agent
+  topology to anticipate them, and do not make either a mandatory hop in
+  the current runtime. The current user-facing path remains Team Manager,
+  unchanged.
+- Operational Context's future sources (ITSM, Alarms, Topology, KPIs,
+  Change, Handover) are Phase 5.2–5.7 roadmap items, listed here only to
+  show where Operational Context is headed — do not build any of them
+  early.
+
+===================================================================
 TRUST / CONTROL PRINCIPLES
 ===================================================================
 
@@ -297,6 +363,28 @@ DEVELOPMENT RULES FOR PHASE 5.1
   Phase 4H — do not design 5.1 in a way that assumes ingested content is
   automatically safe to reason over unguarded.
 - Do not introduce autonomous execution during 5.1.
+- Phase 5.1 builds Knowledge Context capability — one of three future
+  context domains (see "TARGET FUTURE ARCHITECTURE" above) — not a
+  standalone feature bolted onto Incident Manager.
+- Generic KM sits behind Knowledge Context; Knowledge Context is one input
+  the future Context Engineering Layer would assemble alongside
+  Operational Context and Case Context. Do not design 5.1 as if Generic KM
+  were a peer data source alongside Teams/Cases, and do not design it as
+  if Context Engineering already existed as a runtime service.
+- Do not create one-off MOP/SOP tooling — every knowledge object type goes
+  through the same generic architecture/contracts, never type-specific
+  shortcuts.
+- Do not add the Troubleshooting Manager during 5.1A — it is FUTURE (see
+  "TARGET FUTURE ARCHITECTURE" above), not part of this phase.
+- Do not add the Head of Automated Operations during 5.1A — it is FUTURE,
+  not part of this phase, and never a mandatory hop in the current runtime.
+- Do not add future operational integrations (ITSM, Alarms, Topology,
+  KPIs, Change, Handover) early — those are Phase 5.2–5.7, not 5.1.
+- Preserve the current frozen runtime architecture throughout 5.1 — Team
+  Manager remains the only user-facing agent, and Incident Manager remains
+  the only specialist actually wired into a live turn, until 5.1J
+  deliberately connects it to Knowledge Context as the first reference
+  consumer.
 
 Key invariant to check continually while building 5.1: "Can the Knowledge
 layer still work without knowing Incident Manager exists?" If the answer

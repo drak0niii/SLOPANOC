@@ -147,6 +147,45 @@ This is the current topology. No other agent exists today. A future
 specialist (e.g. a Knowledge agent, see [Roadmap](#roadmap)) would attach to
 Team Manager the same way Incident Manager does.
 
+## Architecture Evolution
+
+The sections above describe what is implemented today. This section shows
+where the architecture is headed, so Phase 5.1A and later phases are built
+toward a consistent target — none of the FUTURE/NEXT items below exist in
+the codebase yet.
+
+- **CURRENT (implemented):** Team Manager, Incident Manager, Teams
+  integration, Case context.
+- **NEXT (Phase 5.1, planned):** a Generic Knowledge Management Layer,
+  providing *Knowledge Context* — MOPs/SOPs/RCAs/KB articles live behind
+  this layer, never as raw sources a specialist reads directly.
+- **FUTURE (target architecture, not yet designed in detail):** a Context
+  Engineering Layer that assembles bounded context from Operational,
+  Knowledge, and Case context for a specialist; a second specialist
+  (Troubleshooting Manager); a supervisory Head of Automated Operations
+  agent; and expanded Operational Context sources (ITSM, alarms, topology,
+  KPIs, change, handover — see [Roadmap](#roadmap)).
+
+```mermaid
+flowchart TD
+    HOO["Head of Automated Operations (FUTURE)"] --> TM[Team Manager]
+    TM --> IM["Incident Manager (CURRENT)"]
+    TM --> TSM["Troubleshooting Manager (FUTURE)"]
+    IM --> CEL["Context Engineering Layer (FUTURE)"]
+    TSM --> CEL
+    CEL --> OC["Operational Context<br/>Teams (CURRENT)"]
+    CEL --> KC["Knowledge Context<br/>Generic KM Layer (NEXT)"]
+    CEL --> CC["Case Context<br/>Cases (CURRENT)"]
+    KC --> KM["MOP / SOP / RCA / KB<br/>(behind Generic KM — NEXT)"]
+```
+
+Read this diagram as target architecture, not as a running system. The
+current, actually-running path remains exactly the [Architecture](#architecture)
+and [Agent topology](#agent-topology) sections above: the user talks to
+Team Manager, which delegates to Incident Manager, which uses Teams tools
+through Power Automate. Nothing about today's runtime changes until each
+labeled phase is actually built.
+
 ## Microsoft Teams integration
 
 Read operations (`teams.listChats`, `teams.getMessages`, `teams.getMembers`)
@@ -340,7 +379,7 @@ enterprise-ai-ui/
 │   ├── TEAMS_TOOL_CONTRACT.md   # Teams tool / Power Automate integration contract
 │   ├── PRODUCT.md, UX_SPEC.md    # Original UI/UX product vision documents
 │   └── implementation-handoff/    # Pre-implementation architecture planning (historical)
-└── CLAUDE.md                        # Original UI/UX-prototype-phase project instructions
+└── CLAUDE.md                        # Current implementation guide for Claude Code work in this repo
 ```
 
 ## Current limitations / production readiness

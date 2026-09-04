@@ -64,6 +64,42 @@ user-facing text. `AgentTool` — "allows an agent to be called as a tool ...
 the agent's output is returned as the tool's result" — keeps `team_manager`
 in control of the turn instead, which is why it is used.
 
+### Future agent topology (target architecture — not implemented)
+
+```mermaid
+flowchart TD
+    HOO["Head of Automated Operations (FUTURE)<br/>supervision / efficiency / governance"] --> TM[team_manager - user-facing orchestrator]
+    TM --> IM["incident_manager (CURRENT)"]
+    TM --> TSM["Troubleshooting Manager (FUTURE)"]
+    IM --> CEL["Context Engineering Layer (FUTURE)"]
+    TSM --> CEL
+```
+
+This is target architecture only — nothing in this section exists in the
+codebase today. It is documented here so Phase 5.1A and later phases are
+designed toward a consistent destination, not so it can be mistaken for a
+current capability.
+
+- **`team_manager` remains the only user-facing agent today**, and remains
+  so until a "Head of Automated Operations" agent is actually designed and
+  built — not merely documented. Nothing about this future diagram changes
+  today's runtime path (§2): the user still talks to `team_manager`
+  directly.
+- **Troubleshooting Manager** is a planned second specialist, alongside
+  `incident_manager`, for future contextual-troubleshooting/next-step
+  reasoning work (see the README's roadmap, Phase 7). It would attach to
+  `team_manager` via `AgentTool`, the same way `incident_manager` does
+  (§12) — never built as part of Phase 5.1A.
+- **Head of Automated Operations** is a planned future supervisory agent
+  (oversight/efficiency/governance across specialists), not a mandatory hop
+  in any current or near-term turn. It is not designed in detail here and
+  is out of scope for Phase 5.1A.
+- **Context Engineering Layer** is a future conceptual abstraction — the
+  layer that would assemble the bounded, validated context (operational,
+  knowledge, case) a specialist needs — not a concrete implemented runtime
+  service today. See §12 for how Phase 5.1's Generic Knowledge Management
+  Layer relates to it.
+
 ---
 
 ## 3. Agent vs. tool
@@ -372,3 +408,14 @@ generic, safe response — it never falls back to a normal, tool-enabled
 - See the README's roadmap for the currently planned next specialist
   (Phase 5.1's Generic Knowledge Management Layer) — not yet designed in
   this document; 5.1A will cover that separately.
+- The Generic Knowledge Management Layer (Phase 5.1) is not itself a new
+  agent — it is a **Knowledge Context provider** within the future Context
+  Engineering architecture (see §2's "Future agent topology"), consumed by
+  specialists through generic contracts. It must remain independent of
+  `incident_manager` and of any future specialist (e.g. the future
+  Troubleshooting Manager) — it must not become one-off MOP/SOP reading
+  logic owned by a single agent.
+- Troubleshooting Manager and Head of Automated Operations (§2's future
+  topology) are not part of Phase 5.1A and must not be introduced while
+  building it — 5.1A is scoped to Knowledge Context's foundation
+  (architecture + contracts) only.
