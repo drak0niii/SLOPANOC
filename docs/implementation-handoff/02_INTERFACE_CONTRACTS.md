@@ -1,5 +1,9 @@
 # 02 — Interface Contracts
 
+> Historical planning document, written before backend implementation began.
+> Superseded by README.md, docs/AGENT_CONTRACT.md, and
+> docs/TEAMS_TOOL_CONTRACT.md for current architecture.
+
 Status: **UI/UX frozen.** These are canonical logical contracts, not REST/OpenAPI
 specifications and not database schemas. They are written TypeScript-style for
 precision, but the types themselves are language-neutral concepts. Every contract

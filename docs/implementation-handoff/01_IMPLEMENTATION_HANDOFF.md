@@ -1,5 +1,9 @@
 # 01 — Implementation Handoff
 
+> Historical planning document, written before backend implementation began.
+> Superseded by README.md, docs/AGENT_CONTRACT.md, and
+> docs/TEAMS_TOOL_CONTRACT.md for current architecture.
+
 Status: **UI/UX frozen.** This document explains the product behavior a production
 implementation must reproduce behind the existing, approved frontend.
 

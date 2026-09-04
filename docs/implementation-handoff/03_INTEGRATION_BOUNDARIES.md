@@ -1,5 +1,9 @@
 # 03 — Integration Boundaries
 
+> Historical planning document, written before backend implementation began.
+> Superseded by README.md, docs/AGENT_CONTRACT.md, and
+> docs/TEAMS_TOOL_CONTRACT.md for current architecture.
+
 Status: **UI/UX frozen.** This document defines logical components and the trust
 boundaries between them. It intentionally does not commit to specific cloud
 products, frameworks, or vendors beyond what the source-of-truth docs already

@@ -1,5 +1,9 @@
 # 04 — Backend Build Sequence
 
+> Historical planning document, written before backend implementation began.
+> Superseded by README.md, docs/AGENT_CONTRACT.md, and
+> docs/TEAMS_TOOL_CONTRACT.md for current architecture.
+
 Status: **UI/UX frozen.** This is a recommended implementation **dependency
 order**, not a calendar plan. Each stage is expressed in terms of what it
 requires from prior stages, so a team can validate the ordering against their

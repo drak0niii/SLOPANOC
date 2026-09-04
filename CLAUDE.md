@@ -2,854 +2,363 @@ CLAUDE.md
 
 Project Purpose
 
-This repository is the starting point for the UI/UX prototype of an enterprise AI assistant.
-
-The product should feel as immediate, calm, and intuitive as a modern conversational AI workspace, while remaining visually and structurally its own product.
-
-This phase is intentionally limited to UI/UX prototyping.
-
-Non-Negotiable Scope
-
-Build now
-
-Application shell
-
-Left navigation/sidebar
-
-Empty chat landing state
-
-Prompt composer
-
-Mock conversation states
-
-Project UI
-
-Settings modal
-
-Usage UI
-
-Connectors management UI
-
-Skills management UI
-
-Responsive desktop behavior
-
-Interaction states, overlays, menus, hover states, loading states, and empty states
-
-Mock data where needed
-
-Do NOT build yet
-
-AI APIs
-
-LLM integrations
-
-RAG
-
-embeddings
-
-vector databases
-
-authentication
-
-authorization backends
-
-document ingestion
-
-real connectors
-
-email integrations
-
-Teams integrations
-
-databases
-
-backend services
-
-production telemetry
-
-billing integrations
-
-real usage metering
-
-real file storage
-
-real action execution
-
-If a UI interaction requires one of the above, simulate it with mock data and local state.
-
-Product Principle
-
-The default experience must be:
-
-Open application → type prompt → send → receive response
-
-The user must NOT need to click "New Chat" before entering the first prompt.
-
-The prompt composer is already present and usable when the application opens.
-
-The first submitted prompt automatically creates the conversation and causes it to appear in chat history.
-
-Design Direction
-
-The interface should be:
-
-calm
-
-minimal
-
-premium
-
-highly polished
-
-desktop-first
-
-spacious
-
-low-noise
-
-fast to understand
-
-content-first
-
-conversational rather than dashboard-like
-
-familiar without being a pixel-for-pixel clone of ChatGPT
-
-Prefer:
-
-whitespace
-
-subtle hierarchy
-
-progressive disclosure
-
-restrained use of borders
-
-contextual controls
-
-menus and overlays instead of permanent clutter
-
-soft visual transitions
-
-strong alignment and spacing discipline
-
-Avoid:
-
-enterprise dashboard aesthetics
-
-excessive cards
-
-dense toolbars
-
-permanent panels for secondary actions
-
-unnecessary labels
-
-duplicated controls
-
-decorative complexity
-
-gradients used only for visual effect
-
-oversized hero content
-
-onboarding dashboards
-
-landing-page marketing patterns inside the product
-
-"Get Started" screens before the prompt
-
-Core Information Architecture
-
-Global application
-
-Contains:
-
-global approved baseline knowledge
-
-global connector catalogue
-
-global skill catalogue
-
-settings
-
-usage
-
-account/help/logout controls
-
-cross-project chat history
-
-Global approved baseline knowledge
-
-Global approved baseline knowledge exists but is system/admin-managed and is not managed by the end user in this UI prototype.
-
-The baseline knowledge will later be supplied from an external approved source such as a Google Cloud Storage bucket.
-
-For this UI/UX phase:
-
-do not build a global knowledge-management screen
-
-do not build bucket configuration
-
-do not build ingestion
-
-do not build approval workflows
-
-use mock source/citation data only where the UX needs to represent grounded answers
-
-Project
-
-A Project is a workspace/container.
-
-A project can contain:
-
-project instructions
-
-project approved baseline documents
-
-selected global connectors
-
-project chats
-
-project files
-
-New chats started inside a project inherit the project context.
-
-Skills are NOT configured at project level.
-
-Chat
-
-A chat:
-
-belongs either to the general workspace or a project
-
-maintains conversation history
-
-can receive temporary files/folders from the prompt composer
-
-can have zero or one active skill
-
-is automatically created after the first user prompt is submitted
-
-Skills apply per chat only.
-
-Knowledge Behavior to Represent in the UX
-
-The intended future assistant behavior is strict grounding.
-
-For knowledge-grounded questions:
-
-use approved baseline documents
-
-do not silently supplement missing knowledge from general model knowledge
-
-if the answer is not available in approved knowledge, say so clearly
-
-make source provenance visible in the response experience
-
-The UI prototype should anticipate citations/source references, but no real retrieval system is needed yet.
-
-The global approved baseline is system/admin-managed and will later come from an approved external source such as Google Cloud Storage.
-
-Connector Model
-
-Connectors are managed globally.
-
-Examples may include:
-
-Email
-
-Microsoft Teams
-
-SharePoint
-
-ticketing systems
-
-monitoring systems
-
-file repositories
-
-APIs
-
-Projects select which globally available connectors are enabled for that workspace.
-
-Future connectors can support:
-
-read/retrieve/search
-
-action/write/update/send
-
-For the future product:
-
-read-only actions may happen directly
-
-external state-changing actions should require explicit confirmation
-
-In this UI phase:
-
-use mock connector data
-
-simulate connected/disconnected/error states
-
-simulate an approval confirmation pattern for write actions
-
-do not perform real actions
-
-Skill Model
-
-Skills are managed globally.
-
-A skill is a reusable behavioral/task instruction set that changes how the assistant approaches a request.
-
-Examples:
-
-Incident Investigator
-
-Executive Communication
-
-NOC Troubleshooting
-
-Concise Writing
-
-Rules:
-
-skills apply to chats, not projects
-
-only ONE skill may be active in a chat at a time
-
-a chat may have no active skill
-
-selecting a new skill for a chat replaces the previously active skill in that chat
-
-project instructions and skill instructions are separate concepts
-
-project instructions describe the workspace/context
-
-the skill describes how the assistant should perform the task within the current chat
-
-The UI must not imply that a skill is inherited from, stored on, or configured for a project.
-
-The UI must not imply that multiple skills can be active simultaneously.
-
-Main Navigation
-
-The left sidebar should include:
-
-Top
-
-New Chat
-
-Projects
-
-expandable/collapsible projects
-
-project chats accessible below the project
-
-contextual project actions where appropriate
-
-Chat History
-
-recent chats
-
-pinning
-
-rename
-
-contextual options
-
-project association where relevant
-
-Bottom
-
-Settings
-
-Help
-
-Account / Logout
-
-The sidebar should feel lightweight and navigational, not like a management console.
-
-Main Chat Area
-
-The main area has two primary states.
-
-Empty chat state
-
-When the app opens:
-
-prompt composer is immediately visible
-
-composer is the visual focus
-
-no dashboard
-
-no onboarding cards
-
-no forced project selection
-
-no extra step before typing
-
-keep the empty canvas calm
-
-Active conversation state
-
-After sending the first prompt:
-
-user prompt appears in the conversation
-
-mock assistant response appears
-
-chat is now represented in history
-
-composer remains available
-
-source/citation affordances can be mocked
-
-conversation content becomes the visual focus
-
-Prompt Composer
-
-The composer should support the following UI affordances:
-
-"+" button
-
-text input
-
-thinking effort selector
-
-skill selector
-
-microphone
-
-send button
-
-The "+" menu should expose:
-
-Add files
-
-Add folders
-
-Add connector
-
-Important:
-
-this is UI only
-
-use mocked attachment behavior
-
-use mocked connector selection
-
-do not implement real uploads or integrations unless they are purely local prototype behavior
-
-The composer should remain visually simple.
-
-Secondary controls should not overpower the text input.
-
-The skill selector applies only to the current chat.
-
-Settings
-
-Settings should open as a modal/overlay rather than forcing navigation to a standalone dashboard.
-
-Initial sections:
-
-Usage
-
-Connectors
-
-Skills
-
-The structure should be extensible to future account/preferences/security sections, but those are not required now.
-
-Do not add a global Knowledge section in the user-facing Settings UI during this phase.
-
-Global approved baseline knowledge is system/admin-managed outside this prototype.
-
-Usage UI
-
-Usage is mock UI only.
-
-It may show:
-
-usage summary
-
-model/request consumption
-
-time-range breakdown
-
-limits/allowance
-
-connector-related usage where useful
-
-Do not invent complex enterprise billing flows.
-
-The goal is clarity, not analytics density.
-
-Connectors UI
-
-The connectors section should allow the user to understand:
-
-which connectors exist
-
-whether each is connected
-
-connection health/state
-
-what it is for
-
-whether it supports read-only or read/write behavior
-
-an obvious connect/disconnect/manage action
-
-Use realistic mock states:
-
-Connected
-
-Not connected
-
-Permission required
-
-Error
-
-Do not build real OAuth or API integrations.
-
-Skills UI
-
-The skills section should support:
-
-browse skills
-
-create a skill
-
-edit a skill
-
-view skill name
-
-view short description
-
-view/edit instruction text
-
-Skills are defined and managed globally, but activation happens per chat.
-
-Do not create a global "active skill" state in Settings.
-
-Only one skill may be active in any given chat at a time.
-
-Project UI
-
-A project should expose project-specific configuration without becoming a dashboard.
-
-Project configuration may include:
-
-Instructions
-
-Knowledge
-
-Connectors
-
-Files
-
-Chats
-
-Do NOT include Skill as a project configuration section.
-
-Skills are selected per chat only.
-
-Prefer a calm, focused layout.
-
-Global management belongs in Settings.
-
-Project screens only select/configure what the project uses.
-
-UX Principles
-
-Immediate entry
-
-The user should never be blocked from typing a prompt when the application first opens.
-
-Progressive disclosure
-
-Show secondary options only when needed.
-
-Context clarity
-
-The user should be able to understand:
-
-whether they are in a general chat or project
-
-which project is active
-
-which skill is active in the current chat
-
-which connectors are available
-
-whether sources were used
-
-Do this subtly.
-
-Low cognitive load
-
-Do not present every available feature at once.
-
-Familiar interaction patterns
-
-Use conventions users already understand:
-
-sidebar navigation
-
-contextual menus
-
-modal settings
-
-inline attachments
-
-composer actions
-
-hover states
-
-tooltips where needed
-
-Explicit action confirmation
-
-Prototype a clear confirmation step before mocked state-changing external actions.
-
-Implementation Discipline
-
-Before writing implementation code:
-
-Inspect the repository and read:
-
-CLAUDE.md
-
-docs/PRODUCT.md
-
-docs/UX_SPEC.md
-
-Propose the component architecture.
-
-Propose the page/state architecture.
-
-Identify reusable components.
-
-Identify the minimum state model required for the prototype.
-
-Present an implementation plan.
-
-Stop and wait for approval before implementation if explicitly requested by the user.
-
-Do not create a large number of screens at once.
-
-Do not install packages, initialize a framework, scaffold an application, or choose the final technology stack until the architecture proposal has been approved.
-
-The preferred build order is:
-
-App shell
-
-Empty chat landing state
-
-Prompt composer
-
-Sidebar
-
-Active conversation state
-
-Project workspace
-
-Settings modal shell
-
-Usage
-
-Connectors
-
-Skills
-
-Responsive and interaction polish
-
-The first major quality gate is the opening experience.
-
-Do not move on merely because the opening screen is functional.
-
-The shell, proportions, spacing, typography, composer, sidebar, hover states, and visual hierarchy should feel production-quality before expanding the prototype.
-
-Component Philosophy
-
-Prefer reusable, composable components.
-
-Likely conceptual components include:
-
-AppShell
-
-Sidebar
-
-SidebarSection
-
-ProjectTree
-
-ChatHistory
-
-ChatRow
-
-MainConversation
-
-EmptyChat
-
-MessageList
-
-Message
-
-PromptComposer
-
-ComposerPlusMenu
-
-ThinkingEffortSelector
-
-SkillSelector
-
-AttachmentChip
-
-SourceCitation
-
-SettingsModal
-
-SettingsNavigation
-
-UsagePanel
-
-ConnectorsPanel
-
-ConnectorRow/Card
-
-SkillsPanel
-
-SkillEditor
-
-ProjectSettings
-
-ConfirmationDialog
-
-These are conceptual suggestions, not mandatory implementation names.
-
-Claude should propose the final architecture before implementation.
-
-Prototype Data
-
-Use clearly separated mock data for:
-
-projects
-
-chats
-
-connectors
-
-skills
-
-usage
-
-messages
-
-files
-
-citations
-
-Do not hard-code large amounts of mock content directly into presentation components when avoidable.
-
-Mock skill assignment belongs to chat data, not project data.
-
-Accessibility
-
-The prototype should observe good accessibility fundamentals:
-
-keyboard-accessible controls
-
-visible focus states
-
-semantic buttons
-
-appropriate labels
-
-sufficient contrast
-
-dialogs that can be closed predictably
-
-menus that support keyboard navigation where practical
-
-Responsive Behavior
-
-Desktop is the priority.
-
-The UI should nevertheless degrade gracefully when width is reduced.
-
-At smaller widths:
-
-sidebar may collapse
-
-secondary metadata may hide
-
-composer must remain usable
-
-modals should remain accessible
-
-conversation content should maintain readable line lengths
-
-Do not spend disproportionate effort on mobile during the first UI milestone.
-
-Visual Fidelity Rule
-
-Do not copy ChatGPT pixel-for-pixel.
-
-The goal is to borrow the successful interaction model:
-
-immediate prompt
-
-conversation-first workspace
-
-restrained navigation
-
-contextual controls
-
-progressive disclosure
-
-Develop an original visual system through:
-
-typography
-
-spacing
-
-surface treatment
-
-radius
-
-icon choices
-
-menu treatment
-
-interaction motion
-
-hierarchy
-
-Decision Rule
-
-When uncertain between:
-
-showing more information
-
-hiding it until needed
-
-prefer hiding it until needed, unless hiding it makes the user lose important context.
-
-When uncertain between:
-
-adding another screen
-
-using a modal/popover/contextual interaction
-
-prefer the simpler interaction if it remains clear.
-
-When uncertain between:
-
-visually impressive
-
-calm and obvious
-
-prefer calm and obvious.
+SLOPANOC is an enterprise AI assistant for Microsoft Teams-based incident and
+operational collaboration. It began as a UI/UX-only prototype; that phase is
+over. A real React frontend and a real FastAPI backend now exist, orchestrating
+Gemini (via Google ADK) to read and summarize Microsoft Teams conversations
+and to propose — never silently execute — Teams write actions.
+
+Read this file together with README.md, docs/AGENT_CONTRACT.md, and
+docs/TEAMS_TOOL_CONTRACT.md before making an architectural change. Those three
+documents are current architectural truth; this file summarizes what matters
+for day-to-day work in this repository and must never contradict them. If this
+file and the implementation ever disagree, the implementation wins — treat
+that as a signal this file needs a small correction, not that the code is
+wrong.
+
+docs/PRODUCT.md and docs/UX_SPEC.md remain useful for original product/UX
+intent (Projects, global Knowledge, Connectors beyond Teams, Skills) — most of
+that surface is still local-state mock UI, not backend-wired. Do not treat
+those two documents as a description of current backend capability.
+
+===================================================================
+CURRENT STATE (verified against the implementation — do not assume more)
+===================================================================
+
+- Real React + TypeScript frontend (Vite, Tailwind) and real FastAPI backend.
+- Gemini, via Google ADK, performs reasoning/orchestration.
+- Team Manager is the only user-facing agent.
+- Incident Manager is currently the principal specialist agent, invoked by
+  Team Manager through an ADK AgentTool call (in-process, not a hand-off).
+- Power Automate is the Microsoft Teams / M365 gateway. Microsoft Graph is
+  not integrated directly anywhere in this stack.
+- Persistent chat sessions are implemented (ADK DatabaseSessionService,
+  SQLite locally).
+- Persistent Case/fault context is implemented (backend/cases/), distinct
+  from ordinary session/chat state.
+- True SSE streaming is implemented, with real mid-run cancellation.
+- Edit/rewind is implemented — editing an earlier message excludes later,
+  now-stale turns from model context going forward.
+- Deterministic conversation targeting is implemented (current_thread /
+  selected_external_conversation / explicit_external_conversation).
+- Teams read flows are implemented: chat discovery, deterministic name
+  resolution, ambiguity handling, message retrieval with pagination and
+  time-range scoping, decision/action/proposal/open-question/risk
+  extraction.
+- Teams write proposal/approval flows are implemented: propose → approve/
+  reject (trusted API endpoint, never the model) → deterministic
+  re-authorized execution.
+- SelectionCard (ambiguous chat choice) and ApprovalCard (write-action
+  approval) both exist and are different concepts — see "Selection vs.
+  approval" below.
+- TrustedSpecialistResult / trusted-continuation architecture exists: a
+  validated specialist result can be handed to a presentation-only Team
+  Manager variant (tools=[]) in the same turn, with a fail-closed path if
+  validation fails.
+- SourceReference / Supporting Evidence provenance exists: backend-built,
+  message-owned, validated against actually-retrieved evidence.
+- Markdown rendering and lightweight response typography are implemented
+  for real backend assistant messages.
+- Model warm-up and per-model-call performance/timing instrumentation
+  exist.
+
+Do not describe this project as UI-only, prototype-only, pre-agent,
+pre-Teams-integration, pre-persistence, pre-streaming, pre-provenance, or
+pre-approval. None of that is true anymore.
+
+The application shell, sidebar, Projects, Settings (Usage/Connectors/
+Skills), and Scheduled Tasks inherited from the original UI/UX prototype
+phase still run on local, mock state — they are not backend-wired. The real,
+backend-driven experience is the chat conversation itself (any chat with a
+`backendSessionId`). Do not assume Projects/Connectors/Skills/Usage have
+backend support just because the chat pipeline does.
+
+===================================================================
+FROZEN ARCHITECTURE — do not casually rework
+===================================================================
+
+    SLOPANOC React UI
+            v
+    FastAPI backend
+            v
+    Gemini ADK Team Manager
+            v
+    Incident Manager / deterministic application services
+            v
+    controlled tools
+            v
+    Power Automate gateway
+            v
+    Microsoft Teams / M365
+
+- Team Manager remains the only user-facing agent.
+- Incident Manager remains a specialist, invoked via AgentTool, never native
+  sub_agents transfer.
+- Power Automate remains the current M365 gateway. Do not introduce a direct
+  Microsoft Graph integration unless explicitly requested.
+- No model-controlled approval, ever.
+- No model-controlled destination binding — a chat id used for retrieval or
+  a write always traces back to a real tool result, never a model assertion.
+- No fabricated provenance — evidence is validated against actually
+  retrieved messages before it reaches the user.
+- No unrestricted generic HTTP / SQL / shell tools given to any agent.
+- No keyword/regex-based natural-language routing, unless a deterministic
+  protocol explicitly requires it (conversation targeting and chat
+  resolution are model semantic judgment plus deterministic validation, not
+  string matching on the user's wording).
+- Do not reopen frozen performance, provenance, or Markdown-rendering work
+  unless a real, currently-observed defect requires it.
+
+===================================================================
+TRUST / CONTROL PRINCIPLES
+===================================================================
+
+MODEL MAY:
+- interpret, summarize, and classify Teams content
+- select among already-validated evidence
+- propose a Teams write action
+
+MODEL MAY NOT:
+- authorize a write
+- approve its own action
+- override a trusted, already-resolved chat destination
+- fabricate source identity or evidence
+- expose secrets (gateway URLs, credentials) in any form
+- grant itself permissions
+- bypass trusted application state (approval records, selection state,
+  trusted-result envelopes)
+
+Every sensitive decision — write authorization, destination binding,
+evidence provenance — is enforced by deterministic application code, never
+by an agent's prompt-following alone. When adding a new capability, ask
+where the sensitive decision actually gets enforced; if the answer is "the
+prompt asks the model nicely," that is not sufficient.
+
+===================================================================
+CURRENT TEAMS BEHAVIOR
+===================================================================
+
+- Conversation target resolution decides, per request, whether the user
+  means current_thread (this SLOPANOC conversation), selected_external_
+  conversation (the already-selected Teams chat), or explicit_external_
+  conversation (a Teams chat named in the current message) — model semantic
+  judgment, deterministically validated, never regex/keyword routing.
+- Ambiguity is resolved via SelectionCard and session state, never via the
+  approval mechanism — selection and approval are separate state machines.
+- Once a destination is resolved, it is authoritative for the rest of the
+  turn — the model cannot substitute a different chat.
+- Read continuation (after a selection, or via the direct-unique fast path
+  for a first-time exact match) uses trusted, backend-held state to drive
+  retrieval deterministically, converging on the same trusted-result/
+  presentation pipeline either way.
+- Writes always go through ActionProposal + trusted approval before
+  anything reaches Power Automate.
+- Teams provenance is backend-validated: evidence not traceable to an
+  actual retrieval is stripped before the user sees it.
+- SourceReference is message-owned, not a global/session-level artifact.
+- `teams_get_members` is used deterministically for contributor enrichment
+  (building SourceReference), not as a model-callable tool — do not assume
+  the model can look up chat membership on demand.
+
+See docs/TEAMS_TOOL_CONTRACT.md for the full contract.
+
+===================================================================
+CURRENT PERSISTENCE / RUNTIME
+===================================================================
+
+- Session persistence uses ADK's DatabaseSessionService; local development
+  defaults to SQLite. This is not a production database architecture —
+  Postgres/Cloud SQL is a likely direction, not yet built.
+- Case/fault context (backend/cases/) is a separate, optional persistence
+  layer from ordinary session/chat state — do not conflate the two.
+- Streaming is real SSE, with a background-task turn model — a turn runs as
+  a background task and is cancellable mid-run.
+- Edit/rewind changes what is included in model context going forward; it
+  does not delete history.
+- Model warm-up and per-model-call timing instrumentation exist for
+  diagnosis, not as a production observability/alerting stack.
+
+Do not imply distributed, multi-instance, or otherwise fully "production"
+persistence/runtime characteristics — none of that exists yet.
+
+===================================================================
+CURRENT LIMITATIONS
+===================================================================
+
+SLOPANOC is not production-ready. In particular, none of the following
+exist yet:
+
+- Phase 4H security hardening (trust-boundary/threat modeling,
+  prompt-injection isolation, tool output validation, secret-handling
+  hardening, security audit events, adversarial regression suite)
+- enterprise authentication
+- per-user Microsoft identity / delegated Graph (Power Automate currently
+  runs as its own configured connection identity, not per-user)
+- production database/migrations
+- distributed runtime coordination
+- production observability/alerting
+- load/concurrency validation
+- final secret-management hardening
+- a committed Python dependency manifest (no requirements.txt/pyproject.toml
+  exists yet — do not imply one does; see README.md's local-development
+  section for the currently-required packages)
+- broader operational integrations: generic Knowledge Management, ITSM,
+  alarm/topology/KPI/change integrations
+- autonomous remediation of any kind
+
+See README.md's "Current limitations / production readiness" for the full,
+current list.
+
+===================================================================
+LOCKED ROADMAP — do not reorder
+===================================================================
+
+CURRENT: Teams integration, core platform, and Markdown rendering are
+complete.
+
+NEXT:
+
+PHASE 5.1 — GENERIC KNOWLEDGE MANAGEMENT LAYER
+
+5.1A Knowledge architecture + contracts
+5.1B Metadata + applicability
+5.1C Generic ingestion boundary
+5.1D Content processing / structured segmentation
+5.1E Versioning + lifecycle governance
+5.1F Knowledge repository abstraction
+5.1G Retrieval + ranking
+5.1H Knowledge provenance
+5.1I Generic agent-facing Knowledge tools
+5.1J First reference consumer integration
+
+5.1 is a GENERIC KM PLATFORM CAPABILITY. It is NOT a one-off MOP reader,
+Incident-Manager-specific KM logic, a JOC implementation, or autonomous
+execution. Initial knowledge object types may include MOP, SOP, RCA, KB
+Article, Troubleshooting Guide, Operational Procedure, Technical
+Instruction. The KM layer must remain independent from Incident Manager —
+Incident Manager in 5.1J is only the first reference consumer, used to
+validate the generic contract.
+
+Then: LOCAL GIT CHECKPOINT
+
+Then: PHASE 4H SECURITY HARDENING
+
+4H.1 Trust boundaries + threat model
+4H.2 Prompt-injection / untrusted external content isolation
+4H.3 Tool authorization + output validation
+4H.4 Sensitive-data / secret handling
+4H.5 Model Armor integration
+4H.6 Security audit events + safe failure
+4H.7 Adversarial regression suite
+
+Then: FULL REGRESSION + LIVE VALIDATION
+
+Then: GITHUB CHECKPOINT
+
+Then:
+
+5.2 ITSM
+5.3 Alarm / fault
+5.4 Topology / inventory
+5.5 KPI / observability
+5.6 Change Management
+5.7 Handover / operational context
+
+Then:
+
+Phase 6 Agent expansion
+Phase 7 JOC / advanced troubleshooting
+Phase 8 Controlled autonomy
+
+===================================================================
+DEVELOPMENT RULES FOR PHASE 5.1
+===================================================================
+
+- Build contracts before storage.
+- Build generic KM before agent integration.
+- MOP is a document type, not an architecture — do not design the KM layer
+  around any single document type.
+- Keep KM independently testable without Gemini.
+- Do not let Incident Manager own KM logic.
+- Do not let agents access raw database/storage directly — go through a
+  tool/service boundary, the same way Teams access goes through
+  tools/teams/, never a direct client in agent code.
+- Enforce lifecycle/version/applicability deterministically, not by model
+  judgment.
+- Provenance must be validated against real retrieved evidence — the same
+  discipline already enforced for Teams evidence, never relaxed for
+  Knowledge.
+- Semantic relevance alone is not enough to select a knowledge item for use.
+- Approved/current/applicable knowledge must be favored for operational use
+  over merely similar content.
+- Vector/index storage must not become the system of record — it is a
+  retrieval aid over a real repository, not the source of truth.
+- External knowledge content must later be treated as untrusted data during
+  Phase 4H — do not design 5.1 in a way that assumes ingested content is
+  automatically safe to reason over unguarded.
+- Do not introduce autonomous execution during 5.1.
+
+Key invariant to check continually while building 5.1: "Can the Knowledge
+layer still work without knowing Incident Manager exists?" If the answer
+becomes no, the architecture is too coupled — back out and re-decouple
+before continuing.
+
+===================================================================
+DESIGN PRINCIPLES (frontend)
+===================================================================
+
+These principles governed the original UI/UX prototype phase and remain the
+standard for any frontend work, including the still-mock areas
+(Projects/Settings/Connectors/Skills) and any future backend-wired UI:
+
+The interface should be calm, minimal, premium, desktop-first, spacious,
+low-noise, content-first, and conversational rather than dashboard-like —
+familiar without being a pixel-for-pixel clone of any other assistant.
+Prefer whitespace, subtle hierarchy, progressive disclosure, restrained
+borders, contextual controls, and menus/overlays over permanent panels.
+Avoid enterprise-dashboard aesthetics, excessive cards, dense toolbars,
+decorative complexity, and onboarding/marketing patterns inside the
+product.
+
+The prompt composer is always immediately usable when the app opens — the
+user is never blocked from typing, and never needs a "New Chat" step before
+their first prompt. The first submitted prompt creates the conversation.
+
+When uncertain between showing more information or hiding it until needed,
+prefer hiding it until needed, unless doing so loses important context.
+When uncertain between a new screen and a modal/popover/contextual
+interaction, prefer the simpler interaction if it stays clear. When
+uncertain between visually impressive and calm and obvious, prefer calm and
+obvious.
+
+Accessibility fundamentals apply throughout: keyboard-accessible controls,
+visible focus states, semantic buttons, sufficient contrast, predictably
+closable dialogs, keyboard-navigable menus.
+
+Desktop is the priority; the UI should still degrade gracefully at smaller
+widths (sidebar may collapse, secondary metadata may hide, composer and
+modals must remain usable, conversation content should keep a readable line
+length).
+
+===================================================================
+WORKING IN THIS REPOSITORY
+===================================================================
+
+Before a non-trivial architectural change, read README.md,
+docs/AGENT_CONTRACT.md, and docs/TEAMS_TOOL_CONTRACT.md — they are current
+truth for the backend/agent architecture. For frontend product/UX intent
+beyond what's built, docs/PRODUCT.md and docs/UX_SPEC.md remain useful, with
+the caveat above that most of what they describe (Projects, global
+Knowledge, non-Teams Connectors, Skills) is still local-state mock UI.
+
+Propose an implementation plan for a non-trivial change before writing code,
+the same discipline this project has always used: identify what already
+exists, what's reusable, and the minimum change needed — do not
+casually rework the frozen architecture above. Do not install new
+dependencies, change the technology stack, or restructure existing modules
+without a clear reason tied to the task at hand.
+
+docs/implementation-handoff/ contains historical pre-implementation planning
+documents, superseded by README.md/docs/AGENT_CONTRACT.md/
+docs/TEAMS_TOOL_CONTRACT.md for current architecture — useful for historical
+context, not for current truth.

@@ -12,7 +12,13 @@ Open the application and ask a question immediately.
 
 The interface should feel familiar to users of modern AI assistants, but the product is designed around governed enterprise knowledge, projects, connectors, and reusable behavioral skills.
 
-The initial prototype is UI/UX only.
+The initial phase of this product was UI/UX only. A working backend
+(Microsoft Teams integration, agents, persistence, approval) has since been
+implemented for the Teams domain described here — see README.md and
+docs/AGENT_CONTRACT.md for the current architecture. The product objects
+and UI surfaces below (Projects, global Knowledge, Connectors beyond Teams,
+Skills) remain product/UX intent, not yet implemented — see README.md's
+"Current capabilities" and "Roadmap" for what exists today.
 
 2. Product Goal
 

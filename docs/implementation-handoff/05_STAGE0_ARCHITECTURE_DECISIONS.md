@@ -1,5 +1,9 @@
 # Stage 0 Architecture Decisions
 
+> Historical planning document, written before backend implementation began.
+> Superseded by README.md, docs/AGENT_CONTRACT.md, and
+> docs/TEAMS_TOOL_CONTRACT.md for current architecture.
+
 Status: **UI/UX frozen. No backend implemented in this pass.** This document
 resolves the architecture decisions required before backend implementation can
 safely begin, per the approved Implementation Handoff package
