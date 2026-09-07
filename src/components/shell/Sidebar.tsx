@@ -219,6 +219,7 @@ export function Sidebar() {
     openScheduledTasks,
     openAllProjects,
     startScheduledTaskSetup,
+    retrySavedChats,
   } = useAppState();
   const collapsed = state.sidebarCollapsed;
   // Task-owned chats are listed under Tasks instead, so a scheduling
@@ -462,23 +463,46 @@ export function Sidebar() {
               expanded={chatsOpen}
               onToggle={() => setChatsOpen((open) => !open)}
             />
-            {chatsOpen &&
-              (generalChats.length === 0 ? (
-                <p className={SECTION_EMPTY_CLASS}>No chats yet</p>
-              ) : (
-                <div className="mt-1 flex flex-col gap-0.5">
-                  {generalChats.map((chat) => (
-                    <SidebarChatRow
-                      key={chat.id}
-                      chat={chat}
-                      active={activeChat?.id === chat.id}
-                      onSelect={() => selectChat(chat.id)}
-                      showPinIndicator
-                      showChatIcon
-                    />
-                  ))}
-                </div>
-              ))}
+            {chatsOpen && (
+              <div className="mt-1 flex flex-col gap-0.5">
+                {/* POST-5.1 B4C correction pass — the GLOBAL saved-chat
+                    list request state, distinct from any one chat's own
+                    lazy history load. "Loading chats…" only replaces the
+                    empty state while nothing is known yet — it must never
+                    read as "you have no saved chats" during a real
+                    network round trip. */}
+                {state.savedChatsHydrationStatus === "loading" && generalChats.length === 0 && (
+                  <p className={SECTION_EMPTY_CLASS}>Loading chats…</p>
+                )}
+                {state.savedChatsHydrationStatus === "error" && (
+                  <div className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-tertiary">
+                      Couldn&rsquo;t load saved chats
+                    </p>
+                    <button
+                      type="button"
+                      onClick={retrySavedChats}
+                      className="shrink-0 rounded px-1 text-[11px] font-medium text-accent transition-colors duration-150 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+                {state.savedChatsHydrationStatus === "loaded" && generalChats.length === 0 && (
+                  <p className={SECTION_EMPTY_CLASS}>No chats yet</p>
+                )}
+                {generalChats.map((chat) => (
+                  <SidebarChatRow
+                    key={chat.id}
+                    chat={chat}
+                    active={activeChat?.id === chat.id}
+                    onSelect={() => selectChat(chat.id)}
+                    showPinIndicator
+                    showChatIcon
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

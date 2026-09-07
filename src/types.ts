@@ -333,6 +333,22 @@ export interface Chat {
    * Zero or more entries per message (a model may select multiple
    * distinct governed sections). */
   knowledgeSources?: Record<string, KnowledgeSourceReferenceDTO[]>;
+  /** POST-5.1 B4C — set ONLY for a chat backed by a real backend session
+   * whose transcript may still need fetching: `"unloaded"` (a saved-chat
+   * summary was hydrated at boot, but `GET /api/sessions/{id}/history` has
+   * never been called), `"loading"` (that call is in flight), `"loaded"`
+   * (the transcript above is authoritative), `"error"` (the last attempt
+   * failed — retryable, see `historyError`). Left `undefined` for every
+   * other chat (local/mock/demo/project, and any backend chat that already
+   * owns its own live, freshly-sent transcript) — those never attempt a
+   * history fetch at all. Never `messageIds.length === 0` alone as the
+   * signal: a real history can legitimately be a single failed user-only
+   * turn with a still-empty-looking transcript otherwise. */
+  historyHydrationStatus?: "unloaded" | "loading" | "loaded" | "error";
+  /** Safe, already user-facing message for `historyHydrationStatus ===
+   * "error"` — the real backend `ApiError.message`, or a fixed fallback.
+   * Never raw transport/exception text. */
+  historyError?: string;
 }
 
 /** Expandable, sanitized run trace (pre-4H milestone) — see Chat.runTraces

@@ -333,3 +333,61 @@ export interface SkipSelectionResponse {
   selection_id: string;
   status: string;
 }
+
+// --- POST-5.1 B4C: saved-chat list + lazy transcript hydration -------------
+
+/** One row of `GET /api/sessions` (backend/api/session_history_service.py's
+ * `SessionSummaryDTO`). `updated_at` is the backend's own `chat_activity_at`
+ * — the latest genuine visible user chat activity — never a generic
+ * last-modified time; the list itself already arrives sorted newest first. */
+export interface SavedSessionSummaryDTO {
+  session_id: string;
+  title: string;
+  updated_at: string;
+}
+
+export interface ListSavedSessionsResponseDTO {
+  sessions: SavedSessionSummaryDTO[];
+}
+
+/** One row of `GET /api/sessions/{id}/history`'s `attachments` array.
+ * Typed because it's part of the real response shape, but NOT mapped into
+ * any `Message` yet — persisted-attachment rehydration/rendering is B4D,
+ * not B4C (see AppState.tsx's history-mapping code for where this is
+ * deliberately left unused). */
+export interface SessionHistoryAttachmentDTO {
+  attachment_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+}
+
+/** One row of `GET /api/sessions/{id}/history`'s `messages` array.
+ * `turn_id` is the backend's ADK `invocation_id`; `message_id` is already
+ * globally stable and unique on its own (`"{turn_id}:user"`/
+ * `"{turn_id}:assistant"`) — see AppState.tsx's history-mapping code for
+ * why `turn_id` itself is never separately stored on the frontend
+ * `Message` model. */
+export interface SessionHistoryMessageDTO {
+  message_id: string;
+  turn_id: string;
+  role: "user" | "assistant";
+  text: string;
+  created_at: string;
+  attachments: SessionHistoryAttachmentDTO[];
+}
+
+export interface SessionHistoryResponseDTO {
+  session_id: string;
+  messages: SessionHistoryMessageDTO[];
+}
+
+/** Response for `PATCH /api/sessions/{id}` — a durable manual rename.
+ * `updated_at` is echoed back unchanged (rename never touches
+ * `chat_activity_at`); the frontend does not currently need to read it,
+ * but it's part of the real wire shape. */
+export interface RenameSessionResponseDTO {
+  session_id: string;
+  title: string;
+  updated_at: string;
+}

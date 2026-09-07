@@ -37,11 +37,20 @@ import type {
   KnowledgeSourceReferenceDTO,
   PendingActionDTO,
   PendingSelectionDTO,
+  SavedSessionSummaryDTO,
+  SessionHistoryResponseDTO,
   SourceReferenceDTO,
   TraceStepDTO,
 } from "../api/types";
 import { elapsedSecondsSince } from "../lib/elapsedTime";
-import { cancelRun, createSession, rewindSession } from "../api/sessions";
+import {
+  cancelRun,
+  createSession,
+  getSessionHistory,
+  listSavedSessions,
+  renameSession as renameSessionApi,
+  rewindSession,
+} from "../api/sessions";
 import { uploadAttachment } from "../api/attachments";
 import { ApiError } from "../api/client";
 import { runBackendChat } from "../api/runBackendChat";
@@ -211,6 +220,18 @@ export interface AppState {
    * never nudged yet, so PromptComposer's effect doesn't fire on mount. */
   composerNudgeAt: number;
   draft: DraftState;
+  /** POST-5.1 B4C correction pass — the GLOBAL `GET /api/sessions` boot
+   * (and retry) status, distinct from any single chat's own
+   * `historyHydrationStatus`. Starts `"loading"` so the sidebar's Chats
+   * section can tell "still finding out" apart from "found zero saved
+   * chats" apart from "the request itself failed" — a silent/ambiguous
+   * empty state during a real network failure previously looked
+   * identical to a genuinely empty account. */
+  savedChatsHydrationStatus: "loading" | "loaded" | "error";
+  /** Safe, already user-facing message for `savedChatsHydrationStatus ===
+   * "error"` — the real `ApiError.message`, or a fixed fallback. Never
+   * raw transport/exception text. */
+  savedChatsHydrationError?: string;
 }
 
 // Exported (alongside `reducer` below) so AppState.reducer.test.ts can
@@ -237,6 +258,7 @@ export const initialState: AppState = {
   activeScheduledTaskId: null,
   composerNudgeAt: 0,
   draft: freshDraft(),
+  savedChatsHydrationStatus: "loading",
 };
 
 export type Action =
@@ -351,6 +373,23 @@ export type Action =
   // clobbers an already-set `backendSessionId` (a second, superseded
   // in-flight session-creation call must never overwrite the first).
   | { type: "BACKEND_SESSION_ENSURED"; payload: { chatId: string; sessionId: string } }
+  // POST-5.1 B4C — merges `GET /api/sessions`'s own summaries (already
+  // owner-scoped, empty-session-excluded, sorted newest activity first)
+  // into state at boot. Dedupes by `backendSessionId`, never by `Chat.id`
+  // equality alone (see AppState.tsx's reducer case) — safe to dispatch
+  // more than once (StrictMode double-invocation) without ever producing a
+  // duplicate chat or re-ordering an already-hydrated one.
+  | { type: "HYDRATE_SAVED_SESSIONS"; payload: { sessions: SavedSessionSummaryDTO[] } }
+  // POST-5.1 B4C correction pass — the GLOBAL saved-chat-list request
+  // lifecycle (see AppState.savedChatsHydrationStatus's own docstring).
+  // STARTED is dispatched only by an explicit retry (the initial state is
+  // already "loading", so boot never needs to dispatch it itself).
+  | { type: "SAVED_CHATS_HYDRATION_STARTED" }
+  | { type: "SAVED_CHATS_HYDRATION_FAILED"; payload: { message: string } }
+  | { type: "HISTORY_FETCH_STARTED"; payload: { chatId: string } }
+  | { type: "HISTORY_FETCH_SUCCEEDED"; payload: { chatId: string; response: SessionHistoryResponseDTO } }
+  | { type: "HISTORY_FETCH_FAILED"; payload: { chatId: string; message: string } }
+  | { type: "RETRY_HISTORY_LOAD"; payload: { chatId: string } }
   | { type: "TOGGLE_SIDEBAR" }
   | {
       type: "CREATE_PROJECT";
@@ -1855,6 +1894,166 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, chats: { ...state.chats, [chatId]: { ...chat, backendSessionId: sessionId } } };
     }
 
+    case "HYDRATE_SAVED_SESSIONS": {
+      // Dedupe key is ALWAYS backendSessionId, never Chat.id equality —
+      // instruction: a locally-created chat that already owns this exact
+      // backend session (e.g. resumed earlier this session) must be
+      // reconciled, not duplicated, and this same dispatch must be safe to
+      // run more than once (StrictMode double-invocation of the boot
+      // effect) without ever inserting a second copy or re-ordering an
+      // already-hydrated chat.
+      const existingByBackendId = new Map<string, string>();
+      for (const chat of Object.values(state.chats)) {
+        if (chat.backendSessionId) existingByBackendId.set(chat.backendSessionId, chat.id);
+      }
+
+      let chats = state.chats;
+      let changed = false;
+      const newIds: string[] = [];
+
+      for (const summary of action.payload.sessions) {
+        const existingId = existingByBackendId.get(summary.session_id);
+        if (existingId) {
+          const existing = chats[existingId];
+          // Only the title is server-authoritative to reconcile here — a
+          // chat's active run/local messages/draft/mock-specific state are
+          // never touched by hydration.
+          if (existing.title !== summary.title) {
+            if (!changed) chats = { ...chats };
+            changed = true;
+            chats[existingId] = { ...existing, title: summary.title };
+          }
+          continue;
+        }
+
+        if (!changed) chats = { ...chats };
+        changed = true;
+        const createdAt = Date.parse(summary.updated_at);
+        const chat: Chat = {
+          id: summary.session_id,
+          title: summary.title,
+          projectId: null,
+          pinned: false,
+          createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
+          messageIds: [],
+          activeSkillId: null,
+          connectorIds: [],
+          selectedModelId: DEFAULT_MODEL_ID,
+          thinkingEffort: DEFAULT_THINKING_EFFORT,
+          backendSessionId: summary.session_id,
+          historyHydrationStatus: "unloaded",
+        };
+        chats[summary.session_id] = chat;
+        newIds.push(summary.session_id);
+      }
+
+      // GET /api/sessions already arrives newest-activity-first — appended
+      // after whatever chatOrder already holds (never reordering existing
+      // entries) so that backend order is preserved for the newly hydrated
+      // chats. activeChatId is deliberately left untouched (boot must never
+      // auto-open a conversation). A successful response — including one
+      // with ZERO sessions — always settles `savedChatsHydrationStatus` to
+      // "loaded", which is what lets the sidebar tell a genuinely empty
+      // saved-chat list apart from "still loading"/"failed to load".
+      const merged = !changed ? state : newIds.length > 0 ? { ...state, chats, chatOrder: [...state.chatOrder, ...newIds] } : { ...state, chats };
+      return { ...merged, savedChatsHydrationStatus: "loaded", savedChatsHydrationError: undefined };
+    }
+
+    case "SAVED_CHATS_HYDRATION_STARTED":
+      return { ...state, savedChatsHydrationStatus: "loading", savedChatsHydrationError: undefined };
+
+    case "SAVED_CHATS_HYDRATION_FAILED":
+      // Never touches `chats`/`chatOrder` — a failed (re)fetch must never
+      // erase whatever local/already-hydrated chats already exist.
+      return { ...state, savedChatsHydrationStatus: "error", savedChatsHydrationError: action.payload.message };
+
+    case "HISTORY_FETCH_STARTED": {
+      const chat = state.chats[action.payload.chatId];
+      if (!chat) return state;
+      return {
+        ...state,
+        chats: {
+          ...state.chats,
+          [action.payload.chatId]: { ...chat, historyHydrationStatus: "loading", historyError: undefined },
+        },
+      };
+    }
+
+    case "HISTORY_FETCH_SUCCEEDED": {
+      const { chatId, response } = action.payload;
+      const chat = state.chats[chatId];
+      // Chat removed locally (DELETE_CHAT) while the request was in
+      // flight — a late response must never resurrect it.
+      if (!chat) return state;
+      // Superseded (a retry or a second effect run already moved this
+      // chat past "loading") — never apply a stale result on top.
+      if (chat.historyHydrationStatus !== "loading") return state;
+      // Defensive correctness guard: if a genuine local turn already
+      // appended real messages to this chat while its history was still
+      // loading (e.g. the user sent a message before the fetch resolved),
+      // a late historical transcript must never clobber it — just mark
+      // the fetch as settled without touching messageIds/messages.
+      if (chat.messageIds.length > 0) {
+        return { ...state, chats: { ...state.chats, [chatId]: { ...chat, historyHydrationStatus: "loaded" } } };
+      }
+
+      const messages: Record<string, Message> = {};
+      const messageIds: string[] = [];
+      for (const dto of response.messages) {
+        messageIds.push(dto.message_id);
+        messages[dto.message_id] = {
+          id: dto.message_id,
+          chatId,
+          role: dto.role,
+          text: dto.text,
+          status: "complete",
+          // Caller (the boot/lazy-load effect below) already validated
+          // every dto.created_at parses to a finite timestamp before ever
+          // dispatching this action — see that effect's own comment for
+          // why a malformed one fails the whole request instead of
+          // reaching here with an invented fallback time.
+          createdAt: Date.parse(dto.created_at),
+        };
+        // POST-5.1 B4C — dto.attachments is deliberately NOT mapped onto
+        // Message.attachments here. Persisted-attachment reference
+        // hydration/rendering is B4D, not B4C (see this file's own
+        // instruction history) — surfacing them now would silently imply
+        // rendering support that does not exist yet.
+      }
+
+      return {
+        ...state,
+        chats: {
+          ...state.chats,
+          [chatId]: { ...chat, messageIds, historyHydrationStatus: "loaded", historyError: undefined },
+        },
+        messages: { ...state.messages, ...messages },
+      };
+    }
+
+    case "HISTORY_FETCH_FAILED": {
+      const { chatId, message } = action.payload;
+      const chat = state.chats[chatId];
+      if (!chat) return state;
+      if (chat.historyHydrationStatus !== "loading") return state;
+      return {
+        ...state,
+        chats: { ...state.chats, [chatId]: { ...chat, historyHydrationStatus: "error", historyError: message } },
+      };
+    }
+
+    case "RETRY_HISTORY_LOAD": {
+      const chat = state.chats[action.payload.chatId];
+      if (!chat || chat.historyHydrationStatus !== "error") return state;
+      return {
+        ...state,
+        chats: {
+          ...state.chats,
+          [action.payload.chatId]: { ...chat, historyHydrationStatus: "unloaded", historyError: undefined },
+        },
+      };
+    }
+
     case "TOGGLE_SIDEBAR":
       return { ...state, sidebarCollapsed: !state.sidebarCollapsed };
 
@@ -2567,6 +2766,17 @@ interface AppContextValue {
   toggleUnread: (chatId: string) => void;
   renameChat: (chatId: string, title: string) => void;
   deleteChat: (chatId: string) => void;
+  /** POST-5.1 B4C — retries a failed `GET /api/sessions/{id}/history` load
+   * for a saved chat (`historyHydrationStatus === "error"` only; a no-op
+   * otherwise). See AppState.tsx's lazy-history-load effect, which resumes
+   * fetching the moment this flips the chat back to `"unloaded"`. */
+  retryHistoryLoad: (chatId: string) => void;
+  /** POST-5.1 B4C correction pass — retries a failed GLOBAL saved-chat-list
+   * load (`state.savedChatsHydrationStatus === "error"`). Safe to call
+   * regardless of current status — always issues a fresh `GET
+   * /api/sessions` and re-merges via the same idempotent reducer path
+   * boot itself uses. */
+  retrySavedChats: () => void;
   toggleConnector: (connectorId: string) => void;
   addAttachments: (attachments: Attachment[]) => void;
   removeAttachment: (id: string) => void;
@@ -2730,6 +2940,108 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }, ATTACHMENT_LIMIT_NOTICE_DURATION_MS);
     return () => window.clearTimeout(timeout);
   }, [state.draft.attachmentLimitNotice?.key]);
+
+  // POST-5.1 B4C correction pass — the ONE function that actually performs
+  // a `GET /api/sessions` attempt, shared by both the boot effect and an
+  // explicit user retry (never two separate implementations). Success
+  // merges the summaries in AND settles `savedChatsHydrationStatus` to
+  // "loaded" (see the "HYDRATE_SAVED_SESSIONS" reducer case — this
+  // includes the "loaded with zero sessions" case, a genuine empty list,
+  // never confused with "still loading"/"failed"). Failure dispatches a
+  // real, explicit `SAVED_CHATS_HYDRATION_FAILED` (previously just a
+  // dev-only console.debug — the earlier version of this effect left the
+  // sidebar's Chats section indistinguishable from a genuinely empty
+  // account on a real network failure) — it never touches `chats`, so
+  // existing local/already-hydrated chats are never erased by a failed
+  // retry.
+  const runSavedChatsHydration = useCallback(async () => {
+    try {
+      const response = await listSavedSessions();
+      dispatch({ type: "HYDRATE_SAVED_SESSIONS", payload: { sessions: response.sessions } });
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : "Couldn't load saved chats.";
+      dispatch({ type: "SAVED_CHATS_HYDRATION_FAILED", payload: { message } });
+    }
+  }, []);
+
+  // Boot fires this exactly once per app load. A plain boolean ref
+  // (rather than relying solely on the reducer's own backendSessionId
+  // dedupe — see "HYDRATE_SAVED_SESSIONS") is a single-flight guard
+  // against React 18 StrictMode's double-invocation firing a second,
+  // wasted `GET /api/sessions` network call; correctness does not depend
+  // on it, since the reducer is idempotent even if this ever fired twice.
+  // This guard is boot-only — it never blocks `retrySavedChats` below,
+  // which is a distinct, always-allowed, explicitly user-triggered call.
+  const hasHydratedSavedSessionsRef = useRef(false);
+  useEffect(() => {
+    if (hasHydratedSavedSessionsRef.current) return;
+    hasHydratedSavedSessionsRef.current = true;
+    void runSavedChatsHydration();
+  }, [runSavedChatsHydration]);
+
+  // POST-5.1 B4C correction pass — explicit user retry for a failed
+  // saved-chat-list load (the sidebar's "Retry" affordance). Resets
+  // status to "loading" synchronously so the UI reflects the new attempt
+  // immediately, then reuses the exact same fetch/merge path as boot —
+  // repeated retries can never duplicate a chat, since the reducer's own
+  // backendSessionId dedupe is unconditional regardless of how many times
+  // this fires.
+  const retrySavedChats = useCallback(() => {
+    dispatch({ type: "SAVED_CHATS_HYDRATION_STARTED" });
+    void runSavedChatsHydration();
+  }, [runSavedChatsHydration]);
+
+  // POST-5.1 B4C — lazy transcript hydration: fetches a hydrated saved
+  // chat's real history the moment it becomes active, never at boot (see
+  // the effect above, which only ever fetches summaries). Re-runs on every
+  // `state.chats` change, but the guard below makes every one of those
+  // re-runs a cheap no-op except the one genuine "just selected an
+  // unloaded saved chat" transition — `historyHydrationStatus` flips away
+  // from `"unloaded"` synchronously (HISTORY_FETCH_STARTED, dispatched
+  // before the `await`), so a second overlapping fetch for the same chat
+  // can never start. The token map additionally guards against a stale
+  // response from an OLDER fetch for this same chatId (a manual retry
+  // superseding an earlier attempt) ever being applied after a newer one.
+  const historyFetchTokensRef = useRef(new Map<string, number>());
+  useEffect(() => {
+    const chatId = state.activeChatId;
+    if (!chatId) return;
+    const chat = state.chats[chatId];
+    if (!chat || chat.historyHydrationStatus !== "unloaded" || !chat.backendSessionId) return;
+    const sessionId = chat.backendSessionId;
+
+    const token = (historyFetchTokensRef.current.get(chatId) ?? 0) + 1;
+    historyFetchTokensRef.current.set(chatId, token);
+    dispatch({ type: "HISTORY_FETCH_STARTED", payload: { chatId } });
+
+    void (async () => {
+      try {
+        const response = await getSessionHistory(sessionId);
+        // Instruction: a malformed created_at must fail safely for this
+        // request rather than ever inventing a fallback time — validated
+        // up front, before any state is applied, so HISTORY_FETCH_SUCCEEDED
+        // can trust every timestamp unconditionally.
+        for (const message of response.messages) {
+          if (!Number.isFinite(Date.parse(message.created_at))) {
+            throw new Error("malformed history timestamp");
+          }
+        }
+        if (historyFetchTokensRef.current.get(chatId) !== token) return;
+        dispatch({ type: "HISTORY_FETCH_SUCCEEDED", payload: { chatId, response } });
+      } catch (error) {
+        if (historyFetchTokensRef.current.get(chatId) !== token) return;
+        const message =
+          error instanceof ApiError
+            ? error.message
+            : "This conversation could not be loaded. Please try again.";
+        dispatch({ type: "HISTORY_FETCH_FAILED", payload: { chatId, message } });
+      }
+    })();
+  }, [state.activeChatId, state.chats]);
+
+  const retryHistoryLoad = useCallback((chatId: string) => {
+    dispatch({ type: "RETRY_HISTORY_LOAD", payload: { chatId } });
+  }, []);
 
   // Phase 4F — drives one real backend turn. Takes `existingSessionId` as
   // a parameter (rather than reading `state` itself) so it never risks a
@@ -3636,9 +3948,53 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     (chatId: string) => dispatch({ type: "TOGGLE_UNREAD", payload: { chatId } }),
     [],
   );
+  // POST-5.1 B4C — a chat WITH a `backendSessionId` (hydrated from a saved
+  // session, or one that already got a real session from its own first
+  // send — the two are indistinguishable here and don't need to be) is
+  // renamed durably via `PATCH /api/sessions/{id}`; the local `RENAME_CHAT`
+  // dispatch only ever happens once that call actually succeeds, using the
+  // backend's own echoed title. Everything else (mock/project/demo chats)
+  // keeps the original synchronous local-only behavior unchanged.
+  // `renameTokensRef` protects against a stale response from an earlier
+  // rename overwriting a newer one for the same chat (fire two renames in
+  // quick succession, only the LAST one's response may ever apply).
+  const renameTokensRef = useRef(new Map<string, number>());
   const renameChat = useCallback(
-    (chatId: string, title: string) => dispatch({ type: "RENAME_CHAT", payload: { chatId, title } }),
-    [],
+    (chatId: string, title: string) => {
+      const trimmed = title.trim();
+      if (!trimmed) return;
+      const chat = state.chats[chatId];
+      if (!chat) return;
+
+      if (!chat.backendSessionId) {
+        dispatch({ type: "RENAME_CHAT", payload: { chatId, title: trimmed } });
+        return;
+      }
+
+      const backendSessionId = chat.backendSessionId;
+      const token = (renameTokensRef.current.get(chatId) ?? 0) + 1;
+      renameTokensRef.current.set(chatId, token);
+
+      void (async () => {
+        try {
+          const response = await renameSessionApi(backendSessionId, trimmed);
+          if (renameTokensRef.current.get(chatId) !== token) return;
+          dispatch({ type: "RENAME_CHAT", payload: { chatId, title: response.title } });
+        } catch (error) {
+          if (renameTokensRef.current.get(chatId) !== token) return;
+          // Failure leaves the prior title in place (no dispatch at all) —
+          // same fail-safe shape as editMessage's own rewind-failure path
+          // just above: a safe, already-user-facing message, never raw
+          // transport/exception text.
+          const message =
+            error instanceof ApiError
+              ? error.message
+              : "This chat could not be renamed right now. Please try again.";
+          window.alert(message);
+        }
+      })();
+    },
+    [state.chats],
   );
   const deleteChat = useCallback(
     (chatId: string) => dispatch({ type: "DELETE_CHAT", payload: { chatId } }),
@@ -4030,6 +4386,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     toggleUnread,
     renameChat,
     deleteChat,
+    retryHistoryLoad,
+    retrySavedChats,
     toggleConnector,
     addAttachments,
     removeAttachment,

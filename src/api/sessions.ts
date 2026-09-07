@@ -1,5 +1,12 @@
-import { postJson } from "./client";
-import type { CancelRunResponse, CreateSessionResponse, RewindSessionResponse } from "./types";
+import { getJson, patchJson, postJson } from "./client";
+import type {
+  CancelRunResponse,
+  CreateSessionResponse,
+  ListSavedSessionsResponseDTO,
+  RenameSessionResponseDTO,
+  RewindSessionResponse,
+  SessionHistoryResponseDTO,
+} from "./types";
 
 /** Creates a new, server-authoritative ADK session. The backend's
  * `POST /api/sessions` route takes no request body — the client never
@@ -39,4 +46,28 @@ export async function cancelRun(sessionId: string, runId: string): Promise<Cance
   return postJson<CancelRunResponse>(
     `/api/sessions/${encodeURIComponent(sessionId)}/runs/${encodeURIComponent(runId)}/cancel`,
   );
+}
+
+/** POST-5.1 B4C — the caller's own saved-chat list (`GET /api/sessions`).
+ * Owner-scoped, already sorted newest genuine chat activity first, empty/
+ * upload-only sessions already excluded — this frontend never re-derives
+ * any of those rules itself. */
+export async function listSavedSessions(): Promise<ListSavedSessionsResponseDTO> {
+  return getJson<ListSavedSessionsResponseDTO>("/api/sessions");
+}
+
+/** POST-5.1 B4C — the safe, active-branch-only transcript for one saved
+ * session (`GET /api/sessions/{id}/history`). Already final-assistant-only,
+ * rewind-aware, and stripped of tool/state/internal events — never
+ * second-guessed or re-filtered on this side. */
+export async function getSessionHistory(sessionId: string): Promise<SessionHistoryResponseDTO> {
+  return getJson<SessionHistoryResponseDTO>(`/api/sessions/${encodeURIComponent(sessionId)}/history`);
+}
+
+/** POST-5.1 B4C — durable manual rename for a real backend chat (`PATCH
+ * /api/sessions/{id}`). Changes `chat_title` only; the backend leaves
+ * `chat_activity_at`/sidebar ordering untouched, so no caller here needs to
+ * separately re-sort anything after a successful rename. */
+export async function renameSession(sessionId: string, title: string): Promise<RenameSessionResponseDTO> {
+  return patchJson<RenameSessionResponseDTO>(`/api/sessions/${encodeURIComponent(sessionId)}`, { title });
 }

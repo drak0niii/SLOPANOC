@@ -364,7 +364,7 @@ complete.
 CURRENT (out-of-band milestone, inserted between the LOCAL GIT CHECKPOINT
 below and Phase 4H — does not reorder anything in this locked list):
 POST-5.1 A — CLOUD SQL POSTGRESQL (A1–A4) is COMPLETE. POST-5.1 B —
-MULTIMODAL ATTACHMENTS is IN PROGRESS (B0–B4B done, B4C next).
+MULTIMODAL ATTACHMENTS is IN PROGRESS (B0–B4C done, B4D next).
 A5 (real TELCO/RAN MOP ingestion) follows POST-5.1 B, before Phase
 4H security hardening.
 
@@ -549,7 +549,91 @@ POST-5.1 B execution sequence (locked, do not reorder):
       `chat_activity_at` identically, including on a second history read.
       The earlier defect-evidence session (`6dd9fad5-...`) was left
       intact, read-only, not deleted. **B4B is DONE.**
-  B4C Frontend saved-chat list + lazy transcript hydration
+  B4C [DONE] Frontend saved-chat list + lazy transcript hydration. Server
+      remains authoritative -- no localStorage/sessionStorage/IndexedDB
+      persistence added. `AppStateProvider` fetches `GET /api/sessions`
+      once at boot and merges each summary into the sidebar
+      (`Chat.id = Chat.backendSessionId = session_id`, general workspace,
+      `historyHydrationStatus: "unloaded"`), deduped by
+      `backendSessionId` (never `Chat.id` equality) so a StrictMode
+      double-invocation can never duplicate a chat; `activeChatId` is
+      never touched (no auto-open). Backend order (already newest-
+      activity-first) is preserved by appending hydrated ids to
+      `chatOrder`, reusing `sortChatsForDisplay`'s existing pin logic
+      unchanged. Transcript history is fetched lazily -- only on open
+      (`GET /api/sessions/{id}/history`), tracked via
+      `Chat.historyHydrationStatus` (`"unloaded" | "loading" | "loaded" |
+      "error"`, deliberately not inferred from `messageIds.length` --  a
+      real failed turn can legitimately look empty otherwise); a late
+      response can neither resurrect a deleted chat nor overwrite a real
+      local turn started while the fetch was in flight (defensive
+      messageIds.length guard); failure is retryable
+      (`retryHistoryLoad`), never fabricates a placeholder assistant
+      reply. `turn_id` is deliberately NOT stored on the frontend
+      `Message` model -- edit/rewind already worked (regression-tested)
+      by counting preceding `role === "user"` entries positionally, so
+      there is no consumer for it. History-response `attachments` are
+      typed but not mapped onto any `Message` -- persisted attachment
+      rendering remains B4D. Resuming a hydrated chat needs no special
+      code: `sendMessage`'s existing `chat.backendSessionId` reuse means
+      a normal send never re-calls `createSession()`. Real-chat rename
+      calls `PATCH /api/sessions/{id}` whenever `backendSessionId` is
+      set (hydrated OR a chat that got a session from its own first
+      send); success applies the server-echoed title, failure keeps the
+      prior title and surfaces the real safe `ApiError` message (same
+      fallback pattern as `editMessage`'s own rewind-failure path), and a
+      per-chat request token discards a stale response so a rapid
+      double-rename can't let an older reply win. Mock/project/demo
+      chats (no `backendSessionId`) keep the original synchronous
+      local-only rename. B4B's DELETE/pin/unread non-guarantees are
+      unchanged -- no backend DELETE/pin/unread persistence exists;
+      deleting a hydrated chat only removes it locally this session.
+      CORRECTION PASS (locked): the boot `GET /api/sessions` failure path
+      previously only logged a DEV-only console.debug, leaving the
+      sidebar's Chats section indistinguishable from a genuinely empty
+      account during a real network failure. Fixed with a new GLOBAL (not
+      per-chat) `AppState.savedChatsHydrationStatus: "loading" | "loaded"
+      | "error"` (+ `savedChatsHydrationError`), separate from any one
+      chat's own `historyHydrationStatus` -- starts `"loading"`, settles
+      to `"loaded"` on any successful response including a genuine
+      zero-session one (never confused with loading/error), or to
+      `"error"` with a safe message, which never touches
+      `chats`/`chatOrder` (a failed/retried fetch never erases an
+      existing local chat). Sidebar shows "Loading chats..." only while
+      unknown-and-empty, "Couldn't load saved chats" + "Retry" on
+      failure (no modal/alert/raw ApiError), "No chats yet" only once
+      genuinely loaded-and-empty. `retrySavedChats()` resets to
+      `"loading"` and reuses boot's own fetch/merge function; repeated
+      retries can't duplicate a chat (unconditional `backendSessionId`
+      dedupe). The boot single-flight ref is boot-scoped only -- never
+      blocks an explicit retry, including right after a StrictMode
+      double-invocation (regression-tested).
+      Covered by `src/api/sessions.test.ts`,
+      `src/state/AppState.savedChats.reducer.test.ts` (+ this pass's
+      loading/loaded/loaded-empty/error/retry-dedupe cases), and
+      `src/state/AppState.savedChats.integration.test.tsx` (boot
+      hydration incl. StrictMode double-invocation, lazy fetch,
+      resume-saved-chat, rename success/failure/race, edit/rewind
+      regression against a real hydrated two-turn fixture, + this pass's
+      boot-loading/boot-failure-preserves-local-chats/retry-recovery/
+      failed-retry/StrictMode-then-retry cases) -- full frontend suite
+      and `npm run build` both green, zero regressions.
+      FINAL LIVE CLOSURE -- a real browser validation pass against the
+      full real stack (React -> FastAPI -> ADK DatabaseSessionService ->
+      real Cloud SQL PostgreSQL, after a genuine VS Code/backend/frontend
+      restart) confirmed all of it end to end: a hard refresh restored
+      the real saved-chat list from Cloud SQL ("B4B Live Persistence
+      Test," the earlier B4B failed-session chat, and "Hello"); opening
+      "B4B Live Persistence Test" lazily loaded and rendered exactly its
+      real two-message transcript with no fabricated assistant reply and
+      no raw tool/function/internal event leakage; renaming it from the
+      real UI to "B4C UI Rename Test" then hard-refreshing showed the
+      renamed title surviving durably via `PATCH
+      /api/sessions/{backendSessionId}` into Cloud SQL -- proving
+      real-chat rename is no longer local-only; reopening the renamed
+      chat afterward reloaded the exact same transcript again, proving
+      the rename never detached the underlying session identity.
+      **B4C is DONE.**
   B4D Attachment-reference hydration + restart/rewind/live validation
   B5  Gemini/ADK Multimodal Runtime
   B6  Image + Teams + KM Operational Reasoning

@@ -105,6 +105,31 @@ export async function postJson<T>(path: string, body?: unknown): Promise<T> {
 }
 
 /**
+ * Plain GET helper (POST-5.1 B4C). Shares `throwForFailedResponse` with
+ * `postJson`/`postForm` — one error-mapping implementation for every verb.
+ */
+export async function getJson<T>(path: string): Promise<T> {
+  const response = await apiFetch(path);
+  if (!response.ok) return throwForFailedResponse(path, response);
+  return (await response.json()) as T;
+}
+
+/**
+ * JSON PATCH helper (POST-5.1 B4C) — currently only `PATCH
+ * /api/sessions/{id}` (durable manual rename). Mirrors `postJson` exactly,
+ * differing only in HTTP method.
+ */
+export async function patchJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await apiFetch(path, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) return throwForFailedResponse(path, response);
+  return (await response.json()) as T;
+}
+
+/**
  * `multipart/form-data` POST helper (POST-5.1 B3) — the chat attachment
  * upload endpoint's only current use. Deliberately never sets a
  * `Content-Type` header itself: the browser computes the correct
