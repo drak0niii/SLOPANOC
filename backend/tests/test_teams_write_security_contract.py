@@ -47,6 +47,7 @@ def test_team_manager_tools_are_unchanged_by_this_milestone() -> None:
         "incident_manager",
         "record_case_analysis",
         "record_conversation_target",
+        "record_source_requirements",
     ]
 
 

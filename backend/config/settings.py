@@ -47,6 +47,7 @@ _CASE_CONTEXT_MAX_ITEMS_ENV_VAR = "SLOPANOC_CASE_CONTEXT_MAX_ITEMS"
 _CASE_CONTEXT_MAX_CHARACTERS_ENV_VAR = "SLOPANOC_CASE_CONTEXT_MAX_CHARACTERS"
 _DATABASE_URL_ENV_VAR = "SLOPANOC_DATABASE_URL"
 _DATABASE_SECRET_ENV_VAR = "SLOPANOC_DATABASE_SECRET_RESOURCE"
+_KNOWLEDGE_DATABASE_URL_ENV_VAR = "SLOPANOC_KNOWLEDGE_DATABASE_URL"
 _MODEL_WARMUP_ENABLED_ENV_VAR = "SLOPANOC_MODEL_WARMUP_ENABLED"
 _MODEL_WARMUP_TIMEOUT_ENV_VAR = "SLOPANOC_MODEL_WARMUP_TIMEOUT_SECONDS"
 
@@ -87,6 +88,16 @@ _VALID_SESSION_BACKENDS = frozenset({"memory", "database"})
 # dependency of this environment -- a local `.db` file next to wherever
 # the process is run from, requiring zero setup for local development.
 _DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./slopanoc_sessions.db"
+
+# Phase 5.1J (first Generic KM reference consumer): a SEPARATE local
+# SQLite database from the ADK session store above -- the Generic
+# Knowledge Management repository (backend/knowledge/repository/) has its
+# own table set and its own lifecycle, unrelated to session persistence.
+# Mirrors `_DEFAULT_DATABASE_URL`'s exact "local file, zero setup"
+# reasoning; a genuinely dedicated setting, not reused ad hoc, because a
+# production deployment may reasonably want to scale/replace governed
+# knowledge storage independently of chat session storage.
+_DEFAULT_KNOWLEDGE_DATABASE_URL = "sqlite+aiosqlite:///./slopanoc_knowledge.db"
 
 # Phase 4D (backend/cases/snapshot.py): the model-facing
 # `CaseContextSnapshot` is always bounded -- never the full ledger. These
@@ -194,6 +205,21 @@ class Settings:
             return _fetch_secret_from_secret_manager(secret_resource)
 
         return _DEFAULT_DATABASE_URL
+
+    def resolve_knowledge_database_url(self) -> str:
+        """Resolve the Generic Knowledge Management repository's own
+        database URL -- explicit and local/reference-consumer focused
+        (Phase 5.1J). No Secret Manager fallback: unlike the session/Case
+        databases, this is the FIRST reference consumer's local SQLite
+        repository, not a shared production credential path yet -- a
+        direct env var override (for local development / tests) or the
+        local-file default is sufficient today, without inventing
+        production Cloud SQL support this phase does not need.
+        """
+        direct = self._env.get(_KNOWLEDGE_DATABASE_URL_ENV_VAR)
+        if direct:
+            return direct
+        return _DEFAULT_KNOWLEDGE_DATABASE_URL
 
     @property
     def case_context_max_items(self) -> int:

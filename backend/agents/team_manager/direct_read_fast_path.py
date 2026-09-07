@@ -347,6 +347,7 @@ from backend.agents.team_manager.read_continuation_execution import execute_read
 from backend.agents.team_manager.read_continuation_presentation import (
     PENDING_SPECIALIST_RESULT_STATE_KEY,
     build_and_validate_trusted_envelope,
+    content_has_nonblank_text,
 )
 from backend.api.perf_timing import before_model_call
 from backend.api.turn_context import current_run_id
@@ -464,6 +465,42 @@ raw ids, no Teams content, no internal trust terminology -- see section 9.
 """
 
 
+def _requires_governed_knowledge(tool_context: Any) -> bool:
+    """Reads `IncidentManagerRequest.requires_governed_knowledge` back
+    from `tool_context.user_content` -- the SAME `types.Content` ADK's
+    own `AgentTool.run_async` built from `input_value.model_dump_json(...)`
+    at the start of THIS incident_manager invocation (verified against
+    the installed ADK source: `ToolContext`/`ReadonlyContext.user_content`
+    is a public, documented "the user content that started this
+    invocation" property, stable across every callback within one
+    invocation -- never re-derived from model reasoning or from any
+    tool's own call arguments, which never carry this field at all).
+
+    FAILS CLOSED (returns `True`, i.e. "assume governed knowledge might be
+    required, skip the fast path") on anything unexpected -- missing
+    content, non-JSON text, or a missing/malformed field -- since
+    incorrectly SKIPPING the optimization only costs latency, while
+    incorrectly ENTERING it when governed knowledge was actually required
+    is the exact correctness bug this pass fixes. This should not
+    normally be reached in practice: the content is JSON this codebase
+    itself produced via `IncidentManagerRequest.model_dump_json`.
+    """
+    user_content = getattr(tool_context, "user_content", None)
+    parts = getattr(user_content, "parts", None) if user_content else None
+    if not parts:
+        return True
+    text = "".join(p.text for p in parts if getattr(p, "text", None))
+    if not text:
+        return True
+    try:
+        payload = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return True
+    if not isinstance(payload, dict):
+        return True
+    return bool(payload.get("requires_governed_knowledge", False))
+
+
 def _capture_unique_match_for_fast_path(
     tool: Any, args: dict[str, Any], tool_context: Any, tool_response: Any
 ) -> None:
@@ -472,6 +509,20 @@ def _capture_unique_match_for_fast_path(
     only, exactly like `state_sync.py`'s `sync_incident_manager_result_
     to_state` and `selection_delegation_guard.py`'s `record_selection_
     needed`).
+
+    FAST-PATH ELIGIBILITY (pre-4H correction pass): this optimization
+    assumes the ENTIRE delegated request can be satisfied by a Teams
+    read alone -- no longer a safe assumption once governed knowledge
+    (5.1J) exists as an independent, equally-required context source. If
+    `requires_governed_knowledge` is true on the request that produced
+    this `teams_list_chats` call, the marker below is never set, so
+    `_fast_path_before_model_callback` finds nothing pending and
+    incident_manager's own NORMAL (non-shortcut) turn continues instead
+    -- free to use Teams tools, `knowledge_search`, and
+    `knowledge_select_evidence` together, exactly as a combined request
+    requires. This never affects a Teams-ONLY request (`requires_
+    governed_knowledge=False`, the default) -- the fast path remains
+    fully eligible for that case, unchanged.
     """
     if getattr(tool, "name", None) != "teams_list_chats":
         return None
@@ -479,6 +530,11 @@ def _capture_unique_match_for_fast_path(
         return None  # a write's own destination resolution -- untouched
     if not isinstance(tool_response, dict) or tool_response.get("match") != "matched":
         _log_resolution_outcome(tool_response)
+        return None
+    if _requires_governed_knowledge(tool_context):
+        _perf_logger.info(
+            "perf stage=fast_path_skipped_requires_governed_knowledge run_id=%s", current_run_id()
+        )
         return None
 
     matched_chat = tool_response.get("matched_chat") or {}
@@ -659,10 +715,19 @@ async def _run_trusted_presentation(
     session, run a nested Runner, delete it" pattern (`_run_specialist_
     and_collect`), never the real canonical session (see module docstring
     for why). Returns the final response `Content`, or `None` if the
-    nested run produced no content -- the caller (`_present_fast_path_
-    result_via_trusted_pipeline`) treats `None` as a trust-boundary failure
-    and fails closed, NEVER as a signal to fall back to team_manager's own
-    normal presentation (section 8's own explicit prohibition).
+    nested run produced no USABLE (non-blank-text) content -- the caller
+    (`_present_fast_path_result_via_trusted_pipeline`) treats `None` as a
+    signal to retry once, then fail closed, NEVER as a signal to fall
+    back to team_manager's own normal presentation (section 8's own
+    explicit prohibition).
+
+    EMPTY-RESPONSE FIX (pre-4H correction pass): the loop below now keeps
+    only a content whose OWN `content_has_nonblank_text` check passes --
+    previously `if event.content:` alone was used, which is true for a
+    `types.Content` with an empty `parts` list or a thought-only/blank-
+    text part, silently forwarding an effectively-empty "success" up to
+    the caller instead of the honest "no content" this function's own
+    contract already promised to signal.
     """
     from backend.agents.team_manager.agent import presentation_team_manager
 
@@ -687,7 +752,7 @@ async def _run_trusted_presentation(
             async for event in runner.run_async(
                 user_id="direct-fast-path", session_id=internal_session_id, new_message=user_content
             ):
-                if event.content:
+                if event.content and content_has_nonblank_text(event.content):
                     last_content = event.content
         finally:
             await runner.close()
@@ -764,7 +829,31 @@ async def _present_fast_path_result_via_trusted_pipeline(
         run_id=run_id,
     )
     if content is None:
-        _logger.warning("direct_read_fast_path: trusted presentation produced no content -- failing closed")
+        # EMPTY-RESPONSE FIX (pre-4H correction pass): `validated` (the
+        # already-validated `IncidentManagerResponse`) is REUSED unchanged
+        # for this one bounded retry -- this repeats ONLY the presentation
+        # step (a fresh throwaway session/Runner over `presentation_team_
+        # manager`, tools=[]), never `execute_read_continuation`, never
+        # `teams_list_chats`/`teams_get_messages` again. At most one retry
+        # -- if it also produces no usable text, this falls through to the
+        # same deterministic safe-failure response as before, never an
+        # unbounded loop.
+        _logger.warning(
+            "direct_read_fast_path: trusted presentation produced no usable text -- retrying once run_id=%s",
+            run_id,
+        )
+        _perf_logger.info("perf stage=direct_fast_path_presentation_retry run_id=%s", run_id)
+        content = await _run_trusted_presentation(
+            validated_result=validated,
+            seed_state=seed_state,
+            user_content=callback_context.user_content,
+            run_id=run_id,
+        )
+    if content is None:
+        _logger.warning(
+            "direct_read_fast_path: trusted presentation still produced no usable text after retry -- failing closed run_id=%s",
+            run_id,
+        )
         _trust_validation_failed_runs.add(run_id)
         return _safe_trust_failure_response()
     return LlmResponse(content=content)

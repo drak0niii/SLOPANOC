@@ -1,6 +1,6 @@
-import { FileText, MessagesSquare } from "../ui/icons";
+import { FileText, MessagesSquare, NotebookText } from "../ui/icons";
 import type { Citation } from "../../types";
-import type { SourceReferenceDTO } from "../../api/types";
+import type { KnowledgeSourceReferenceDTO, SourceReferenceDTO } from "../../api/types";
 import { DrawerContent, DrawerRoot, DrawerTitle, DrawerTrigger } from "../ui/Drawer";
 import { formatEvidenceTimestamp, formatSourcePeriod } from "../../lib/sourceReference";
 
@@ -20,7 +20,10 @@ import { formatEvidenceTimestamp, formatSourcePeriod } from "../../lib/sourceRef
  * exactly): never calls the backend, never reruns retrieval, never
  * mutates session state.
  */
-export type SourceChipProps = { kind: "mop"; citation: Citation } | { kind: "teams"; source: SourceReferenceDTO };
+export type SourceChipProps =
+  | { kind: "mop"; citation: Citation }
+  | { kind: "teams"; source: SourceReferenceDTO }
+  | { kind: "knowledge"; source: KnowledgeSourceReferenceDTO };
 
 // MOP's trigger is unchanged byte-for-byte from the pre-refactor
 // SourceCitation.tsx — no visual regression for existing MOP call sites.
@@ -39,21 +42,30 @@ export function SourceChip(props: SourceChipProps) {
     <DrawerRoot>
       <DrawerTrigger asChild>
         <button type="button" className={props.kind === "mop" ? MOP_TRIGGER_CLASSES : TEAMS_TRIGGER_CLASSES}>
-          {props.kind === "mop" ? (
+          {props.kind === "mop" && (
             <>
               <FileText className="h-2.5 w-2.5" />
               {props.citation.docId}
             </>
-          ) : (
+          )}
+          {props.kind === "teams" && (
             <>
               <MessagesSquare className="h-3 w-3" />
+              Source · {props.source.label}
+            </>
+          )}
+          {props.kind === "knowledge" && (
+            <>
+              <NotebookText className="h-3 w-3" />
               Source · {props.source.label}
             </>
           )}
         </button>
       </DrawerTrigger>
       <DrawerContent className="flex flex-col overflow-y-auto p-5">
-        {props.kind === "mop" ? <MopSourceDetails citation={props.citation} /> : <TeamsSourceDetails source={props.source} />}
+        {props.kind === "mop" && <MopSourceDetails citation={props.citation} />}
+        {props.kind === "teams" && <TeamsSourceDetails source={props.source} />}
+        {props.kind === "knowledge" && <KnowledgeSourceDetails source={props.source} />}
       </DrawerContent>
     </DrawerRoot>
   );
@@ -177,6 +189,72 @@ function TeamsSourceDetails({ source }: { source: SourceReferenceDTO }) {
           </ul>
         </div>
       )}
+    </>
+  );
+}
+
+/** Human-readable label for a governed `document_type` value — purely a
+ * display label; carries no ranking/priority meaning (Generic KM treats
+ * every document type identically — docs/KNOWLEDGE_CONTRACT.md). Falls
+ * back to the raw value itself for any type this build doesn't have a
+ * specific label for, so a future/unknown type still renders sensibly. */
+function formatDocumentType(documentType: string): string {
+  const labels: Record<string, string> = {
+    mop: "Method of Procedure",
+    sop: "Standard Operating Procedure",
+    rca: "Root Cause Analysis",
+    kb_article: "KB Article",
+    troubleshooting_guide: "Troubleshooting Guide",
+    operational_procedure: "Operational Procedure",
+    technical_instruction: "Technical Instruction",
+    other: "Document",
+  };
+  return labels[documentType] ?? documentType;
+}
+
+/** Governed-knowledge provenance drawer content (Phase 5.1J correction
+ * pass, Part C) — every field here is already-safe, already-structured
+ * data from `KnowledgeSourceReferenceDTO`, built entirely from a trusted
+ * backend `KnowledgeEvidenceItem` the model explicitly SELECTED this
+ * turn (never every item `knowledge_search` merely returned). Never
+ * shows `source_uri` — deliberately absent from the DTO itself, not just
+ * hidden here (see docs/KNOWLEDGE_CONTRACT.md's Phase 5.1J section). */
+function KnowledgeSourceDetails({ source }: { source: KnowledgeSourceReferenceDTO }) {
+  return (
+    <>
+      <DrawerTitle>{source.title}</DrawerTitle>
+
+      <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+        <span className="rounded-full bg-accent/10 px-2 py-0.5 font-medium text-accent">
+          {formatDocumentType(source.document_type)}
+        </span>
+        <span className="text-tertiary">·</span>
+        <span className="text-tertiary">{source.version_label}</span>
+      </div>
+
+      {source.section_heading && (
+        <div className="mt-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-tertiary">Section</p>
+          <p className="mt-1 text-sm text-secondary">{source.section_heading}</p>
+        </div>
+      )}
+
+      <div className="mt-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-tertiary">Source</p>
+        <p className="mt-1 text-sm text-secondary">
+          {source.source_display_name ?? source.source_system}
+          {source.source_display_name ? <span className="text-tertiary"> · {source.source_system}</span> : null}
+        </p>
+        <p className="text-sm text-tertiary">{source.evidence_source_id}</p>
+        {source.source_locator && <p className="text-sm text-tertiary">{source.source_locator}</p>}
+      </div>
+
+      <div className="mt-5">
+        <p className="text-sm font-medium text-tertiary">Supporting evidence</p>
+        <p className="mt-2 border-l-2 border-accent/40 pl-3 text-sm italic leading-relaxed text-secondary">
+          "{source.content}"
+        </p>
+      </div>
     </>
   );
 }

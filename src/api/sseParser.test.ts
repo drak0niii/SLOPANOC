@@ -197,6 +197,77 @@ describe("parseSSEEvent", () => {
     expect(onWarn).toHaveBeenCalledWith(expect.stringContaining("malformed source"));
   });
 
+  it("parses a message.completed event with structured knowledge_sources present (Phase 5.1J correction pass)", () => {
+    const onWarn = vi.fn();
+    const knowledgeSource = {
+      source_id: "ks1",
+      source_type: "knowledge",
+      label: "Governed knowledge",
+      knowledge_id: "aurora-relay-verification",
+      version_label: "v1",
+      section_id: "aurora-relay-verification:v1:s0",
+      title: "Aurora Relay Verification Procedure",
+      document_type: "technical_instruction",
+      source_system: "manual_e2e_fixture",
+      evidence_source_id: "doc-1",
+      source_display_name: "Aurora Relay Governed Test Procedure",
+      section_heading: "Verification",
+      source_locator: "test-fixture:verification",
+      content: "Confirm the checksum is 7319 and the status is GREEN.",
+    };
+    const raw = JSON.stringify({
+      ...BASE_ENVELOPE,
+      type: "message.completed",
+      data: { content: "The checksum is 7319.", knowledge_sources: [knowledgeSource] },
+    });
+    const event = parseSSEEvent(raw, onWarn);
+    expect(event).not.toBeNull();
+    expect(event?.data).toEqual({ content: "The checksum is 7319.", knowledge_sources: [knowledgeSource] });
+    expect(onWarn).not.toHaveBeenCalled();
+  });
+
+  it("drops only the malformed entries within knowledge_sources, keeping valid ones", () => {
+    const onWarn = vi.fn();
+    const valid = {
+      source_id: "ks1",
+      source_type: "knowledge",
+      knowledge_id: "k1",
+      version_label: "v1",
+      section_id: "k1:v1:s0",
+      title: "Guide",
+      content: "Text",
+    };
+    const raw = JSON.stringify({
+      ...BASE_ENVELOPE,
+      type: "message.completed",
+      data: { content: "Answer.", knowledge_sources: [valid, { source_type: "knowledge" /* missing fields */ }] },
+    });
+    const event = parseSSEEvent(raw, onWarn);
+    expect(event).not.toBeNull();
+    expect(event?.data).toEqual({ content: "Answer.", knowledge_sources: [valid] });
+    expect(onWarn).toHaveBeenCalledWith(expect.stringContaining("malformed knowledge_sources"));
+  });
+
+  it("never claims source_uri appears anywhere in a parsed knowledge_sources entry", () => {
+    const onWarn = vi.fn();
+    const knowledgeSource = {
+      source_id: "ks1",
+      source_type: "knowledge",
+      knowledge_id: "k1",
+      version_label: "v1",
+      section_id: "k1:v1:s0",
+      title: "Guide",
+      content: "Text",
+    };
+    const raw = JSON.stringify({
+      ...BASE_ENVELOPE,
+      type: "message.completed",
+      data: { content: "Answer.", knowledge_sources: [knowledgeSource] },
+    });
+    const event = parseSSEEvent(raw, onWarn);
+    expect(JSON.stringify(event?.data)).not.toContain("source_uri");
+  });
+
   it("returns null for a malformed selection.pending event", () => {
     const onWarn = vi.fn();
     const raw = JSON.stringify({

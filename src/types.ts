@@ -1,4 +1,10 @@
-import type { PendingActionDTO, PendingSelectionDTO, SourceReferenceDTO, TraceStepSafeMetadata } from "./api/types";
+import type {
+  KnowledgeSourceReferenceDTO,
+  PendingActionDTO,
+  PendingSelectionDTO,
+  SourceReferenceDTO,
+  TraceStepSafeMetadata,
+} from "./api/types";
 
 /** Stops on one axis, ordered from fastest to most thorough. The slider
  * derives its geometry from this order, so adding a stop is a one-line change
@@ -250,6 +256,16 @@ export interface Chat {
    * backend's own wire/snake_case shape (`SourceReferenceDTO`), same
    * rationale as `PendingActionDTO` — no translation layer needed. */
   sources?: Record<string, SourceReferenceDTO>;
+  /** Phase 5.1J correction pass (Part C) — governed-knowledge source
+   * references, keyed by the owning assistant message's id, mirroring
+   * `sources` above's exact same message-ownership model (never moves,
+   * never duplicated, disappears if the owning message is discarded by
+   * edit/rewind). A SEPARATE field from `sources` (never merged into it)
+   * since Teams and KM provenance are structurally different shapes — a
+   * combined-answer message may legitimately have entries in BOTH.
+   * Zero or more entries per message (a model may select multiple
+   * distinct governed sections). */
+  knowledgeSources?: Record<string, KnowledgeSourceReferenceDTO[]>;
 }
 
 /** Expandable, sanitized run trace (pre-4H milestone) — see Chat.runTraces

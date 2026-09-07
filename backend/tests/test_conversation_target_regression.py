@@ -81,7 +81,7 @@ def _external_conversation_events(target: str, chat_title: str, evidence: list, 
             final=False,
             function_responses=[FakeFunctionResponse("record_conversation_target", {"target": target})],
         ),
-        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]),
+        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager", {"chat_topic": chat_title})]),
         FakeEvent(
             final=False,
             function_responses=[
@@ -91,20 +91,38 @@ def _external_conversation_events(target: str, chat_title: str, evidence: list, 
                 )
             ],
         ),
+        FakeEvent(
+            final=False,
+            function_responses=[
+                FakeFunctionResponse("record_source_requirements", {"requires_teams": True, "requires_governed_knowledge": False})
+            ],
+        ),
         FakeEvent(text=final_text, final=True),
     ]
 
 
 def _current_thread_events(final_text: str) -> list:
-    """The CORRECT behavior for a current_thread request (P4A: no longer
-    declared via `record_conversation_target` at all -- that call has "no
+    """The CORRECT behavior for a current_thread request: `record_
+    conversation_target` is still never called (P4A: that call has "no
     other side effect and does not by itself change what you do next" per
-    conversation_target_capture.py's own docstring, so the P4A instruction
-    tells team_manager to skip it entirely for this target and answer
-    directly): a single, ZERO-tool-call model turn, matching section 11's
-    "no ConversationTarget function call unless actually required."
+    conversation_target_capture.py's own docstring, so the instruction
+    tells team_manager to skip it entirely for this target). FIFTH
+    correction pass: `record_source_requirements` is NOT exempted the same
+    way -- it is mandatory for every substantive turn, including a
+    current_thread/history-recall one (both false here, since nothing
+    about this request needs current Teams content or governed
+    knowledge) -- so this fixture now includes exactly that one
+    declaration, still zero OTHER tool calls.
     """
-    return [FakeEvent(text=final_text, final=True)]
+    return [
+        FakeEvent(
+            final=False,
+            function_responses=[
+                FakeFunctionResponse("record_source_requirements", {"requires_teams": False, "requires_governed_knowledge": False})
+            ],
+        ),
+        FakeEvent(text=final_text, final=True),
+    ]
 
 
 def _parallel_external_conversation_events(target: str, chat_title: str, evidence: list, final_text: str) -> list:
@@ -124,7 +142,7 @@ def _parallel_external_conversation_events(target: str, chat_title: str, evidenc
             final=False,
             function_calls=[
                 FakeFunctionCall("record_conversation_target", {"target": target}),
-                FakeFunctionCall("incident_manager"),
+                FakeFunctionCall("incident_manager", {"chat_topic": chat_title}),
             ],
         ),
         FakeEvent(
@@ -135,6 +153,12 @@ def _parallel_external_conversation_events(target: str, chat_title: str, evidenc
                     "incident_manager",
                     {"outcome": "ok", "chat_title": chat_title, "evidence": evidence},
                 ),
+            ],
+        ),
+        FakeEvent(
+            final=False,
+            function_responses=[
+                FakeFunctionResponse("record_source_requirements", {"requires_teams": True, "requires_governed_knowledge": False})
             ],
         ),
         FakeEvent(text=final_text, final=True),

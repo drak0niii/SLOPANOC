@@ -294,7 +294,13 @@ def test_agent_topology_is_unaffected_by_the_api_layer() -> None:
     deliberately-added restricted Case-write capability (instruction:
     "Adding a deterministic Case-context capability is allowed."), added
     directly on `team_manager`'s own definition, not something the API
-    layer injected.
+    layer injected. `knowledge_search`/`knowledge_select_evidence`
+    (Phase 5.1J) are the same kind of legitimate, deliberate addition --
+    added directly on `incident_manager`'s own definition
+    (backend/agents/incident_manager/agent.py), not something the API
+    layer injected -- and, critically, `team_manager.tools` below remains
+    exactly the pre-5.1J three: Team Manager never receives either KM
+    tool directly (docs/KNOWLEDGE_CONTRACT.md's Phase 5.1J section).
     """
     from backend.agents.incident_manager.agent import incident_manager
     from backend.agents.team_manager.agent import team_manager
@@ -306,6 +312,7 @@ def test_agent_topology_is_unaffected_by_the_api_layer() -> None:
         "incident_manager",
         "record_case_analysis",
         "record_conversation_target",
+        "record_source_requirements",
     ]
     assert [tname(t) for t in incident_manager.tools] == [
         "teams_list_chats",
@@ -315,6 +322,8 @@ def test_agent_topology_is_unaffected_by_the_api_layer() -> None:
         "teams_propose_send_message",
         "teams_create_chat",
         "teams_send_message",
+        "knowledge_search",
+        "knowledge_select_evidence",
     ]
 
 

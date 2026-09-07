@@ -96,9 +96,33 @@ export interface SourceReferenceDTO {
   evidence: SourceEvidenceItemDTO[];
 }
 
+/** Phase 5.1J correction pass (Part C) — safe, structured provenance for
+ * a governed-knowledge-derived answer. Mirrors backend/api/schemas.py's
+ * `KnowledgeSourceReferenceDTO` field-for-field. Deliberately excludes
+ * `source_uri` — see docs/KNOWLEDGE_CONTRACT.md's Phase 5.1J section,
+ * "DO NOT EXPOSE source_uri YET". A SEPARATE, additive shape from
+ * `SourceReferenceDTO` (Teams) — never merged into one DTO, since the two
+ * provenance kinds have genuinely different fields. */
+export interface KnowledgeSourceReferenceDTO {
+  source_id: string;
+  source_type: "knowledge";
+  label: string;
+  knowledge_id: string;
+  version_label: string;
+  section_id: string;
+  title: string;
+  document_type: string;
+  source_system: string;
+  evidence_source_id: string;
+  source_display_name: string | null;
+  section_heading: string | null;
+  source_locator: string | null;
+  content: string;
+}
+
 export interface MessageCompletedEvent extends SSEEventBase {
   type: "message.completed";
-  data: { content: string; source?: SourceReferenceDTO };
+  data: { content: string; source?: SourceReferenceDTO; knowledge_sources?: KnowledgeSourceReferenceDTO[] };
 }
 
 export interface ActionPendingEvent extends SSEEventBase {

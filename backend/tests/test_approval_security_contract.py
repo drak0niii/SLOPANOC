@@ -30,7 +30,12 @@ def test_team_manager_has_no_approval_tools() -> None:
     # declaration tool, see conversation_target.py) -- still no
     # approval-mutation tool of any kind.
     names = _tool_names(team_manager)
-    assert names == ["incident_manager", "record_case_analysis", "record_conversation_target"]
+    assert names == [
+        "incident_manager",
+        "record_case_analysis",
+        "record_conversation_target",
+        "record_source_requirements",
+    ]
     for forbidden in ("approve_proposal", "reject_proposal", "consume_proposal", "create_action_proposal"):
         assert forbidden not in names
 

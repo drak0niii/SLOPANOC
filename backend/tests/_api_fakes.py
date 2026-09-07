@@ -169,6 +169,27 @@ class FakeRunner:
             for event in self._events:
                 yield event
             return
+        # FIFTH pre-4H correction pass: chat_service.py now requires an
+        # explicit `record_source_requirements` declaration (both false is
+        # the ordinary, ungated case -- see source_requirements.py) before
+        # accepting ANY completion, on every turn that doesn't go through
+        # the separate, already-trusted `specialist_result_state_written`
+        # presentation path. Emitting it here, once, for the DEFAULT
+        # (`respond`/`side_effect`-only) path means the ~170 existing
+        # tests that construct a plain `FakeRunner(service, ...)` with no
+        # explicit `events=` list keep working unchanged -- they were
+        # never testing source-requirements behavior in the first place.
+        # A test that passes its OWN `events=[...]` list (this class's
+        # other branch, above) is explicitly opting into full control over
+        # the event stream and must include its own `record_source_
+        # requirements` response if it wants the ordinary, non-gated path.
+        yield FakeEvent(
+            text=None,
+            final=False,
+            function_responses=[
+                FakeFunctionResponse("record_source_requirements", {"requires_teams": False, "requires_governed_knowledge": False})
+            ],
+        )
         yield FakeEvent(text=self._respond(text))
 
 

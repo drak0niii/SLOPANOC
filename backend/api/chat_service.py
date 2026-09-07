@@ -112,10 +112,19 @@ from backend.agents.team_manager.read_continuation_presentation import (
     PENDING_SPECIALIST_RESULT_STATE_KEY,
     TRUSTED_SPECIALIST_RESULT_ENVELOPE_STATE_KEY,
     build_trusted_specialist_result_envelope,
+    content_has_nonblank_text,
     pop_current_run_specialist_result,
     synthetic_incident_manager_call_event,
     synthetic_incident_manager_response_event,
     validate_trusted_envelope_for_run,
+)
+from backend.agents.team_manager.governed_knowledge_completion import (
+    SAFE_COMPLETION_FAILURE_TEXT,
+    enforce_governed_knowledge_at_completion,
+)
+from backend.agents.team_manager.source_requirements_completion import (
+    SAFE_DECLARATION_FAILURE_TEXT,
+    request_source_requirements_declaration,
 )
 from backend.agents.team_manager.state_sync import compute_state_updates
 from backend.api.activity_translator import (
@@ -130,18 +139,24 @@ from backend.api.activity_translator import (
 from backend.api.case_service import ACTIVE_CASE_ID_STATE_KEY, get_active_case_for_session
 from backend.api.conversation_target_capture import ConversationTargetCapture
 from backend.api.pending_action import map_pending_action
+from backend.api.source_requirements_capture import SourceRequirementsCapture
 from backend.api.pending_selection import map_pending_selection
 from backend.api.perf_timing import DelegationTimer, PerfTimer, discard_model_call_tracking
 from backend.api.run_trace import RunTraceRecorder
 from backend.api.schemas import ActiveCaseDTO, AssistantMessage, ChatResponse, PendingActionDTO
 from backend.api.session_service import APP_NAME, DEFAULT_USER_ID, ApiSessionService, get_session_service
+from backend.api.knowledge_source_reference import build_knowledge_source_references
 from backend.api.source_reference import TeamsSourceCapture, resolve_authoritative_contributors
 from backend.api.streaming_events import EventSequencer, Stage, StreamEvent, StreamEventType, status_data
 from backend.api.turn_context import bind_run_id, pop_message_texts, reset_run_id
 from backend.cases.service import CaseService, get_case_service
 from backend.gateway.safe_error import SafeErrorException, run_failure, validation_error
 from backend.selection.service import PENDING_READ_CONTINUATION_STATE_KEY, pop_read_continuation
-from backend.tools.teams.state_keys import SELECTED_TEAMS_CHAT_ID_STATE_KEY
+from backend.tools.knowledge.runtime import discard_knowledge_run_evidence_state, snapshot_selected_knowledge_evidence
+from backend.tools.teams.state_keys import (
+    SELECTED_TEAMS_CHAT_ID_STATE_KEY,
+    SELECTED_TEAMS_CHAT_TOPIC_STATE_KEY,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -234,6 +249,72 @@ def _build_presentation_runner(session_service: ApiSessionService) -> _Runner:
         agent=presentation_team_manager,
         session_service=session_service.adk_session_service,
     )
+
+
+async def _retry_trusted_presentation_once(
+    *, user_id: str, run_id: str, validated_result: dict[str, Any], user_content: types.Content
+) -> Optional[str]:
+    """EMPTY-RESPONSE FIX (pre-4H correction pass): a single, bounded
+    retry of ONLY the presentation turn (`presentation_team_manager`,
+    `tools=[]`), used when the FIRST presentation attempt on the real
+    session (`_run_turn_events`'s own main loop, above) produced no
+    non-blank final text -- never a retry of `execute_read_continuation`
+    or any Teams tool.
+
+    Deliberately runs against a fresh, throwaway `InMemorySessionService`
+    -- mirroring `backend/agents/team_manager/direct_read_fast_path.py`'s
+    own already-proven `_run_trusted_presentation` pattern -- rather than
+    the real canonical session: calling `Runner.run_async` a second time
+    with the same `new_message` against the REAL session would append a
+    second, duplicate user-turn event to genuine conversation history,
+    which this function must never do. Seeded with only
+    `PENDING_SPECIALIST_RESULT_STATE_KEY` (the same already-validated
+    result the first attempt used) -- no other session state is needed
+    for a `tools=[]` presentation-only turn. Returns the retried
+    response's non-blank text, or `None` if the retry also produced
+    nothing usable.
+    """
+    from google.adk.memory import InMemoryMemoryService
+    from google.adk.runners import Runner
+    from google.adk.sessions import InMemorySessionService
+
+    from backend.agents.team_manager.agent import presentation_team_manager
+
+    session_service = InMemorySessionService()
+    app_name = f"{presentation_team_manager.name}::retry-presentation"
+    retry_session_id = f"retry-presentation::{run_id}"
+    try:
+        await session_service.create_session(
+            app_name=app_name,
+            user_id=user_id,
+            session_id=retry_session_id,
+            state={PENDING_SPECIALIST_RESULT_STATE_KEY: validated_result},
+        )
+        runner = Runner(
+            app_name=app_name,
+            agent=presentation_team_manager,
+            session_service=session_service,
+            memory_service=InMemoryMemoryService(),
+        )
+        last_content: Optional[types.Content] = None
+        try:
+            async for event in runner.run_async(user_id=user_id, session_id=retry_session_id, new_message=user_content):
+                if event.content and content_has_nonblank_text(event.content):
+                    last_content = event.content
+        finally:
+            await runner.close()
+    finally:
+        try:
+            existing = await session_service.get_session(app_name=app_name, user_id=user_id, session_id=retry_session_id)
+            if existing is not None:
+                await session_service.delete_session(app_name=app_name, user_id=user_id, session_id=retry_session_id)
+        except Exception:
+            _logger.warning("chat_service: failed to delete internal retry-presentation session")
+
+    if last_content is None or not last_content.parts:
+        return None
+    texts = [p.text for p in last_content.parts if not getattr(p, "thought", False) and getattr(p, "text", None)]
+    return "\n".join(texts) or None
 
 
 def _non_thought_text(part: Any) -> Optional[str]:
@@ -531,6 +612,7 @@ class ChatService:
         source_capture = TeamsSourceCapture()
         delegation_timer = DelegationTimer()
         conversation_target_capture = ConversationTargetCapture()
+        source_requirements_capture = SourceRequirementsCapture()
 
         # Contributor-accuracy fix + performance pass: the membership
         # fetch is started as soon as a `chat_id` becomes known DURING the
@@ -660,6 +742,17 @@ class ChatService:
         # a later, unrelated turn sharing this process never inherits a
         # stale `run_id`.
         message_texts_by_id: dict[str, str] = {}
+        # Phase 5.1J correction pass (Part C): captured from this turn's
+        # own `finally` below, BEFORE `discard_knowledge_run_evidence_state`
+        # clears the run-scoped trusted evidence store -- mirrors
+        # `message_texts_by_id`'s own "snapshot at cleanup time, use after
+        # the try/except/finally" shape exactly. Trusted
+        # `KnowledgeEvidenceItem`s the model explicitly selected this turn
+        # (never every item `knowledge_search` merely returned -- SEARCH
+        # RESULT != EVIDENCE USED), used below to build KM Source
+        # references from authoritative backend data, never from model
+        # text/agent_payload.
+        selected_knowledge_evidence: list[Any] = []
         run_id_token = bind_run_id(sequencer.run_id)
         # Production hardening pass #3: tracks whether `PENDING_
         # SPECIALIST_RESULT_STATE_KEY` was actually written this turn, so
@@ -827,6 +920,7 @@ class ChatService:
                         source_capture.observe(event)
                         delegation_timer.observe(event)
                         conversation_target_capture.observe(event)
+                        source_requirements_capture.observe(event)
 
                         # Contributor-accuracy fix + performance pass: start
                         # (or restart, for a superseded chat_id) the
@@ -859,6 +953,48 @@ class ChatService:
                         text = _extract_final_text(event)
                         if text is not None:
                             final_text = text
+
+                if specialist_result_state_written and final_text is None:
+                    # EMPTY-RESPONSE FIX (pre-4H correction pass): evidence
+                    # was already successfully retrieved and validated --
+                    # `specialist_result_state_written` is only ever set
+                    # after a genuinely successful `ResolvedReadContinuation`
+                    # + envelope validation, above. An empty presentation
+                    # turn here must never silently surface as "the
+                    # assistant did not produce a response" without at
+                    # least one bounded retry. The retry reuses the SAME
+                    # already-validated `validated_for_presentation` --
+                    # never `execute_read_continuation`, never
+                    # `teams_list_chats`/`teams_get_messages` again -- and
+                    # runs against a throwaway, disposable session (mirrors
+                    # direct_read_fast_path.py's own proven
+                    # `_run_trusted_presentation` pattern) rather than the
+                    # REAL session, so a second attempt on the same real
+                    # session_id never appends a duplicate user-turn event
+                    # to genuine conversation history.
+                    _logger.warning(
+                        "chat_service: trusted presentation produced no final text -- retrying once run_id=%s",
+                        sequencer.run_id,
+                    )
+                    retry_text = await _retry_trusted_presentation_once(
+                        user_id=user_id,
+                        run_id=sequencer.run_id,
+                        validated_result=validated_for_presentation,
+                        user_content=content,
+                    )
+                    if retry_text:
+                        yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": retry_text})
+                        final_text = retry_text
+                    else:
+                        _logger.warning(
+                            "chat_service: trusted presentation still produced no final text after retry -- "
+                            "failing closed run_id=%s",
+                            sequencer.run_id,
+                        )
+                        error = (
+                            "run_failure",
+                            "The assistant could not complete this request. Please try again.",
+                        )
         except Exception:
             # Never propagate a raw model/runtime exception (could include
             # implementation detail) -- see errors.py's module docstring.
@@ -887,6 +1023,22 @@ class ChatService:
             # bookkeeping entry (perf_timing.py) survives past this one
             # turn, on any exit path.
             discard_model_call_tracking(sequencer.run_id)
+            # Phase 5.1J correction pass (Part C): snapshot exactly what
+            # Incident Manager explicitly selected this turn -- BEFORE
+            # discarding the run-scoped store below -- so the KM Source
+            # reference built later in this method (after this try/except/
+            # finally) still has it, mirroring `message_texts_by_id`'s own
+            # snapshot-then-use-later shape. Never the model's own
+            # agent_payload/text -- always the trusted backend accessor.
+            selected_knowledge_evidence = snapshot_selected_knowledge_evidence(sequencer.run_id)
+            # Same discipline for the Generic KM tool adapter's own
+            # run-id-keyed trusted evidence state
+            # (backend/tools/knowledge/runtime.py) -- guarantees no
+            # `KnowledgeRunEvidenceState` (available/selected evidence)
+            # survives past the one turn/run that produced it, on any
+            # exit path, exactly like every other piece of this turn's
+            # own per-run bookkeeping cleaned up in this same block.
+            discard_knowledge_run_evidence_state(sequencer.run_id)
             # P4B.3 CORRECTION PASS: same discipline for direct_read_fast_
             # path.py's own run-id-keyed pending-trusted-result registry --
             # normally already self-cleaned by `_present_fast_path_result_
@@ -951,6 +1103,127 @@ class ChatService:
                 "conversation_target=%s run_id=%s", conversation_target_capture.target, sequencer.run_id
             )
 
+        # Fetched here (moved up from immediately after the MESSAGE_COMPLETED
+        # yield, where it used to live) so `SELECTED_TEAMS_CHAT_ID_STATE_KEY`
+        # -- written this same turn by team_manager's own
+        # `sync_incident_manager_result_to_state` `after_tool_callback`
+        # (state_sync.py), which already runs and persists BEFORE
+        # `Runner.run_async`'s generator is exhausted -- is available for
+        # the contributor-accuracy chat_id fallback below, AND for the
+        # governed-knowledge completion gate immediately below. Reused
+        # again further down for `pending_action`/`pending_selection`, so
+        # this is still exactly one extra session read per turn, not two.
+        refreshed_session = await self._session_service.get_session(session_id, user_id)
+
+        if (
+            error is None
+            and final_text is not None
+            and not specialist_result_state_written
+            and not source_requirements_capture.declared
+        ):
+            # FIFTH pre-4H correction pass: the remaining structural gap --
+            # "no declaration" was previously read the same as "declared
+            # false", letting team_manager skip `record_source_
+            # requirements` ENTIRELY and answer straight from conversation
+            # history with no gate ever noticing. Skipped for a `
+            # specialist_result_state_written` turn (the post-selection/
+            # fast-path TRUSTED presentation path, `presentation_team_
+            # manager`, tools=[]) -- that turn is ALREADY provenance-safe
+            # via the SEPARATE, already-validated `TrustedSpecialistResult`
+            # envelope mechanism, and is structurally incapable of calling
+            # ANY tool (including this declaration one), so requiring a
+            # declaration there would be a pure regression, not a safety
+            # improvement. Also skipped whenever `final_text is None` --
+            # a turn that produced no response at all has nothing
+            # successful to gate; the pre-existing "no final text" error
+            # path a few lines below already handles that failure mode,
+            # and this gate exists to protect a successful-looking
+            # completion, never to manufacture one from a genuine non-
+            # response. See source_requirements_completion.py's own
+            # module docstring for the full rationale of the bounded,
+            # tools=[record_source_requirements]-only remediation below.
+            _logger.warning(
+                "chat_service: no current-turn source-requirements declaration -- "
+                "requesting one via bounded remediation run_id=%s",
+                sequencer.run_id,
+            )
+            try:
+                declaration = await request_source_requirements_declaration(
+                    question=message_text, run_id=f"{sequencer.run_id}::declaration-remediation"
+                )
+            except Exception:
+                _logger.warning(
+                    "chat_service: source-requirements declaration remediation raised -- failing closed run_id=%s",
+                    sequencer.run_id,
+                )
+                declaration = None
+
+            if declaration is None:
+                _logger.warning(
+                    "chat_service: source-requirements declaration still missing after remediation -- "
+                    "failing closed run_id=%s",
+                    sequencer.run_id,
+                )
+                final_text = SAFE_DECLARATION_FAILURE_TEXT
+                selected_knowledge_evidence = []
+            else:
+                requires_teams_declared, requires_governed_knowledge_declared = declaration
+                source_requirements_capture.record_external_declaration(
+                    requires_teams_declared, requires_governed_knowledge_declared
+                )
+                # `declared=False` (the only way this branch was reached)
+                # means `final_text` is UNVERIFIED against this now-known
+                # requirement -- when neither source is required, team_
+                # manager's own original answer already stands on its own
+                # (a plain conversational/history-recall/greeting response
+                # never needed a delegation in the first place), so it is
+                # left untouched; the `requires_governed_knowledge` branch
+                # immediately below still applies uniformly regardless of
+                # whether the declaration came from the main turn or from
+                # this remediation.
+
+        if error is None and source_requirements_capture.requires_governed_knowledge and not selected_knowledge_evidence:
+            # FOURTH pre-4H correction pass: PAST ASSISTANT OUTPUT != GOVERNED
+            # KNOWLEDGE. team_manager's own turn declared (via `record_
+            # source_requirements`, directly or via the remediation just
+            # above) that THIS request requires current governed
+            # knowledge, but this run's own trusted, run-scoped SELECTED
+            # evidence (snapshotted above, in the `finally` block) is
+            # empty -- whether because team_manager never delegated to
+            # incident_manager at all, or because its own free-form
+            # presentation did not carry a validated result forward
+            # faithfully. `final_text` is therefore UNTRUSTED for this
+            # governed-knowledge portion and must not reach the user as-is.
+            # See governed_knowledge_completion.py's own module docstring
+            # for the full live-failure rationale -- this deterministically
+            # forces the REAL, unmodified `incident_manager` to run, so ITS
+            # OWN existing compliance retry (provenance_compliance.py,
+            # third correction pass) is what actually enforces selection;
+            # this is not a second, competing selection mechanism.
+            _logger.warning(
+                "chat_service: requires_governed_knowledge declared but no current selected evidence -- "
+                "forcing deterministic governed-knowledge remediation run_id=%s",
+                sequencer.run_id,
+            )
+            try:
+                chat_topic = (
+                    refreshed_session.state.get(SELECTED_TEAMS_CHAT_TOPIC_STATE_KEY)
+                    if source_requirements_capture.requires_teams
+                    else None
+                )
+                final_text, selected_knowledge_evidence = await enforce_governed_knowledge_at_completion(
+                    question=message_text,
+                    chat_topic=chat_topic,
+                    run_id=f"{sequencer.run_id}::governed-completion",
+                )
+            except Exception:
+                _logger.warning(
+                    "chat_service: governed-knowledge completion remediation raised -- failing closed run_id=%s",
+                    sequencer.run_id,
+                )
+                final_text = SAFE_COMPLETION_FAILURE_TEXT
+                selected_knowledge_evidence = []
+
         if error is None and final_text is None:
             # A turn that produced no final text at all is itself an
             # unexpected runtime condition, not a user input problem.
@@ -972,17 +1245,6 @@ class ChatService:
             yield sequencer.build(StreamEventType.RUN_COMPLETED, {"outcome": "error"})
             perf.log_duration("total_run", perf.elapsed_seconds())
             return
-
-        # Fetched here (moved up from immediately after the MESSAGE_COMPLETED
-        # yield, where it used to live) so `SELECTED_TEAMS_CHAT_ID_STATE_KEY`
-        # -- written this same turn by team_manager's own
-        # `sync_incident_manager_result_to_state` `after_tool_callback`
-        # (state_sync.py), which already runs and persists BEFORE
-        # `Runner.run_async`'s generator is exhausted -- is available for
-        # the contributor-accuracy chat_id fallback below. Reused again
-        # further down for `pending_action`/`pending_selection`, so this is
-        # still exactly one extra session read per turn, not two.
-        refreshed_session = await self._session_service.get_session(session_id, user_id)
 
         # Pre-4H UX/provenance milestone: structured Teams source/
         # provenance data, if this turn actually retrieved grounded
@@ -1065,6 +1327,27 @@ class ChatService:
             # turn's evidence was empty) -- discard the now-unneeded
             # in-flight fetch rather than leaving it dangling unawaited.
             contributors_task.cancel()
+
+        # Phase 5.1J correction pass (Part C): a SEPARATE, purely additive
+        # `knowledge_sources` list -- never merged into/replacing `source`
+        # above (Teams and KM provenance keep their own, differently-
+        # shaped DTOs; see knowledge_source_reference.py's own docstring
+        # for why forcing them into one shape would damage both). Built
+        # ONLY from `selected_knowledge_evidence` (snapshotted above, in
+        # this method's own `finally`, from the trusted, run-id-keyed
+        # store) -- never from `agent_payload`/model text. A combined-
+        # answer turn may legitimately carry both `source` and
+        # `knowledge_sources` on the SAME message.completed event.
+        # Deduplicated by `(knowledge_id, version_label, section_id)`,
+        # preserving selection order. An empty `selected_knowledge_evidence`
+        # (no `knowledge_select_evidence` call this turn, or it was never
+        # called at all) correctly omits the key entirely -- SEARCH RESULT
+        # != EVIDENCE USED.
+        knowledge_sources = build_knowledge_source_references(selected_knowledge_evidence)
+        if knowledge_sources:
+            message_completed_data["knowledge_sources"] = [
+                reference.model_dump(mode="json") for reference in knowledge_sources
+            ]
         yield sequencer.build(StreamEventType.MESSAGE_COMPLETED, message_completed_data)
 
         pending_action = map_pending_action(refreshed_session.state)

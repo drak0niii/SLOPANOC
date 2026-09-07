@@ -65,10 +65,17 @@ class _FakeEvent:
 
 def test_generic_incident_manager_instruction_is_byte_for_byte_unchanged() -> None:
     """P4B.2 must not regress the heavily-prompt-tested normal/time-range
-    path -- this is the same 39,707-char instruction measured earlier in
-    this pass, confirmed unchanged.
+    path -- this was the 39,707-char instruction measured during that
+    pass, confirmed unchanged through P4B.2 itself. Phase 5.1J
+    deliberately extended it with one concise "GOVERNED KNOWLEDGE"
+    paragraph, a first pre-4H correction pass extended it again with the
+    "NO TEAMS CONVERSATION NEEDED" branch making `chat_topic` genuinely
+    optional, and a second pre-4H correction pass extended it once more
+    with `requires_governed_knowledge` and combined Teams+KM guidance
+    (docs/KNOWLEDGE_CONTRACT.md's Phase 5.1J section) -- this is that
+    legitimate, intentional length, not P4B.2-era drift.
     """
-    assert len(INCIDENT_MANAGER_INSTRUCTION) == 39707
+    assert len(INCIDENT_MANAGER_INSTRUCTION) == 43956
 
 
 def test_synthesis_only_agent_no_longer_uses_the_generic_instruction() -> None:

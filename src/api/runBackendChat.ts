@@ -1,6 +1,12 @@
 import { ApiError } from "./client";
 import { isAbortError, streamChatMessage } from "./streamChat";
-import type { PendingActionDTO, PendingSelectionDTO, SourceReferenceDTO, TraceStepDTO } from "./types";
+import type {
+  KnowledgeSourceReferenceDTO,
+  PendingActionDTO,
+  PendingSelectionDTO,
+  SourceReferenceDTO,
+  TraceStepDTO,
+} from "./types";
 
 const GENERIC_CONNECTION_ERROR =
   "The assistant could not be reached right now. Please try again.";
@@ -20,8 +26,11 @@ export interface BackendChatHandlers {
   onDelta: (textDelta: string) => void;
   /** Pre-4H UX/provenance milestone — `source`, when present, is the
    * safe, structured Teams provenance for THIS answer (never parsed from
-   * `content`; see SourceChip.tsx's module docstring). */
-  onCompleted: (content: string, source?: SourceReferenceDTO) => void;
+   * `content`; see SourceChip.tsx's module docstring). Phase 5.1J
+   * correction pass (Part C) — `knowledgeSources`, when present and
+   * non-empty, is the governed-knowledge counterpart; independent of
+   * `source` (either, both, or neither may be present). */
+  onCompleted: (content: string, source?: SourceReferenceDTO, knowledgeSources?: KnowledgeSourceReferenceDTO[]) => void;
   onActionPending: (action: PendingActionDTO) => void;
   /** Interaction-capability extension — mirrors `onActionPending` exactly. */
   onSelectionPending: (selection: PendingSelectionDTO) => void;
@@ -84,7 +93,7 @@ export async function runBackendChat(
             handlers.onDelta(event.data.text);
             break;
           case "message.completed":
-            handlers.onCompleted(event.data.content, event.data.source);
+            handlers.onCompleted(event.data.content, event.data.source, event.data.knowledge_sources);
             break;
           case "action.pending":
             handlers.onActionPending(event.data);

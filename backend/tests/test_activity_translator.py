@@ -242,11 +242,25 @@ def test_partial_function_call_argument_chunks_are_ignored() -> None:
 
 def test_incident_manager_call_produces_a_used_conversation_trace_step() -> None:
     translator = RunTraceTranslator()
-    step = translator.translate_event(FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]))
+    step = translator.translate_event(
+        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager", {"chat_topic": "   "})])
+    )
     assert step is not None
     assert step["category"] == TraceCategory.TEAMS
     assert step["label"] == "Used the selected Teams conversation"
     assert step["status"] == TraceStepStatus.COMPLETED
+
+
+def test_incident_manager_call_with_no_chat_topic_produces_no_teams_trace_step() -> None:
+    """Phase 5.1J correction pass: `chat_topic` is now legitimately
+    OPTIONAL on `IncidentManagerRequest` (a governed-knowledge-only
+    delegation never sets it) -- an absent `chat_topic` must never be
+    reported as "Used the selected Teams conversation", since no Teams
+    conversation was necessarily involved at all.
+    """
+    translator = RunTraceTranslator()
+    step = translator.translate_event(FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]))
+    assert step is None
 
 
 def test_unrelated_events_never_produce_a_trace_step() -> None:
@@ -477,10 +491,23 @@ def test_teams_call_step_names_the_chat_when_chat_topic_is_known() -> None:
     assert step["label"] == 'Used the "Ops Bridge" conversation'
 
 
-def test_teams_call_step_falls_back_to_generic_label_without_a_chat_topic() -> None:
+def test_teams_call_step_falls_back_to_generic_label_with_a_blank_chat_topic() -> None:
+    """`chat_topic` present but not a clean, non-empty string (e.g.
+    whitespace-only) still counts as a Teams-scoped call -- distinct from
+    `chat_topic` being entirely ABSENT (see
+    `test_incident_manager_call_with_no_chat_topic_produces_no_teams_trace_step`).
+    """
+    translator = RunTraceTranslator()
+    step = translator.translate_event(
+        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager", {"chat_topic": "   "})])
+    )
+    assert step["label"] == "Used the selected Teams conversation"
+
+
+def test_teams_call_step_is_none_when_chat_topic_key_is_entirely_absent() -> None:
     translator = RunTraceTranslator()
     step = translator.translate_event(FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager", {})]))
-    assert step["label"] == "Used the selected Teams conversation"
+    assert step is None
 
 
 def test_teams_call_step_never_leaks_the_question_argument() -> None:

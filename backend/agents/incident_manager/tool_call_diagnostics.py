@@ -33,6 +33,11 @@ _SAFE_TOOL_NAMES = frozenset(
         "teams_propose_send_message",
         "teams_create_chat",
         "teams_send_message",
+        # Phase 5.1J: same closed-vocabulary, name-only diagnostic
+        # extended to the new Generic KM tools -- never logs query text,
+        # selection keys, or evidence content.
+        "knowledge_search",
+        "knowledge_select_evidence",
     }
 )
 

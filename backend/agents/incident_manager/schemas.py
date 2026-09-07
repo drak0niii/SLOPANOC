@@ -38,13 +38,22 @@ from backend.approval.schemas import WriteOperation
 
 
 class IncidentManagerRequest(BaseModel):
-    """What team_manager sends when delegating Teams-domain work."""
+    """What team_manager sends when delegating to incident_manager --
+    Teams-domain work, governed-knowledge work, or both (Phase 5.1J
+    correction pass).
+    """
 
-    chat_topic: str = Field(
+    chat_topic: Optional[str] = Field(
+        default=None,
         description=(
             "The exact Teams chat title/name as the user stated it, to be "
-            "resolved via teams_list_chats."
-        )
+            "resolved via teams_list_chats -- set ONLY when an external "
+            "Teams conversation is actually relevant to this request. "
+            "Leave unset for a request that does not need Teams at all "
+            "(e.g. a governed-knowledge-only question) -- team_manager "
+            "must never fabricate a value here merely because a Teams "
+            "chat happens to be currently selected."
+        ),
     )
     question: Optional[str] = Field(
         default=None,
@@ -70,6 +79,25 @@ class IncidentManagerRequest(BaseModel):
             "history, unbounded, exactly as before this field existed). "
             "incident_manager -- not team_manager -- is responsible for "
             "converting this into UTC from_datetime/to_datetime boundaries."
+        ),
+    )
+    requires_governed_knowledge: bool = Field(
+        default=False,
+        description=(
+            "True when governed knowledge (via knowledge_search) is a "
+            "REQUIRED source for fulfilling this specific request -- set "
+            "by team_manager's own semantic judgment, never inferred from "
+            "keywords. False (the default) means the request does not "
+            "explicitly require governed knowledge in addition to whatever "
+            "else is being asked -- incident_manager may still use "
+            "knowledge_search on its own initiative if it judges it useful "
+            "(see GOVERNED KNOWLEDGE below), but nothing REQUIRES it to. "
+            "This field is also read by the exact-read Teams fast path "
+            "(direct_read_fast_path.py) to decide whether a request can be "
+            "fully satisfied by a Teams read alone -- when True, that "
+            "optimization is skipped so the normal, multi-tool "
+            "incident_manager turn can use both Teams and governed "
+            "knowledge together."
         ),
     )
 
@@ -212,13 +240,18 @@ class IncidentManagerResponse(BaseModel):
     """incident_manager's structured reply to team_manager for this slice.
 
     `summary` may only describe content present in `evidence` (when
-    populated) or the retrieved messages generally. When `outcome` is
-    anything other than "ok", `summary`, `evidence`, and the
-    classification fields below are left unset/empty, and
-    `detail`/`candidate_titles` carry the explanation instead. When
-    `outcome` is "proposed"/"executed", `write_action` carries the
-    write-action info instead, and `summary` may hold a short
-    human-readable description of the action.
+    populated) or the retrieved messages generally -- OR, for a request
+    that used governed knowledge instead of (or alongside) Teams (Phase
+    5.1J), content grounded in evidence actually returned by
+    `knowledge_search`. When `outcome` is anything other than "ok",
+    `summary`, `evidence`, and the classification fields below are left
+    unset/empty, and `detail`/`candidate_titles` carry the explanation
+    instead. When `outcome` is "proposed"/"executed", `write_action`
+    carries the write-action info instead, and `summary` may hold a short
+    human-readable description of the action. `chat_id`/`chat_title`
+    legitimately stay unset for an "ok" response that did not involve any
+    Teams conversation (`chat_topic` was absent on the request) -- this
+    is normal, not an omission to correct.
 
     `decisions`/`actions`/`proposals`/`open_questions`/`risks` are
     separate, optional/empty-by-default lists -- populate each only when

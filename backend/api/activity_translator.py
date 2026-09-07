@@ -260,11 +260,14 @@ def selection_prepared_trace_step() -> TraceStepInput:
 def _safe_chat_topic(args: Any) -> Optional[str]:
     """The `chat_topic` call argument, if present/non-empty -- the exact
     Teams chat name/title `team_manager` is asking about (per
-    `IncidentManagerRequest.chat_topic`, a required field on every call):
-    either the user's own typed words, or the exact candidate label they
-    already picked from a `SelectionCard`, or the currently-authoritative
-    selected topic. Deliberately NOT treated the same as `question` (never
-    surfaced -- see `test_trace_step_never_contains_raw_tool_arguments...`):
+    `IncidentManagerRequest.chat_topic`, OPTIONAL since Phase 5.1J's
+    correction pass -- absent entirely for a request that does not need
+    an external Teams conversation, e.g. a governed-knowledge-only
+    request): either the user's own typed words, or the exact candidate
+    label they already picked from a `SelectionCard`, or the currently-
+    authoritative selected topic. Deliberately NOT treated the same as
+    `question` (never surfaced -- see
+    `test_trace_step_never_contains_raw_tool_arguments...`):
     a chat name is already fully known to/provided by the user and already
     shown elsewhere in this UI (a write proposal's `target_display_name`,
     the `SelectionCard` the user picked from) -- unlike `question`, which
@@ -306,9 +309,22 @@ class RunTraceTranslator:
         for call in function_calls:
             name = getattr(call, "name", None)
             if name == _INCIDENT_MANAGER_TOOL_NAME:
-                topic = _safe_chat_topic(getattr(call, "args", None))
-                label = f'Used the "{topic}" conversation' if topic else "Used the selected Teams conversation"
-                return _trace_step(TraceCategory.TEAMS, label)
+                args = getattr(call, "args", None)
+                topic = _safe_chat_topic(args)
+                if topic:
+                    return _trace_step(TraceCategory.TEAMS, f'Used the "{topic}" conversation')
+                if isinstance(args, dict) and args.get("chat_topic"):
+                    # `chat_topic` was supplied but didn't resolve to a
+                    # clean non-empty string -- still a Teams-scoped call.
+                    return _trace_step(TraceCategory.TEAMS, "Used the selected Teams conversation")
+                # Phase 5.1J: `chat_topic` is optional on `IncidentManagerRequest`
+                # -- ABSENT means this delegation may not involve a Teams
+                # conversation at all (e.g. a governed-knowledge-only
+                # request). Never claim "Used the selected Teams
+                # conversation" when no Teams destination was actually
+                # supplied -- no trace step for this call-observation point
+                # is more accurate than a fabricated one.
+                return None
         return None
 
     def _translate_function_responses(self, function_responses: list[Any]) -> Optional[TraceStepInput]:

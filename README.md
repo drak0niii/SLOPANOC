@@ -470,6 +470,28 @@ sub-phase.
 - 5.1I Generic agent-facing Knowledge tools
 - 5.1J First reference consumer integration (Incident Manager)
 
+5.1A (domain foundation), 5.1B (metadata hardening + deterministic
+applicability evaluation), 5.1C (the generic, source-agnostic ingestion
+boundary contract), 5.1D (deterministic structural content
+processing/segmentation), 5.1E (versioning + lifecycle governance),
+5.1F (the generic knowledge repository contract, with a local SQLite
+implementation), 5.1G (deterministic, generic retrieval + ranking — a
+context-reduction boundary, with one lexical token-overlap reference
+scorer), 5.1H (knowledge provenance — a deterministic validation
+boundary that revalidates retrieval results against the exact repository
+state before they become trusted evidence), 5.1I (one generic
+agent-facing `knowledge_search` tool composing 5.1G + 5.1H behind a
+closed, model-controlled request contract, with trusted `as_of`/
+applicability context supplied only by the backend), and 5.1J (Incident
+Manager, the first reference consumer — concrete `knowledge_search`/
+`knowledge_select_evidence` ADK tools in `backend/tools/knowledge/`,
+outside Generic KM itself, with server-owned, run-id-keyed trusted
+evidence state; Team Manager remains untouched and receives neither
+tool) are implemented, with the full contract documented in
+[`docs/KNOWLEDGE_CONTRACT.md`](docs/KNOWLEDGE_CONTRACT.md). Phase 5.1 is
+now complete; Phase 4H security hardening is next per the locked
+roadmap.
+
 ```mermaid
 flowchart TD
     SRC[Knowledge Sources] --> ING[Ingestion / Normalization]

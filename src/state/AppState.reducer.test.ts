@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { initialState, reducer, type AppState } from "./AppState";
-import type { PendingActionDTO, PendingSelectionDTO, SourceReferenceDTO, TraceStepDTO } from "../api/types";
+import type {
+  KnowledgeSourceReferenceDTO,
+  PendingActionDTO,
+  PendingSelectionDTO,
+  SourceReferenceDTO,
+  TraceStepDTO,
+} from "../api/types";
 
 const CHAT_ID = "chat-1";
 const USER_MSG_ID = "msg-user-1";
@@ -192,6 +198,28 @@ function sourceReference(overrides: Partial<SourceReferenceDTO> = {}): SourceRef
   };
 }
 
+// --- Phase 5.1J correction pass: governed-knowledge source/provenance -----
+
+function knowledgeSourceReference(overrides: Partial<KnowledgeSourceReferenceDTO> = {}): KnowledgeSourceReferenceDTO {
+  return {
+    source_id: "ks1",
+    source_type: "knowledge",
+    label: "Governed knowledge",
+    knowledge_id: "aurora-relay-verification",
+    version_label: "v1",
+    section_id: "aurora-relay-verification:v1:s0",
+    title: "Aurora Relay Verification Procedure",
+    document_type: "technical_instruction",
+    source_system: "manual_e2e_fixture",
+    evidence_source_id: "doc-1",
+    source_display_name: "Aurora Relay Governed Test Procedure",
+    section_heading: "Verification",
+    source_locator: "test-fixture:verification",
+    content: "Confirm the checksum is 7319 and the status is GREEN.",
+    ...overrides,
+  };
+}
+
 describe("reducer — BACKEND_MESSAGE_COMPLETED attaches a structured source", () => {
   it("stores the source under chat.sources, keyed by the owning assistant message id", () => {
     const state = reducer(seedRunningChat(), {
@@ -349,6 +377,156 @@ describe("reducer — EDIT_MESSAGE discards a discarded turn's source, mirrors r
     });
 
     expect(next.chats[CHAT_ID].sources?.[ASSISTANT_MSG_ID]).toEqual(sourceReference());
+  });
+});
+
+describe("reducer — BACKEND_MESSAGE_COMPLETED attaches structured knowledge_sources (Phase 5.1J correction pass)", () => {
+  it("stores knowledge_sources under chat.knowledgeSources, keyed by the owning assistant message id", () => {
+    const state = reducer(seedRunningChat(), {
+      type: "BACKEND_MESSAGE_COMPLETED",
+      payload: {
+        chatId: CHAT_ID,
+        runToken: RUN_TOKEN,
+        messageId: ASSISTANT_MSG_ID,
+        content: "The checksum is 7319.",
+        knowledgeSources: [knowledgeSourceReference()],
+      },
+    });
+
+    expect(state.chats[CHAT_ID].knowledgeSources?.[ASSISTANT_MSG_ID]).toEqual([knowledgeSourceReference()]);
+  });
+
+  it("does not create a knowledgeSources entry when knowledge_search was called but nothing was selected", () => {
+    const state = reducer(seedRunningChat(), {
+      type: "BACKEND_MESSAGE_COMPLETED",
+      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, messageId: ASSISTANT_MSG_ID, content: "No governed knowledge selected." },
+    });
+
+    expect(state.chats[CHAT_ID].knowledgeSources).toBeUndefined();
+  });
+
+  it("does not create a knowledgeSources entry for an empty array", () => {
+    const state = reducer(seedRunningChat(), {
+      type: "BACKEND_MESSAGE_COMPLETED",
+      payload: {
+        chatId: CHAT_ID,
+        runToken: RUN_TOKEN,
+        messageId: ASSISTANT_MSG_ID,
+        content: "No governed knowledge selected.",
+        knowledgeSources: [],
+      },
+    });
+
+    expect(state.chats[CHAT_ID].knowledgeSources).toBeUndefined();
+  });
+
+  it("stores BOTH a Teams source and knowledge_sources on the same message (combined-answer turn)", () => {
+    const state = reducer(seedRunningChat(), {
+      type: "BACKEND_MESSAGE_COMPLETED",
+      payload: {
+        chatId: CHAT_ID,
+        runToken: RUN_TOKEN,
+        messageId: ASSISTANT_MSG_ID,
+        content: "Combined answer.",
+        source: sourceReference(),
+        knowledgeSources: [knowledgeSourceReference()],
+      },
+    });
+
+    expect(state.chats[CHAT_ID].sources?.[ASSISTANT_MSG_ID]).toEqual(sourceReference());
+    expect(state.chats[CHAT_ID].knowledgeSources?.[ASSISTANT_MSG_ID]).toEqual([knowledgeSourceReference()]);
+  });
+
+  it("stores multiple distinct selected KM references, preserving order", () => {
+    const first = knowledgeSourceReference({ source_id: "ks1", section_id: "s1" });
+    const second = knowledgeSourceReference({ source_id: "ks2", section_id: "s2" });
+    const state = reducer(seedRunningChat(), {
+      type: "BACKEND_MESSAGE_COMPLETED",
+      payload: {
+        chatId: CHAT_ID,
+        runToken: RUN_TOKEN,
+        messageId: ASSISTANT_MSG_ID,
+        content: "Combined answer.",
+        knowledgeSources: [first, second],
+      },
+    });
+
+    expect(state.chats[CHAT_ID].knowledgeSources?.[ASSISTANT_MSG_ID]).toEqual([first, second]);
+  });
+});
+
+describe("reducer — EDIT_MESSAGE discards a discarded turn's knowledgeSources, mirrors sources cleanup (Part C8)", () => {
+  it("removes the knowledgeSources owned by a message that no longer exists after the edit", () => {
+    let state = reducer(seedRunningChat(), {
+      type: "BACKEND_MESSAGE_COMPLETED",
+      payload: {
+        chatId: CHAT_ID,
+        runToken: RUN_TOKEN,
+        messageId: ASSISTANT_MSG_ID,
+        content: "The checksum is 7319.",
+        knowledgeSources: [knowledgeSourceReference()],
+      },
+    });
+    state = reducer(state, { type: "BACKEND_RUN_COMPLETED", payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, outcome: "ok" } });
+    expect(state.chats[CHAT_ID].knowledgeSources?.[ASSISTANT_MSG_ID]).toBeDefined();
+
+    const next = reducer(state, {
+      type: "EDIT_MESSAGE",
+      payload: {
+        chatId: CHAT_ID,
+        messageId: USER_MSG_ID,
+        text: "a different opening prompt",
+        assistantMessageId: "msg-assistant-edited",
+        retitle: true,
+      },
+    });
+
+    expect(next.chats[CHAT_ID].knowledgeSources?.[ASSISTANT_MSG_ID]).toBeUndefined();
+    expect(Object.keys(next.chats[CHAT_ID].knowledgeSources ?? {})).toHaveLength(0);
+  });
+
+  it("leaves an EARLIER, surviving message's knowledgeSources completely untouched by editing a LATER message", () => {
+    let state = reducer(seedRunningChat(), {
+      type: "BACKEND_MESSAGE_COMPLETED",
+      payload: {
+        chatId: CHAT_ID,
+        runToken: RUN_TOKEN,
+        messageId: ASSISTANT_MSG_ID,
+        content: "The checksum is 7319.",
+        knowledgeSources: [knowledgeSourceReference()],
+      },
+    });
+    state = reducer(state, { type: "BACKEND_RUN_COMPLETED", payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, outcome: "ok" } });
+
+    const secondUserId = "msg-user-2";
+    const secondAssistantId = "msg-assistant-2";
+    state = reducer(state, {
+      type: "SEND_MESSAGE",
+      payload: {
+        chatId: CHAT_ID,
+        isNewChat: false,
+        userMessageId: secondUserId,
+        assistantMessageId: secondAssistantId,
+        text: "a follow-up",
+        attachments: [],
+        sources: [],
+        timestamp: 2000,
+        runToken: "run-2",
+      },
+    });
+
+    const next = reducer(state, {
+      type: "EDIT_MESSAGE",
+      payload: {
+        chatId: CHAT_ID,
+        messageId: secondUserId,
+        text: "actually, something else",
+        assistantMessageId: "msg-assistant-2-edited",
+        retitle: false,
+      },
+    });
+
+    expect(next.chats[CHAT_ID].knowledgeSources?.[ASSISTANT_MSG_ID]).toEqual([knowledgeSourceReference()]);
   });
 });
 

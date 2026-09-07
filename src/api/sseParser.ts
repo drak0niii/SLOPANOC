@@ -148,6 +148,34 @@ export function parseSSEEvent(rawData: string, onWarn: (message: string) => void
           delete (data as { source?: unknown }).source;
         }
       }
+      // Phase 5.1J correction pass (Part C): `knowledge_sources` is a
+      // SEPARATE, additive array — validated independently of `source`
+      // above, and just as tolerant of a malformed/future shape (drop the
+      // one bad entry, or the whole array, rather than the message).
+      if (data.knowledge_sources !== undefined) {
+        if (!Array.isArray(data.knowledge_sources)) {
+          onWarn("dropping malformed knowledge_sources on message.completed event");
+          delete (data as { knowledge_sources?: unknown }).knowledge_sources;
+        } else {
+          const valid = (data.knowledge_sources as unknown[]).filter((entry): boolean => {
+            if (typeof entry !== "object" || entry === null) return false;
+            const ref = entry as Record<string, unknown>;
+            return (
+              ref.source_type === "knowledge" &&
+              isString(ref.source_id) &&
+              isString(ref.knowledge_id) &&
+              isString(ref.version_label) &&
+              isString(ref.section_id) &&
+              isString(ref.title) &&
+              isString(ref.content)
+            );
+          });
+          if (valid.length !== (data.knowledge_sources as unknown[]).length) {
+            onWarn("dropping malformed knowledge_sources entries on message.completed event");
+          }
+          (data as { knowledge_sources?: unknown }).knowledge_sources = valid;
+        }
+      }
       break;
     case "action.pending":
       if (!isString(data.proposal_id) || !isString(data.operation) || !isString(data.status)) {

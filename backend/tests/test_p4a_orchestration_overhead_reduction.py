@@ -79,7 +79,12 @@ def test_team_manager_tool_list_is_orchestration_level_only() -> None:
     `incident_manager`'s own tool list, agents/incident_manager/agent.py).
     """
     names = {getattr(tool, "name", None) or getattr(tool, "__name__", None) for tool in team_manager.tools}
-    assert names == {"incident_manager", "record_case_analysis", "record_conversation_target"}
+    assert names == {
+        "incident_manager",
+        "record_case_analysis",
+        "record_conversation_target",
+        "record_source_requirements",
+    }
 
     forbidden_raw_teams_tools = {
         "teams_list_chats",

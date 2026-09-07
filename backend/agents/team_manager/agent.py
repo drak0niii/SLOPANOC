@@ -87,6 +87,7 @@ from backend.agents.team_manager.direct_read_fast_path import _fast_path_inciden
 from backend.agents.team_manager.case_tools import record_case_analysis
 from backend.agents.team_manager.conversation_target import record_conversation_target
 from backend.agents.team_manager.read_continuation_enforcement import enforce_read_continuation
+from backend.agents.team_manager.source_requirements import record_source_requirements
 from backend.agents.team_manager.selection_delegation_guard import (
     block_repeated_delegation_after_selection_needed,
     record_selection_needed,
@@ -113,7 +114,7 @@ team_manager = Agent(
         "incident_manager specialist."
     ),
     instruction=team_manager_instruction_provider,
-    tools=[incident_manager_tool, record_case_analysis, record_conversation_target],
+    tools=[incident_manager_tool, record_case_analysis, record_conversation_target, record_source_requirements],
     # R3 FIX (correctness-regression pass): a LIST of callbacks -- ADK's
     # own documented multi-callback mechanism (verified against the
     # installed 1.33.0 source, `flows/llm_flows/functions.py`'s `_run_

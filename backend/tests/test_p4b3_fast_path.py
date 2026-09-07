@@ -120,9 +120,25 @@ async def test_before_model_callback_shortcut_skips_the_real_second_model_call()
 # --- Tier 2: domain logic -------------------------------------------------
 
 
+def _user_content_json(payload: dict[str, Any]) -> Any:
+    """Mirrors what `AgentTool.run_async` actually builds from
+    `IncidentManagerRequest.model_dump_json(...)` -- see
+    `direct_read_fast_path.py`'s own `_requires_governed_knowledge`
+    docstring for why `tool_context.user_content` is where that field is
+    read back from (never a tool's own call arguments).
+    """
+    return types.Content(role="user", parts=[types.Part.from_text(text=json.dumps(payload))])
+
+
 class _Ctx:
-    def __init__(self, state: Optional[dict] = None) -> None:
+    def __init__(self, state: Optional[dict] = None, requires_governed_knowledge: bool = False) -> None:
         self.state = state if state is not None else {}
+        # Pre-4H correction pass (combined Teams+KM fast-path guard):
+        # defaults to a Teams-only request (`requires_governed_knowledge:
+        # false`) -- exactly what every existing test in this file that
+        # predates that guard is actually exercising -- so none of them
+        # needed to change their own call sites.
+        self.user_content = _user_content_json({"requires_governed_knowledge": requires_governed_knowledge})
 
 
 def _matched_response(chat_id: str = "chat-b2-id", title: str = "Network Operations Daily") -> dict[str, Any]:

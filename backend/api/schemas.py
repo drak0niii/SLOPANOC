@@ -196,6 +196,47 @@ class SourceReferenceDTO(BaseModel):
     evidence: list[SourceEvidenceItem] = Field(default_factory=list)
 
 
+class KnowledgeSourceReferenceDTO(BaseModel):
+    """Safe, structured provenance for a governed-knowledge-derived
+    answer (Phase 5.1J correction pass, Part C) -- the frontend's source
+    drawer renders this directly, exactly like `SourceReferenceDTO`, but
+    for the KM evidence path. Built ONLY from a trusted, backend-side
+    `KnowledgeEvidenceItem` the model explicitly SELECTED this turn (via
+    `knowledge_select_evidence`) -- never from `agent_payload`, never
+    from the model's own answer text, and never from every item
+    `knowledge_search` merely returned (AVAILABLE EVIDENCE != SELECTED
+    EVIDENCE). See backend/api/knowledge_source_reference.py for how this
+    is constructed.
+
+    Deliberately excludes `KnowledgeSource.source_uri` -- see
+    docs/KNOWLEDGE_CONTRACT.md's Phase 5.1J section, "DO NOT EXPOSE
+    source_uri YET": the trusted backend `KnowledgeEvidenceItem` still
+    retains it, but it never reaches this DTO, the API response, or any
+    log. `content` here is the EXACT, untruncated, unparaphrased
+    governed section text this answer was built from -- never a model-
+    generated summary/snippet, mirroring `SourceEvidenceItem.snippet`'s
+    own "never from the model" discipline for Teams.
+    """
+
+    source_id: str
+    """Synthetic per-DTO identity (a `uuid4`), mirroring `SourceReferenceDTO
+    .source_id` exactly -- NOT the governed `KnowledgeSource.source_id`
+    (see `evidence_source_id` for that)."""
+    source_type: Literal["knowledge"]
+    label: str
+    knowledge_id: str
+    version_label: str
+    section_id: str
+    title: str
+    document_type: str
+    source_system: str
+    evidence_source_id: str
+    source_display_name: Optional[str] = None
+    section_heading: Optional[str] = None
+    source_locator: Optional[str] = None
+    content: str
+
+
 class ChatResponse(BaseModel):
     session_id: str
     message: AssistantMessage

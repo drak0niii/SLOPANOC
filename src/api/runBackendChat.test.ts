@@ -53,7 +53,7 @@ describe("runBackendChat", () => {
     expect(handlers.onStatus).toHaveBeenCalledWith("processing", "Processing your request");
     expect(handlers.onStatusClear).toHaveBeenCalledOnce();
     expect(handlers.onDelta).toHaveBeenCalledWith("Hi");
-    expect(handlers.onCompleted).toHaveBeenCalledWith("Hi", undefined);
+    expect(handlers.onCompleted).toHaveBeenCalledWith("Hi", undefined, undefined);
     expect(handlers.onRunCompleted).toHaveBeenCalledWith("ok");
     expect(handlers.onError).not.toHaveBeenCalled();
   });
@@ -78,7 +78,35 @@ describe("runBackendChat", () => {
     const handlers = makeHandlers();
     await runBackendChat("s1", "hello", handlers, new AbortController().signal);
 
-    expect(handlers.onCompleted).toHaveBeenCalledWith("Here is the summary.", source);
+    expect(handlers.onCompleted).toHaveBeenCalledWith("Here is the summary.", source, undefined);
+  });
+
+  it("passes structured knowledge_sources through to onCompleted when present (Phase 5.1J correction pass)", async () => {
+    const knowledgeSource = {
+      source_id: "ks1",
+      source_type: "knowledge",
+      label: "Governed knowledge",
+      knowledge_id: "aurora-relay-verification",
+      version_label: "v1",
+      section_id: "aurora-relay-verification:v1:s0",
+      title: "Aurora Relay Verification Procedure",
+      document_type: "technical_instruction",
+      source_system: "manual_e2e_fixture",
+      evidence_source_id: "doc-1",
+      source_display_name: "Aurora Relay Governed Test Procedure",
+      section_heading: "Verification",
+      source_locator: "test-fixture:verification",
+      content: "For the Aurora Relay verification, confirm that the relay checksum is exactly 7319 and the status indicator is GREEN.",
+    };
+    streamChatMessage.mockImplementation(async ({ onEvent }: { onEvent: (e: SSEEvent) => void }) => {
+      onEvent(envelope("message.completed", { content: "The checksum is 7319.", knowledge_sources: [knowledgeSource] }));
+      onEvent(envelope("run.completed", { outcome: "ok" }));
+    });
+
+    const handlers = makeHandlers();
+    await runBackendChat("s1", "hello", handlers, new AbortController().signal);
+
+    expect(handlers.onCompleted).toHaveBeenCalledWith("The checksum is 7319.", undefined, [knowledgeSource]);
   });
 
   it("dispatches trace.step events to onTraceStep, verbatim", async () => {
@@ -107,7 +135,7 @@ describe("runBackendChat", () => {
     await runBackendChat("s1", "hello", handlers, new AbortController().signal);
 
     expect(handlers.onDelta).not.toHaveBeenCalled();
-    expect(handlers.onCompleted).toHaveBeenCalledWith("The full answer at once.", undefined);
+    expect(handlers.onCompleted).toHaveBeenCalledWith("The full answer at once.", undefined, undefined);
     expect(handlers.onRunCompleted).toHaveBeenCalledWith("ok");
   });
 

@@ -12,7 +12,14 @@ import pytest
 from backend.api.chat_service import ChatService
 from backend.api.session_service import ApiSessionService
 from backend.gateway.safe_error import SafeErrorException
-from backend.tests._api_fakes import FakeEvent, FakeRunner, NoFinalTextRunner, RaisingRunner, simulate_proposal
+from backend.tests._api_fakes import (
+    FakeEvent,
+    FakeFunctionResponse,
+    FakeRunner,
+    NoFinalTextRunner,
+    RaisingRunner,
+    simulate_proposal,
+)
 
 
 @pytest.mark.asyncio
@@ -112,6 +119,13 @@ async def test_only_final_response_text_becomes_the_public_message() -> None:
     events = [
         FakeEvent(text=None, final=False, function_calls=[object()]),
         FakeEvent(text=None, final=False, function_responses=[object()]),
+        FakeEvent(
+            text=None,
+            final=False,
+            function_responses=[
+                FakeFunctionResponse("record_source_requirements", {"requires_teams": False, "requires_governed_knowledge": False})
+            ],
+        ),
         FakeEvent(text="the real final answer", final=True),
     ]
     chat_service = ChatService(service, runner=FakeRunner(service, events=events))

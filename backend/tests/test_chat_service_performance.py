@@ -35,6 +35,12 @@ def _teams_ok_events(evidence_authors: list[str], chat_id: str = "c1") -> list:
     return [
         FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]),
         FakeEvent(final=False, function_responses=[FakeFunctionResponse("incident_manager", response)]),
+        FakeEvent(
+            final=False,
+            function_responses=[
+                FakeFunctionResponse("record_source_requirements", {"requires_teams": True, "requires_governed_knowledge": False})
+            ],
+        ),
         FakeEvent(text="Here is a summary.", final=True),
     ]
 

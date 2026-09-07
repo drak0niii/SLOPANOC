@@ -17,22 +17,28 @@ via the ADK CLI (`adk run`/`adk web`) for local debugging -- this is a
 developer convenience only; the real application never talks to the user
 through incident_manager (docs/AGENT_CONTRACT.md #7).
 
-`after_agent_callback=strip_unverified_evidence` is the deterministic
-enforcement point for "no fake provenance may reach team_manager" -- see
-evidence.py. Verified against the installed ADK (1.33.0) source
-(`agents/base_agent.py`, `tools/agent_tool.py`): `after_agent_callback`
-runs once, after the agent's whole turn, and any `types.Content` it
-returns becomes a new final event; `AgentTool.run_async` tracks the *last*
-event with content in the stream as the tool's result and re-validates it
-against `output_schema`, so a corrected `Content` from this callback
-transparently supersedes incident_manager's original, unvalidated
-response before it ever reaches team_manager.
+`after_agent_callback=enforce_incident_manager_response_integrity` is the
+deterministic enforcement point for "no fake provenance may reach team_
+manager" -- see evidence.py. It composes two checks: THIRD pre-4H
+correction pass's governed-knowledge provenance-compliance enforcement
+(provenance_compliance.py -- "SEARCH RESULT != EVIDENCE USED", including
+its own bounded one-retry mechanism) followed by the original Teams
+evidence-stripping check (`strip_unverified_evidence`, unchanged).
+Verified against the installed ADK (1.33.0) source (`agents/base_
+agent.py`, `tools/agent_tool.py`): `after_agent_callback` runs once, after
+the agent's whole turn (and supports an async callable -- `inspect.
+isawaitable(...)` is awaited), and any `types.Content` it returns becomes
+a new final event; `AgentTool.run_async` tracks the *last* event with
+content in the stream as the tool's result and re-validates it against
+`output_schema`, so a corrected `Content` from this callback transparently
+supersedes incident_manager's original, unvalidated response before it
+ever reaches team_manager.
 """
 from __future__ import annotations
 
 from google.adk.agents import Agent
 
-from backend.agents.incident_manager.evidence import strip_unverified_evidence
+from backend.agents.incident_manager.evidence import enforce_incident_manager_response_integrity
 from backend.agents.incident_manager.prompts import INCIDENT_MANAGER_INSTRUCTION
 from backend.agents.incident_manager.schemas import (
     IncidentManagerRequest,
@@ -41,6 +47,7 @@ from backend.agents.incident_manager.schemas import (
 from backend.agents.incident_manager.tool_call_diagnostics import log_incident_manager_tool_call
 from backend.api.perf_timing import after_model_call, before_model_call
 from backend.config.settings import get_settings, get_shared_llm
+from backend.tools.knowledge.tools import knowledge_search, knowledge_select_evidence
 from backend.tools.runtime_time import get_current_time_context
 from backend.tools.teams.execute_write import teams_create_chat, teams_send_message
 from backend.tools.teams.get_messages import teams_get_messages
@@ -77,12 +84,21 @@ incident_manager = Agent(
         teams_propose_send_message,
         teams_create_chat,
         teams_send_message,
+        # Phase 5.1J: the Generic Knowledge Management capability's first
+        # real consumer -- see backend/tools/knowledge/__init__.py. Both
+        # are read-only and model-visible with only their own narrow,
+        # closed schemas (query_text/limit; selections[] of
+        # knowledge_id/version_label/section_id) -- no repository,
+        # as_of, applicability, or evidence-content parameter is ever
+        # exposed to the model.
+        knowledge_search,
+        knowledge_select_evidence,
     ],
     input_schema=IncidentManagerRequest,
     output_schema=IncidentManagerResponse,
     disallow_transfer_to_parent=True,
     disallow_transfer_to_peers=True,
-    after_agent_callback=strip_unverified_evidence,
+    after_agent_callback=enforce_incident_manager_response_integrity,
     # P4B AUDIT: safe, closed-vocabulary tool-name-only diagnostic (see
     # tool_call_diagnostics.py's own docstring) -- answers "what is each
     # pre-retrieval model round trip actually calling" without guessing,

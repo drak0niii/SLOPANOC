@@ -715,11 +715,20 @@ export function Message({ message }: { message: MessageType }) {
               ))}
             </div>
           )}
-          {done && message.status === "complete" && isBackendMessage && activeChat?.sources?.[message.id] && (
-            <div className="anim-fade mt-4 flex flex-wrap gap-1.5">
-              <SourceChip kind="teams" source={activeChat.sources[message.id]} />
-            </div>
-          )}
+          {done &&
+            message.status === "complete" &&
+            isBackendMessage &&
+            (activeChat?.sources?.[message.id] ||
+              (activeChat?.knowledgeSources?.[message.id]?.length ?? 0) > 0) && (
+              <div className="anim-fade mt-4 flex flex-wrap gap-1.5">
+                {activeChat?.sources?.[message.id] && (
+                  <SourceChip kind="teams" source={activeChat.sources[message.id]} />
+                )}
+                {activeChat?.knowledgeSources?.[message.id]?.map((knowledgeSource) => (
+                  <SourceChip key={knowledgeSource.source_id} kind="knowledge" source={knowledgeSource} />
+                ))}
+              </div>
+            )}
           {done && message.status === "complete" && message.connectorUnavailable && (
             <ConnectorUnavailableCard info={message.connectorUnavailable} />
           )}

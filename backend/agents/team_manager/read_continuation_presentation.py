@@ -139,6 +139,37 @@ ever read via `pop_current_run_specialist_result`.
 _INCIDENT_MANAGER_TOOL_NAME = "incident_manager"
 
 
+def content_has_nonblank_text(content: Any) -> bool:
+    """Whether `content` (a `google.genai.types.Content`, or `None`)
+    carries at least one actual, non-blank, non-thought text part --
+    stricter than a bare truthiness check on `content` itself.
+
+    ROOT CAUSE FIX (pre-4H correction pass): a `types.Content` object
+    with an empty `parts` list, or with only a "thought" part, or with a
+    whitespace/empty-string text part, is still a TRUTHY Python object --
+    `if content:` alone (the check this module's own presentation-running
+    callers previously used) incorrectly treats that as "the presentation
+    turn produced a real answer." `chat_service.py`'s own `_extract_final_text`
+    already applies the correct, stricter check for the OUTER event
+    stream; this function gives every presentation-invoking caller in
+    this package the SAME strictness for the presentation turn's own
+    result, so an effectively-empty model response is never mistaken for
+    a real one.
+    """
+    if content is None:
+        return False
+    parts = getattr(content, "parts", None)
+    if not parts:
+        return False
+    for part in parts:
+        if getattr(part, "thought", False):
+            continue
+        text = getattr(part, "text", None)
+        if text:
+            return True
+    return False
+
+
 class TrustedSpecialistResult(BaseModel):
     """Server-only envelope binding a validated `IncidentManagerResponse`
     to the exact SLOPANOC run that produced it. Constructed ONLY by

@@ -208,7 +208,10 @@ async def test_ambiguous_request_delegates_exactly_once_and_lists_once(monkeypat
         runner=FakeRunner(
             service,
             events=[
-                FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]),
+                FakeEvent(
+                    final=False,
+                    function_calls=[FakeFunctionCall("incident_manager", {"chat_topic": "Knowledge Management Daily Sync"})],
+                ),
                 FakeEvent(
                     final=False,
                     function_responses=[FakeFunctionResponse("incident_manager", {"outcome": "selection_needed"})],
@@ -358,6 +361,12 @@ async def test_normal_exact_teams_request_uses_the_normal_runner_not_presentatio
                         FakeFunctionResponse(
                             "incident_manager", {"outcome": "ok", "chat_title": "Production Bridge", "evidence": []}
                         ),
+                    ],
+                ),
+                FakeEvent(
+                    final=False,
+                    function_responses=[
+                        FakeFunctionResponse("record_source_requirements", {"requires_teams": True, "requires_governed_knowledge": False})
                     ],
                 ),
                 FakeEvent(text="Here is the Production Bridge summary.", final=True),

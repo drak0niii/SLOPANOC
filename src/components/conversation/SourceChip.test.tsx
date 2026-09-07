@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { SourceChip } from "./SourceChip";
 import type { Citation } from "../../types";
-import type { SourceReferenceDTO } from "../../api/types";
+import type { KnowledgeSourceReferenceDTO, SourceReferenceDTO } from "../../api/types";
 
 function makeCitation(overrides: Partial<Citation> = {}): Citation {
   return {
@@ -33,6 +33,26 @@ function makeSource(overrides: Partial<SourceReferenceDTO> = {}): SourceReferenc
       { author: "Alex", sent_at: "2026-08-26T09:00:00Z", snippet: "We should escalate this now." },
       { author: "Priya", sent_at: "2026-08-27T10:00:00Z", snippet: "Agreed, paging on-call." },
     ],
+    ...overrides,
+  };
+}
+
+function makeKnowledgeSource(overrides: Partial<KnowledgeSourceReferenceDTO> = {}): KnowledgeSourceReferenceDTO {
+  return {
+    source_id: "ks1",
+    source_type: "knowledge",
+    label: "Governed knowledge",
+    knowledge_id: "aurora-relay-verification",
+    version_label: "v1",
+    section_id: "aurora-relay-verification:v1:s0",
+    title: "Aurora Relay Verification Procedure",
+    document_type: "technical_instruction",
+    source_system: "manual_e2e_fixture",
+    evidence_source_id: "doc-1",
+    source_display_name: "Aurora Relay Governed Test Procedure",
+    section_heading: "Verification",
+    source_locator: "test-fixture:verification",
+    content: "Confirm the checksum is 7319 and the status is GREEN.",
     ...overrides,
   };
 }
@@ -245,5 +265,69 @@ describe("SourceChip — Teams supporting evidence (snippet-authenticity fix)", 
     fireEvent.click(screen.getByRole("button"));
     const drawer = screen.getByRole("dialog");
     expect(drawer.className).toMatch(/overflow-y-auto/);
+  });
+});
+
+describe("SourceChip — Knowledge (kind: 'knowledge', Phase 5.1J correction pass)", () => {
+  it("renders a compact 'Source · Governed knowledge' trigger", () => {
+    render(<SourceChip kind="knowledge" source={makeKnowledgeSource()} />);
+    expect(screen.getByRole("button", { name: /Source · Governed knowledge/ })).toBeInTheDocument();
+  });
+
+  it("opens the drawer showing title, document type, version, section, source, and supporting evidence", () => {
+    render(<SourceChip kind="knowledge" source={makeKnowledgeSource()} />);
+    fireEvent.click(screen.getByRole("button"));
+
+    expect(screen.getByText("Aurora Relay Verification Procedure")).toBeInTheDocument();
+    expect(screen.getByText("Technical Instruction")).toBeInTheDocument();
+    expect(screen.getByText("v1")).toBeInTheDocument();
+    expect(screen.getByText("Verification")).toBeInTheDocument();
+    expect(screen.getByText("Aurora Relay Governed Test Procedure")).toBeInTheDocument();
+    expect(screen.getByText(/manual_e2e_fixture/)).toBeInTheDocument();
+    expect(screen.getByText("doc-1")).toBeInTheDocument();
+    expect(screen.getByText("test-fixture:verification")).toBeInTheDocument();
+    expect(screen.getByText('"Confirm the checksum is 7319 and the status is GREEN."')).toBeInTheDocument();
+  });
+
+  it("never renders source_uri anywhere, even though it is not part of the DTO at all", () => {
+    render(<SourceChip kind="knowledge" source={makeKnowledgeSource()} />);
+    fireEvent.click(screen.getByRole("button"));
+    const drawerText = document.body.textContent ?? "";
+    expect(drawerText.toLowerCase()).not.toContain("source_uri");
+    expect(drawerText).not.toContain("https://");
+  });
+
+  it("never shows Teams-specific fields for a knowledge source", () => {
+    render(<SourceChip kind="knowledge" source={makeKnowledgeSource()} />);
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.queryByText("Microsoft Teams")).not.toBeInTheDocument();
+    expect(screen.queryByText("Messages reviewed")).not.toBeInTheDocument();
+    expect(screen.queryByText("Contributors")).not.toBeInTheDocument();
+  });
+
+  it("omits Section/Locator when not present, rather than showing a placeholder", () => {
+    const minimal = makeKnowledgeSource({ section_heading: null, source_locator: null, source_display_name: null });
+    render(<SourceChip kind="knowledge" source={minimal} />);
+    fireEvent.click(screen.getByRole("button"));
+
+    expect(screen.queryByText("Section")).not.toBeInTheDocument();
+    // source_system still renders as the fallback display value.
+    expect(screen.getByText(/manual_e2e_fixture/)).toBeInTheDocument();
+  });
+
+  it("falls back to the raw document_type value for an unrecognized type", () => {
+    const source = makeKnowledgeSource({ document_type: "some_future_type" });
+    render(<SourceChip kind="knowledge" source={source} />);
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByText("some_future_type")).toBeInTheDocument();
+  });
+
+  it("shows the exact evidence content verbatim, never truncated or paraphrased", () => {
+    const longContent =
+      "Step 1: check the indicator light. Step 2: run the self-test diagnostic. Step 3: confirm the checksum reads exactly 7319 and the status is GREEN.";
+    const source = makeKnowledgeSource({ content: longContent });
+    render(<SourceChip kind="knowledge" source={source} />);
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByText(`"${longContent}"`)).toBeInTheDocument();
   });
 });

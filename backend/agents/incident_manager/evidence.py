@@ -8,15 +8,14 @@ present inside a retrieved message's `message_references`) this turn --
 see `backend/tools/teams/get_messages.py`'s `KNOWN_MESSAGE_IDS_STATE_KEY`,
 which `teams_get_messages` populates as it runs.
 
-`strip_unverified_evidence` wires that rule into the ADK runtime as
-incident_manager's `after_agent_callback` (`agent.py`): it inspects
-incident_manager's own final structured response (already produced and
-validated against `IncidentManagerResponse` by the model/ADK), re-checks
-every `evidence[].message_id` against the session's actual
-`known_message_ids`, and -- only if something needed to be removed --
-returns a corrected `Content` that ADK treats as this turn's real final
-output, which `AgentTool` (docs/AGENT_CONTRACT.md #4) then returns to
-team_manager instead of the unverified one. This mirrors the same
+`strip_unverified_evidence` wires that rule into the ADK runtime: it
+inspects incident_manager's own final structured response (already
+produced and validated against `IncidentManagerResponse` by the
+model/ADK), re-checks every `evidence[].message_id` against the session's
+actual `known_message_ids`, and -- only if something needed to be removed
+-- returns a corrected `Content` that ADK treats as this turn's real
+final output, which `AgentTool` (docs/AGENT_CONTRACT.md #4) then returns
+to team_manager instead of the unverified one. This mirrors the same
 philosophy already used for the write-tool approval gate elsewhere in
 this codebase: prompt instructions alone are not a sufficient control,
 so the guarantee is enforced in deterministic code that runs regardless
@@ -26,6 +25,22 @@ This module does NOT attempt semantic validation of whether a message
 truly supports a claim -- only that the cited provenance is real,
 retrieved Teams data (per the task's explicit instruction not to
 second-guess relevance, only existence).
+
+THIRD PRE-4H CORRECTION PASS: `agent.py`'s own `after_agent_callback` is
+now `enforce_incident_manager_response_integrity` (below), not
+`strip_unverified_evidence` directly -- it runs
+`provenance_compliance.enforce_governed_knowledge_selection` FIRST (the
+new "SEARCH RESULT != EVIDENCE USED" enforcement -- see that module's own
+docstring), then applies this module's existing, UNCHANGED Teams
+evidence-stripping check to whatever text is final afterward, so a
+corrected combined (Teams + governed knowledge) answer is still subject
+to the SAME Teams-evidence validation every other incident_manager turn
+already gets. `strip_unverified_evidence` itself is untouched -- still
+directly tested, still used unmodified by every OTHER incident_manager
+variant that inherits `after_agent_callback` without overriding it and
+never sets `requires_governed_knowledge=true` in the first place
+(`_CONTINUATION_INCIDENT_MANAGER`/`_SYNTHESIS_ONLY_INCIDENT_MANAGER`,
+read_continuation_execution.py).
 """
 from __future__ import annotations
 
@@ -34,6 +49,7 @@ from typing import AbstractSet, Any, Optional
 
 from google.genai import types
 
+from backend.agents.incident_manager.provenance_compliance import enforce_governed_knowledge_selection
 from backend.tools.teams.get_messages import KNOWN_MESSAGE_IDS_STATE_KEY
 
 _INCIDENT_MANAGER_AUTHOR = "incident_manager"
@@ -73,17 +89,15 @@ def _find_last_response_text(session: Any) -> Optional[str]:
     return None
 
 
-def strip_unverified_evidence(callback_context: Any) -> Optional[types.Content]:
-    """ADK `after_agent_callback` for `incident_manager` -- see the module
-    docstring. Returns `None` (no override) whenever there is nothing to
-    parse, nothing to validate, or nothing that actually needed removal;
-    returns a corrected `types.Content` only when at least one `evidence`
-    entry was stripped.
+def _strip_evidence_from_text(text: str, known_ids: AbstractSet[str]) -> Optional[str]:
+    """Pure text -> text transform, extracted from `strip_unverified_
+    evidence` (unchanged behavior) so `enforce_incident_manager_response_
+    integrity` (below) can apply the SAME check to text that did not
+    necessarily come from `callback_context.session` (e.g. a governed-
+    knowledge provenance-compliance retry's own result). Returns the
+    corrected JSON text, or `None` when there is nothing to parse, nothing
+    to validate, or nothing that actually needed removal.
     """
-    text = _find_last_response_text(getattr(callback_context, "session", None))
-    if not text:
-        return None
-
     try:
         payload = json.loads(text)
     except (json.JSONDecodeError, TypeError):
@@ -96,14 +110,64 @@ def strip_unverified_evidence(callback_context: Any) -> Optional[types.Content]:
     if not isinstance(evidence, list) or not evidence:
         return None
 
-    known_ids: AbstractSet[str] = set(
-        callback_context.state.get(KNOWN_MESSAGE_IDS_STATE_KEY, [])
-    )
     validated = validate_evidence(evidence, known_ids)
-
     if validated == evidence:
         return None
 
     payload["evidence"] = validated
-    corrected_text = json.dumps(payload)
+    return json.dumps(payload)
+
+
+def strip_unverified_evidence(callback_context: Any) -> Optional[types.Content]:
+    """ADK `after_agent_callback` for `incident_manager` -- see the module
+    docstring. Returns `None` (no override) whenever there is nothing to
+    parse, nothing to validate, or nothing that actually needed removal;
+    returns a corrected `types.Content` only when at least one `evidence`
+    entry was stripped.
+    """
+    text = _find_last_response_text(getattr(callback_context, "session", None))
+    if not text:
+        return None
+
+    known_ids: AbstractSet[str] = set(
+        callback_context.state.get(KNOWN_MESSAGE_IDS_STATE_KEY, [])
+    )
+    corrected_text = _strip_evidence_from_text(text, known_ids)
+    if corrected_text is None:
+        return None
     return types.Content(role="model", parts=[types.Part.from_text(text=corrected_text)])
+
+
+async def enforce_incident_manager_response_integrity(callback_context: Any) -> Optional[types.Content]:
+    """THIRD pre-4H correction pass -- the combined `after_agent_callback`
+    wired onto the LIVE `incident_manager` agent (agent.py) in place of
+    `strip_unverified_evidence` alone.
+
+    Runs `provenance_compliance.enforce_governed_knowledge_selection`
+    first (governed-knowledge "SEARCH RESULT != EVIDENCE USED"
+    enforcement, including its own bounded one-retry mechanism), then
+    applies the SAME Teams evidence-stripping check `strip_unverified_
+    evidence` already performs to whatever text is final afterward --
+    whether that is incident_manager's own original text (the common,
+    already-compliant case), the compliance retry's corrected text, or a
+    deterministic safe-failure text. This guarantees a combined Teams +
+    governed-knowledge answer is validated on BOTH axes, never only one.
+
+    Returns `None` (no override -- incident_manager's own original
+    response stands unchanged) whenever neither check needed to intervene.
+    """
+    original_text = _find_last_response_text(getattr(callback_context, "session", None))
+    provenance_text = await enforce_governed_knowledge_selection(callback_context, original_text)
+    working_text = provenance_text if provenance_text is not None else original_text
+    if not working_text:
+        return None
+
+    known_ids: AbstractSet[str] = set(
+        callback_context.state.get(KNOWN_MESSAGE_IDS_STATE_KEY, [])
+    )
+    stripped_text = _strip_evidence_from_text(working_text, known_ids)
+    final_text = stripped_text if stripped_text is not None else working_text
+
+    if final_text == original_text:
+        return None
+    return types.Content(role="model", parts=[types.Part.from_text(text=final_text)])

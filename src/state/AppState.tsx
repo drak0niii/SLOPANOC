@@ -31,7 +31,13 @@ import type {
   ThinkingEffort,
   WorkspaceScope,
 } from "../types";
-import type { PendingActionDTO, PendingSelectionDTO, SourceReferenceDTO, TraceStepDTO } from "../api/types";
+import type {
+  KnowledgeSourceReferenceDTO,
+  PendingActionDTO,
+  PendingSelectionDTO,
+  SourceReferenceDTO,
+  TraceStepDTO,
+} from "../api/types";
 import { elapsedSecondsSince } from "../lib/elapsedTime";
 import { cancelRun, createSession, rewindSession } from "../api/sessions";
 import { ApiError } from "../api/client";
@@ -405,7 +411,14 @@ export type Action =
     }
   | {
       type: "BACKEND_MESSAGE_COMPLETED";
-      payload: { chatId: string; runToken: string; messageId: string; content: string; source?: SourceReferenceDTO };
+      payload: {
+        chatId: string;
+        runToken: string;
+        messageId: string;
+        content: string;
+        source?: SourceReferenceDTO;
+        knowledgeSources?: KnowledgeSourceReferenceDTO[];
+      };
     }
   | {
       type: "BACKEND_ACTION_PENDING";
@@ -869,26 +882,35 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case "BACKEND_MESSAGE_COMPLETED": {
-      const { chatId, runToken, messageId, content, source } = action.payload;
+      const { chatId, runToken, messageId, content, source, knowledgeSources } = action.payload;
       const chat = state.chats[chatId];
       if (!chat || !chat.run || chat.run.runToken !== runToken) return state;
       const existing = state.messages[messageId];
       if (!existing) return state;
+      // Phase 5.1J correction pass (Part C): `source` (Teams) and
+      // `knowledgeSources` (KM) are independent — either, both, or
+      // neither may be present on one completed message (a combined-
+      // answer turn legitimately carries both). Each mirrors
+      // actionCards/selectionCards/runTraces's exact same message-
+      // ownership model: permanently owned by THIS message, never moves,
+      // never duplicated, omitted entirely when this turn produced
+      // nothing of that kind.
+      const updatedChat =
+        source || (knowledgeSources && knowledgeSources.length > 0)
+          ? {
+              ...chat,
+              ...(source ? { sources: { ...chat.sources, [messageId]: source } } : null),
+              ...(knowledgeSources && knowledgeSources.length > 0
+                ? { knowledgeSources: { ...chat.knowledgeSources, [messageId]: knowledgeSources } }
+                : null),
+            }
+          : null;
       return {
         ...state,
         // Authoritative overwrite — reconciles with, never appends to,
         // whatever accumulated delta text preceded this.
         messages: { ...state.messages, [messageId]: { ...existing, text: content, status: "complete" } },
-        chats: source
-          ? {
-              ...state.chats,
-              // Pre-4H UX/provenance milestone — permanently owned by
-              // THIS message, mirroring actionCards/selectionCards/
-              // runTraces (never moves, never duplicated). Omitted
-              // entirely when this turn produced no grounded evidence.
-              [chatId]: { ...chat, sources: { ...chat.sources, [messageId]: source } },
-            }
-          : state.chats,
+        chats: updatedChat ? { ...state.chats, [chatId]: updatedChat } : state.chats,
       };
     }
 
@@ -1470,6 +1492,22 @@ export function reducer(state: AppState, action: Action): AppState {
             : Object.fromEntries(survivingSourceEntries);
       }
 
+      // Phase 5.1J correction pass (Part C8) — same cleanup, mirrored
+      // exactly for KM source references: a discarded assistant turn's
+      // governed-knowledge sources must disappear along with it too,
+      // never left dangling on a message no longer part of the active
+      // branch.
+      let nextKnowledgeSources = chat.knowledgeSources;
+      if (chat.knowledgeSources) {
+        const survivingKnowledgeSourceEntries = Object.entries(chat.knowledgeSources).filter(
+          ([ownerId]) => !removedIdSet.has(ownerId)
+        );
+        nextKnowledgeSources =
+          survivingKnowledgeSourceEntries.length === Object.keys(chat.knowledgeSources).length
+            ? chat.knowledgeSources
+            : Object.fromEntries(survivingKnowledgeSourceEntries);
+      }
+
       return {
         ...state,
         messages: remainingMessages,
@@ -1490,6 +1528,7 @@ export function reducer(state: AppState, action: Action): AppState {
             pendingSelectionRunToken: nextPendingSelectionRunToken,
             runTraces: nextRunTraces,
             sources: nextSources,
+            knowledgeSources: nextKnowledgeSources,
             // Backend-sourced chats: seed a fresh run exactly like
             // SEND_MESSAGE does, so the truncated chat immediately shows
             // the new assistant placeholder as in-flight.
@@ -2524,10 +2563,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
                 type: "BACKEND_MESSAGE_DELTA",
                 payload: { chatId, runToken, messageId: assistantMessageId, textDelta },
               }),
-            onCompleted: (content, source) =>
+            onCompleted: (content, source, knowledgeSources) =>
               dispatch({
                 type: "BACKEND_MESSAGE_COMPLETED",
-                payload: { chatId, runToken, messageId: assistantMessageId, content, source },
+                payload: { chatId, runToken, messageId: assistantMessageId, content, source, knowledgeSources },
               }),
             onActionPending: (action: PendingActionDTO) =>
               dispatch({

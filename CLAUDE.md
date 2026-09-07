@@ -352,6 +352,38 @@ Instruction. The KM layer must remain independent from Incident Manager —
 Incident Manager in 5.1J is only the first reference consumer, used to
 validate the generic contract.
 
+5.1A (domain foundation), 5.1B (metadata hardening + deterministic
+applicability evaluation), 5.1C (the generic, source-agnostic ingestion
+boundary contract), 5.1D (deterministic structural content
+processing/segmentation), 5.1E (versioning + lifecycle governance),
+5.1F (the generic knowledge repository contract, with a local SQLite
+implementation), 5.1G (deterministic, generic retrieval + ranking —
+a context-reduction boundary composing list_all/resolve_current_version/
+evaluate_applicability unchanged, plus one lexical token-overlap
+reference scorer), 5.1H (knowledge provenance — a deterministic
+validation boundary that exactly revalidates a retrieval result against
+the repository, reusing KnowledgeEvidenceReference as its authoritative
+identity, before it becomes a trusted KnowledgeEvidenceSet), 5.1I
+(one generic agent-facing knowledge_search tool composing the frozen
+5.1G/5.1H services behind a closed model-controlled request contract,
+splitting its result into a model-safe agent_payload and a separately-
+retained trusted KnowledgeEvidenceSet, with as_of/ApplicabilityContext
+supplied only by a trusted execution context, never the model), and 5.1J
+(Incident Manager, the first reference consumer: concrete
+knowledge_search/knowledge_select_evidence ADK tools live in
+backend/tools/knowledge/ -- outside Generic KM itself -- with a
+server-owned, run-id-keyed trusted evidence store; Team Manager is
+unchanged and receives neither tool) are implemented. The detailed
+contract is documented in docs/KNOWLEDGE_CONTRACT.md — read it before
+extending backend/knowledge/domain/, backend/knowledge/ingestion/,
+backend/knowledge/processing/, backend/knowledge/governance/,
+backend/knowledge/repository/, backend/knowledge/retrieval/,
+backend/knowledge/provenance/, backend/knowledge/tools/, or
+backend/tools/knowledge/. Phase 5.1 is now complete; no concrete source
+adapter (SharePoint/GCS/Drive/...) exists, and none is planned as part
+of 5.1 -- the next phase is the locked-roadmap LOCAL GIT CHECKPOINT
+followed by Phase 4H security hardening.
+
 Then: LOCAL GIT CHECKPOINT
 
 Then: PHASE 4H SECURITY HARDENING

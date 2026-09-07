@@ -161,6 +161,12 @@ async def test_accumulated_deltas_equal_message_completed_content() -> None:
         FakeEvent(text="The ", final=False, partial=True),
         FakeEvent(text="quick ", final=False, partial=True),
         FakeEvent(text="fox.", final=False, partial=True),
+        FakeEvent(
+            final=False,
+            function_responses=[
+                FakeFunctionResponse("record_source_requirements", {"requires_teams": False, "requires_governed_knowledge": False})
+            ],
+        ),
         FakeEvent(text="The quick fox.", final=True, partial=False),
     ]
     chat_service = ChatService(service, runner=FakeRunner(service, events=events))
@@ -686,7 +692,7 @@ async def test_trace_steps_appear_in_chronological_sequence_order() -> None:
     service = ApiSessionService()
     session_id = await service.create_session()
     events = [
-        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]),
+        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager", {"chat_topic": "   "})]),
         FakeEvent(
             final=False,
             function_responses=[
@@ -799,7 +805,7 @@ async def test_selection_needed_trace_reflects_safe_candidate_count_and_preparat
         )
 
     events = [
-        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]),
+        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager", {"chat_topic": "   "})]),
         FakeEvent(
             final=False,
             function_responses=[
@@ -837,7 +843,7 @@ async def test_write_proposal_trace_never_claims_the_message_was_sent() -> None:
         await simulate_proposal(session_service, session, "teams.sendMessage", {"chatId": "c1", "message": "Hi"})
 
     events = [
-        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]),
+        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager", {"chat_topic": "   "})]),
         FakeEvent(
             final=False,
             function_responses=[
@@ -954,8 +960,8 @@ async def test_duplicate_underlying_events_never_produce_duplicate_trace_steps()
     service = ApiSessionService()
     session_id = await service.create_session()
     events = [
-        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]),
-        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]),
+        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager", {"chat_topic": "   "})]),
+        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager", {"chat_topic": "   "})]),
         FakeEvent(text="ok", final=True),
     ]
     chat_service = ChatService(service, runner=FakeRunner(service, events=events))
