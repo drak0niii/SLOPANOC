@@ -14,8 +14,16 @@ import { LONG_PASTE_THRESHOLD } from "../../lib/constants";
 const MAX_TEXTAREA_HEIGHT = 240;
 
 export function PromptComposer() {
-  const { state, activeChat, activeMessages, setDraftText, addAttachments, sendMessage, stopActiveRun } =
-    useAppState();
+  const {
+    state,
+    activeChat,
+    activeMessages,
+    setDraftText,
+    addAttachments,
+    queueImageFiles,
+    sendMessage,
+    stopActiveRun,
+  } = useAppState();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [nudge, setNudge] = useState(false);
   // composerNudgeAt lives in global state, not on this component — a
@@ -62,11 +70,20 @@ export function PromptComposer() {
   // existing disabled-Send treatment instead of offering a Stop control
   // that would silently do nothing when clicked.
   const hasAbortableRun = Boolean(activeChat?.run);
+  // POST-5.1 B3 interim gating — real image attachments cannot be sent to
+  // Gemini yet (B5 doesn't exist), so Send stays disabled whenever the
+  // draft holds one, in ANY upload state (pending/uploading/ready/failed).
+  // This must never degrade to a silent text-only send — the user has to
+  // resolve the attachment (wait, retry, or remove it) before Send is
+  // available again. Mirrored by a defensive backstop in AppState's
+  // `sendMessage` itself.
+  const hasBlockingImageAttachment = state.draft.attachments.some((a) => a.kind === "image");
   const canSend =
     (state.draft.text.trim().length > 0 ||
       state.draft.attachments.length > 0 ||
       state.draft.sources.length > 0) &&
-    !isRunActive;
+    !isRunActive &&
+    !hasBlockingImageAttachment;
 
   function resize() {
     const el = textareaRef.current;
@@ -96,10 +113,26 @@ export function PromptComposer() {
     stopActiveRun(activeChat.id);
   }
 
-  /** A paste over the threshold becomes a "Pasted text.txt" attachment
-   * immediately, rather than dumping a wall of text into the composer —
-   * whatever's already typed is left alone. */
+  /** POST-5.1 B3 — an image on the clipboard (e.g. a screenshot) goes
+   * through the exact same central ingestion path as the picker
+   * (`queueImageFiles`), never a separate base64/data-URL pipeline. This
+   * takes precedence over the long-text-paste handling below: a paste
+   * that contains an image is never also treated as (or mixed with) a
+   * text paste, even if the clipboard happens to carry both. */
   function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const imageFiles = Array.from(event.clipboardData.items)
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+    if (imageFiles.length > 0) {
+      event.preventDefault();
+      queueImageFiles(imageFiles);
+      return;
+    }
+
+    // A paste over the threshold becomes a "Pasted text.txt" attachment
+    // immediately, rather than dumping a wall of text into the composer —
+    // whatever's already typed is left alone.
     const pasted = event.clipboardData.getData("text");
     if (pasted.length <= LONG_PASTE_THRESHOLD) return;
     event.preventDefault();

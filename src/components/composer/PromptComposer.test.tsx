@@ -20,6 +20,7 @@ const mockAppState: {
   activeMessages: MessageType[];
   setDraftText: ReturnType<typeof vi.fn>;
   addAttachments: ReturnType<typeof vi.fn>;
+  queueImageFiles: ReturnType<typeof vi.fn>;
   sendMessage: ReturnType<typeof vi.fn>;
   stopActiveRun: ReturnType<typeof vi.fn>;
 } = {
@@ -28,6 +29,7 @@ const mockAppState: {
   activeMessages: [],
   setDraftText: vi.fn(),
   addAttachments: vi.fn(),
+  queueImageFiles: vi.fn(),
   sendMessage: vi.fn(),
   stopActiveRun: vi.fn(),
 };
@@ -66,12 +68,28 @@ function makeMessage(overrides: Partial<MessageType> = {}): MessageType {
   };
 }
 
+function makeImageAttachment(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    kind: "image",
+    id: "img-1",
+    file: new File(["x"], "screenshot.png", { type: "image/png" }),
+    objectUrl: "blob:mock-url",
+    uploadState: "ready",
+    filename: "screenshot.png",
+    mimeType: "image/png",
+    sizeBytes: 1,
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   mockAppState.state = { draft: { text: "", attachments: [], sources: [] }, composerNudgeAt: 0 };
   mockAppState.activeChat = null;
   mockAppState.activeMessages = [];
   mockAppState.sendMessage.mockClear();
   mockAppState.stopActiveRun.mockClear();
+  mockAppState.addAttachments.mockClear();
+  mockAppState.queueImageFiles.mockClear();
 });
 
 describe("PromptComposer — duplicate-submit / active-run guard", () => {
@@ -287,5 +305,117 @@ describe("PromptComposer — resting vs. focus glow (Phase 4G hardening pass)", 
     // glow was removed at the source, not merely unreachable today.
     expect(composerSource).not.toContain("anim-intelligence-pulse");
     expect(composerSource).not.toContain("isGenerating");
+  });
+});
+
+describe("PromptComposer — POST-5.1 B3 interim Send gating for real image attachments", () => {
+  it.each(["pending", "uploading", "ready", "failed"] as const)(
+    "disables Send while a draft image attachment is %s, even with typed text present",
+    (uploadState) => {
+      mockAppState.state.draft.text = "here's a screenshot";
+      mockAppState.state.draft.attachments = [makeImageAttachment({ uploadState })];
+      render(<PromptComposer />);
+
+      const button = screen.getByRole("button", { name: "Send message" });
+      expect(button).toBeDisabled();
+      fireEvent.click(button);
+      expect(mockAppState.sendMessage).not.toHaveBeenCalled();
+    },
+  );
+
+  it("blocks Enter from submitting while a real image attachment is present", () => {
+    mockAppState.state.draft.text = "hello";
+    mockAppState.state.draft.attachments = [makeImageAttachment()];
+    render(<PromptComposer />);
+
+    fireEvent.keyDown(screen.getByLabelText("Message"), { key: "Enter" });
+    expect(mockAppState.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("re-enables Send once every image attachment has been removed from the draft", () => {
+    mockAppState.state.draft.text = "hello";
+    mockAppState.state.draft.attachments = [makeImageAttachment()];
+    const { rerender } = render(<PromptComposer />);
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+
+    mockAppState.state.draft.attachments = [];
+    rerender(<PromptComposer />);
+    expect(screen.getByRole("button", { name: "Send message" })).not.toBeDisabled();
+  });
+
+  it("a non-image (pasted-text) attachment alone never blocks Send", () => {
+    mockAppState.state.draft.attachments = [
+      { id: "att-1", kind: "file", name: "Pasted text.txt", meta: "500 characters", isPastedText: true, content: "x" },
+    ];
+    render(<PromptComposer />);
+
+    expect(screen.getByRole("button", { name: "Send message" })).not.toBeDisabled();
+  });
+});
+
+describe("PromptComposer — POST-5.1 B3 clipboard image paste", () => {
+  function pasteImage(textarea: HTMLElement, file: File) {
+    fireEvent.paste(textarea, {
+      clipboardData: {
+        items: [{ kind: "file", type: file.type, getAsFile: () => file }],
+        getData: () => "",
+      },
+    });
+  }
+
+  it("routes a pasted image through the central queueImageFiles path, not addAttachments", () => {
+    render(<PromptComposer />);
+    const file = new File(["binary"], "clip.png", { type: "image/png" });
+
+    pasteImage(screen.getByLabelText("Message"), file);
+
+    expect(mockAppState.queueImageFiles).toHaveBeenCalledExactlyOnceWith([file]);
+    expect(mockAppState.addAttachments).not.toHaveBeenCalled();
+  });
+
+  it("an image paste is never also treated as a long-text paste, even if clipboard text is also present", () => {
+    render(<PromptComposer />);
+    const file = new File(["binary"], "clip.png", { type: "image/png" });
+    const textarea = screen.getByLabelText("Message");
+
+    fireEvent.paste(textarea, {
+      clipboardData: {
+        items: [{ kind: "file", type: file.type, getAsFile: () => file }],
+        getData: () => "x".repeat(500),
+      },
+    });
+
+    expect(mockAppState.queueImageFiles).toHaveBeenCalledExactlyOnceWith([file]);
+    expect(mockAppState.addAttachments).not.toHaveBeenCalled();
+  });
+
+  it("a plain long-text paste (no image) still goes through the existing addAttachments path, unchanged", () => {
+    render(<PromptComposer />);
+    const textarea = screen.getByLabelText("Message");
+
+    fireEvent.paste(textarea, {
+      clipboardData: {
+        items: [],
+        getData: () => "y".repeat(500),
+      },
+    });
+
+    expect(mockAppState.addAttachments).toHaveBeenCalledOnce();
+    expect(mockAppState.queueImageFiles).not.toHaveBeenCalled();
+  });
+
+  it("a short plain-text paste triggers neither path", () => {
+    render(<PromptComposer />);
+    const textarea = screen.getByLabelText("Message");
+
+    fireEvent.paste(textarea, {
+      clipboardData: {
+        items: [],
+        getData: () => "short",
+      },
+    });
+
+    expect(mockAppState.addAttachments).not.toHaveBeenCalled();
+    expect(mockAppState.queueImageFiles).not.toHaveBeenCalled();
   });
 });

@@ -545,11 +545,11 @@ bootstrap, and real runtime cutover + persistence validation — see
 [Local Cloud SQL PostgreSQL development](#local-cloud-sql-postgresql-development)
 and [Current limitations](#current-limitations--production-readiness).
 
-**Next — POST-5.1 B: multimodal attachments.** STARTED, not complete.
+**Next — POST-5.1 B: multimodal attachments.** IN PROGRESS (B0–B3 done).
 Locked execution sequence (do not reorder): B0 [done] architecture + ADK
-persistence audit → B1 [done] Persistent Attachment Foundation →
-**B2 [done] Attachment Upload/Retrieve API** → B3 Complete Existing
-Frontend Attachment UX → B4 Saved Conversation/Attachment Rehydration →
+persistence audit → B1 [done] Persistent Attachment Foundation → B2
+[done] Attachment Upload/Retrieve API → **B3 [done] Complete Existing
+Frontend Attachment UX** → B4 Saved Conversation/Attachment Rehydration →
 B5 Gemini/ADK Multimodal Runtime → B6 Image + Teams + KM Operational
 Reasoning → B7 Lifecycle + Real UI + Full Regression.
 
@@ -604,6 +604,46 @@ B2 added real endpoints, still with no frontend/Gemini/ADK wiring:
 `SLOPANOC_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN` (defined now, not yet
 enforced anywhere — ready for B5's message-send validation).
 `python-multipart` and `Pillow` are now direct pinned dependencies.
+
+B3 turned the existing mock-only attachment UI scaffolding into a real
+frontend lifecycle backed by B2's API — no backend file changed. A picked
+or pasted image becomes a `DraftImageAttachment` (real `File`, a local
+`URL.createObjectURL` preview, never base64/data URLs); the picker
+(`ComposerPlusMenu`) and clipboard paste (`PromptComposer`) both feed one
+central ingestion function, `queueImageFiles` (`src/state/AppState.tsx`),
+which enforces a 4-image / 8 MiB frontend preflight, creates the chat's
+backend session on demand — single-flight per chat, so several
+images/pastes queued before the first `POST /api/sessions` resolves still
+cause exactly one call — and uploads through B2's real endpoint. Selecting
+or pasting more than the remaining capacity accepts only what fits and
+shows a brief, auto-dismissing notice ("Up to 4 images can be attached.")
+rather than silently dropping the rest — never an `alert()`/modal, and the
+rejected files never reach the upload API. Draft state moves through
+PENDING → UPLOADING → READY/FAILED (frontend-only, never persisted with
+those names); removing an attachment aborts its in-flight upload via a
+per-attachment `AbortController`, and a late completion after removal can
+never resurrect it. A FAILED upload can be retried, reusing the same
+`File`. Object URLs are created once per image and revoked centrally
+whenever that attachment leaves the draft. Validated end-to-end against
+the real backend — a live picker upload and a live clipboard (Ctrl+V)
+paste, both against real Cloud SQL PostgreSQL metadata and the real
+private GCS bucket, not just component/unit tests.
+
+Real image **Send stays intentionally blocked** — B5 (the Gemini/ADK
+multimodal runtime) doesn't exist yet, so both `PromptComposer`'s
+`canSend` and `AppState`'s `sendMessage` hard-block whenever any
+image-kind attachment is present in the draft, in any state; there is no
+fallback to a text-only send and no fabricated response. Removing an
+already-**uploaded** attachment from the draft does **not** delete its
+GCS object or Cloud SQL row — B3 adds no delete endpoint or synchronous
+cleanup, so it is left as a `READY`, unlinked (`message_id IS NULL`) row,
+an orphan candidate for a future retention pass. `NoAnswerNotice.tsx`'s
+older, separate metadata-only file-attach affordance (found during the B0
+audit) was removed rather than wired to the real pipeline, so there is
+exactly one attachment entry point in the app. No `attachment_ids` are
+sent with a chat message, no Gemini/ADK/`Part.from_uri` wiring exists in
+the live send path, and no saved-conversation rehydration exists — all
+still B4/B5.
 
 **Then — A5: real TELCO/RAN MOP ingestion** (after Attachments completes
 in full, not just B1). A5 ingests the 3 real TELCO/RAN MOPs through the

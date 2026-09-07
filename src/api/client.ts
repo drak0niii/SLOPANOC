@@ -62,6 +62,31 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
   return fetch(`${getApiBaseUrl()}${path}`, init);
 }
 
+/** Shared by every request helper below — parses a non-OK response into
+ * the standard SafeError shape when possible and throws `ApiError`.
+ * Extracted (POST-5.1 B3) so `postJson` and `postForm` share EXACTLY one
+ * error-mapping implementation rather than two copies drifting apart. */
+async function throwForFailedResponse(path: string, response: Response): Promise<never> {
+  if (import.meta.env.DEV) {
+    console.debug(`[api] ${path} failed with status ${response.status}`);
+  }
+  let safe: SafeErrorBody | null = null;
+  try {
+    const parsed = await response.json();
+    if (isSafeErrorBody(parsed)) safe = parsed;
+  } catch {
+    // Not JSON, or not the SafeError shape — fall back to the generic
+    // message below rather than guessing at what the body meant.
+  }
+  throw new ApiError(
+    safe?.userMessage ?? "The request could not be completed. Please try again.",
+    response.status,
+    safe
+      ? { errorCode: safe.errorCode, retryable: safe.retryable, correlationId: safe.correlationId, reason: safe.reason }
+      : undefined,
+  );
+}
+
 /**
  * JSON POST helper. `body` is omitted entirely (no request body, no
  * `Content-Type` header) when `undefined` — the real backend's
@@ -74,26 +99,29 @@ export async function postJson<T>(path: string, body?: unknown): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
-  if (!response.ok) {
-    if (import.meta.env.DEV) {
-      console.debug(`[api] ${path} failed with status ${response.status}`);
-    }
-    let safe: SafeErrorBody | null = null;
-    try {
-      const parsed = await response.json();
-      if (isSafeErrorBody(parsed)) safe = parsed;
-    } catch {
-      // Not JSON, or not the SafeError shape — fall back to the generic
-      // message below rather than guessing at what the body meant.
-    }
-    throw new ApiError(
-      safe?.userMessage ?? "The request could not be completed. Please try again.",
-      response.status,
-      safe
-        ? { errorCode: safe.errorCode, retryable: safe.retryable, correlationId: safe.correlationId, reason: safe.reason }
-        : undefined,
-    );
-  }
+  if (!response.ok) return throwForFailedResponse(path, response);
+
+  return (await response.json()) as T;
+}
+
+/**
+ * `multipart/form-data` POST helper (POST-5.1 B3) — the chat attachment
+ * upload endpoint's only current use. Deliberately never sets a
+ * `Content-Type` header itself: the browser computes the correct
+ * `multipart/form-data; boundary=...` value from the `FormData` body, and
+ * setting it manually would omit/break that boundary. Shares
+ * `throwForFailedResponse` with `postJson` — identical SafeError mapping,
+ * one implementation. `signal`, when provided, lets a caller abort an
+ * in-flight upload (see AppState.tsx's per-attachment `AbortController`).
+ */
+export async function postForm<T>(path: string, formData: FormData, signal?: AbortSignal): Promise<T> {
+  const response = await apiFetch(path, {
+    method: "POST",
+    body: formData,
+    signal,
+  });
+
+  if (!response.ok) return throwForFailedResponse(path, response);
 
   return (await response.json()) as T;
 }

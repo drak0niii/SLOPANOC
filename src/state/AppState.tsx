@@ -17,6 +17,8 @@ import type {
   Connector,
   ConnectorUnavailableReason,
   DemoRun,
+  DraftAttachment,
+  DraftImageAttachment,
   Message,
   Project,
   ProjectFile,
@@ -40,6 +42,7 @@ import type {
 } from "../api/types";
 import { elapsedSecondsSince } from "../lib/elapsedTime";
 import { cancelRun, createSession, rewindSession } from "../api/sessions";
+import { uploadAttachment } from "../api/attachments";
 import { ApiError } from "../api/client";
 import { runBackendChat } from "../api/runBackendChat";
 // `approveAction` is aliased -- an unrelated, pre-existing mock function
@@ -49,9 +52,17 @@ import { runBackendChat } from "../api/runBackendChat";
 import { approveAction as approveActionApi, executeApprovedAction, rejectAction as rejectActionApi } from "../api/approval";
 import { chooseSelection as chooseSelectionApi, skipSelection as skipSelectionApi } from "../api/selections";
 import { classifyApprovalFailure } from "../lib/approvalCard";
+import { classifyAttachmentUploadFailure } from "../lib/attachmentError";
 import { classifySelectionFailure } from "../lib/selectionCard";
 import { createId } from "../lib/id";
-import { LONG_PASTE_THRESHOLD } from "../lib/constants";
+import {
+  ACCEPTED_IMAGE_MIME_TYPES,
+  ATTACHMENT_LIMIT_NOTICE_DURATION_MS,
+  LONG_PASTE_THRESHOLD,
+  MAX_DRAFT_IMAGES,
+  MAX_IMAGE_BYTES,
+  type AcceptedImageMimeType,
+} from "../lib/constants";
 import {
   ACTION_CONNECTOR_ID,
   DEFAULT_MODEL_ID,
@@ -134,7 +145,7 @@ const DEFAULT_THINKING_EFFORT: ThinkingEffort = "instant";
 
 interface DraftState {
   text: string;
-  attachments: Attachment[];
+  attachments: DraftAttachment[];
   /** Chat rooms / calendars / folders attached via the composer's "+" menu,
    * read once when the message is sent. */
   sources: TaskSource[];
@@ -142,6 +153,22 @@ interface DraftState {
   skillId: string | null;
   connectorIds: string[];
   modelId: string;
+  /** POST-5.1 B3 overflow-UX closure pass — a brief, non-blocking message
+   * shown when `queueImageFiles` rejects one or more files purely because
+   * the draft is already at (or would exceed) `MAX_DRAFT_IMAGES`, never for
+   * a format/size rejection (those already surface per-attachment via that
+   * draft's own `error`). Transient, frontend-only UI state — never sent to
+   * the backend, never part of a message. Lives on `DraftState` (rather
+   * than a one-off ref) specifically so every existing draft-reset path
+   * (send, new chat, chat switch — all of which already construct a fresh
+   * `freshDraft()`) clears it for free, with no new cleanup call needed.
+   * `key` is a fresh id per occurrence (never reused) so the auto-dismiss
+   * effect restarts its timer even if the SAME message text is triggered
+   * twice in a row — a plain string dependency wouldn't change in that
+   * case, and the second notice would inherit the first one's remaining
+   * time instead of getting its own full display duration.
+   */
+  attachmentLimitNotice: { message: string; key: string } | null;
 }
 
 function freshDraft(): DraftState {
@@ -153,6 +180,7 @@ function freshDraft(): DraftState {
     skillId: null,
     connectorIds: [],
     modelId: DEFAULT_MODEL_ID,
+    attachmentLimitNotice: null,
   };
 }
 
@@ -299,8 +327,30 @@ export type Action =
   | { type: "RENAME_CHAT"; payload: { chatId: string; title: string } }
   | { type: "DELETE_CHAT"; payload: { chatId: string } }
   | { type: "TOGGLE_CONNECTOR"; payload: { connectorId: string } }
-  | { type: "ADD_ATTACHMENTS"; payload: { attachments: Attachment[] } }
+  | { type: "ADD_ATTACHMENTS"; payload: { attachments: DraftAttachment[] } }
   | { type: "REMOVE_ATTACHMENT"; payload: { id: string } }
+  // POST-5.1 B3 — patches one in-progress DraftImageAttachment (upload
+  // state transitions, the durable attachmentId once known, a safe error
+  // message on failure). Never touches any other draft attachment.
+  | { type: "UPDATE_DRAFT_IMAGE_ATTACHMENT"; payload: { id: string; patch: Partial<DraftImageAttachment> } }
+  // POST-5.1 B3 overflow-UX closure pass — a brief, non-blocking notice
+  // that `queueImageFiles` rejected one or more files purely because the
+  // draft is already at MAX_DRAFT_IMAGES. `CLEAR_...` is dispatched either
+  // by the auto-dismiss timeout or implicitly by any action that replaces
+  // `state.draft` wholesale (send, new chat, etc. all call `freshDraft()`).
+  | { type: "SET_ATTACHMENT_LIMIT_NOTICE"; payload: { message: string; key: string } }
+  | { type: "CLEAR_ATTACHMENT_LIMIT_NOTICE" }
+  // POST-5.1 B3 — an empty chat created purely because the user attached
+  // an image before ever sending a first message (mirrors "the first
+  // submitted prompt creates the conversation" — here, the first
+  // attachment does). Idempotent: a no-op if `chatId` already exists.
+  | { type: "CREATE_DRAFT_CHAT"; payload: { chatId: string; timestamp: number } }
+  // POST-5.1 B3 — sets `Chat.backendSessionId` OUTSIDE of an active run
+  // (unlike `BACKEND_SESSION_CREATED`, this has no `runToken`/
+  // `withActiveRun` guard — attachment upload isn't a "run"). Never
+  // clobbers an already-set `backendSessionId` (a second, superseded
+  // in-flight session-creation call must never overwrite the first).
+  | { type: "BACKEND_SESSION_ENSURED"; payload: { chatId: string; sessionId: string } }
   | { type: "TOGGLE_SIDEBAR" }
   | {
       type: "CREATE_PROJECT";
@@ -679,6 +729,15 @@ export function reducer(state: AppState, action: Action): AppState {
 
       const updatedChat: Chat = {
         ...chat,
+        // POST-5.1 B3: a chat may already exist with zero messages (e.g.
+        // `CREATE_DRAFT_CHAT`, fired when the user attached an image
+        // before ever sending anything) — `isNewChat` is false for that
+        // case (an id was already active), so the branch above never ran
+        // `deriveChatTitle`. Re-derive here whenever this is genuinely
+        // the chat's first message, regardless of which branch created
+        // the chat record itself; a chat that already has messages keeps
+        // its existing title untouched, exactly as before.
+        title: chat.messageIds.length === 0 ? deriveChatTitle(text) : chat.title,
         messageIds: [...chat.messageIds, userMessageId, assistantMessageId],
         // Phase 4F: seed the run only — deliberately never touches
         // pendingAction here. A prior action.pending stays visible in
@@ -1738,6 +1797,64 @@ export function reducer(state: AppState, action: Action): AppState {
         },
       };
 
+    case "UPDATE_DRAFT_IMAGE_ATTACHMENT": {
+      const { id, patch } = action.payload;
+      return {
+        ...state,
+        draft: {
+          ...state.draft,
+          attachments: state.draft.attachments.map((a) =>
+            a.id === id && a.kind === "image" ? { ...a, ...patch } : a,
+          ),
+        },
+      };
+    }
+
+    case "SET_ATTACHMENT_LIMIT_NOTICE":
+      return {
+        ...state,
+        draft: {
+          ...state.draft,
+          attachmentLimitNotice: { message: action.payload.message, key: action.payload.key },
+        },
+      };
+
+    case "CLEAR_ATTACHMENT_LIMIT_NOTICE":
+      if (state.draft.attachmentLimitNotice === null) return state;
+      return { ...state, draft: { ...state.draft, attachmentLimitNotice: null } };
+
+    case "CREATE_DRAFT_CHAT": {
+      const { chatId, timestamp } = action.payload;
+      // Idempotent -- a second CREATE_DRAFT_CHAT for the same id (e.g. a
+      // caller that raced ensureActiveChat twice) is a safe no-op.
+      if (state.chats[chatId]) return state;
+      const chat: Chat = {
+        id: chatId,
+        title: "New chat",
+        projectId: state.workspaceScope.type === "project" ? state.workspaceScope.projectId : null,
+        pinned: false,
+        createdAt: timestamp,
+        messageIds: [],
+        activeSkillId: state.draft.skillId,
+        connectorIds: state.draft.connectorIds,
+        selectedModelId: state.draft.modelId,
+        thinkingEffort: state.draft.thinkingEffort,
+      };
+      return {
+        ...state,
+        chats: { ...state.chats, [chatId]: chat },
+        chatOrder: [chatId, ...state.chatOrder],
+        activeChatId: chatId,
+      };
+    }
+
+    case "BACKEND_SESSION_ENSURED": {
+      const { chatId, sessionId } = action.payload;
+      const chat = state.chats[chatId];
+      if (!chat || chat.backendSessionId) return state;
+      return { ...state, chats: { ...state.chats, [chatId]: { ...chat, backendSessionId: sessionId } } };
+    }
+
     case "TOGGLE_SIDEBAR":
       return { ...state, sidebarCollapsed: !state.sidebarCollapsed };
 
@@ -2453,6 +2570,12 @@ interface AppContextValue {
   toggleConnector: (connectorId: string) => void;
   addAttachments: (attachments: Attachment[]) => void;
   removeAttachment: (id: string) => void;
+  /** POST-5.1 B3 — the one central image-ingestion entry point (picker,
+   * paste, and drag/drop all call this). See AppState.tsx's own
+   * `queueImageFiles` docstring for the full eligibility/preflight/
+   * single-flight-session semantics. */
+  queueImageFiles: (files: File[]) => void;
+  retryImageAttachment: (draftId: string) => void;
   toggleSidebar: () => void;
   createProject: (name: string, description?: string) => void;
   enterProject: (projectId: string) => void;
@@ -2526,6 +2649,87 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       for (const controller of runControllersRef.current.values()) controller.abort();
     };
   }, []);
+
+  // POST-5.1 B3 — one Promise per chat with a session-creation call
+  // currently in flight, keyed by chatId. This is the single-flight guard
+  // `beginBackendRun` never needed (Phase 4F's own send flow only ever
+  // starts one run per chat at a time, gated by `isRunActive` in
+  // PromptComposer) but real image attachments can be queued several at
+  // once (multi-select, or a paste immediately followed by a picker
+  // selection) before any of them has a session to upload against —
+  // without this, each queued image would independently see no
+  // `backendSessionId` yet and call `createSession()` itself, creating
+  // several backend sessions for what the user experiences as one chat.
+  // `ensureBackendSession` below is the only reader/writer.
+  const sessionCreationPromisesRef = useRef(new Map<string, Promise<string>>());
+
+  // POST-5.1 B3 — one AbortController per in-flight attachment upload,
+  // keyed by the DraftImageAttachment's own `id` (mirrors
+  // `runControllersRef`'s exact pattern). Removing an uploading
+  // attachment aborts its own request; nothing else is affected.
+  const uploadControllersRef = useRef(new Map<string, AbortController>());
+
+  useEffect(() => {
+    return () => {
+      for (const controller of uploadControllersRef.current.values()) controller.abort();
+    };
+  }, []);
+
+  // POST-5.1 B3 — object-URL lifecycle for draft image previews
+  // (instruction section 18: every `URL.createObjectURL` must eventually
+  // be revoked). Centralized here, rather than at every individual call
+  // site that can cause a DraftImageAttachment to leave the draft (remove,
+  // NEW_CHAT, SELECT_CHAT, DELETE_CHAT, CREATE_PROJECT, ENTER_PROJECT,
+  // START_TASK_RUN, START_SCHEDULING_CHAT, SEND_MESSAGE — see AppState
+  // .reducer.test.ts's own enumeration of every case that resets
+  // `draft.attachments`), because that's a lot of call sites to keep in
+  // sync by hand and missing even one would leak a URL. Diffing the
+  // previous vs. current set of `(id -> objectUrl)` pairs on every
+  // `state.draft.attachments` change catches every single one of them
+  // uniformly, without touching any of those reducer cases individually.
+  // A retried attachment keeps the SAME id/objectUrl (see
+  // `retryImageAttachment`), so it never appears "removed then re-added"
+  // here and is correctly never revoked mid-retry.
+  const draftImageObjectUrlsRef = useRef(new Map<string, string>());
+
+  useEffect(() => {
+    const current = new Map<string, string>();
+    for (const attachment of state.draft.attachments) {
+      if (attachment.kind === "image") current.set(attachment.id, attachment.objectUrl);
+    }
+    const previous = draftImageObjectUrlsRef.current;
+    for (const [id, url] of previous) {
+      if (!current.has(id)) URL.revokeObjectURL(url);
+    }
+    draftImageObjectUrlsRef.current = current;
+  }, [state.draft.attachments]);
+
+  // True provider teardown (see the identical pattern for
+  // `runControllersRef` above) — revokes whatever object URLs are still
+  // outstanding at that point. In normal operation the effect above
+  // already revokes everything as attachments leave the draft; this is
+  // the final safety net, not the primary mechanism.
+  useEffect(() => {
+    return () => {
+      for (const url of draftImageObjectUrlsRef.current.values()) URL.revokeObjectURL(url);
+    };
+  }, []);
+
+  // POST-5.1 B3 overflow-UX closure pass — auto-dismisses
+  // `draft.attachmentLimitNotice` after a fixed duration. Keyed off
+  // `.key` (never the message text) so a second overflow with the exact
+  // same copy still restarts the timer instead of inheriting whatever
+  // time was left on the first one. Any other action that replaces the
+  // whole draft (send, new chat, ...) already clears the notice via
+  // `freshDraft()`, so this effect only ever needs to handle the
+  // auto-dismiss case, not those resets.
+  useEffect(() => {
+    if (!state.draft.attachmentLimitNotice) return;
+    const timeout = window.setTimeout(() => {
+      dispatch({ type: "CLEAR_ATTACHMENT_LIMIT_NOTICE" });
+    }, ATTACHMENT_LIMIT_NOTICE_DURATION_MS);
+    return () => window.clearTimeout(timeout);
+  }, [state.draft.attachmentLimitNotice?.key]);
 
   // Phase 4F — drives one real backend turn. Takes `existingSessionId` as
   // a parameter (rather than reading `state` itself) so it never risks a
@@ -2610,6 +2814,178 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       }
     },
     [],
+  );
+
+  // POST-5.1 B3 — creates (or reuses) the real backend session a chat
+  // needs before its first image attachment can be uploaded. Single-
+  // flight per chatId (instruction section 9): a second call for the
+  // same chat while the first is still in flight reuses the SAME
+  // Promise rather than issuing a second `POST /api/sessions` — see
+  // `sessionCreationPromisesRef`'s own docstring above. Never clobbers
+  // an already-set `backendSessionId` (`BACKEND_SESSION_ENSURED`'s own
+  // reducer guard).
+  const ensureBackendSession = useCallback(
+    (chatId: string): Promise<string> => {
+      const existing = state.chats[chatId]?.backendSessionId;
+      if (existing) return Promise.resolve(existing);
+
+      const inFlight = sessionCreationPromisesRef.current.get(chatId);
+      if (inFlight) return inFlight;
+
+      const promise = (async () => {
+        try {
+          const created = await createSession();
+          dispatch({ type: "BACKEND_SESSION_ENSURED", payload: { chatId, sessionId: created.session_id } });
+          return created.session_id;
+        } finally {
+          sessionCreationPromisesRef.current.delete(chatId);
+        }
+      })();
+      sessionCreationPromisesRef.current.set(chatId, promise);
+      return promise;
+    },
+    [state.chats],
+  );
+
+  // POST-5.1 B3 — the actual upload step for ONE draft image, shared by
+  // both `queueImageFiles` (first attempt) and `retryImageAttachment`
+  // (instruction section 16: retry reuses the same underlying upload
+  // operation, never a parallel implementation). An abort (the
+  // attachment was removed mid-upload — see `removeAttachment` below)
+  // is silent transport cleanup, never a user-facing failure, mirroring
+  // `runBackendChat`'s own `isAbortError` handling.
+  const uploadDraftImage = useCallback(
+    async (chatId: string, draftId: string, file: File) => {
+      dispatch({
+        type: "UPDATE_DRAFT_IMAGE_ATTACHMENT",
+        payload: { id: draftId, patch: { uploadState: "uploading", error: undefined } },
+      });
+
+      const controller = new AbortController();
+      uploadControllersRef.current.set(draftId, controller);
+
+      try {
+        const sessionId = await ensureBackendSession(chatId);
+        const response = await uploadAttachment(sessionId, file, controller.signal);
+        // If this draft was removed while the upload was in flight, the
+        // reducer's `.map()` simply finds no matching id and this is a
+        // silent no-op — a removed attachment is never resurrected by a
+        // stale completion (instruction section 37).
+        dispatch({
+          type: "UPDATE_DRAFT_IMAGE_ATTACHMENT",
+          payload: { id: draftId, patch: { uploadState: "ready", attachmentId: response.attachment_id } },
+        });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        dispatch({
+          type: "UPDATE_DRAFT_IMAGE_ATTACHMENT",
+          payload: { id: draftId, patch: { uploadState: "failed", error: classifyAttachmentUploadFailure(error) } },
+        });
+      } finally {
+        uploadControllersRef.current.delete(draftId);
+      }
+    },
+    [ensureBackendSession],
+  );
+
+  /** POST-5.1 B3 — the ONE central image-ingestion path (instruction
+   * section 16): the file picker, clipboard paste, and drag/drop all
+   * call this exact function, never three separate validation/upload
+   * pipelines. Frontend-only preflight (size/count/format — instruction
+   * sections 12-13) never replaces the backend's own authoritative
+   * validation; it only avoids an always-doomed request.
+   *
+   * ELIGIBILITY (instruction section 28): mirrors `isBackendBranch`'s own
+   * three conditions in `sendMessage` exactly (general workspace scope,
+   * no active demo script, no already-drafted ad-hoc "chat room" source)
+   * — a chat that wouldn't route its next text send to the real backend
+   * anyway is not offered real image attachments; see
+   * `ComposerPlusMenu.tsx`/`PromptComposer.tsx` for where this is
+   * surfaced to the user as a disabled affordance rather than a silent
+   * no-op.
+   */
+  const queueImageFiles = useCallback(
+    (files: File[]) => {
+      if (files.length === 0) return;
+
+      const activeChat = state.activeChatId ? state.chats[state.activeChatId] : undefined;
+      const eligible =
+        state.workspaceScope.type === "general" && state.draft.sources.length === 0 && !activeChat?.demoRun;
+      if (!eligible) return;
+
+      const currentImageCount = state.draft.attachments.filter((a) => a.kind === "image").length;
+      const remainingCapacity = Math.max(0, MAX_DRAFT_IMAGES - currentImageCount);
+      const accepted = files.slice(0, remainingCapacity);
+
+      // POST-5.1 B3 overflow-UX closure pass — a file dropped purely for
+      // lack of remaining capacity (never a format/size rejection, which
+      // is instead surfaced per-attachment via that draft's own `error`)
+      // gets one brief, non-blocking notice rather than silently
+      // vanishing. Covers both a partial accept (some queued, some
+      // rejected) and a fully-at-capacity call (nothing queued at all).
+      if (files.length > accepted.length) {
+        dispatch({
+          type: "SET_ATTACHMENT_LIMIT_NOTICE",
+          payload: { message: `Up to ${MAX_DRAFT_IMAGES} images can be attached.`, key: createId("notice") },
+        });
+      }
+      if (accepted.length === 0) return;
+
+      // POST-5.1 B3: the first image attached to a brand-new composer
+      // (no active chat yet) creates the chat immediately — mirrors "the
+      // first submitted prompt creates the conversation," extended to
+      // "the first attachment does too." `chatId` is minted here, in the
+      // callback's own closure, exactly like `sendMessage` already mints
+      // `runToken`/message ids before dispatching — never awaited from a
+      // re-render.
+      const chatId = state.activeChatId ?? createId("chat");
+      if (!state.activeChatId) {
+        dispatch({ type: "CREATE_DRAFT_CHAT", payload: { chatId, timestamp: Date.now() } });
+      }
+
+      const drafts: DraftImageAttachment[] = accepted.map((file) => {
+        const mimeType = file.type;
+        const isAcceptedType = (ACCEPTED_IMAGE_MIME_TYPES as readonly string[]).includes(
+          mimeType as AcceptedImageMimeType,
+        );
+        const oversized = file.size > MAX_IMAGE_BYTES;
+        return {
+          kind: "image",
+          id: createId("img"),
+          file,
+          objectUrl: URL.createObjectURL(file),
+          uploadState: isAcceptedType && !oversized ? "pending" : "failed",
+          filename: file.name,
+          mimeType,
+          sizeBytes: file.size,
+          error: !isAcceptedType
+            ? "This image format isn't supported."
+            : oversized
+              ? "Image is too large."
+              : undefined,
+        };
+      });
+      dispatch({ type: "ADD_ATTACHMENTS", payload: { attachments: drafts } });
+
+      for (const draft of drafts) {
+        if (draft.uploadState === "pending") void uploadDraftImage(chatId, draft.id, draft.file);
+      }
+    },
+    [state.activeChatId, state.chats, state.workspaceScope.type, state.draft.sources, state.draft.attachments, uploadDraftImage],
+  );
+
+  /** POST-5.1 B3 — re-attempts a FAILED draft image's upload, reusing the
+   * exact same `File`/preview (instruction section 23): never re-reads
+   * from disk, never creates a new object URL.
+   */
+  const retryImageAttachment = useCallback(
+    (draftId: string) => {
+      if (!state.activeChatId) return;
+      const attachment = state.draft.attachments.find((a) => a.id === draftId);
+      if (!attachment || attachment.kind !== "image") return;
+      void uploadDraftImage(state.activeChatId, draftId, attachment.file);
+    },
+    [state.activeChatId, state.draft.attachments, uploadDraftImage],
   );
 
   /** Pre-4H refinement — the Stop control's implementation. Stops the
@@ -2738,17 +3114,36 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const sendMessage = useCallback((overrideText?: string) => {
+    // POST-5.1 B3 interim gating — Gemini/ADK multimodal wiring (B5) does
+    // not exist yet, so a real image attachment must never be allowed to
+    // silently disappear into a text-only send, and the user must never be
+    // shown an assistant response that implies the image was considered.
+    // Hard-block here as a defensive backstop to PromptComposer's own
+    // `canSend` gate — this function simply does nothing while any image
+    // attachment (in any upload state) is present in the draft.
+    const hasBlockingImageAttachment = state.draft.attachments.some((a) => a.kind === "image");
+    if (hasBlockingImageAttachment) return;
+
     const typedText = (overrideText ?? state.draft.text).trim();
+
+    // The gate above guarantees no image-kind entry survives past this
+    // point — narrow `DraftAttachment[]` down to the plain `Attachment[]`
+    // the rest of this function (and the `SEND_MESSAGE` payload, which
+    // feeds `Message.attachments`) has always worked with, rather than
+    // assuming the union away.
+    const nonImageAttachments = state.draft.attachments.filter(
+      (a): a is Attachment => a.kind !== "image",
+    );
 
     // The composer already intercepts long *pastes* and turns them into a
     // "Pasted text.txt" attachment before they ever reach draft.text (see
     // PromptComposer's onPaste handler) — its content is folded back in here
     // so the message's full text always reflects what was actually said,
     // regardless of how much of it lives in an attachment.
-    const existingPastedAttachments = state.draft.attachments.filter((a) => a.isPastedText);
+    const existingPastedAttachments = nonImageAttachments.filter((a) => a.isPastedText);
     const pastedContent = existingPastedAttachments.map((a) => a.content ?? "").join("\n\n");
     const rawText = [typedText, pastedContent].filter(Boolean).join("\n\n");
-    if (!rawText && state.draft.attachments.length === 0) return;
+    if (!rawText && nonImageAttachments.length === 0) return;
 
     // Anything not already caught at paste time — typed directly, or pasted
     // through a path the composer didn't intercept — still gets converted
@@ -2757,7 +3152,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const typedIsLongPaste = typedText.length > LONG_PASTE_THRESHOLD;
     const attachments = typedIsLongPaste
       ? [
-          ...state.draft.attachments,
+          ...nonImageAttachments,
           {
             id: createId("attachment"),
             kind: "file" as const,
@@ -2767,7 +3162,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
             content: typedText,
           },
         ]
-      : state.draft.attachments;
+      : nonImageAttachments;
 
     const chatId = state.activeChatId ?? createId("chat");
     const isNewChat = state.activeChatId === null;
@@ -3257,10 +3652,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     (attachments: Attachment[]) => dispatch({ type: "ADD_ATTACHMENTS", payload: { attachments } }),
     [],
   );
-  const removeAttachment = useCallback(
-    (id: string) => dispatch({ type: "REMOVE_ATTACHMENT", payload: { id } }),
-    [],
-  );
+  // POST-5.1 B3: aborts an in-flight upload (if any) BEFORE dispatching
+  // the removal — the object-URL revocation itself is handled uniformly
+  // by the cleanup effect above once `state.draft.attachments` no longer
+  // contains this id (instruction section 22).
+  const removeAttachment = useCallback((id: string) => {
+    uploadControllersRef.current.get(id)?.abort();
+    uploadControllersRef.current.delete(id);
+    dispatch({ type: "REMOVE_ATTACHMENT", payload: { id } });
+  }, []);
   const toggleSidebar = useCallback(() => dispatch({ type: "TOGGLE_SIDEBAR" }), []);
 
   const createProject = useCallback(
@@ -3633,6 +4033,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     toggleConnector,
     addAttachments,
     removeAttachment,
+    queueImageFiles,
+    retryImageAttachment,
     toggleSidebar,
     createProject,
     enterProject,

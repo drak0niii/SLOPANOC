@@ -4,8 +4,7 @@ import { useAppState } from "../../state/AppState";
 import { CONNECTOR_STATE_LABEL } from "../../data/mock";
 import { CHAT_ROOM_KIND_IDS, SOURCE_KIND_BY_ID } from "../../data/workspaceSources";
 import { createId } from "../../lib/id";
-import { formatBytes } from "../../lib/format";
-import type { Attachment } from "../../types";
+import { ACCEPTED_IMAGE_MIME_TYPES } from "../../lib/constants";
 import { IconButton } from "../ui/IconButton";
 import { ScrollingText } from "../ui/ScrollingText";
 import { Tooltip } from "../ui/Tooltip";
@@ -34,9 +33,11 @@ function RowLabel({ label, description }: { label: string; description: string }
 
 export function ComposerPlusMenu() {
   const {
+    state,
+    activeChat,
     activeConnectorIds,
     toggleConnector,
-    addAttachments,
+    queueImageFiles,
     addDraftSource,
     activeProject,
     connectorList,
@@ -47,17 +48,17 @@ export function ComposerPlusMenu() {
     ? connectorList.filter((connector) => activeProject.connectorIds.includes(connector.id))
     : connectorList;
 
+  // POST-5.1 B3 — mirrors `queueImageFiles`'s own eligibility gate in
+  // AppState.tsx exactly (general workspace scope, no drafted ad-hoc chat
+  // room source, no active demo script) so the affordance is disabled
+  // rather than silently doing nothing when clicked.
+  const canAttachImages =
+    state.workspaceScope.type === "general" && state.draft.sources.length === 0 && !activeChat?.demoRun;
+
   function handleFilesSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
-
-    const attachments: Attachment[] = Array.from(files).map((file) => ({
-      id: createId("att"),
-      kind: "file",
-      name: file.name,
-      meta: formatBytes(file.size),
-    }));
-    addAttachments(attachments);
+    queueImageFiles(Array.from(files));
     event.target.value = "";
   }
 
@@ -67,6 +68,7 @@ export function ComposerPlusMenu() {
         ref={fileInputRef}
         type="file"
         multiple
+        accept={ACCEPTED_IMAGE_MIME_TYPES.join(",")}
         className="hidden"
         onChange={handleFilesSelected}
       />
@@ -82,12 +84,14 @@ export function ComposerPlusMenu() {
         <MenuContent align="start" className="w-96">
           <MenuItem
             icon={<Paperclip className="h-5 w-5 shrink-0 text-secondary" />}
+            disabled={!canAttachImages}
             onSelect={(e) => {
               e.preventDefault();
+              if (!canAttachImages) return;
               window.setTimeout(() => fileInputRef.current?.click(), 0);
             }}
           >
-            <RowLabel label="Add files" description="Upload from computer" />
+            <RowLabel label="Add images" description="PNG, JPEG, or WebP from your computer" />
           </MenuItem>
           <MenuSub>
             <MenuSubTrigger icon={<MessagesSquare className="h-5 w-5 shrink-0 text-secondary" />}>

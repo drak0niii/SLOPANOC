@@ -364,8 +364,9 @@ complete.
 CURRENT (out-of-band milestone, inserted between the LOCAL GIT CHECKPOINT
 below and Phase 4H — does not reorder anything in this locked list):
 POST-5.1 A — CLOUD SQL POSTGRESQL (A1–A4) is COMPLETE. POST-5.1 B —
-MULTIMODAL ATTACHMENTS has STARTED (not complete). A5 (real TELCO/RAN MOP
-ingestion) follows POST-5.1 B, before Phase 4H security hardening.
+MULTIMODAL ATTACHMENTS is IN PROGRESS (B0–B3 done, B4 next). A5 (real
+TELCO/RAN MOP ingestion) follows POST-5.1 B, before Phase 4H security
+hardening.
 
 POST-5.1 B execution sequence (locked, do not reorder):
   B0 [DONE] Durable chat attachment architecture + ADK persistence audit
@@ -383,7 +384,41 @@ POST-5.1 B execution sequence (locked, do not reorder):
       cleanup on DB-insert failure. No frontend, no `attachment_ids` on
       message-send, no `Part.from_uri` construction in the live chat path
       yet.
-  B3  Complete Existing Frontend Attachment UX
+  B3 [DONE] Complete Existing Frontend Attachment UX -- real File-backed
+      draft state (`DraftImageAttachment`), local `URL.createObjectURL`
+      preview, real `POST /api/sessions/{id}/attachments` upload wired
+      into the picker (`ComposerPlusMenu`) and clipboard paste
+      (`PromptComposer`) through one central ingestion path
+      (`queueImageFiles` in `src/state/AppState.tsx`), per-chat backend
+      session single-flight (`ensureBackendSession`) so concurrent
+      images/pastes before a session exists cause exactly one
+      `POST /api/sessions`, PENDING/UPLOADING/READY/FAILED draft states
+      (frontend-only, never persisted as such), remove/retry with
+      per-upload `AbortController` (a stale completion after removal
+      never resurrects the removed attachment), a 4-image / 8 MiB
+      frontend preflight (`src/lib/constants.ts`) with a visible,
+      auto-dismissing "Up to 4 images can be attached." notice
+      (`draft.attachmentLimitNotice`) whenever a selection/paste is
+      rejected purely for exceeding that capacity -- never silent, never
+      an alert()/modal -- and safe backend-errorCode -> user-message
+      mapping (`src/lib/attachmentError.ts`). Validated end-to-end against
+      real Cloud SQL PostgreSQL (`slopanoc`) + the real private GCS bucket
+      via a live picker upload and a live clipboard (Ctrl+V) paste, both
+      through the real backend -- not just component/unit tests. Real
+      image Send remains INTENTIONALLY BLOCKED (B5 doesn't exist yet) --
+      `PromptComposer`'s `canSend` and `AppState`'s `sendMessage` both
+      hard-block whenever any image-kind attachment is present, in any
+      state; there is no fallback to a text-only or fabricated send.
+      `NoAnswerNotice.tsx`'s old, separate metadata-only file-attach
+      affordance was removed (not routed to the real pipeline) -- there
+      is exactly one attachment entry point now. Removing an
+      already-UPLOADED attachment from the draft does NOT delete its GCS
+      object/Cloud SQL row -- it is left as a READY, unlinked
+      (`message_id IS NULL`) orphan candidate for future retention
+      cleanup, per B1/B2's existing architecture; B3 intentionally adds
+      no DELETE endpoint or synchronous cleanup. No backend file was
+      touched by B3. No `attachment_ids` on message-send, no
+      Gemini/ADK/`Part.from_uri` wiring, no rehydration -- all still B4/B5.
   B4  Saved Conversation / Attachment Rehydration
   B5  Gemini/ADK Multimodal Runtime
   B6  Image + Teams + KM Operational Reasoning

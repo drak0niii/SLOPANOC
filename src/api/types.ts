@@ -221,6 +221,24 @@ export interface CreateSessionResponse {
   session_id: string;
 }
 
+/** POST-5.1 B2/B3 — mirrors backend/api/schemas.py's `AttachmentResponse`
+ * exactly (wire shape, snake_case fields, 1:1 with the backend DTO) — the
+ * frontend-safe view of a `ChatAttachmentRecord` returned by both
+ * `POST /api/sessions/{id}/attachments` and `GET /api/attachments/{id}`.
+ * Deliberately has no `storage_object_name`/`owner_user_id`/`sha256`/
+ * `gs://` field — the backend never returns any of those (see that
+ * schema's own docstring). `status` is always `"ready"` in B3 (the
+ * backend only ever creates a row as READY, never LINKED/DELETED from
+ * this endpoint) — kept as a plain `string`, not narrowed to a literal,
+ * since this frontend has no reason to branch on it yet. */
+export interface AttachmentResponse {
+  attachment_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  status: string;
+}
+
 /** Phase 4G hardening pass — conversational branching for editing a
  * historical user message. See `POST /api/sessions/{id}/rewind`'s
  * backend docstring (chat_service.py's `rewind_before_user_turn`) for

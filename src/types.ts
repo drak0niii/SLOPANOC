@@ -54,6 +54,73 @@ export interface Attachment {
   content?: string;
 }
 
+/** POST-5.1 B3 — the browser-only lifecycle of one durable-backed image
+ * attachment while it's still a draft. `PENDING` briefly, before upload
+ * starts; `UPLOADING` while the real POST is in flight; `READY` once the
+ * backend has returned a real `attachment_id`; `FAILED` on any rejection
+ * (validation, network, backend error). This state is presentation-only —
+ * it is never persisted to Cloud SQL (the backend's own `ChatAttachment
+ * .status` is a completely separate, server-owned concept: READY/LINKED/
+ * DELETED — see backend/attachments/models.py). */
+export type DraftImageUploadState = "pending" | "uploading" | "ready" | "failed";
+
+/** POST-5.1 B3 — a real image selected/pasted into the composer, backed by
+ * an actual `File`, not yet (or not successfully) part of any sent
+ * message. `file`/`objectUrl` are BROWSER-ONLY — they must never be read
+ * by anything that assumes `Draft`/`Message` state is serializable (there
+ * is no `JSON.stringify` path in this app today, but keep it that way).
+ * `id` is client-minted (see `createId`) and stable for this draft slot's
+ * whole lifetime, independent of `attachmentId` (the durable backend id,
+ * set only once upload succeeds) — this is what `removeAttachment`/retry/
+ * the object-URL-cleanup effect key off of, uniformly with the existing
+ * `Attachment.id` field (see `DraftAttachment` below). */
+export interface DraftImageAttachment {
+  kind: "image";
+  id: string;
+  file: File;
+  /** `URL.createObjectURL(file)` — local preview only, revoked once this
+   * entry leaves the draft (see AppState.tsx's object-URL cleanup effect).
+   * Never a base64/data URL. */
+  objectUrl: string;
+  uploadState: DraftImageUploadState;
+  /** The durable backend id — set only once `uploadState === "ready"`. */
+  attachmentId?: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  /** Safe, already user-facing text — set only when `uploadState ===
+   * "failed"`. Never raw backend/network exception text. */
+  error?: string;
+}
+
+/** POST-5.1 B3 — everything `Draft.attachments` may hold: the existing
+ * metadata-only `Attachment` (still the ONLY shape long-paste "Pasted
+ * text.txt" entries ever use — that subsystem is deliberately untouched,
+ * see PromptComposer.tsx's `handlePaste`) union'd with the new real-image
+ * draft shape. Discriminated on `kind` — `Attachment.kind` is `"file" |
+ * "folder"`, `DraftImageAttachment.kind` is `"image"`, so the two never
+ * collide and TypeScript narrows correctly on a plain `kind` check. This
+ * is the smallest safe union (instruction: do not rewrite the long-paste
+ * subsystem to unify it with the new image type). */
+export type DraftAttachment = Attachment | DraftImageAttachment;
+
+/** POST-5.1 B3 — prepared for B4/B5, NOT produced by anything yet: the
+ * durable, backend-linked shape a SENT message's attachment will
+ * eventually use once B5 actually links a `READY` attachment to a real
+ * user message. Deliberately minimal (mirrors the backend's own
+ * `AttachmentResponse` DTO — see backend/api/schemas.py) — no `File`, no
+ * `objectUrl`, nothing browser-only. Nothing in this codebase constructs
+ * one yet; `Message.attachments` still uses the plain `Attachment` type
+ * (correct for now: a real image can never reach a sent message in B3,
+ * since Send is gated closed while one is in the draft — see AppState
+ * .tsx's `hasBlockingImageAttachment`). */
+export interface PersistedAttachmentReference {
+  attachmentId: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
 export type CitationScope = "global" | "project";
 
 export interface Citation {
