@@ -19,6 +19,13 @@
 fastapi==0.136.1
 starlette==0.52.1
 uvicorn==0.46.0
+# Required by FastAPI/Starlette for multipart/form-data request parsing --
+# the chat attachment upload endpoint (POST-5.1 B2,
+# backend/api/app.py's attachment upload route) is this backend's first
+# direct use of `UploadFile`/multipart requests. Pinned to a current
+# secure release, not the environment's pre-existing older transitive
+# version -- this parser sits directly on the untrusted upload boundary.
+python-multipart==0.0.32
 
 # --- Data validation ----------------------------------------------------
 pydantic==2.13.4
@@ -48,3 +55,13 @@ google-cloud-storage==3.10.1
 # --- HTTP client ----------------------------------------------------------
 # The Power Automate gateway client (backend/gateway/power_automate_client.py).
 requests==2.33.1
+
+# --- Image validation -----------------------------------------------------
+# POST-5.1 B2: decode/verify actual uploaded image bytes against the
+# claimed MIME type (backend/attachments/validation.py) -- never trust a
+# filename extension or a client-supplied Content-Type alone. Pinned to a
+# current release (never the environment's pre-existing older transitive
+# version) precisely because this library decodes untrusted, unauthenticated-
+# boundary input (webp decode vulnerabilities fixed after 10.0.1 are
+# directly relevant given image/webp is an accepted type here).
+Pillow==12.3.0

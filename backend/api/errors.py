@@ -26,6 +26,8 @@ _STATUS_BY_ERROR_CODE: dict[str, int] = {
     "authorization_error": 403,
     "not_found": 404,
     "rate_limited": 429,
+    "payload_too_large": 413,
+    "unsupported_media_type": 415,
     "connector_unavailable": 503,
     "knowledge_insufficient": 422,
     "run_failure": 502,

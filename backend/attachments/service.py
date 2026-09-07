@@ -68,12 +68,24 @@ class AttachmentService:
         size_bytes: int,
         sha256: str,
         now: Optional[datetime] = None,
+        *,
+        attachment_id: Optional[str] = None,
     ) -> ChatAttachmentRecord:
         """Registers a new, already-durably-stored attachment as `READY`.
         Takes metadata only -- the caller (B2's upload endpoint) is
         responsible for having already written the bytes to
         `build_object_name(session_id, attachment_id)` in GCS before
         calling this; `create()` never writes binary data itself.
+
+        `attachment_id` (POST-5.1 B2 addition, optional, keyword-only):
+        when omitted (B1's original behavior, still exactly what every
+        B1 test exercises), one is generated here. B2's real upload flow
+        passes one explicitly -- it must generate the id *before* the
+        GCS write (so the object key and the DB row agree), meaning the
+        id has to exist before this method is ever called; this
+        parameter lets the id be supplied rather than silently
+        regenerated (which would desynchronize `storage_object_name`
+        from the object B2 actually already wrote).
         """
         if not original_filename.strip():
             raise ValueError("original_filename must not be empty.")
@@ -84,7 +96,7 @@ class AttachmentService:
         if not sha256.strip():
             raise ValueError("sha256 must not be empty.")
 
-        attachment_id = generate_attachment_id()
+        attachment_id = attachment_id or generate_attachment_id()
         created_at = _now(now)
         record = ChatAttachmentRecord(
             attachment_id=attachment_id,
@@ -113,6 +125,19 @@ class AttachmentService:
     async def _require_owned(self, attachment_id: str, owner_user_id: str, session_id: str) -> ChatAttachmentRecord:
         record = await self._repository.get(attachment_id)
         if record is None or record.owner_user_id != owner_user_id or record.session_id != session_id:
+            raise AttachmentNotFoundError("No such attachment was found.")
+        return record
+
+    async def get_owned(self, attachment_id: str, owner_user_id: str) -> ChatAttachmentRecord:
+        """POST-5.1 B2 addition: authorize by (`attachment_id`,
+        `owner_user_id`) alone -- for the two by-attachment-id-only API
+        routes (`GET /api/attachments/{id}` and `.../content`), which
+        have no `session_id` in their URL to also check. Same anti-
+        enumeration discipline as `_require_owned`: unknown id and
+        wrong-owner id raise the identical `AttachmentNotFoundError`.
+        """
+        record = await self._repository.get(attachment_id)
+        if record is None or record.owner_user_id != owner_user_id:
             raise AttachmentNotFoundError("No such attachment was found.")
         return record
 

@@ -458,3 +458,21 @@ class SkipSelectionResponse(BaseModel):
     session_id: str
     selection_id: str
     status: str
+
+
+# --- Chat Attachments (POST-5.1 B2) -----------------------------------------
+
+
+class AttachmentResponse(BaseModel):
+    """The frontend-safe view of a `ChatAttachmentRecord` (instruction
+    section 4/26) -- deliberately excludes `storage_object_name`, any
+    `gs://` reference, `bucket` name, `owner_user_id`, and `sha256`
+    (server/trusted metadata, no concrete frontend need for the hash
+    yet). Never a direct serialization of the SQLAlchemy record.
+    """
+
+    attachment_id: str
+    filename: str
+    mime_type: str
+    size_bytes: int
+    status: str

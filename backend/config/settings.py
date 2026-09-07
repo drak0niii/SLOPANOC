@@ -52,6 +52,9 @@ _KNOWLEDGE_DATABASE_SECRET_ENV_VAR = "SLOPANOC_KNOWLEDGE_DATABASE_SECRET_RESOURC
 _MODEL_WARMUP_ENABLED_ENV_VAR = "SLOPANOC_MODEL_WARMUP_ENABLED"
 _MODEL_WARMUP_TIMEOUT_ENV_VAR = "SLOPANOC_MODEL_WARMUP_TIMEOUT_SECONDS"
 _CHAT_ATTACHMENTS_BUCKET_ENV_VAR = "SLOPANOC_CHAT_ATTACHMENTS_BUCKET"
+_CHAT_ATTACHMENT_MAX_BYTES_ENV_VAR = "SLOPANOC_CHAT_ATTACHMENT_MAX_BYTES"
+_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN_ENV_VAR = "SLOPANOC_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN"
+_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN_ENV_VAR = "SLOPANOC_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN"
 
 # Matches google.adk.agents.llm_agent.LlmAgent.DEFAULT_MODEL in the
 # installed ADK (1.33.0) -- not an independently invented default.
@@ -115,6 +118,18 @@ _DEFAULT_KNOWLEDGE_DATABASE_URL = "sqlite+aiosqlite:///./slopanoc_knowledge.db"
 # scattering fixed values through prompts."), not a specific number.
 _DEFAULT_CASE_CONTEXT_MAX_ITEMS = 12
 _DEFAULT_CASE_CONTEXT_MAX_CHARACTERS = 4000
+
+# POST-5.1 B2: conservative application limits for chat image attachments,
+# stricter than Gemini/Vertex's own published per-request limits -- a
+# fixed, configurable budget existing at all (same "settings, not magic
+# numbers scattered through modules" discipline as the Case context
+# budget above). Only `chat_attachment_max_bytes` is enforced in B2 (the
+# upload endpoint's bounded read); the per-turn settings are defined now
+# so B5's message-send validation has a ready-made setting, not a reason
+# to invent one later.
+_DEFAULT_CHAT_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024  # 8 MiB
+_DEFAULT_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN = 4
+_DEFAULT_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN = 16 * 1024 * 1024  # 16 MiB
 
 
 class ConfigurationError(RuntimeError):
@@ -270,6 +285,33 @@ class Settings:
         """
         raw = self._env.get(_CHAT_ATTACHMENTS_BUCKET_ENV_VAR)
         return raw.strip() if raw and raw.strip() else None
+
+    @property
+    def chat_attachment_max_bytes(self) -> int:
+        """POST-5.1 B2: the per-image upload size limit, enforced via a
+        bounded read (never trusting a client-declared `Content-Length`)
+        -- see `backend/api/attachment_service.py`. Default 8 MiB.
+        """
+        raw = self._env.get(_CHAT_ATTACHMENT_MAX_BYTES_ENV_VAR)
+        return int(raw) if raw else _DEFAULT_CHAT_ATTACHMENT_MAX_BYTES
+
+    @property
+    def chat_attachment_max_images_per_turn(self) -> int:
+        """POST-5.1 B2: defined now, not yet enforced anywhere -- the
+        future message-send path (B5) will read this when validating
+        `attachment_ids`. Default 4.
+        """
+        raw = self._env.get(_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN_ENV_VAR)
+        return int(raw) if raw else _DEFAULT_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN
+
+    @property
+    def chat_attachment_max_total_bytes_per_turn(self) -> int:
+        """POST-5.1 B2: defined now, not yet enforced anywhere -- same
+        future-B5 note as `chat_attachment_max_images_per_turn`. Default
+        16 MiB.
+        """
+        raw = self._env.get(_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN_ENV_VAR)
+        return int(raw) if raw else _DEFAULT_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN
 
     def resolve_power_automate_gateway_url(self) -> str:
         """Resolve the Power Automate gateway URL. Never log the result."""

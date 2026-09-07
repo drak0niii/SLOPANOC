@@ -207,6 +207,15 @@ def test_only_the_expected_routes_exist() -> None:
         "/api/cases/{case_id}/members",
         "/api/cases/{case_id}/sessions/{session_id}",
         "/api/cases/{case_id}/context",
+        # POST-5.1 B2 -- durable chat attachments (backend/api/attachment_
+        # service.py). Upload is metadata/GCS only -- never a tool-
+        # execution/state-mutation channel, never linked to a message or
+        # sent to Gemini here (that's B5). The two GET routes return
+        # frontend-safe metadata/binary content only, authorized by
+        # attachment ownership -- never a raw storage path.
+        "/api/sessions/{session_id}/attachments",
+        "/api/attachments/{attachment_id}",
+        "/api/attachments/{attachment_id}/content",
         "/openapi.json",
         "/docs",
         "/docs/oauth2-redirect",

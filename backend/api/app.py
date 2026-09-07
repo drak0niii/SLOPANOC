@@ -96,6 +96,30 @@ ROUTES:
                                                      ledger.
   POST   /api/cases/{case_id}/context            -- add a user-authored
                                                      context item.
+  POST /api/sessions/{session_id}/attachments    -- (POST-5.1 B2)
+                                                     multipart image
+                                                     upload; validates,
+                                                     stores in private
+                                                     GCS, records a
+                                                     READY Cloud SQL
+                                                     metadata row.
+                                                     Not yet linked to
+                                                     any message or sent
+                                                     to Gemini (that's
+                                                     B5).
+  GET  /api/attachments/{attachment_id}          -- (POST-5.1 B2)
+                                                     frontend-safe
+                                                     metadata only --
+                                                     never a `gs://` URI
+                                                     or storage object
+                                                     name.
+  GET  /api/attachments/{attachment_id}/content  -- (POST-5.1 B2) the
+                                                     actual image bytes,
+                                                     streamed from
+                                                     private GCS through
+                                                     this backend --
+                                                     never a public or
+                                                     signed URL.
 
 No arbitrary tool-execution or state-mutation endpoint exists -- the only
 way to reach Teams-domain conversational behavior through this API is via
@@ -122,12 +146,13 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, File, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from google.adk.utils.context_utils import Aclosing
 
 from backend.api import approval_service
+from backend.api import attachment_service as attachment_orchestration
 from backend.api import case_service as case_orchestration
 from backend.api import execution_service
 from backend.api import selection_service
@@ -140,6 +165,7 @@ from backend.api.schemas import (
     AddCaseMemberRequest,
     ApprovalRequest,
     ApprovalResponse,
+    AttachmentResponse,
     CancelRunResponse,
     CaseContextItemResponse,
     CaseContextResponse,
@@ -162,8 +188,12 @@ from backend.api.schemas import (
     UpdateCaseRequest,
 )
 from backend.api.session_service import ApiSessionService, get_session_service
+from backend.attachments.models import ChatAttachmentRecord
+from backend.attachments.service import AttachmentService, get_attachment_service
+from backend.attachments.storage import ChatAttachmentStorage, get_attachment_storage
 from backend.cases.service import CaseService, get_case_service
 from backend.config.model_warmup import warmup_shared_model
+from backend.config.settings import Settings, get_settings
 from backend.gateway.safe_error import SafeErrorException
 
 
@@ -178,6 +208,33 @@ def _case_response(case) -> CaseResponse:
         created_at=case.created_at.isoformat(),
         updated_at=case.updated_at.isoformat(),
     )
+
+
+def _attachment_response(record: ChatAttachmentRecord) -> AttachmentResponse:
+    """Maps the trusted persistence model to the frontend-safe DTO --
+    never a direct serialization (`storage_object_name`/`owner_user_id`/
+    `sha256`/any `gs://` reference never leave this function).
+    """
+    return AttachmentResponse(
+        attachment_id=record.attachment_id,
+        filename=record.original_filename,
+        mime_type=record.mime_type,
+        size_bytes=record.size_bytes,
+        status=record.status,
+    )
+
+
+def _content_disposition_filename(original_filename: str) -> str:
+    """`original_filename` is already normalized (control characters/
+    directory-traversal significance stripped) by `backend.attachments
+    .validation.normalize_filename` at upload time -- this only guards
+    against the one remaining header-breakout vector a stored filename
+    could still contain: a literal `"` closing the quoted-string value
+    early. CR/LF are already impossible here, so this alone is
+    sufficient to make embedding this value in a `Content-Disposition`
+    header safe.
+    """
+    return original_filename.replace('"', "")
 
 
 def _context_item_response(item) -> CaseContextItemResponse:
@@ -494,6 +551,58 @@ def create_app() -> FastAPI:
     ) -> CaseContextItemResponse:
         item = await case_service.add_user_context_item(user.user_id, case_id, body.kind.value, body.content)
         return _context_item_response(item)
+
+    # --- Chat Attachments (POST-5.1 B2) ------------------------------------
+
+    @app.post("/api/sessions/{session_id}/attachments", response_model=AttachmentResponse, status_code=201)
+    async def upload_session_attachment(
+        session_id: str,
+        file: UploadFile = File(...),
+        user: UserContext = Depends(resolve_user_context),
+        session_service: ApiSessionService = Depends(get_session_service),
+        attachment_service: AttachmentService = Depends(get_attachment_service),
+        storage: ChatAttachmentStorage = Depends(get_attachment_storage),
+        settings: Settings = Depends(get_settings),
+    ) -> AttachmentResponse:
+        record = await attachment_orchestration.upload_attachment(
+            session_service=session_service,
+            attachment_service=attachment_service,
+            storage=storage,
+            settings=settings,
+            user_id=user.user_id,
+            session_id=session_id,
+            upload_file=file,
+        )
+        return _attachment_response(record)
+
+    @app.get("/api/attachments/{attachment_id}", response_model=AttachmentResponse)
+    async def get_attachment_metadata(
+        attachment_id: str,
+        user: UserContext = Depends(resolve_user_context),
+        attachment_service: AttachmentService = Depends(get_attachment_service),
+    ) -> AttachmentResponse:
+        record = await attachment_orchestration.get_attachment_metadata(attachment_service, user.user_id, attachment_id)
+        return _attachment_response(record)
+
+    @app.get("/api/attachments/{attachment_id}/content")
+    async def get_attachment_content(
+        attachment_id: str,
+        user: UserContext = Depends(resolve_user_context),
+        attachment_service: AttachmentService = Depends(get_attachment_service),
+        storage: ChatAttachmentStorage = Depends(get_attachment_storage),
+    ) -> Response:
+        data, record = await attachment_orchestration.get_attachment_content(
+            attachment_service, storage, user.user_id, attachment_id
+        )
+        safe_filename = _content_disposition_filename(record.original_filename)
+        return Response(
+            content=data,
+            media_type=record.mime_type,
+            headers={
+                "Content-Disposition": f'inline; filename="{safe_filename}"',
+                "Cache-Control": "private",
+            },
+        )
 
     return app
 

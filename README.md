@@ -365,6 +365,9 @@ Backend configuration is read from process environment variables
 | `SLOPANOC_KNOWLEDGE_DATABASE_URL` | SQLAlchemy async URL for Governed Knowledge persistence (separate setting — see [Local Cloud SQL PostgreSQL development](#local-cloud-sql-postgresql-development)) | `sqlite+aiosqlite:///./slopanoc_knowledge.db` |
 | `SLOPANOC_KNOWLEDGE_DATABASE_SECRET_RESOURCE` | Secret Manager resource for the Knowledge database URL (deployment) | none |
 | `SLOPANOC_CHAT_ATTACHMENTS_BUCKET` | Private GCS bucket name for durable chat attachment binaries (POST-5.1 B1+) | none — attachment storage unavailable when unset; ordinary text chat is unaffected |
+| `SLOPANOC_CHAT_ATTACHMENT_MAX_BYTES` | Max single image upload size, enforced (POST-5.1 B2) | `8388608` (8 MiB) |
+| `SLOPANOC_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN` | Max images per message turn — defined, not yet enforced (future B5) | `4` |
+| `SLOPANOC_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN` | Max combined image bytes per turn — defined, not yet enforced (future B5) | `16777216` (16 MiB) |
 | `SLOPANOC_CASE_CONTEXT_MAX_ITEMS` | Max Case context items shown to the model | `12` |
 | `SLOPANOC_CASE_CONTEXT_MAX_CHARACTERS` | Max Case context characters shown to the model | `4000` |
 | `SLOPANOC_MODEL_WARMUP_ENABLED` | Warm up the model client on startup | `true` |
@@ -544,11 +547,11 @@ and [Current limitations](#current-limitations--production-readiness).
 
 **Next — POST-5.1 B: multimodal attachments.** STARTED, not complete.
 Locked execution sequence (do not reorder): B0 [done] architecture + ADK
-persistence audit → **B1 [done] Persistent Attachment Foundation** → B2
-Attachment Upload/Retrieve API → B3 Complete Existing Frontend Attachment
-UX → B4 Saved Conversation/Attachment Rehydration → B5 Gemini/ADK
-Multimodal Runtime → B6 Image + Teams + KM Operational Reasoning → B7
-Lifecycle + Real UI + Full Regression.
+persistence audit → B1 [done] Persistent Attachment Foundation →
+**B2 [done] Attachment Upload/Retrieve API** → B3 Complete Existing
+Frontend Attachment UX → B4 Saved Conversation/Attachment Rehydration →
+B5 Gemini/ADK Multimodal Runtime → B6 Image + Teams + KM Operational
+Reasoning → B7 Lifecycle + Real UI + Full Regression.
 
 Product model: normal SENT chat attachments are real saved conversation
 resources, not a current-turn-only demo. Unsent draft = browser
@@ -578,6 +581,29 @@ and a private GCS bucket (`slopanoc-chat-attachments-sandbox01`,
 `europe-west4`, uniform bucket-level access, public access prevention
 enforced, no object versioning). No HTTP upload/retrieve endpoints, no
 frontend changes, and no Gemini/ADK wiring yet — those are B2+.
+
+B2 added real endpoints, still with no frontend/Gemini/ADK wiring:
+
+- `POST /api/sessions/{session_id}/attachments` — multipart image
+  upload. Validates the *actual* decoded image (Pillow — PNG/JPEG/WebP
+  only; a declared `Content-Type` that doesn't match the real decoded
+  format is rejected, never silently reinterpreted), enforces a bounded
+  read against `SLOPANOC_CHAT_ATTACHMENT_MAX_BYTES` (default 8 MiB) so a
+  client can never bypass the limit by lying about size, writes to
+  private GCS, then records a `READY` Cloud SQL row — a GCS object is
+  never referenced by a database row until it definitely exists, and a
+  best-effort GCS delete runs immediately if the database write then
+  fails.
+- `GET /api/attachments/{attachment_id}` / `.../content` — frontend-safe
+  metadata and the actual image bytes (streamed through this backend,
+  never a public or signed URL), both authorized by attachment ownership
+  — a wrong-user or unknown id gets the same safe 404 either way.
+
+`backend/config/settings.py` gained `SLOPANOC_CHAT_ATTACHMENT_MAX_BYTES`
+(enforced) plus `SLOPANOC_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN`/
+`SLOPANOC_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN` (defined now, not yet
+enforced anywhere — ready for B5's message-send validation).
+`python-multipart` and `Pillow` are now direct pinned dependencies.
 
 **Then — A5: real TELCO/RAN MOP ingestion** (after Attachments completes
 in full, not just B1). A5 ingests the 3 real TELCO/RAN MOPs through the

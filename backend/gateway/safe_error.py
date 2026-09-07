@@ -25,6 +25,8 @@ ErrorCode = Literal[
     "action_failure",
     "not_found",
     "rate_limited",
+    "payload_too_large",
+    "unsupported_media_type",
     "internal_error",
 ]
 
@@ -39,6 +41,11 @@ _RETRYABLE: dict[ErrorCode, bool] = {
     "action_failure": False,
     "not_found": False,
     "rate_limited": True,
+    # Neither is retryable as-is: the exact same file will always be
+    # too large / the wrong format again -- the client must change what
+    # it sends (a different/smaller file), not merely retry.
+    "payload_too_large": False,
+    "unsupported_media_type": False,
     "internal_error": True,
 }
 
@@ -121,6 +128,15 @@ def rate_limited(
     return SafeErrorException(SafeError(error_code="rate_limited", user_message=message))
 
 
+def connector_unavailable(message: str) -> SafeErrorException:
+    """A downstream connector this API depends on (Teams/Power Automate,
+    or -- POST-5.1 B2 -- private GCS attachment storage) is not
+    currently reachable/configured. `message` is required (no Teams-
+    specific default) since this is now used by more than one connector.
+    """
+    return SafeErrorException(SafeError(error_code="connector_unavailable", user_message=message))
+
+
 def validation_error(message: str) -> SafeErrorException:
     return SafeErrorException(SafeError(error_code="validation_error", user_message=message))
 
@@ -129,3 +145,15 @@ def internal_error(
     message: str = "Something went wrong handling this Teams request.",
 ) -> SafeErrorException:
     return SafeErrorException(SafeError(error_code="internal_error", user_message=message))
+
+
+def payload_too_large(
+    message: str = "The uploaded file is too large.",
+) -> SafeErrorException:
+    return SafeErrorException(SafeError(error_code="payload_too_large", user_message=message))
+
+
+def unsupported_media_type(
+    message: str = "The uploaded file is not a supported image type.",
+) -> SafeErrorException:
+    return SafeErrorException(SafeError(error_code="unsupported_media_type", user_message=message))

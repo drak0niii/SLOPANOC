@@ -374,7 +374,15 @@ POST-5.1 B execution sequence (locked, do not reorder):
       foundation (`slopanoc-chat-attachments-sandbox01`, europe-west4),
       `backend/attachments/{models,repository,service,storage}.py`. No
       HTTP endpoints, no frontend, no Gemini/ADK wiring yet.
-  B2  Attachment Upload/Retrieve API
+  B2 [DONE] Attachment Upload/Retrieve API -- multipart image upload
+      (`POST /api/sessions/{session_id}/attachments`), Pillow-validated
+      (actual-format decode, declared-vs-actual MIME match, PNG/JPEG/WebP
+      only), private GCS write + Cloud SQL `READY` row, authenticated
+      metadata/content retrieval (`GET /api/attachments/{id}[/content]`),
+      GCS calls off the event loop (`run_in_threadpool`), best-effort GCS
+      cleanup on DB-insert failure. No frontend, no `attachment_ids` on
+      message-send, no `Part.from_uri` construction in the live chat path
+      yet.
   B3  Complete Existing Frontend Attachment UX
   B4  Saved Conversation / Attachment Rehydration
   B5  Gemini/ADK Multimodal Runtime
