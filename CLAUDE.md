@@ -283,20 +283,33 @@ CURRENT PERSISTENCE / RUNTIME
   defaults to SQLite unless `SLOPANOC_DATABASE_URL`/
   `SLOPANOC_KNOWLEDGE_DATABASE_URL` explicitly select PostgreSQL — SQLite
   remains the zero-setup default, never silently overridden.
-- POST-5.1 A (Cloud SQL PostgreSQL foundation, A1–A2): a Cloud SQL
+- POST-5.1 A — Cloud SQL PostgreSQL (A1–A4) is COMPLETE. A Cloud SQL
   PostgreSQL 18 instance (`sloc-anoc-sandbox01`, project
   `pr-msn-dev-gl-slopai-01`, region `europe-west4`) and its `slopanoc`
-  database exist, with IAM database authentication proven locally through
-  the Cloud SQL Auth Proxy v2. `resolve_knowledge_database_url()` now
-  supports the same `*_SECRET_RESOURCE` Secret Manager fallback
-  `resolve_database_url()` already had. An Alembic migration foundation
-  (`alembic/`) now owns one baseline migration reproducing the current
-  Case/Fault + Governed Knowledge schema exactly, validated only against a
-  disposable local SQLite database — ADK's own session tables remain
-  outside Alembic's scope, self-managed as before. None of this has been
-  applied to Cloud SQL yet, and the running application still defaults to
-  SQLite locally — this is infrastructure/migration-file readiness, not a
-  cutover. Do not imply Cloud SQL is the live persistence backend.
+  database exist, with IAM database authentication (Cloud SQL Auth Proxy
+  v2, no DB password) as the local Cloud SQL development path.
+  `resolve_knowledge_database_url()` supports the same `*_SECRET_RESOURCE`
+  Secret Manager fallback `resolve_database_url()` already had. Alembic
+  (`alembic/`) manages ONLY the SLOPANOC-owned Case/Fault + Governed
+  Knowledge schema (`slopanoc_cases`, `slopanoc_case_memberships`,
+  `slopanoc_case_session_links`, `slopanoc_case_context_items`,
+  `slopanoc_knowledge_objects`) and has been applied to Cloud SQL. ADK
+  owns its own session schema (`sessions`, `events`, `app_states`,
+  `user_states`, `adk_internal_metadata`) entirely independently — Alembic
+  must never manage it. A dedicated least-privilege PostgreSQL role
+  architecture exists (`slopanoc_migrator` for schema/migration authority,
+  `slopanoc_runtime` for application DML only, no `CREATE`); the developer
+  IAM identity currently holds both roles for local development only, not
+  as a statement about the future production runtime identity. The real
+  SLOPANOC FastAPI runtime has been validated end-to-end against Cloud
+  SQL: ADK session persistence, Case/Fault Context, the approval/session-
+  state persistence mechanism, and the Governed Knowledge repository all
+  proven to persist correctly, including surviving a backend restart, with
+  local SQLite confirmed untouched during that validation. SQLite remains
+  the zero-setup LOCAL DEFAULT when `SLOPANOC_DATABASE_URL`/
+  `SLOPANOC_KNOWLEDGE_DATABASE_URL` are not explicitly set to PostgreSQL —
+  that default behavior is unrelated to whether Cloud SQL support itself
+  is implemented and proven, which it now is.
 - Case/fault context (backend/cases/) is a separate, optional persistence
   layer from ordinary session/chat state — do not conflate the two.
 - Streaming is real SSE, with a background-task turn model — a turn runs as
@@ -322,10 +335,14 @@ exist yet:
 - enterprise authentication
 - per-user Microsoft identity / delegated Graph (Power Automate currently
   runs as its own configured connection identity, not per-user)
-- production database cutover/migration execution — Cloud SQL PostgreSQL
-  infrastructure and Alembic migration files exist (POST-5.1 A1–A2), but
-  no migration has been applied to Cloud SQL and the application has not
-  been cut over from its local SQLite default
+- production deployment identity/configuration — local Cloud SQL
+  validation (POST-5.1 A) used the developer's own IAM identity, a member
+  of both `slopanoc_migrator` and `slopanoc_runtime`; a future deployment
+  needs a dedicated runtime service account mapped only to
+  `slopanoc_runtime`, and Secret Manager-based DB URL configuration is not
+  yet exercised for Cloud SQL (Secret Manager fallback code exists, but
+  local Cloud SQL development so far has used shell environment variables
+  only)
 - distributed runtime coordination
 - production observability/alerting
 - load/concurrency validation
@@ -343,6 +360,35 @@ LOCKED ROADMAP — do not reorder
 
 CURRENT: Teams integration, core platform, and Markdown rendering are
 complete.
+
+CURRENT (out-of-band milestone, inserted between the LOCAL GIT CHECKPOINT
+below and Phase 4H — does not reorder anything in this locked list):
+POST-5.1 A — CLOUD SQL POSTGRESQL (A1–A4) is COMPLETE. Next is POST-5.1 B
+(multimodal attachments), then A5 (real TELCO/RAN MOP ingestion — moved
+to AFTER Attachments; the 3 real TELCO/RAN MOPs are ingested only once
+Attachments is complete), before Phase 4H security hardening proceeds.
+
+The CURRENT next milestone is POST-5.1 B — MULTIMODAL ATTACHMENTS (not yet
+started — planning/documentation only at this point). Scope: paste a
+temporary screenshot into SLOPANOC, image upload, composer preview/
+remove, React → FastAPI image transport, Gemini multimodal input, text +
+image in the same turn, and Teams + KM + image reasoning where relevant.
+
+Locked persistence rule for POST-5.1 B and beyond:
+  - a temporary user screenshot → NO Cloud Storage required
+  - a governed knowledge image → Cloud Storage required
+  - persistent incident evidence → Cloud Storage required
+
+A5 — REAL TELCO/RAN MOP INGESTION now follows POST-5.1 B, not the other
+way around. A5 ingests the 3 real TELCO/RAN MOPs through the existing,
+unchanged Generic KM pipeline (MOP → source adapter/import boundary →
+IngestedKnowledgeDocument → processing → governance → KnowledgeRepository
+→ Cloud SQL PostgreSQL) — it is a separate milestone from Attachments, not
+part of it. If a MOP contains images, its text/metadata/governed content
+still goes to Cloud SQL PostgreSQL and any governed knowledge image goes
+to Cloud Storage per the rule above — but the actual image extraction/
+storage mechanics belong to A5's own future implementation pass, not
+POST-5.1 B and not this docs-only correction.
 
 NEXT:
 

@@ -464,12 +464,21 @@ SLOPANOC is not production-ready. Known gaps include at least:
   configured connection identity, not a delegated per-user Microsoft Graph
   identity. If per-user Teams permissions are required, this needs design
   work.
-- **Production database cutover** — SQLite remains the local-development
-  default. A Cloud SQL PostgreSQL instance/database and IAM connectivity
-  exist (see [Local Cloud SQL PostgreSQL development](#local-cloud-sql-postgresql-development)),
-  and an Alembic migration foundation exists for the Case/Fault + Governed
-  Knowledge schema, but no migration has been applied to Cloud SQL and the
-  application has not been cut over.
+- **Production deployment identity/configuration** — Cloud SQL PostgreSQL
+  support is implemented and validated end-to-end (see
+  [Local Cloud SQL PostgreSQL development](#local-cloud-sql-postgresql-development)):
+  SLOPANOC-owned schemas (Case/Fault + Governed Knowledge) are
+  Alembic-managed and applied to Cloud SQL; ADK's own session schema is
+  self-managed by ADK and intentionally excluded from Alembic; the real
+  FastAPI runtime has been proven against Cloud SQL, including session/
+  Case/Knowledge persistence surviving a backend restart. SQLite remains
+  the local zero-setup default when `SLOPANOC_DATABASE_URL`/
+  `SLOPANOC_KNOWLEDGE_DATABASE_URL` are not set. What's still missing:
+  local Cloud SQL validation so far used the developer's own IAM identity
+  (a member of both the `slopanoc_migrator` and `slopanoc_runtime`
+  database roles); a real deployment needs a dedicated runtime service
+  account scoped only to `slopanoc_runtime`, and Secret Manager-based DB
+  URL configuration for Cloud SQL has not yet been exercised.
 - **Distributed runtime coordination** — the backend assumes a single
   process; multi-instance coordination (session affinity, distributed
   cancellation, etc.) is not addressed.
@@ -524,8 +533,37 @@ outside Generic KM itself, with server-owned, run-id-keyed trusted
 evidence state; Team Manager remains untouched and receives neither
 tool) are implemented, with the full contract documented in
 [`docs/KNOWLEDGE_CONTRACT.md`](docs/KNOWLEDGE_CONTRACT.md). Phase 5.1 is
-now complete; Phase 4H security hardening is next per the locked
-roadmap.
+now complete.
+
+**Then — POST-5.1 A: Cloud SQL PostgreSQL.** ✅ COMPLETE (A1–A4). Cloud
+SQL PostgreSQL foundation, IAM connectivity, database roles/schema
+bootstrap, and real runtime cutover + persistence validation — see
+[Local Cloud SQL PostgreSQL development](#local-cloud-sql-postgresql-development)
+and [Current limitations](#current-limitations--production-readiness).
+
+**Next — POST-5.1 B: multimodal attachments** (not yet started — planning/
+documentation only at this point). Scope: paste a temporary screenshot
+into SLOPANOC, image upload, composer preview/remove, React → FastAPI
+image transport, Gemini multimodal input, text + image in the same turn,
+and Teams + KM + image reasoning where relevant.
+
+Locked persistence rule for Attachments and beyond:
+- a temporary user screenshot → no Cloud Storage required
+- a governed knowledge image → Cloud Storage required
+- persistent incident evidence → Cloud Storage required
+
+**Then — A5: real TELCO/RAN MOP ingestion** (moved to AFTER Attachments —
+the 3 real TELCO/RAN MOPs are ingested only once Attachments is
+complete). A5 ingests them through the existing, unchanged Generic KM
+pipeline (MOP → source adapter/import boundary → `IngestedKnowledgeDocument`
+→ processing → governance → `KnowledgeRepository` → Cloud SQL PostgreSQL)
+— a separate milestone from Attachments, not part of it. If a MOP contains
+images, its text/metadata/governed content still goes to Cloud SQL
+PostgreSQL and any governed knowledge image goes to Cloud Storage per the
+rule above, but the actual image extraction/storage mechanics belong to
+A5's own future implementation pass.
+
+**Then** — Phase 4H security hardening proceeds per the locked roadmap.
 
 ```mermaid
 flowchart TD
