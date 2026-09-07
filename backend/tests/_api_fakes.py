@@ -84,12 +84,25 @@ class FakeEvent:
         function_calls: Optional[list[Any]] = None,
         function_responses: Optional[list[Any]] = None,
         thought: bool = False,
+        invocation_id: str = _TEST_INVOCATION_ID,
     ) -> None:
         self.content = FakeContent([FakePart(text, thought=thought)]) if text is not None else None
         self.partial = partial
         self._final = final
         self._function_calls = function_calls or []
         self._function_responses = function_responses or []
+        # POST-5.1 B4B -- `chat_service.py` reads `event.invocation_id`
+        # directly off the first event yielded by `run_async` (to look up
+        # that turn's real user event for `chat_activity_at`). Defaults to
+        # the same constant `persist_state_delta`-authored fixture events
+        # already reference; deliberately NOT the actual invocation_id
+        # `FakeRunner`'s own `persist_state_delta(session, {})` call
+        # generates internally (a fresh random uuid4 each time) -- tests
+        # never need those two to match, since `FakeRunner` never appends
+        # a genuine user-content event for `record_user_turn_activity` to
+        # find anyway (see that function's own documented, safe "no
+        # matching event" fallback).
+        self.invocation_id = invocation_id
 
     def get_function_calls(self) -> list[Any]:
         return self._function_calls

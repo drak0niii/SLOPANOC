@@ -476,3 +476,77 @@ class AttachmentResponse(BaseModel):
     mime_type: str
     size_bytes: int
     status: str
+
+
+# --- Saved conversation / history rehydration (POST-5.1 B4B) ---------------
+
+
+class SessionSummaryDTO(BaseModel):
+    """One row of `GET /api/sessions` (the saved-chat sidebar list).
+    Deliberately excludes `state`/`events`/`user_id`/`app_name`/any
+    database id -- see `history_service.py`'s module docstring for why
+    `title`/`updated_at` are the only two derived fields cheap enough to
+    include without triggering a per-session event read. No
+    `last_message_preview` -- there is no source for one within that same
+    cheap, state-only cost model (B4A finding, unchanged by the
+    correction pass); do not add one by triggering event reads per row.
+    """
+
+    session_id: str
+    title: str
+    updated_at: str
+
+
+class SessionListResponse(BaseModel):
+    sessions: list[SessionSummaryDTO] = Field(default_factory=list)
+
+
+class AttachmentHistoryDTO(BaseModel):
+    """The frontend-safe view of a LINKED attachment inside a rehydrated
+    transcript. Deliberately the same shape discipline as
+    `AttachmentResponse` (never `storage_object_name`/`gs://`/`bucket`/
+    `owner_user_id`/`sha256`) but a distinct model -- a history-context
+    attachment is always LINKED (never READY/DELETED), and `status` has
+    no consumer here, so it is omitted rather than reused as-is.
+    """
+
+    attachment_id: str
+    filename: str
+    mime_type: str
+    size_bytes: int
+
+
+class SessionHistoryMessageDTO(BaseModel):
+    """One projected, safe transcript entry. `message_id` and `turn_id`
+    are deliberately DIFFERENT identities (B4A correction pass) --
+    `turn_id` is the ADK `invocation_id` shared by a user message and its
+    final assistant reply; `message_id` is the derived, role-suffixed,
+    collision-free identity (`f"{turn_id}:user"`/`f"{turn_id}:assistant"`)
+    safe to use as a React `Record<string, Message>` key. `attachments`
+    is only ever non-empty for `role == "user"` -- see
+    `history_service.py`'s attachment-join logic.
+    """
+
+    message_id: str
+    turn_id: str
+    role: Literal["user", "assistant"]
+    text: str
+    created_at: str
+    attachments: list[AttachmentHistoryDTO] = Field(default_factory=list)
+
+
+class SessionHistoryResponse(BaseModel):
+    session_id: str
+    messages: list[SessionHistoryMessageDTO] = Field(default_factory=list)
+
+
+class RenameSessionRequest(BaseModel):
+    """Body for `PATCH /api/sessions/{session_id}` (POST-5.1 B4B). Plain
+    length/emptiness validation happens here (Pydantic); the additional,
+    business-meaningful bound (`MAX_MANUAL_TITLE_LENGTH`) and whitespace
+    normalization are applied in `history_service.rename_session` --
+    kept there, not here, since it is a deliberate product decision
+    (never silently truncate a manual rename), not a wire-shape concern.
+    """
+
+    title: str = Field(min_length=1)

@@ -13,6 +13,7 @@ import pytest
 from backend.approval.service import PENDING_ACTION_PROPOSAL_STATE_KEY
 from backend.gateway.safe_error import SafeErrorException
 from backend.api.session_service import ApiSessionService, get_session_service
+from backend.api.session_state_keys import HAS_VISIBLE_MESSAGE_STATE_KEY
 
 
 @pytest.mark.asyncio
@@ -24,11 +25,17 @@ async def test_create_session_returns_a_generated_id() -> None:
 
 
 @pytest.mark.asyncio
-async def test_created_session_starts_with_empty_state() -> None:
+async def test_created_session_starts_with_only_the_b4b_visibility_marker() -> None:
+    """POST-5.1 B4B: every new session now starts with `has_visible_
+    message=False` (see `session_service.create_session`'s own docstring
+    for the tri-state saved-chat-list rationale) -- no longer genuinely
+    empty state, but still no `chat_title` or any other key until a real
+    first turn happens.
+    """
     service = ApiSessionService()
     session_id = await service.create_session()
     session = await service.get_session(session_id)
-    assert dict(session.state) == {}
+    assert dict(session.state) == {HAS_VISIBLE_MESSAGE_STATE_KEY: False}
 
 
 @pytest.mark.asyncio

@@ -155,6 +155,13 @@ class AttachmentService:
         (instruction: "READY, not deleted" -- `LINKED`/`DELETED` are both
         rejected here as "not READY", so a caller can never re-link an
         already-linked or link a deleted attachment).
+
+        POST-5.1 B4A/B4B: `message_id` must be the owning user turn's ADK
+        `invocation_id` -- see `models.py`'s `ChatAttachmentRecord
+        .message_id` docstring for the full semantic and why it is NOT
+        the frontend-visible history message id. Not called anywhere in
+        production yet (that's B5's job, wiring `attachment_ids` into a
+        real message send) -- B4B only ever READS via `list_for_message`.
         """
         record = await self._require_owned(attachment_id, owner_user_id, session_id)
         if record.status != ChatAttachmentStatus.READY.value:

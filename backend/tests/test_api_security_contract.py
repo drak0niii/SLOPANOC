@@ -216,6 +216,13 @@ def test_only_the_expected_routes_exist() -> None:
         "/api/sessions/{session_id}/attachments",
         "/api/attachments/{attachment_id}",
         "/api/attachments/{attachment_id}/content",
+        # POST-5.1 B4B -- safe saved-conversation list/history rehydration
+        # (session_history_service.py) plus durable manual rename. Never
+        # raw ADK state/events; ownership-scoped identically to every
+        # other session route. GET /api/sessions itself needs no new
+        # entry -- that path already exists (POST, above).
+        "/api/sessions/{session_id}",
+        "/api/sessions/{session_id}/history",
         "/openapi.json",
         "/docs",
         "/docs/oauth2-redirect",
@@ -256,7 +263,12 @@ def test_rewind_endpoint_only_accepts_a_turn_index_field() -> None:
 
 def test_session_route_methods_are_exactly_as_expected() -> None:
     methods = _all_methods_by_path()
-    assert methods["/api/sessions"] == {"POST"}
+    # POST-5.1 B4B added GET (the saved-chat list) alongside the existing
+    # POST (create) on the same path.
+    assert methods["/api/sessions"] == {"POST", "GET"}
+    # POST-5.1 B4B -- durable manual rename only; no GET-by-id/DELETE route.
+    assert methods["/api/sessions/{session_id}"] == {"PATCH"}
+    assert methods["/api/sessions/{session_id}/history"] == {"GET"}
     assert methods["/api/sessions/{session_id}/messages"] == {"POST"}
     assert methods["/api/sessions/{session_id}/messages/stream"] == {"POST"}
     assert methods["/api/sessions/{session_id}/runs/{run_id}/cancel"] == {"POST"}

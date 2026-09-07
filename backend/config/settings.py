@@ -55,6 +55,12 @@ _CHAT_ATTACHMENTS_BUCKET_ENV_VAR = "SLOPANOC_CHAT_ATTACHMENTS_BUCKET"
 _CHAT_ATTACHMENT_MAX_BYTES_ENV_VAR = "SLOPANOC_CHAT_ATTACHMENT_MAX_BYTES"
 _CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN_ENV_VAR = "SLOPANOC_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN"
 _CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN_ENV_VAR = "SLOPANOC_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN"
+# POST-5.1 B4B: ADK's own `list_sessions` has no pagination primitive at
+# all (verified against the installed 1.33.0 source) -- this is a bounded
+# "recent saved-chat list" cap, not real pagination. Also bounds the
+# one-time legacy-session backfill scan (B4A correction pass) to the same
+# candidate set, so that scan can never grow unbounded either.
+_SAVED_CHAT_LIST_LIMIT_ENV_VAR = "SLOPANOC_SAVED_CHAT_LIST_LIMIT"
 
 # Matches google.adk.agents.llm_agent.LlmAgent.DEFAULT_MODEL in the
 # installed ADK (1.33.0) -- not an independently invented default.
@@ -129,6 +135,7 @@ _DEFAULT_CASE_CONTEXT_MAX_CHARACTERS = 4000
 # to invent one later.
 _DEFAULT_CHAT_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024  # 8 MiB
 _DEFAULT_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN = 4
+_DEFAULT_SAVED_CHAT_LIST_LIMIT = 50
 _DEFAULT_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN = 16 * 1024 * 1024  # 16 MiB
 
 
@@ -312,6 +319,16 @@ class Settings:
         """
         raw = self._env.get(_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN_ENV_VAR)
         return int(raw) if raw else _DEFAULT_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN
+
+    @property
+    def saved_chat_list_limit(self) -> int:
+        """POST-5.1 B4B: the recent-N cap for `GET /api/sessions` (and the
+        legacy-marker backfill scan bounded to the same candidate set) --
+        NOT real pagination, since ADK's `list_sessions` has none to build
+        one on top of. Default 50.
+        """
+        raw = self._env.get(_SAVED_CHAT_LIST_LIMIT_ENV_VAR)
+        return int(raw) if raw else _DEFAULT_SAVED_CHAT_LIST_LIMIT
 
     def resolve_power_automate_gateway_url(self) -> str:
         """Resolve the Power Automate gateway URL. Never log the result."""

@@ -60,6 +60,20 @@ class ChatAttachmentRecord(Base):
     session_id: Mapped[str] = mapped_column(Text)
     # Nullable until linked to the user message it belongs to (instruction
     # section 4/9: upload may happen before a message_id exists).
+    #
+    # POST-5.1 B4A/B4B SEMANTIC (locked, no schema change): despite the
+    # column name, this stores the owning USER TURN's ADK `invocation_id`
+    # -- i.e. `SessionHistoryMessageDTO.turn_id`, NEVER the frontend-
+    # visible `SessionHistoryMessageDTO.message_id` (which is the
+    # deterministic `f"{invocation_id}:user"`/`f"{invocation_id}:assistant"`
+    # string; B4A's correction pass explains why: ADK's own internal user-
+    # content `Event.id` is never observable by this backend without an
+    # awkward extra round trip, whereas `invocation_id` is directly
+    # observable on every event yielded during a turn). B4B's history
+    # projection groups attachments by this same turn identity via
+    # `AttachmentService.list_for_message(session_id, invocation_id)` --
+    # see `backend/api/session_history_service.py`. Do not confuse the
+    # two identities when touching this column.
     message_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     original_filename: Mapped[str] = mapped_column(Text)
     mime_type: Mapped[str] = mapped_column(Text)

@@ -368,6 +368,7 @@ Backend configuration is read from process environment variables
 | `SLOPANOC_CHAT_ATTACHMENT_MAX_BYTES` | Max single image upload size, enforced (POST-5.1 B2) | `8388608` (8 MiB) |
 | `SLOPANOC_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN` | Max images per message turn — defined, not yet enforced (future B5) | `4` |
 | `SLOPANOC_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN` | Max combined image bytes per turn — defined, not yet enforced (future B5) | `16777216` (16 MiB) |
+| `SLOPANOC_SAVED_CHAT_LIST_LIMIT` | Recent-N cap for `GET /api/sessions` and its legacy-marker backfill scan (POST-5.1 B4B) — not real pagination, ADK's `list_sessions` has none | `50` |
 | `SLOPANOC_CASE_CONTEXT_MAX_ITEMS` | Max Case context items shown to the model | `12` |
 | `SLOPANOC_CASE_CONTEXT_MAX_CHARACTERS` | Max Case context characters shown to the model | `4000` |
 | `SLOPANOC_MODEL_WARMUP_ENABLED` | Warm up the model client on startup | `true` |
@@ -545,13 +546,126 @@ bootstrap, and real runtime cutover + persistence validation — see
 [Local Cloud SQL PostgreSQL development](#local-cloud-sql-postgresql-development)
 and [Current limitations](#current-limitations--production-readiness).
 
-**Next — POST-5.1 B: multimodal attachments.** IN PROGRESS (B0–B3 done).
+**Next — POST-5.1 B: multimodal attachments.** IN PROGRESS (B0–B4B done,
+B4C next).
 Locked execution sequence (do not reorder): B0 [done] architecture + ADK
 persistence audit → B1 [done] Persistent Attachment Foundation → B2
-[done] Attachment Upload/Retrieve API → **B3 [done] Complete Existing
-Frontend Attachment UX** → B4 Saved Conversation/Attachment Rehydration →
-B5 Gemini/ADK Multimodal Runtime → B6 Image + Teams + KM Operational
-Reasoning → B7 Lifecycle + Real UI + Full Regression.
+[done] Attachment Upload/Retrieve API → B3 [done] Complete Existing
+Frontend Attachment UX → **B4 Saved Conversation/Attachment Rehydration**
+(B4A [done] architecture + ADK event audit, B4B [DONE] backend safe
+session-list/history API — including a runtime defect found and fixed via
+live smoke, see below, and closed by a full, real end-to-end validation
+pass: real Vertex Gemini 2.5 Flash, real Cloud SQL PostgreSQL, real
+FastAPI/ADK runtime, real backend restart — B4C next: frontend saved-chat
+list + lazy transcript hydration, B4D: attachment-reference hydration +
+restart/rewind/live validation) → B5 Gemini/ADK Multimodal Runtime → B6
+Image + Teams + KM Operational Reasoning → B7 Lifecycle + Real UI + Full
+Regression.
+
+B4B added two new backend modules and three new routes, backend-only (no
+frontend change): `GET /api/sessions` (the caller's own saved-chat list --
+safe `{session_id, title, updated_at}` summaries), `GET /api/sessions/{id}/history`
+(the safe, active-branch-only transcript for one session — reuses
+`chat_service.py`'s already-tested rewind-filtering/final-text-extraction
+logic verbatim, never a second implementation; excludes function
+calls/responses/thought parts/state-only events; attaches LINKED image
+references via exactly one ownership-scoped query per request), and
+`PATCH /api/sessions/{id}` (a durable manual rename — the existing
+frontend rename was local-only and would have been silently overwritten
+by a derived title on next refresh). A session is only listed once it has
+a genuine user-visible message — `has_visible_message` is a tri-state ADK
+session-state marker (`True`/`False`/absent) set to `False` on every new
+session. The real user-content event for a turn is proven durably
+persisted at the first event the Runner yields, but SLOPANOC defers its
+own saved-chat state mutation (`has_visible_message`/`chat_title`/
+`chat_activity_at`) until the active Runner invocation has fully
+terminated, preserving ADK's single-writer/session-revision lifecycle — a
+live production incident proved that an external `get_session()`/
+`append_event()` call made *while* `Runner.run_async` was still yielding
+further events for the same invocation raced ADK's own session-revision
+tracking and broke the Runner's own next internal append (e.g. a tool's
+function-response), surfacing as a generic failure with no model
+continuation. The marker is still flipped to `True` for a failed or
+cancelled turn — the deferred write happens from this method's own
+`finally` block, so it still runs after a failure, just never while the
+Runner is still active — and a crash before that deferred write can run
+is covered by the existing legacy-marker backfill. A session created
+before B4B (marker absent) is bounded, one-time backfilled on its next
+list rather than hidden forever.
+
+**`updated_at`/sidebar ordering — correction pass.** `SessionSummaryDTO
+.updated_at` is `chat_activity_at`, a dedicated session-state timestamp
+this codebase now maintains itself — **never** ADK's own generic `Session
+.last_update_time`. The generic ADK timestamp also moves on unrelated
+state-only writes this codebase already performs elsewhere (an approval
+transition, a Teams-selection sync, a Case link, a manual rename, or this
+very feature's own legacy-marker repair), which would otherwise
+incorrectly bump an untouched old conversation to the top of the sidebar.
+`chat_activity_at` is set/advanced ONLY by a genuine user chat turn, to
+that turn's own real, already-persisted `Event.timestamp` — a manual
+rename changes `chat_title` and nothing else; a legacy conversation is
+backfilled using its LATEST still-active turn (never its first, and never
+a turn a rewind has since discarded). The saved-chat list algorithm
+classifies every session from its cheap, already-loaded state BEFORE any
+limit is applied — `SLOPANOC_SAVED_CHAT_LIST_LIMIT` (default 50) bounds
+only the returned page size and the per-request legacy-repair budget
+(event reads), never the visibility classification itself, so no number
+of empty or not-yet-classified sessions can hide an older real saved
+conversation; unrepaired candidates are simply retried on a later
+request.
+
+Two distinct, deliberately non-interchangeable identities: `turn_id` (an
+ADK `invocation_id`) and `message_id` (`f"{turn_id}:user"`/
+`f"{turn_id}:assistant"` — never ADK's own internal `Event.id`, which this
+backend can't observe for a user event without an extra round trip). No
+schema migration — everything reuses ADK's own session-state mechanism
+and the already-existing `slopanoc_chat_attachments` read methods.
+Validated against real Cloud SQL PostgreSQL, including the correction
+pass: session creation, empty-session exclusion, a real turn becoming
+visible with a derived title and activity timestamp, a rename and an
+unrelated state-only write both leaving activity/ordering untouched, safe
+history projection, durable rename, survival across a simulated backend
+restart, and a real ADK rewind correctly narrowing both history and
+activity to the active branch.
+
+**Runtime defect found and fixed via live smoke.** The first live
+Gemini/Vertex smoke (a function-call tool turn) failed twice with a
+generic "could not complete this request" and no model continuation.
+Root-caused (without changing code first) by direct inspection of
+installed `google-adk==1.33.0`'s `Runner.run_async` event loop and
+`DatabaseSessionService.append_event`'s session-revision staleness check,
+confirmed by a disposable local reproduction against a real
+`DatabaseSessionService`, and corroborated by read-only inspection of the
+real failed Cloud SQL session (exactly the durable user event plus a
+bookkeeping event per attempt, and no function-call/model event ever
+persisted — consistent with the Runner's own next append failing). Fixed
+by deferring the saved-chat bookkeeping write to post-run finalization
+(see above), using the same re-fetch-then-write pattern already proven
+elsewhere in this codebase for the same class of bug
+(`_reload_and_persist_cleanup_delta`). Covered by
+`backend/tests/test_chat_service_function_call_continuation.py` (function-
+call continuation, no-final-answer, and multi-turn regressions, plus two
+tests proving the underlying ADK mechanism directly), the full backend
+suite (2557 passed, 1 skipped), and a real Cloud SQL fixture proving the
+post-run write persists and survives a simulated restart.
+
+**Final live closure.** The retry succeeded end-to-end against the real
+stack: real Vertex Gemini 2.5 Flash returned the requested reply
+("B4B smoke confirmed.") with normal model-call → assistant-text →
+generation-complete → source-requirements remediation → run-complete
+behavior and no recurrence of the earlier generic failure; `GET
+/api/sessions` listed the session with the correct derived title and a
+`chat_activity_at`-based `updated_at` sorted correctly against older
+sessions; `GET /api/sessions/{id}/history` returned exactly the two
+visible messages (`{turn_id}:user`/`{turn_id}:assistant`, correct real
+timestamps, no tool/function/internal event leakage); `PATCH
+/api/sessions/{id}` renamed the title while leaving `updated_at` exactly
+unchanged; and a full backend process restart preserved session
+visibility, the manual title, and `chat_activity_at` identically,
+including on a second history read. **B4B is DONE.** B4C (frontend
+wiring) has not started — there is still no user-visible saved-chat list
+or rehydration in the app today; the existing React chat-rename action
+remains local-only until B4C wires it to `PATCH /api/sessions/{id}`.
 
 Product model: normal SENT chat attachments are real saved conversation
 resources, not a current-turn-only demo. Unsent draft = browser

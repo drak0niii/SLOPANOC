@@ -112,6 +112,7 @@ from google.adk.events import Event, EventActions
 from google.adk.sessions import BaseSessionService, InMemorySessionService, Session
 
 from backend.api.execution_coordinator import SessionExecutionCoordinator
+from backend.api.session_state_keys import HAS_VISIBLE_MESSAGE_STATE_KEY
 from backend.config.settings import Settings, get_settings
 from backend.gateway.safe_error import not_found
 
@@ -173,10 +174,27 @@ class ApiSessionService:
         one, and there is no parameter here through which a client could
         seed initial ADK state (instruction: "Do not allow clients to
         inject arbitrary ADK state during creation.").
+
+        POST-5.1 B4B: every new session starts with `has_visible_message
+        =False` (via ADK's own `create_session(state=...)` initial-state
+        parameter -- not a separate `persist_state_delta` call, since the
+        session doesn't exist yet for one to target). This gives the
+        saved-chat list its tri-state marker semantics from the very
+        first moment a session exists: `False` (known empty) is now the
+        steady state for a brand-new session, so "marker missing entirely"
+        becomes an exclusively legacy (pre-B4B) condition rather than
+        something every new session briefly passes through -- see
+        `session_state_keys.py`'s own docstring for the full tri-state
+        rationale. `chat_title` is deliberately NOT initialized here -- it
+        has no meaningful value until a genuine first user message exists
+        (`session_state_keys.mark_session_visible_if_needed`).
         """
         session_id = str(uuid.uuid4())
         await self._adk.create_session(
-            app_name=APP_NAME, user_id=user_id, session_id=session_id, state={}
+            app_name=APP_NAME,
+            user_id=user_id,
+            session_id=session_id,
+            state={HAS_VISIBLE_MESSAGE_STATE_KEY: False},
         )
         return session_id
 
@@ -194,6 +212,31 @@ class ApiSessionService:
     async def session_exists(self, session_id: str, user_id: str = DEFAULT_USER_ID) -> bool:
         session = await self._adk.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
         return session is not None
+
+    async def list_sessions(self, user_id: str = DEFAULT_USER_ID) -> list[Session]:
+        """POST-5.1 B4B: the ONE place `list_sessions` is called, exactly
+        like `get_session`/`create_session` are the one place their own
+        ADK calls happen -- so `user_id` can never accidentally be
+        omitted at a call site far from this ownership-critical detail.
+
+        B4A CORRECTION-PASS FINDING, load-bearing: ADK's own
+        `BaseSessionService.list_sessions(*, app_name, user_id=None)`
+        treats `user_id=None` as "list every user's sessions for this
+        app" (verified against the installed 1.33.0 source) -- there is
+        no separate opt-in flag for that behavior, just an omitted
+        argument. This method's own signature has no way to omit it
+        (`user_id` is positional-with-default here, always passed
+        through), so that footgun cannot reach this codepath.
+
+        Returned `Session` objects have `events == []` (ADK strips them
+        for list results in both `InMemorySessionService` and
+        `DatabaseSessionService`) but a real, queryable `.state` dict and
+        `.last_update_time` -- see `session_state_keys.py`/
+        `session_history_service.py` for how the saved-chat list uses
+        exactly those two fields without ever reading events.
+        """
+        response = await self._adk.list_sessions(app_name=APP_NAME, user_id=user_id)
+        return list(response.sessions)
 
     async def persist_state_delta(self, session: Session, delta: dict[str, Any]) -> None:
         """Persist `delta` into `session`'s real, stored state via ADK's

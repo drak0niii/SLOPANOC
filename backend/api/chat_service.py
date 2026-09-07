@@ -145,6 +145,7 @@ from backend.api.perf_timing import DelegationTimer, PerfTimer, discard_model_ca
 from backend.api.run_trace import RunTraceRecorder
 from backend.api.schemas import ActiveCaseDTO, AssistantMessage, ChatResponse, PendingActionDTO
 from backend.api.session_service import APP_NAME, DEFAULT_USER_ID, ApiSessionService, get_session_service
+from backend.api.session_state_keys import record_user_turn_activity
 from backend.api.knowledge_source_reference import build_knowledge_source_references
 from backend.api.source_reference import TeamsSourceCapture, resolve_authoritative_contributors
 from backend.api.streaming_events import EventSequencer, Stage, StreamEvent, StreamEventType, status_data
@@ -729,6 +730,15 @@ class ChatService:
         status_cleared = False
         first_event_seen = False
         error: Optional[tuple[str, str]] = None
+        # POST-5.1 B4B DEFECT FIX -- captured (in-memory only, no session
+        # I/O) the moment the first event of a real turn is observed; the
+        # ACTUAL saved-chat bookkeeping write is deferred until this
+        # method's own `finally` block, once the Runner is fully done with
+        # this session for this turn. See that `finally` block's own
+        # comment, and session_state_keys.py's `record_user_turn_activity`
+        # docstring, for the full story of why a MID-run external
+        # `get_session()`/`append_event()` call is unsafe.
+        turn_invocation_id: Optional[str] = None
 
         # Snippet-authenticity fix: binds this turn's own `run_id` into
         # `turn_context`'s ContextVar for the DURATION of the runner call
@@ -906,6 +916,63 @@ class ChatService:
                         if not first_event_seen:
                             first_event_seen = True
                             perf.mark("first_model_event")
+                            # POST-5.1 B4B DEFECT FIX -- in-memory capture
+                            # ONLY. A LIVE PRODUCTION INCIDENT (real
+                            # Vertex/Gemini turn, function-call tool use)
+                            # proved that calling `get_session()`/
+                            # `append_event()` HERE -- while `turn_runner
+                            # .run_async`'s own generator is still
+                            # actively producing more events for this SAME
+                            # invocation -- corrupts ADK's session-
+                            # revision tracking out from under the
+                            # Runner's OWN internal session handle. The
+                            # Runner appends each of its own events
+                            # (`runners.py`: `append_event(session=
+                            # session, ...)` THEN `yield`) using ONE
+                            # session object held for the entire
+                            # invocation; an external `get_session()` +
+                            # `append_event()` call in between two of the
+                            # Runner's own appends bumps the stored
+                            # revision without the Runner's own handle
+                            # ever finding out, so the Runner's NEXT
+                            # internal append (e.g. the function's own
+                            # response, or the continuation call) hits
+                            # `DatabaseSessionService`'s "the session has
+                            # been modified in storage" staleness
+                            # `ValueError` -- silently swallowed by this
+                            # method's own outer `except Exception:`
+                            # below, surfacing to the user as the generic
+                            # "The assistant could not complete this
+                            # request" with NO further model continuation
+                            # and no logged cause. Proven both by direct
+                            # inspection of the installed ADK 1.33.0
+                            # source and by a disposable local
+                            # reproduction (`DatabaseSessionService` +
+                            # SQLite): an external append between two
+                            # Runner-held-session appends reliably
+                            # reproduces the exact same `ValueError`.
+                            #
+                            # THE FIX: `record_user_turn_activity` (the
+                            # actual bookkeeping write) is now called from
+                            # this method's own `finally` block instead --
+                            # strictly AFTER `turn_runner.run_async`'s
+                            # generator has fully closed (success,
+                            # failure, or cancellation all reach it) and
+                            # can therefore no longer be using its own
+                            # session handle for anything. Session-lock
+                            # discipline is preserved: `execute_turn_
+                            # events`'s own caller holds `lock_for(...)`
+                            # for this method's ENTIRE execution, `finally`
+                            # included, so no other turn on this session
+                            # can race the finalization write either.
+                            #
+                            # `event.invocation_id` is this turn's real,
+                            # ADK-assigned invocation id -- captured here
+                            # (a pure in-memory read, no I/O) so `finally`
+                            # can look up the matching genuine user event
+                            # and its own real `.timestamp` once it is
+                            # safe to do so.
+                            turn_invocation_id = event.invocation_id
 
                         status = translator.translate_event(event)
                         if status is not None:
@@ -1087,6 +1154,21 @@ class ChatService:
                     },
                     perf=perf,
                 )
+
+            # POST-5.1 B4B DEFECT FIX -- the saved-chat bookkeeping write
+            # itself, deferred here (see `turn_invocation_id`'s own
+            # capture-site comment above and `_finalize_user_turn_
+            # activity`'s docstring for the full story). Only fires when
+            # a genuine turn actually started (`turn_invocation_id` was
+            # captured from a real yielded event) -- a Runner that raised
+            # before yielding anything (the user-content append itself
+            # never completed) correctly leaves this session's visibility
+            # untouched. Runs on every real turn regardless of how it
+            # ended: normal completion, a caught exception (`error` is
+            # set above), or cancellation -- this `finally` block already
+            # runs on all three (see the BUGFIX comment at its own top).
+            if turn_invocation_id is not None:
+                await self._finalize_user_turn_activity(session_id, user_id, turn_invocation_id, message_text)
 
         perf.mark("generation_complete")
         if delegation_timer.call_count:
@@ -1436,6 +1518,59 @@ class ChatService:
             _logger.warning(
                 "chat_service: cleanup persist_state_delta failed after session reload "
                 "(session_id=%s) -- relying on next turn's crash-recovery sweep",
+                session_id,
+            )
+
+    async def _finalize_user_turn_activity(
+        self, session_id: str, user_id: str, invocation_id: str, message_text: str
+    ) -> None:
+        """POST-5.1 B4B DEFECT FIX -- the saved-chat bookkeeping write
+        (`has_visible_message`/`chat_title`/`chat_activity_at`), deferred
+        to run HERE, from `_run_turn_events`'s own `finally` block, AFTER
+        `turn_runner.run_async`'s generator has fully closed -- never
+        while it is still active.
+
+        SAME ROOT CAUSE, SAME FIX SHAPE, AS `_reload_and_persist_cleanup_
+        delta` ABOVE (that method's own docstring has the full ADK-
+        source-verified mechanism): a session object fetched before the
+        Runner ran is stale the instant the Runner appends anything
+        through its own, separate session handle. This method always
+        re-fetches fresh, exactly like that one -- the only difference is
+        WHAT gets written (`record_user_turn_activity`'s own decision,
+        session_state_keys.py) rather than a fixed cleanup delta.
+
+        A LIVE PRODUCTION INCIDENT (real Vertex/Gemini turn, a function-
+        call tool use) proved the ACTIVE-RUN version of this write is not
+        just theoretically risky but reliably fatal: it corrupted the
+        Runner's OWN session revision tracking mid-invocation, causing
+        the Runner's next internal append (the tool's function response)
+        to raise ADK's "session has been modified in storage" staleness
+        `ValueError` -- silently swallowed by `_run_turn_events`'s own
+        outer `except Exception:`, aborting the turn with no further
+        model continuation and the generic "The assistant could not
+        complete this request" message, with the true cause never
+        logged. Reproduced deterministically with a disposable local
+        `DatabaseSessionService` + SQLite fixture (see
+        test_chat_service_function_call_continuation.py).
+
+        NEVER RAISES: best-effort, exactly like `_reload_and_persist_
+        cleanup_delta` -- a failure here must never turn an otherwise-
+        successful (or already-failed-for-a-different-reason) turn into
+        a second, different failure. If this write is ever lost (a crash
+        between the Runner finishing and this call, or this call's own
+        failure), the session's `has_visible_message` marker either
+        stays absent (pre-existing sessions) or was already initialized
+        `False` at creation -- `session_history_service.py`'s bounded
+        legacy-marker/activity backfill is the standing, self-terminating
+        repair path for exactly this gap, unchanged by this fix.
+        """
+        try:
+            fresh_session = await self._session_service.get_session(session_id, user_id)
+            await record_user_turn_activity(self._session_service, fresh_session, message_text, invocation_id)
+        except Exception:
+            _logger.warning(
+                "chat_service: saved-chat activity finalization failed after session reload "
+                "(session_id=%s) -- relying on the next GET /api/sessions legacy-marker repair",
                 session_id,
             )
 

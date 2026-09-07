@@ -10,6 +10,17 @@ ROUTES:
   POST /api/sessions                        -- create a new session,
                                                 owned by the resolved
                                                 caller (see identity.py).
+  GET  /api/sessions                        -- (POST-5.1 B4B) the
+                                                caller's own saved-chat
+                                                list, safe summaries only
+                                                (see
+                                                session_history_service.py).
+  GET  /api/sessions/{session_id}/history   -- (POST-5.1 B4B) the safe,
+                                                active-branch transcript
+                                                for one session -- never
+                                                raw ADK events/state.
+  PATCH /api/sessions/{session_id}          -- (POST-5.1 B4B) durable
+                                                manual rename.
   POST /api/sessions/{session_id}/messages  -- send a message, get Team
                                                 Manager's reply + any
                                                 pending action + active
@@ -159,6 +170,7 @@ from backend.api import selection_service
 from backend.api.chat_service import ChatService, get_chat_service
 from backend.api.errors import handle_request_validation_error, handle_safe_error, handle_unexpected_error
 from backend.api.identity import UserContext, resolve_user_context
+from backend.api import session_history_service
 from backend.api.streaming_events import format_sse
 from backend.api.schemas import (
     AddCaseContextItemRequest,
@@ -182,9 +194,13 @@ from backend.api.schemas import (
     CreateSessionResponse,
     ExecuteActionResponse,
     HealthResponse,
+    RenameSessionRequest,
     RewindSessionRequest,
     RewindSessionResponse,
     SendMessageRequest,
+    SessionHistoryResponse,
+    SessionListResponse,
+    SessionSummaryDTO,
     UpdateCaseRequest,
 )
 from backend.api.session_service import ApiSessionService, get_session_service
@@ -288,6 +304,58 @@ def create_app() -> FastAPI:
     ) -> CreateSessionResponse:
         session_id = await session_service.create_session(user.user_id)
         return CreateSessionResponse(session_id=session_id)
+
+    # --- Saved conversation / history rehydration (POST-5.1 B4B) ----------
+
+    @app.get("/api/sessions", response_model=SessionListResponse)
+    async def list_sessions_endpoint(
+        user: UserContext = Depends(resolve_user_context),
+        session_service: ApiSessionService = Depends(get_session_service),
+        settings: Settings = Depends(get_settings),
+    ) -> SessionListResponse:
+        """Owner-scoped saved-chat list (`session_history_service
+        .list_saved_sessions`'s own docstring for the tri-state marker /
+        bounded-backfill semantics). Never a raw `state`/`events` dump --
+        `SessionSummaryDTO` is the only shape this ever returns.
+        """
+        sessions = await session_history_service.list_saved_sessions(
+            session_service, user.user_id, settings.saved_chat_list_limit
+        )
+        return SessionListResponse(sessions=sessions)
+
+    @app.get("/api/sessions/{session_id}/history", response_model=SessionHistoryResponse)
+    async def get_session_history_endpoint(
+        session_id: str,
+        user: UserContext = Depends(resolve_user_context),
+        session_service: ApiSessionService = Depends(get_session_service),
+        attachment_service: AttachmentService = Depends(get_attachment_service),
+    ) -> SessionHistoryResponse:
+        """Safe transcript projection (`session_history_service
+        .get_session_history`) -- active branch only, final assistant
+        text only, LINKED attachment references only. Ownership enforced
+        by `session_service.get_session` before anything else, same
+        anti-enumeration behavior as every other session-scoped route.
+        """
+        return await session_history_service.get_session_history(
+            session_service, attachment_service, session_id, user.user_id
+        )
+
+    @app.patch("/api/sessions/{session_id}", response_model=SessionSummaryDTO)
+    async def rename_session_endpoint(
+        session_id: str,
+        body: RenameSessionRequest,
+        user: UserContext = Depends(resolve_user_context),
+        session_service: ApiSessionService = Depends(get_session_service),
+    ) -> SessionSummaryDTO:
+        """Durable manual rename (B4A correction pass) -- the existing
+        frontend `RENAME_CHAT` reducer is local-only today and would be
+        silently overwritten by the derived title on the next refresh
+        without this. Same `CHAT_TITLE_STATE_KEY` the automatic first-turn
+        title uses -- last write (auto or manual) wins.
+        """
+        return await session_history_service.rename_session(
+            session_service, session_id, user.user_id, body.title
+        )
 
     @app.post("/api/sessions/{session_id}/messages", response_model=ChatResponse)
     async def send_message(

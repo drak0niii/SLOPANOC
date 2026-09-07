@@ -99,6 +99,10 @@ class AttachmentRepository:
             return list(result.scalars().all())
 
     async def list_for_message(self, session_id: str, message_id: str) -> list[ChatAttachmentRecord]:
+        """POST-5.1 B4B: `message_id` here is the owning turn's ADK
+        `invocation_id` (see `models.py`'s `ChatAttachmentRecord.message_id`
+        docstring) -- never the frontend-visible history message id.
+        """
         await self.ensure_schema()
         async with self._session_factory() as session:
             result = await session.execute(
