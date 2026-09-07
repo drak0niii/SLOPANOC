@@ -364,6 +364,7 @@ Backend configuration is read from process environment variables
 | `SLOPANOC_DATABASE_SECRET_RESOURCE` | Secret Manager resource for the database URL (deployment) | none |
 | `SLOPANOC_KNOWLEDGE_DATABASE_URL` | SQLAlchemy async URL for Governed Knowledge persistence (separate setting — see [Local Cloud SQL PostgreSQL development](#local-cloud-sql-postgresql-development)) | `sqlite+aiosqlite:///./slopanoc_knowledge.db` |
 | `SLOPANOC_KNOWLEDGE_DATABASE_SECRET_RESOURCE` | Secret Manager resource for the Knowledge database URL (deployment) | none |
+| `SLOPANOC_CHAT_ATTACHMENTS_BUCKET` | Private GCS bucket name for durable chat attachment binaries (POST-5.1 B1+) | none — attachment storage unavailable when unset; ordinary text chat is unaffected |
 | `SLOPANOC_CASE_CONTEXT_MAX_ITEMS` | Max Case context items shown to the model | `12` |
 | `SLOPANOC_CASE_CONTEXT_MAX_CHARACTERS` | Max Case context characters shown to the model | `4000` |
 | `SLOPANOC_MODEL_WARMUP_ENABLED` | Warm up the model client on startup | `true` |
@@ -541,27 +542,52 @@ bootstrap, and real runtime cutover + persistence validation — see
 [Local Cloud SQL PostgreSQL development](#local-cloud-sql-postgresql-development)
 and [Current limitations](#current-limitations--production-readiness).
 
-**Next — POST-5.1 B: multimodal attachments** (not yet started — planning/
-documentation only at this point). Scope: paste a temporary screenshot
-into SLOPANOC, image upload, composer preview/remove, React → FastAPI
-image transport, Gemini multimodal input, text + image in the same turn,
-and Teams + KM + image reasoning where relevant.
+**Next — POST-5.1 B: multimodal attachments.** STARTED, not complete.
+Locked execution sequence (do not reorder): B0 [done] architecture + ADK
+persistence audit → **B1 [done] Persistent Attachment Foundation** → B2
+Attachment Upload/Retrieve API → B3 Complete Existing Frontend Attachment
+UX → B4 Saved Conversation/Attachment Rehydration → B5 Gemini/ADK
+Multimodal Runtime → B6 Image + Teams + KM Operational Reasoning → B7
+Lifecycle + Real UI + Full Regression.
 
-Locked persistence rule for Attachments and beyond:
-- a temporary user screenshot → no Cloud Storage required
-- a governed knowledge image → Cloud Storage required
-- persistent incident evidence → Cloud Storage required
+Product model: normal SENT chat attachments are real saved conversation
+resources, not a current-turn-only demo. Unsent draft = browser
+File/Blob only. Sent normal chat attachment = private GCS binary + Cloud
+SQL metadata/reference, linked to the owning chat/user message. A future
+temporary/incognito chat (not built) would be ephemeral-only; future
+incident-evidence promotion and future governed-KM images (neither
+built) get their own separate ownership/lifecycle.
 
-**Then — A5: real TELCO/RAN MOP ingestion** (moved to AFTER Attachments —
-the 3 real TELCO/RAN MOPs are ingested only once Attachments is
-complete). A5 ingests them through the existing, unchanged Generic KM
-pipeline (MOP → source adapter/import boundary → `IngestedKnowledgeDocument`
-→ processing → governance → `KnowledgeRepository` → Cloud SQL PostgreSQL)
-— a separate milestone from Attachments, not part of it. If a MOP contains
-images, its text/metadata/governed content still goes to Cloud SQL
-PostgreSQL and any governed knowledge image goes to Cloud Storage per the
-rule above, but the actual image extraction/storage mechanics belong to
-A5's own future implementation pass.
+Locked Gemini/ADK multimodal construction rule (B0, proven against the
+installed `google-adk==1.33.0`/`google-genai==1.75.0` stack, both by
+direct source inspection and a disposable local experiment):
+`Part.from_uri(file_uri="gs://...", ...)` is the ONLY sanctioned
+construction for a durable chat image — ADK's `DatabaseSessionService`
+persists only the small URI/MIME-type reference for it.
+`Part.from_bytes(...)` is **forbidden** for this path — proven to
+serialize the full image as base64 directly into the ADK `events` table.
+Not wired into any live message-send path yet (that's B5) — B1 only
+establishes the Cloud SQL/GCS foundation that preserves this rule (no
+binary/base64/data-URL column exists anywhere in the new
+`slopanoc_chat_attachments` table).
+
+B1 added: `backend/attachments/{models,repository,service,storage}.py`,
+one Alembic migration for `slopanoc_chat_attachments` (Alembic-managed,
+like Case/Fault + Governed Knowledge — never ADK's own session tables),
+and a private GCS bucket (`slopanoc-chat-attachments-sandbox01`,
+`europe-west4`, uniform bucket-level access, public access prevention
+enforced, no object versioning). No HTTP upload/retrieve endpoints, no
+frontend changes, and no Gemini/ADK wiring yet — those are B2+.
+
+**Then — A5: real TELCO/RAN MOP ingestion** (after Attachments completes
+in full, not just B1). A5 ingests the 3 real TELCO/RAN MOPs through the
+existing, unchanged Generic KM pipeline (MOP → source adapter/import
+boundary → `IngestedKnowledgeDocument` → processing → governance →
+`KnowledgeRepository` → Cloud SQL PostgreSQL) — a separate milestone from
+Attachments, not part of it. If a MOP contains images, its text/metadata/
+governed content still goes to Cloud SQL PostgreSQL and any governed
+knowledge image goes to Cloud Storage, but the actual image extraction/
+storage mechanics belong to A5's own future implementation pass.
 
 **Then** — Phase 4H security hardening proceeds per the locked roadmap.
 

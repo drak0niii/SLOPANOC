@@ -1,10 +1,11 @@
 """Alembic environment for SLOPANOC-owned schemas.
 
-SCOPE (POST-5.1 A2 instruction section 9): Alembic manages ONLY the two
-SLOPANOC-owned SQLAlchemy metadata collections --
+SCOPE (POST-5.1 A2 instruction section 9, extended POST-5.1 B1): Alembic
+manages ONLY the SLOPANOC-owned SQLAlchemy metadata collections --
 
   - backend.cases.models.Base.metadata       (Case/Fault Context)
   - backend.knowledge.repository.sqlalchemy.Base.metadata  (Governed Knowledge)
+  - backend.attachments.models.Base.metadata  (Chat Attachments, POST-5.1 B1)
 
 ADK's own `DatabaseSessionService` schema (sessions/events/app_states/
 user_states) is deliberately NEVER imported or referenced here. ADK
@@ -51,6 +52,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from backend.attachments.models import Base as AttachmentBase
 from backend.cases.models import Base as CaseBase
 from backend.config.settings import get_settings
 from backend.knowledge.repository.sqlalchemy import Base as KnowledgeBase
@@ -60,8 +62,10 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Both SLOPANOC-owned metadata collections, never ADK's own session schema.
-target_metadata = [CaseBase.metadata, KnowledgeBase.metadata]
+# All SLOPANOC-owned metadata collections, never ADK's own session schema.
+# POST-5.1 B1 adds AttachmentBase (backend/attachments/models.py) alongside
+# the two established since POST-5.1 A2.
+target_metadata = [CaseBase.metadata, KnowledgeBase.metadata, AttachmentBase.metadata]
 
 # POST-5.1 A4: derived (never hand-duplicated) from target_metadata itself
 # -- the exact set of table names Alembic is actually allowed to compare

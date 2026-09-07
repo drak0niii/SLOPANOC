@@ -363,32 +363,58 @@ complete.
 
 CURRENT (out-of-band milestone, inserted between the LOCAL GIT CHECKPOINT
 below and Phase 4H — does not reorder anything in this locked list):
-POST-5.1 A — CLOUD SQL POSTGRESQL (A1–A4) is COMPLETE. Next is POST-5.1 B
-(multimodal attachments), then A5 (real TELCO/RAN MOP ingestion — moved
-to AFTER Attachments; the 3 real TELCO/RAN MOPs are ingested only once
-Attachments is complete), before Phase 4H security hardening proceeds.
+POST-5.1 A — CLOUD SQL POSTGRESQL (A1–A4) is COMPLETE. POST-5.1 B —
+MULTIMODAL ATTACHMENTS has STARTED (not complete). A5 (real TELCO/RAN MOP
+ingestion) follows POST-5.1 B, before Phase 4H security hardening.
 
-The CURRENT next milestone is POST-5.1 B — MULTIMODAL ATTACHMENTS (not yet
-started — planning/documentation only at this point). Scope: paste a
-temporary screenshot into SLOPANOC, image upload, composer preview/
-remove, React → FastAPI image transport, Gemini multimodal input, text +
-image in the same turn, and Teams + KM + image reasoning where relevant.
+POST-5.1 B execution sequence (locked, do not reorder):
+  B0 [DONE] Durable chat attachment architecture + ADK persistence audit
+  B1 [DONE] Persistent Attachment Foundation -- Cloud SQL metadata model
+      (`slopanoc_chat_attachments`, Alembic-managed), private GCS bucket
+      foundation (`slopanoc-chat-attachments-sandbox01`, europe-west4),
+      `backend/attachments/{models,repository,service,storage}.py`. No
+      HTTP endpoints, no frontend, no Gemini/ADK wiring yet.
+  B2  Attachment Upload/Retrieve API
+  B3  Complete Existing Frontend Attachment UX
+  B4  Saved Conversation / Attachment Rehydration
+  B5  Gemini/ADK Multimodal Runtime
+  B6  Image + Teams + KM Operational Reasoning
+  B7  Lifecycle + Real UI + Full Regression
 
-Locked persistence rule for POST-5.1 B and beyond:
-  - a temporary user screenshot → NO Cloud Storage required
-  - a governed knowledge image → Cloud Storage required
-  - persistent incident evidence → Cloud Storage required
+LOCKED product model (B0, refined for durable resources): normal SENT
+chat attachments are real saved conversation resources, not a
+current-turn-only demo -- unsent draft = browser File/Blob only; sent
+normal chat attachment = private GCS binary + Cloud SQL metadata/
+reference, linked to the owning chat/user message; a future temporary/
+incognito chat (not built) would be ephemeral-only; future incident
+evidence and future governed-KM images (neither built) get their own
+separate ownership/lifecycle, per the target design below.
 
-A5 — REAL TELCO/RAN MOP INGESTION now follows POST-5.1 B, not the other
-way around. A5 ingests the 3 real TELCO/RAN MOPs through the existing,
+LOCKED Gemini/ADK multimodal construction rule (B0, proven empirically
+against installed `google-adk==1.33.0`/`google-genai==1.75.0`, both via
+direct source inspection and a disposable local-SQLite `DatabaseSessionService`
+experiment): `google.genai.types.Part.from_uri(file_uri="gs://...", ...)`
+is the ONLY sanctioned construction for a durable chat image in model
+input, because ADK's `DatabaseSessionService` persists only the small
+`file_data.file_uri`/`mime_type` reference for it.
+`Part.from_bytes(...)` is FORBIDDEN for this path -- proven to serialize
+the full image as base64 directly into the `events.event_data` column.
+Not yet wired into any live message-send path (that's B5) -- B1 only
+preserves the architecture (no binary column anywhere in
+`backend/attachments/models.py`).
+
+Target image-storage design (future domains, not all built yet):
+  temporary user screenshot (future incognito chat) -> no Cloud Storage
+  sent normal chat attachment (B1+)                 -> Cloud Storage + Cloud SQL metadata
+  persistent incident evidence (future)              -> Cloud Storage + Case/Fault ownership
+  governed knowledge image (future, A5+)              -> Cloud Storage + KM ownership, separate lifecycle from chat attachments
+
+A5 — REAL TELCO/RAN MOP INGESTION follows POST-5.1 B in full (not just
+B1). A5 ingests the 3 real TELCO/RAN MOPs through the existing,
 unchanged Generic KM pipeline (MOP → source adapter/import boundary →
 IngestedKnowledgeDocument → processing → governance → KnowledgeRepository
-→ Cloud SQL PostgreSQL) — it is a separate milestone from Attachments, not
-part of it. If a MOP contains images, its text/metadata/governed content
-still goes to Cloud SQL PostgreSQL and any governed knowledge image goes
-to Cloud Storage per the rule above — but the actual image extraction/
-storage mechanics belong to A5's own future implementation pass, not
-POST-5.1 B and not this docs-only correction.
+→ Cloud SQL PostgreSQL) — a separate milestone from Attachments, not part
+of it.
 
 NEXT:
 

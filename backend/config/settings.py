@@ -51,6 +51,7 @@ _KNOWLEDGE_DATABASE_URL_ENV_VAR = "SLOPANOC_KNOWLEDGE_DATABASE_URL"
 _KNOWLEDGE_DATABASE_SECRET_ENV_VAR = "SLOPANOC_KNOWLEDGE_DATABASE_SECRET_RESOURCE"
 _MODEL_WARMUP_ENABLED_ENV_VAR = "SLOPANOC_MODEL_WARMUP_ENABLED"
 _MODEL_WARMUP_TIMEOUT_ENV_VAR = "SLOPANOC_MODEL_WARMUP_TIMEOUT_SECONDS"
+_CHAT_ATTACHMENTS_BUCKET_ENV_VAR = "SLOPANOC_CHAT_ATTACHMENTS_BUCKET"
 
 # Matches google.adk.agents.llm_agent.LlmAgent.DEFAULT_MODEL in the
 # installed ADK (1.33.0) -- not an independently invented default.
@@ -254,6 +255,21 @@ class Settings:
     def case_context_max_characters(self) -> int:
         raw = self._env.get(_CASE_CONTEXT_MAX_CHARACTERS_ENV_VAR)
         return int(raw) if raw else _DEFAULT_CASE_CONTEXT_MAX_CHARACTERS
+
+    @property
+    def chat_attachments_bucket(self) -> Optional[str]:
+        """POST-5.1 B1: the private GCS bucket for durable chat
+        attachment binaries. No default -- unlike the database URLs,
+        there is no safe/sensible local zero-setup fallback for a GCS
+        bucket name. Returns `None` when unset; callers (`backend.
+        attachments.storage`) must treat that as "attachment storage is
+        unavailable" and fail clearly ONLY when actually invoked -- this
+        property being unset must never fail application startup or
+        break ordinary text chat, since no B1 code path is wired into a
+        live request yet.
+        """
+        raw = self._env.get(_CHAT_ATTACHMENTS_BUCKET_ENV_VAR)
+        return raw.strip() if raw and raw.strip() else None
 
     def resolve_power_automate_gateway_url(self) -> str:
         """Resolve the Power Automate gateway URL. Never log the result."""
