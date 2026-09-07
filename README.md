@@ -277,18 +277,17 @@ npm install
 
 ### Python environment
 
-This repository does not yet commit a pinned dependency manifest (see
-[Current limitations](#current-limitations--production-readiness)). Install
-the packages the backend imports into your environment of choice (a virtual
-environment is recommended):
-
 ```bash
 python -m venv .venv
 # Windows: .venv\Scripts\activate   |   macOS/Linux: source .venv/bin/activate
-pip install fastapi uvicorn google-adk google-genai google-cloud-secret-manager \
-  pydantic pydantic-settings sqlalchemy aiosqlite requests requests_ntlm \
-  pytest pytest-asyncio
+pip install -r requirements.txt -r requirements-dev.txt
 ```
+
+`requirements.txt` is the audited set of packages the backend actually
+imports (see its own header comment for what's excluded and why —
+notably no `cloud-sql-python-connector`; local Cloud SQL development uses
+the Auth Proxy, see below). `requirements-dev.txt` adds `pytest`/
+`pytest-asyncio` on top for running the test suite.
 
 ### Google authentication
 
@@ -305,6 +304,38 @@ export GOOGLE_GENAI_USE_VERTEXAI=true
 export GOOGLE_CLOUD_PROJECT=<your-gcp-project-id>
 export GOOGLE_CLOUD_LOCATION=<your-vertex-location>   # e.g. us-central1
 ```
+
+### Local Cloud SQL PostgreSQL development
+
+The default local backend, and the default for `python -m pytest`, is
+still zero-setup SQLite — nothing below is required unless you explicitly
+want to run against Cloud SQL PostgreSQL locally.
+
+A Cloud SQL PostgreSQL 18 instance exists for this purpose
+(`sloc-anoc-sandbox01`, project `pr-msn-dev-gl-slopai-01`, region
+`europe-west4` — instance connection name
+`pr-msn-dev-gl-slopai-01:europe-west4:sloc-anoc-sandbox01`; this is not a
+credential and is safe to reference). Local access uses the
+[Cloud SQL Auth Proxy v2](https://cloud.google.com/sql/docs/postgres/sql-proxy)
+with IAM database authentication — never a password in a connection URL:
+
+```bash
+cloud-sql-proxy --address=127.0.0.1 --port=5432 --auto-iam-authn \
+  pr-msn-dev-gl-slopai-01:europe-west4:sloc-anoc-sandbox01
+```
+
+With the proxy running and `gcloud auth application-default login`
+already done, point the backend at it by setting `SLOPANOC_DATABASE_URL`
+and/or `SLOPANOC_KNOWLEDGE_DATABASE_URL` (see
+[Configuration](#configuration)) to a `postgresql+asyncpg://` URL with
+your IAM database username's `@` URL-encoded as `%40`, e.g.:
+
+```bash
+export SLOPANOC_DATABASE_URL="postgresql+asyncpg://your.iam.user%40example.com@127.0.0.1:5432/slopanoc"
+```
+
+Never commit a real, username-specific connection URL anywhere in this
+repository — it is a per-developer local override only.
 
 ### Environment variables
 
@@ -329,8 +360,10 @@ Backend configuration is read from process environment variables
 | `SLOPANOC_POWER_AUTOMATE_TIMEOUT_SECONDS` | Gateway HTTP timeout | `10` |
 | `SLOPANOC_ACTION_PROPOSAL_EXPIRY_SECONDS` | How long a write proposal stays approvable | `600` |
 | `SLOPANOC_SESSION_BACKEND` | `memory` or `database` | `database` |
-| `SLOPANOC_DATABASE_URL` | SQLAlchemy async URL for session persistence | `sqlite+aiosqlite:///./slopanoc_sessions.db` |
+| `SLOPANOC_DATABASE_URL` | SQLAlchemy async URL for session + Case/Fault persistence | `sqlite+aiosqlite:///./slopanoc_sessions.db` |
 | `SLOPANOC_DATABASE_SECRET_RESOURCE` | Secret Manager resource for the database URL (deployment) | none |
+| `SLOPANOC_KNOWLEDGE_DATABASE_URL` | SQLAlchemy async URL for Governed Knowledge persistence (separate setting — see [Local Cloud SQL PostgreSQL development](#local-cloud-sql-postgresql-development)) | `sqlite+aiosqlite:///./slopanoc_knowledge.db` |
+| `SLOPANOC_KNOWLEDGE_DATABASE_SECRET_RESOURCE` | Secret Manager resource for the Knowledge database URL (deployment) | none |
 | `SLOPANOC_CASE_CONTEXT_MAX_ITEMS` | Max Case context items shown to the model | `12` |
 | `SLOPANOC_CASE_CONTEXT_MAX_CHARACTERS` | Max Case context characters shown to the model | `4000` |
 | `SLOPANOC_MODEL_WARMUP_ENABLED` | Warm up the model client on startup | `true` |
@@ -390,6 +423,9 @@ frequently; run the commands above for current numbers.
 
 ```text
 enterprise-ai-ui/
+├── alembic/                  # Migrations for SLOPANOC-owned schemas (Case/Fault, Knowledge) — never ADK's own session tables
+├── alembic.ini
+├── requirements.txt, requirements-dev.txt   # Pinned backend dependency manifest
 ├── backend/
 │   ├── agents/            # team_manager/, incident_manager/ — ADK agents & prompts
 │   ├── api/                # FastAPI app, chat/session/approval/execution services
@@ -428,13 +464,12 @@ SLOPANOC is not production-ready. Known gaps include at least:
   configured connection identity, not a delegated per-user Microsoft Graph
   identity. If per-user Teams permissions are required, this needs design
   work.
-- **Production database** — SQLite is the local-development default;
-  Postgres/Cloud SQL is a likely production direction but is not yet
-  implemented or decided in code.
-- **No pinned Python dependency manifest** — backend dependencies are
-  currently tracked only by what is installed in the development
-  environment (see [Local development](#local-development)), not a
-  committed `requirements.txt`/`pyproject.toml`.
+- **Production database cutover** — SQLite remains the local-development
+  default. A Cloud SQL PostgreSQL instance/database and IAM connectivity
+  exist (see [Local Cloud SQL PostgreSQL development](#local-cloud-sql-postgresql-development)),
+  and an Alembic migration foundation exists for the Case/Fault + Governed
+  Knowledge schema, but no migration has been applied to Cloud SQL and the
+  application has not been cut over.
 - **Distributed runtime coordination** — the backend assumes a single
   process; multi-instance coordination (session affinity, distributed
   cancellation, etc.) is not addressed.

@@ -14,7 +14,7 @@ from backend.config.settings import get_settings
 from backend.knowledge.domain.applicability import ApplicabilityContext
 from backend.knowledge.provenance.contracts import KnowledgeEvidenceItem, KnowledgeEvidenceSelectionKey, KnowledgeEvidenceSet
 from backend.knowledge.provenance.service import KnowledgeProvenanceService, validate_evidence_selection
-from backend.knowledge.repository.sqlite import SQLiteKnowledgeRepository
+from backend.knowledge.repository.sqlalchemy import SqlAlchemyKnowledgeRepository
 from backend.knowledge.retrieval.service import KnowledgeRetrievalService
 from backend.knowledge.tools.contracts import KnowledgeSearchExecutionResult, KnowledgeToolExecutionContext
 from backend.knowledge.tools.service import KnowledgeToolService
@@ -182,18 +182,19 @@ def discard_knowledge_run_evidence_state(run_id: str) -> None:
 
 
 @lru_cache(maxsize=1)
-def get_knowledge_repository() -> SQLiteKnowledgeRepository:
+def get_knowledge_repository() -> SqlAlchemyKnowledgeRepository:
     """Process-wide singleton, mirroring `backend/cases/db.py`'s
-    `get_case_database()` pattern -- a local SQLite repository is
-    acceptable for this FIRST reference consumer (5.1F's own frozen
-    contract already makes a future non-SQLite implementation a drop-in
-    replacement; nothing here depends on SQLite specifics beyond
-    construction). Schema is never created here explicitly -- every
-    `SQLiteKnowledgeRepository` operation already lazily/idempotently
-    calls its own `ensure_schema()` (5.1F); an empty/not-yet-created
-    repository is a valid starting state, not an error.
+    `get_case_database()` pattern. `SqlAlchemyKnowledgeRepository` (POST-
+    5.1 A2 -- formerly `SQLiteKnowledgeRepository`) is dialect-neutral --
+    this constructs it with whatever `Settings.resolve_knowledge_
+    database_url()` resolves to, `sqlite+aiosqlite://...` locally or
+    `postgresql+asyncpg://...` in a Cloud SQL deployment, with no
+    branching here on which dialect it is. Schema is never created here
+    explicitly -- every `SqlAlchemyKnowledgeRepository` operation already
+    lazily/idempotently calls its own `ensure_schema()` (5.1F); an empty/
+    not-yet-created repository is a valid starting state, not an error.
     """
-    return SQLiteKnowledgeRepository(get_settings().resolve_knowledge_database_url())
+    return SqlAlchemyKnowledgeRepository(get_settings().resolve_knowledge_database_url())
 
 
 @lru_cache(maxsize=1)

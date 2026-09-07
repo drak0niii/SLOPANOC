@@ -48,6 +48,7 @@ _CASE_CONTEXT_MAX_CHARACTERS_ENV_VAR = "SLOPANOC_CASE_CONTEXT_MAX_CHARACTERS"
 _DATABASE_URL_ENV_VAR = "SLOPANOC_DATABASE_URL"
 _DATABASE_SECRET_ENV_VAR = "SLOPANOC_DATABASE_SECRET_RESOURCE"
 _KNOWLEDGE_DATABASE_URL_ENV_VAR = "SLOPANOC_KNOWLEDGE_DATABASE_URL"
+_KNOWLEDGE_DATABASE_SECRET_ENV_VAR = "SLOPANOC_KNOWLEDGE_DATABASE_SECRET_RESOURCE"
 _MODEL_WARMUP_ENABLED_ENV_VAR = "SLOPANOC_MODEL_WARMUP_ENABLED"
 _MODEL_WARMUP_TIMEOUT_ENV_VAR = "SLOPANOC_MODEL_WARMUP_TIMEOUT_SECONDS"
 
@@ -97,6 +98,13 @@ _DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./slopanoc_sessions.db"
 # reasoning; a genuinely dedicated setting, not reused ad hoc, because a
 # production deployment may reasonably want to scale/replace governed
 # knowledge storage independently of chat session storage.
+#
+# POST-5.1 A2: `resolve_knowledge_database_url()` now supports the same
+# `*_SECRET_RESOURCE` Secret-Manager fallback `resolve_database_url()`
+# already has -- a production deployment can point Knowledge at the same
+# Cloud SQL PostgreSQL database as sessions/cases via its own explicit
+# secret resource, without the two configuration domains ever silently
+# reusing one another's setting.
 _DEFAULT_KNOWLEDGE_DATABASE_URL = "sqlite+aiosqlite:///./slopanoc_knowledge.db"
 
 # Phase 4D (backend/cases/snapshot.py): the model-facing
@@ -208,17 +216,33 @@ class Settings:
 
     def resolve_knowledge_database_url(self) -> str:
         """Resolve the Generic Knowledge Management repository's own
-        database URL -- explicit and local/reference-consumer focused
-        (Phase 5.1J). No Secret Manager fallback: unlike the session/Case
-        databases, this is the FIRST reference consumer's local SQLite
-        repository, not a shared production credential path yet -- a
-        direct env var override (for local development / tests) or the
-        local-file default is sufficient today, without inventing
-        production Cloud SQL support this phase does not need.
+        database URL (Phase 5.1J, extended POST-5.1 A2). Mirrors
+        `resolve_database_url()`'s exact resolution order and
+        Secret-Manager fallback -- a production PostgreSQL/Cloud SQL
+        connection string is itself a credential-bearing secret, exactly
+        like the session/Case database URL. Never log the result.
+
+        Resolution order:
+          1. `SLOPANOC_KNOWLEDGE_DATABASE_URL` -- local development / tests.
+          2. `SLOPANOC_KNOWLEDGE_DATABASE_SECRET_RESOURCE` -- a GCP Secret
+             Manager secret version resource, for deployment.
+          3. The local-file SQLite default.
+
+        Deliberately a SEPARATE setting from `resolve_database_url()`,
+        never falling back to it -- Knowledge and sessions/Case remain two
+        explicit configuration domains (this module's own docstring,
+        "Keep the two configuration domains explicit"), even though both
+        may be configured to point at the same Cloud SQL PostgreSQL
+        database in a real deployment.
         """
         direct = self._env.get(_KNOWLEDGE_DATABASE_URL_ENV_VAR)
         if direct:
             return direct
+
+        secret_resource = self._env.get(_KNOWLEDGE_DATABASE_SECRET_ENV_VAR)
+        if secret_resource:
+            return _fetch_secret_from_secret_manager(secret_resource)
+
         return _DEFAULT_KNOWLEDGE_DATABASE_URL
 
     @property

@@ -280,8 +280,23 @@ CURRENT PERSISTENCE / RUNTIME
 ===================================================================
 
 - Session persistence uses ADK's DatabaseSessionService; local development
-  defaults to SQLite. This is not a production database architecture —
-  Postgres/Cloud SQL is a likely direction, not yet built.
+  defaults to SQLite unless `SLOPANOC_DATABASE_URL`/
+  `SLOPANOC_KNOWLEDGE_DATABASE_URL` explicitly select PostgreSQL — SQLite
+  remains the zero-setup default, never silently overridden.
+- POST-5.1 A (Cloud SQL PostgreSQL foundation, A1–A2): a Cloud SQL
+  PostgreSQL 18 instance (`sloc-anoc-sandbox01`, project
+  `pr-msn-dev-gl-slopai-01`, region `europe-west4`) and its `slopanoc`
+  database exist, with IAM database authentication proven locally through
+  the Cloud SQL Auth Proxy v2. `resolve_knowledge_database_url()` now
+  supports the same `*_SECRET_RESOURCE` Secret Manager fallback
+  `resolve_database_url()` already had. An Alembic migration foundation
+  (`alembic/`) now owns one baseline migration reproducing the current
+  Case/Fault + Governed Knowledge schema exactly, validated only against a
+  disposable local SQLite database — ADK's own session tables remain
+  outside Alembic's scope, self-managed as before. None of this has been
+  applied to Cloud SQL yet, and the running application still defaults to
+  SQLite locally — this is infrastructure/migration-file readiness, not a
+  cutover. Do not imply Cloud SQL is the live persistence backend.
 - Case/fault context (backend/cases/) is a separate, optional persistence
   layer from ordinary session/chat state — do not conflate the two.
 - Streaming is real SSE, with a background-task turn model — a turn runs as
@@ -307,14 +322,14 @@ exist yet:
 - enterprise authentication
 - per-user Microsoft identity / delegated Graph (Power Automate currently
   runs as its own configured connection identity, not per-user)
-- production database/migrations
+- production database cutover/migration execution — Cloud SQL PostgreSQL
+  infrastructure and Alembic migration files exist (POST-5.1 A1–A2), but
+  no migration has been applied to Cloud SQL and the application has not
+  been cut over from its local SQLite default
 - distributed runtime coordination
 - production observability/alerting
 - load/concurrency validation
 - final secret-management hardening
-- a committed Python dependency manifest (no requirements.txt/pyproject.toml
-  exists yet — do not imply one does; see README.md's local-development
-  section for the currently-required packages)
 - broader operational integrations: generic Knowledge Management, ITSM,
   alarm/topology/KPI/change integrations
 - autonomous remediation of any kind

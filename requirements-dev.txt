@@ -1,0 +1,9 @@
+# SLOPANOC backend test-only tooling. Install alongside requirements.txt
+# for local development / CI:
+#
+#   pip install -r requirements.txt -r requirements-dev.txt
+
+-r requirements.txt
+
+pytest==9.0.3
+pytest-asyncio==1.4.0

@@ -10,7 +10,7 @@ model-visible tool schemas, run-scoped trusted evidence state keyed by
 the application's own trusted run identity -- lives here instead.
 
   - runtime.py -- process-wide `KnowledgeToolService` composition (a
-                  local `SQLiteKnowledgeRepository` + `KnowledgeRetrievalService`
+                  dialect-neutral `SqlAlchemyKnowledgeRepository` + `KnowledgeRetrievalService`
                   + `KnowledgeProvenanceService`), the trusted, run-id-keyed
                   `KnowledgeRunEvidenceState` store (available vs. selected
                   evidence, one trusted `as_of` captured once per run), and

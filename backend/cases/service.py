@@ -178,6 +178,18 @@ class CaseService:
                 updated_at=now,
             )
             session.add(record)
+            # POST-5.1 A4: explicit flush before adding the dependent
+            # membership row -- confirmed live against Cloud SQL that
+            # without it, PostgreSQL can execute the
+            # slopanoc_case_memberships INSERT (referencing this case_id)
+            # before the slopanoc_cases INSERT that satisfies its FK
+            # constraint, raising ForeignKeyViolationError. SQLite never
+            # surfaced this: it does not enforce FOREIGN KEY constraints
+            # unless PRAGMA foreign_keys=ON is set, which this codebase
+            # never sets. Still one atomic transaction -- flush is not
+            # commit; a failure after this point still rolls back both
+            # rows together.
+            await session.flush()
             session.add(
                 CaseMembershipRecord(
                     case_id=case_id, user_id=user_id, role=CaseMemberRole.OWNER.value, created_at=now
