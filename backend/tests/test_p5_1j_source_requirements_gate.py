@@ -64,7 +64,7 @@ async def test_part9_missing_declaration_is_rejected_and_remediated_into_the_gov
         declaration_calls.append(question)
         return True, True
 
-    async def fake_governed(*, question: str, chat_topic: Optional[str], run_id: str):
+    async def fake_governed(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = ()):
         governed_calls.append(question)
         return "Governed knowledge (freshly verified): checksum 7319, status GREEN.", []
 
@@ -128,7 +128,7 @@ async def test_part10_adversarial_suppression_via_missing_declaration_still_forc
     async def fake_declare(*, question: str, run_id: str):
         return False, True
 
-    async def fake_governed(*, question: str, chat_topic: Optional[str], run_id: str):
+    async def fake_governed(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = ()):
         governed_calls.append(question)
         return "Checksum 7319, status GREEN.", []
 

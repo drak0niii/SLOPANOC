@@ -216,6 +216,14 @@ def test_only_the_expected_routes_exist() -> None:
         "/api/sessions/{session_id}/attachments",
         "/api/attachments/{attachment_id}",
         "/api/attachments/{attachment_id}/content",
+        # POST-5.1 B7 -- closes the B3-documented orphan gap: deletes a
+        # still-READY (never sent) attachment removed from the draft
+        # before send. Session-ownership-scoped like upload, above;
+        # structurally rejects deleting a LINKED (sent) attachment --
+        # see backend/api/attachment_service.py's `delete_ready_
+        # attachment`. Never a generic state-mutation/tool-execution
+        # channel.
+        "/api/sessions/{session_id}/attachments/{attachment_id}",
         # POST-5.1 B4B -- safe saved-conversation list/history rehydration
         # (session_history_service.py) plus durable manual rename. Never
         # raw ADK state/events; ownership-scoped identically to every

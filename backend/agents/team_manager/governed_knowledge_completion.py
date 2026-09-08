@@ -52,11 +52,35 @@ own call site) -- it is itself the "one bounded ... attempt" the
 correction task describes, using the SAME real agent (with its own
 internal one-retry compliance mechanism) rather than a second, separate
 retry loop layered on top.
+
+B7 LIVE-REGRESSION CORRECTIVE PASS -- TRUSTED CURRENT-TURN IMAGE EVIDENCE
+NOW PROPAGATED: a real combined image + Teams + governed-KM live
+validation proved this remediation's own `content` (below) was built
+TEXT-ONLY, unconditionally -- this bounded remediation is a bare
+`Runner.run_async` call, never routed through `AgentTool`/
+`MultimodalAgentTool`, so B6's own image-propagation mechanism (which
+only intercepts `AgentTool.run_async`, reading `tool_context.user_
+content`) never had a way to reach it. The observable defect: a turn
+whose FIRST incident_manager execution had real image evidence (via the
+original delegation's `MultimodalAgentTool` path) but finished without
+selected governed-KM evidence correctly triggered THIS remediation --
+which then ran the real, unmodified `incident_manager` a SECOND time,
+this time with NO image evidence at all, so the model had nothing to
+ground its "observed" values in and invented them. `enforce_governed_
+knowledge_at_completion` now accepts `image_parts` -- the SAME trusted
+`file_data` Part(s) already sitting in chat_service.py's own turn-level
+`Content` (extracted via `backend.api.multimodal_turn_context.trusted_
+image_parts_from_content`, never re-derived from attachment ids, never a
+fresh storage/DB lookup) -- and appends them to this remediation's own
+Content, exactly mirroring `MultimodalAgentTool`'s own "text part first,
+then trusted image parts, in order" construction. A text-only turn passes
+an empty sequence and this remediation's `Content` is byte-identical to
+before this pass -- zero behavior change for the non-multimodal case.
 """
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from google.adk.memory import InMemoryMemoryService
 from google.adk.runners import Runner
@@ -93,7 +117,7 @@ never derived from team_manager's own discarded, unproven answer text.
 
 
 async def enforce_governed_knowledge_at_completion(
-    *, question: str, chat_topic: Optional[str], run_id: str
+    *, question: str, chat_topic: Optional[str], run_id: str, image_parts: Sequence[types.Part] = ()
 ) -> tuple[str, list[KnowledgeEvidenceItem]]:
     """Runs the real `incident_manager` (full toolset, unmodified) exactly
     once, deterministically, with `requires_governed_knowledge=True` --
@@ -113,6 +137,16 @@ async def enforce_governed_knowledge_at_completion(
         FAILURE_TEXT`, `selected_evidence` is `[]` -- deterministic safe
         failure (Section C), never team_manager's own discarded answer.
 
+    `image_parts` -- B7 corrective pass: the SAME trusted `file_data`
+    Part(s) this turn's original delegation already had (see this module's
+    own docstring), passed by the caller (chat_service.py), never derived
+    here. Appended AFTER the structured-request text part, in order,
+    exactly mirroring `MultimodalAgentTool`'s own construction -- never a
+    text part, never `inline_data`/bytes (the caller only ever passes what
+    `trusted_image_parts_from_content` already filtered). Defaults to `()`
+    for a text-only turn -- `content` is then byte-identical to before
+    this pass.
+
     Never raises for an expected failure shape -- an unexpected exception
     from the nested Runner itself is allowed to propagate, exactly like
     every other nested-Runner call in this codebase (the caller,
@@ -122,7 +156,13 @@ async def enforce_governed_knowledge_at_completion(
     from backend.agents.incident_manager.schemas import IncidentManagerRequest
 
     request = IncidentManagerRequest(chat_topic=chat_topic, question=question, requires_governed_knowledge=True)
-    content = types.Content(role="user", parts=[types.Part.from_text(text=request.model_dump_json(exclude_none=True))])
+    content = types.Content(
+        role="user",
+        parts=[
+            types.Part.from_text(text=request.model_dump_json(exclude_none=True)),
+            *image_parts,
+        ],
+    )
 
     session_service = InMemorySessionService()
     session_id = f"governed-completion::{run_id}"

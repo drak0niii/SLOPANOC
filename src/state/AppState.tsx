@@ -52,7 +52,7 @@ import {
   renameSession as renameSessionApi,
   rewindSession,
 } from "../api/sessions";
-import { uploadAttachment } from "../api/attachments";
+import { deleteAttachment, uploadAttachment } from "../api/attachments";
 import { ApiError } from "../api/client";
 import { runBackendChat } from "../api/runBackendChat";
 // `approveAction` is aliased -- an unrelated, pre-existing mock function
@@ -2012,8 +2012,21 @@ export function reducer(state: AppState, action: Action): AppState {
 
       const messages: Record<string, Message> = {};
       const messageIds: string[] = [];
+      // B7 corrective pass — durable, turn-owned Source/Knowledge-source
+      // provenance, reprojected through history exactly like the live SSE
+      // `BACKEND_MESSAGE_COMPLETED` case above builds `chat.sources`/
+      // `chat.knowledgeSources`: keyed by message id, present only when
+      // that turn actually produced evidence. Message.tsx already reads
+      // from these two chat-level maps (never from `Message` itself), so
+      // populating them here is sufficient to converge live and hydrated
+      // rendering on the exact same SourceChip path.
+      const sources: Record<string, SourceReferenceDTO> = {};
+      const knowledgeSources: Record<string, KnowledgeSourceReferenceDTO[]> = {};
       for (const dto of response.messages) {
         messageIds.push(dto.message_id);
+        if (dto.source) sources[dto.message_id] = dto.source;
+        if (dto.knowledge_sources && dto.knowledge_sources.length > 0)
+          knowledgeSources[dto.message_id] = dto.knowledge_sources;
         messages[dto.message_id] = {
           id: dto.message_id,
           chatId,
@@ -2051,7 +2064,16 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         chats: {
           ...state.chats,
-          [chatId]: { ...chat, messageIds, historyHydrationStatus: "loaded", historyError: undefined },
+          [chatId]: {
+            ...chat,
+            messageIds,
+            historyHydrationStatus: "loaded",
+            historyError: undefined,
+            ...(Object.keys(sources).length > 0 ? { sources: { ...chat.sources, ...sources } } : null),
+            ...(Object.keys(knowledgeSources).length > 0
+              ? { knowledgeSources: { ...chat.knowledgeSources, ...knowledgeSources } }
+              : null),
+          },
         },
         messages: { ...state.messages, ...messages },
       };
@@ -4084,11 +4106,46 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // the removal — the object-URL revocation itself is handled uniformly
   // by the cleanup effect above once `state.draft.attachments` no longer
   // contains this id (instruction section 22).
-  const removeAttachment = useCallback((id: string) => {
-    uploadControllersRef.current.get(id)?.abort();
-    uploadControllersRef.current.delete(id);
-    dispatch({ type: "REMOVE_ATTACHMENT", payload: { id } });
-  }, []);
+  //
+  // POST-5.1 B7: if the attachment being removed already finished
+  // uploading (`uploadState === "ready"`, a real `attachmentId` exists),
+  // it is now also deleted server-side — closing the orphan gap B3
+  // intentionally left open (a `READY`, unlinked row + GCS object that
+  // used to live forever once removed from the draft). This is
+  // deliberately BEST-EFFORT and fire-and-forget: the local draft removal
+  // above already happened synchronously and must never be blocked,
+  // delayed, or rolled back by this call — a failure here (network,
+  // already-linked-by-a-race, already-deleted) only means one harmless
+  // orphan row/object may remain, never a user-visible error, and never a
+  // reason to keep the item in the draft.
+  const removeAttachment = useCallback(
+    (id: string) => {
+      uploadControllersRef.current.get(id)?.abort();
+      uploadControllersRef.current.delete(id);
+
+      const draft = state.draft.attachments.find((a) => a.id === id);
+      const backendSessionId = state.activeChatId ? state.chats[state.activeChatId]?.backendSessionId : undefined;
+      if (
+        draft &&
+        draft.kind === "image" &&
+        draft.uploadState === "ready" &&
+        draft.attachmentId &&
+        backendSessionId
+      ) {
+        deleteAttachment(backendSessionId, draft.attachmentId).catch(() => {
+          // Best-effort cleanup only -- see this callback's own comment
+          // above. Never surfaced to the user; a DEV-only trace is
+          // enough to notice a systemic problem during development.
+          if (import.meta.env.DEV) {
+            console.debug(`[attachments] best-effort delete failed for ${draft.attachmentId}`);
+          }
+        });
+      }
+
+      dispatch({ type: "REMOVE_ATTACHMENT", payload: { id } });
+    },
+    [state.draft.attachments, state.activeChatId, state.chats],
+  );
   const toggleSidebar = useCallback(() => dispatch({ type: "TOGGLE_SIDEBAR" }), []);
 
   const createProject = useCallback(

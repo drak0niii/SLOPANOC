@@ -27,8 +27,10 @@ vi.mock("../api/selections", () => ({
 }));
 
 const uploadAttachment = vi.fn();
+const deleteAttachment = vi.fn();
 vi.mock("../api/attachments", () => ({
   uploadAttachment: (...args: unknown[]) => uploadAttachment(...args),
+  deleteAttachment: (...args: unknown[]) => deleteAttachment(...args),
 }));
 
 import { ApiError } from "../api/client";
@@ -89,6 +91,8 @@ beforeEach(() => {
   skipSelection.mockReset();
   cancelRun.mockReset();
   uploadAttachment.mockReset();
+  deleteAttachment.mockReset();
+  deleteAttachment.mockResolvedValue(undefined);
   createSession.mockImplementation(async () => ({ session_id: `session-${createSession.mock.calls.length}` }));
 });
 
@@ -584,6 +588,117 @@ describe("AppState — real image upload lifecycle", () => {
     });
 
     expect(imageDrafts()).toHaveLength(0);
+    // Never uploaded to READY at removal time -- no real attachment_id
+    // existed yet, so there is nothing for a B7 delete call to target.
+    expect(deleteAttachment).not.toHaveBeenCalled();
+  });
+});
+
+describe("AppState — POST-5.1 B7 removeAttachment triggers server-side cleanup", () => {
+  it("removing a READY (already-uploaded) image deletes it server-side", async () => {
+    renderHarness();
+    uploadAttachment.mockResolvedValue({
+      attachment_id: "att-ready-1",
+      filename: "photo.png",
+      mime_type: "image/png",
+      size_bytes: 100,
+      status: "ready",
+    });
+
+    act(() => {
+      latest.queueImageFiles([pngFile()]);
+    });
+    await flush();
+    const draftId = imageDrafts()[0].id;
+    expect(imageDrafts()[0].uploadState).toBe("ready");
+    const chatId = latest.state.activeChatId!;
+    const backendSessionId = latest.state.chats[chatId].backendSessionId!;
+
+    act(() => {
+      latest.removeAttachment(draftId);
+    });
+    await flush();
+
+    expect(imageDrafts()).toHaveLength(0);
+    expect(deleteAttachment).toHaveBeenCalledExactlyOnceWith(backendSessionId, "att-ready-1");
+  });
+
+  it("removing a PENDING/UPLOADING image never calls the delete API", async () => {
+    renderHarness();
+    uploadAttachment.mockImplementation(() => new Promise(() => {})); // never resolves
+
+    act(() => {
+      latest.queueImageFiles([pngFile()]);
+    });
+    await flush();
+    const draftId = imageDrafts()[0].id;
+    expect(imageDrafts()[0].uploadState).toBe("uploading");
+
+    act(() => {
+      latest.removeAttachment(draftId);
+    });
+    await flush();
+
+    expect(deleteAttachment).not.toHaveBeenCalled();
+  });
+
+  it("removing a FAILED image never calls the delete API", async () => {
+    renderHarness();
+    uploadAttachment.mockRejectedValue(new Error("network down"));
+
+    act(() => {
+      latest.queueImageFiles([pngFile()]);
+    });
+    await flush();
+    const draftId = imageDrafts()[0].id;
+    expect(imageDrafts()[0].uploadState).toBe("failed");
+
+    act(() => {
+      latest.removeAttachment(draftId);
+    });
+    await flush();
+
+    expect(deleteAttachment).not.toHaveBeenCalled();
+  });
+
+  it("a failing best-effort delete never re-adds the removed attachment or throws", async () => {
+    renderHarness();
+    uploadAttachment.mockResolvedValue({
+      attachment_id: "att-ready-2",
+      filename: "photo.png",
+      mime_type: "image/png",
+      size_bytes: 100,
+      status: "ready",
+    });
+    deleteAttachment.mockRejectedValue(new Error("simulated network failure"));
+
+    act(() => {
+      latest.queueImageFiles([pngFile()]);
+    });
+    await flush();
+    const draftId = imageDrafts()[0].id;
+
+    act(() => {
+      latest.removeAttachment(draftId);
+    });
+    await flush();
+
+    expect(imageDrafts()).toHaveLength(0); // still removed locally, no error surfaced
+  });
+
+  it("removing a non-image attachment never calls the delete API", async () => {
+    renderHarness();
+    act(() => {
+      latest.addAttachments([{ id: "file-1", kind: "file", name: "notes.txt", meta: "1 KB" }]);
+    });
+    await flush();
+
+    act(() => {
+      latest.removeAttachment("file-1");
+    });
+    await flush();
+
+    expect(deleteAttachment).not.toHaveBeenCalled();
   });
 });
 

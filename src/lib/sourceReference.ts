@@ -34,3 +34,38 @@ export function formatEvidenceTimestamp(sentAt: string): string {
   if (Number.isNaN(date.getTime())) return sentAt;
   return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
+
+/** POST-5.1 B7 corrective pass — a concise, per-reference label for a
+ * governed-KM Source chip, built entirely from trusted metadata the
+ * backend already sends on `KnowledgeSourceReferenceDTO` (never re-
+ * derived, never touching `source_uri`, which the DTO never carries at
+ * all). Fixes the presentation defect where every KM chip on the same
+ * answer read identically ("Source · Governed knowledge") even when they
+ * were genuinely distinct evidence references (e.g. two different
+ * sections of the same approved document) — the underlying references
+ * were always correctly distinct; only the label failed to show it.
+ *
+ * Rule: "<title> · <section heading>" when both are present (the common,
+ * most useful case); "<title>" alone when there is no section heading;
+ * "<source display name>" if even `title` is somehow blank (defensive
+ * only — the backend's own schema treats `title` as required/non-empty,
+ * see backend/api/knowledge_source_reference.py); the original generic
+ * "Governed knowledge" as the final fallback so a chip is never rendered
+ * with empty/whitespace-only text.
+ *
+ * Deliberately NEVER deduplicates or merges references by title/
+ * knowledge_id/section — two distinct selected evidence identities always
+ * remain two distinct chips; this only changes what text each one shows. */
+export function formatKnowledgeSourceLabel(source: {
+  title: string;
+  section_heading: string | null;
+  source_display_name: string | null;
+}): string {
+  const title = source.title.trim();
+  const heading = source.section_heading?.trim();
+  if (title && heading) return `${title} · ${heading}`;
+  if (title) return title;
+  const displayName = source.source_display_name?.trim();
+  if (displayName) return displayName;
+  return "Governed knowledge";
+}

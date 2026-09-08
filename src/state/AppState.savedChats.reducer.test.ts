@@ -139,6 +139,7 @@ function historyResponse(overrides: Partial<SessionHistoryResponseDTO> = {}): Se
         text: "B4B live persistence retry. Reply with: B4B smoke confirmed.",
         created_at: "2026-09-07T22:25:09.620902+00:00",
         attachments: [],
+        knowledge_sources: [],
       },
       {
         message_id: "e-1:assistant",
@@ -147,6 +148,7 @@ function historyResponse(overrides: Partial<SessionHistoryResponseDTO> = {}): Se
         text: "B4B smoke confirmed.",
         created_at: "2026-09-07T22:25:12.382673+00:00",
         attachments: [],
+        knowledge_sources: [],
       },
     ],
     ...overrides,
@@ -219,6 +221,7 @@ describe("reducer — HISTORY_FETCH_STARTED / SUCCEEDED / FAILED / RETRY_HISTORY
               text: "diagnose the fault",
               created_at: "2026-09-07T21:46:46.130347+00:00",
               attachments: [],
+              knowledge_sources: [],
             },
           ],
         }),
@@ -401,6 +404,7 @@ describe("reducer — B4D: history DTO attachments -> Message.persistedAttachmen
               attachments: [
                 { attachment_id: "att-1", filename: "screenshot.png", mime_type: "image/png", size_bytes: 12345 },
               ],
+              knowledge_sources: [],
             },
           ],
         }),
@@ -433,6 +437,7 @@ describe("reducer — B4D: history DTO attachments -> Message.persistedAttachmen
               text: "four images",
               created_at: "2026-09-07T22:25:09.620902+00:00",
               attachments: attachmentDtos,
+              knowledge_sources: [],
             },
           ],
         }),
@@ -474,6 +479,7 @@ describe("reducer — B4D: history DTO attachments -> Message.persistedAttachmen
               attachments: [
                 { attachment_id: "att-1", filename: "screenshot.png", mime_type: "image/png", size_bytes: 12345 },
               ],
+              knowledge_sources: [],
             },
           ],
         }),

@@ -173,7 +173,24 @@ async def test_history_response_never_leaks_raw_state_or_internal_fields(
     assert set(body.keys()) == {"session_id", "messages"}
     assert len(body["messages"]) == 2
     for message in body["messages"]:
-        assert set(message.keys()) == {"message_id", "turn_id", "role", "text", "created_at", "attachments"}
+        # B7 corrective pass -- `source`/`knowledge_sources` are new,
+        # intentional additions (durable, turn-owned provenance -- see
+        # backend/api/turn_source_references.py); this turn produced
+        # neither, so `source` serializes as `null` and `knowledge_sources`
+        # as `[]`, proving the allow-list-widening itself introduces no
+        # fabricated evidence for a turn that never had any.
+        assert set(message.keys()) == {
+            "message_id",
+            "turn_id",
+            "role",
+            "text",
+            "created_at",
+            "attachments",
+            "source",
+            "knowledge_sources",
+        }
+        assert message["source"] is None
+        assert message["knowledge_sources"] == []
 
 
 # --- PATCH /api/sessions/{id} -------------------------------------------

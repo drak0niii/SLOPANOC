@@ -571,6 +571,14 @@ class SessionHistoryMessageDTO(BaseModel):
     text: str
     created_at: str
     attachments: list[AttachmentHistoryDTO] = Field(default_factory=list)
+    # B7 corrective pass -- durable, turn-owned provenance (backend/api/
+    # turn_source_references.py). Only ever populated for `role ==
+    # "assistant"` (a user message never carries a Source) -- mirrors the
+    # existing `attachments` field's own role-scoping. Reuses the EXACT
+    # same DTOs the live SSE `message.completed` event already sends,
+    # never a separate "historical" shape -- see this file's own imports.
+    source: Optional[SourceReferenceDTO] = None
+    knowledge_sources: list[KnowledgeSourceReferenceDTO] = Field(default_factory=list)
 
 
 class SessionHistoryResponse(BaseModel):

@@ -258,7 +258,7 @@ async def test_part10a_prior_turn_history_leakage_is_rejected(monkeypatch: pytes
     from backend.api.chat_service import ChatService
     from backend.api.session_service import ApiSessionService
 
-    async def fake_remediation(*, question: str, chat_topic: Optional[str], run_id: str):
+    async def fake_remediation(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = ()):
         return "Governed knowledge (freshly verified): checksum 7319, status GREEN.", []
 
     monkeypatch.setattr("backend.api.chat_service.enforce_governed_knowledge_at_completion", fake_remediation)
@@ -291,7 +291,7 @@ async def test_part10b_adversarial_suppression_still_forces_current_retrieval(mo
 
     remediation_calls: list[str] = []
 
-    async def fake_remediation(*, question: str, chat_topic: Optional[str], run_id: str):
+    async def fake_remediation(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = ()):
         remediation_calls.append(question)
         return "Checksum 7319, status GREEN.", []
 

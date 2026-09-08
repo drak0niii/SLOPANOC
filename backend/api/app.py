@@ -131,6 +131,20 @@ ROUTES:
                                                      this backend --
                                                      never a public or
                                                      signed URL.
+  DELETE /api/sessions/{session_id}/attachments/{attachment_id} --
+                                                     (POST-5.1 B7) closes
+                                                     the B3-documented
+                                                     orphan gap: deletes a
+                                                     still-READY (never
+                                                     sent) attachment the
+                                                     user removed from
+                                                     their draft. A LINKED
+                                                     attachment (part of a
+                                                     sent message) is
+                                                     rejected, never
+                                                     deleted. Idempotent
+                                                     for an already-
+                                                     deleted id.
 
 No arbitrary tool-execution or state-mutation endpoint exists -- the only
 way to reach Teams-domain conversational behavior through this API is via
@@ -671,6 +685,28 @@ def create_app() -> FastAPI:
                 "Cache-Control": "private",
             },
         )
+
+    @app.delete(
+        "/api/sessions/{session_id}/attachments/{attachment_id}",
+        status_code=204,
+    )
+    async def delete_session_attachment(
+        session_id: str,
+        attachment_id: str,
+        user: UserContext = Depends(resolve_user_context),
+        session_service: ApiSessionService = Depends(get_session_service),
+        attachment_service: AttachmentService = Depends(get_attachment_service),
+        storage: ChatAttachmentStorage = Depends(get_attachment_storage),
+    ) -> Response:
+        await attachment_orchestration.delete_ready_attachment(
+            session_service=session_service,
+            attachment_service=attachment_service,
+            storage=storage,
+            user_id=user.user_id,
+            session_id=session_id,
+            attachment_id=attachment_id,
+        )
+        return Response(status_code=204)
 
     return app
 

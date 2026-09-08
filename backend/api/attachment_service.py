@@ -31,7 +31,7 @@ from starlette.concurrency import run_in_threadpool
 
 from backend.api.session_service import ApiSessionService
 from backend.attachments.models import ChatAttachmentRecord, ChatAttachmentStatus
-from backend.attachments.service import AttachmentNotFoundError, AttachmentService
+from backend.attachments.service import AttachmentNotFoundError, AttachmentService, InvalidAttachmentTransitionError
 from backend.attachments.storage import (
     AttachmentStorageUnavailableError,
     ChatAttachmentStorage,
@@ -205,6 +205,94 @@ async def get_attachment_content(
         raise internal_error("The attachment content could not be retrieved.") from None
 
     return data, record
+
+
+async def delete_ready_attachment(
+    *,
+    session_service: ApiSessionService,
+    attachment_service: AttachmentService,
+    storage: ChatAttachmentStorage,
+    user_id: str,
+    session_id: str,
+    attachment_id: str,
+) -> None:
+    """POST-5.1 B7 -- closes the B3-documented orphan gap: an uploaded
+    image REMOVED from the draft before send (`READY`, `message_id IS
+    NULL`) previously had no way to ever be deleted. This is the one,
+    narrow entry point for that case -- session ownership is verified
+    first (instruction: "lifecycle decisions must be ownership/session
+    scoped"), mirroring `upload_attachment`'s own first step.
+
+    DELIBERATELY NARROWER than the domain layer's own `AttachmentService
+    .mark_deleted` (which already supports `READY|LINKED -> DELETED` --
+    see that method's own docstring): this function only ever permits
+    `READY -> DELETED`. A `LINKED` attachment belongs to a durable, sent
+    conversation turn and must NEVER be deleted merely because it
+    disappeared from a draft -- rejecting it here, before `mark_deleted`
+    is ever called, is what makes "never delete a LINKED attachment"
+    a structural guarantee of THIS call site, not a hope that `mark_
+    deleted`'s own broader capability is never misused by a future
+    caller.
+
+    IDEMPOTENT for an already-`DELETED` id (a caller who already owns
+    this attachment learns nothing new from a second delete call
+    succeeding harmlessly -- instruction: "repeated cleanup/delete should
+    be safe/idempotent").
+
+    ORDER: Cloud SQL transitions to `DELETED` FIRST, GCS deletion is
+    best-effort SECOND -- the inverse of `upload_attachment`'s own order,
+    for the same underlying reason: the Cloud SQL row's status is the
+    authoritative claim about whether the binary exists, so that claim
+    must never be retracted a moment before the deletion actually starts,
+    nor left standing after the binary is gone. A GCS-side failure after
+    the DB transition already succeeded is logged, never raised -- the
+    attachment is correctly gone from every path that matters
+    (`get_attachment_content`/`prepare_attachments_for_turn` already treat
+    `DELETED` as not-found unconditionally); a rare orphaned GCS object
+    left behind is a harmless, unreachable byte range, not a correctness
+    or security issue.
+    """
+    await session_service.get_session(session_id, user_id)  # 404 before ever taking any other action
+
+    try:
+        record = await attachment_service.get_owned(attachment_id, user_id)
+    except AttachmentNotFoundError as exc:
+        raise not_found("No such attachment was found.") from exc
+    if record.session_id != session_id:
+        # Same anti-enumeration discipline as prepare_attachments_for_turn:
+        # a real attachment owned by this user but uploaded against a
+        # DIFFERENT session must look identical to "no such attachment".
+        raise not_found("No such attachment was found.")
+
+    if record.status == ChatAttachmentStatus.DELETED.value:
+        return  # idempotent no-op -- already exactly the state the caller wants
+
+    if record.status == ChatAttachmentStatus.LINKED.value:
+        raise validation_error(
+            "This attachment is part of a sent message and cannot be removed this way."
+        )
+
+    # status is READY here -- the only state this endpoint may ever delete.
+    try:
+        await attachment_service.mark_deleted(attachment_id, user_id, session_id)
+    except InvalidAttachmentTransitionError:
+        # Lost a race with a concurrent transition (e.g. a send that
+        # linked this same attachment between the read above and this
+        # call). Fail safely rather than deleting something that may now
+        # be part of a durable message -- the caller can simply retry,
+        # which will correctly see LINKED (rejected) or DELETED
+        # (idempotent no-op) on the next attempt.
+        raise validation_error(
+            "This attachment could not be removed -- it may have just been used in a message."
+        ) from None
+
+    if storage.is_configured:
+        try:
+            await run_in_threadpool(storage.delete, record.storage_object_name)
+        except Exception:
+            logger.exception(
+                "best-effort GCS cleanup after attachment deletion failed: attachment_id=%s", attachment_id
+            )
 
 
 # --- Multimodal turn preparation (POST-5.1 B5) ------------------------------

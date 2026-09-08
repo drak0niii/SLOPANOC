@@ -368,6 +368,13 @@ export interface SessionHistoryAttachmentDTO {
  * `"{turn_id}:assistant"`) — see AppState.tsx's history-mapping code for
  * why `turn_id` itself is never separately stored on the frontend
  * `Message` model. */
+/** B7 corrective pass — durable, turn-owned provenance
+ * (backend/api/turn_source_references.py). Reuses the EXACT same
+ * `SourceReferenceDTO`/`KnowledgeSourceReferenceDTO` shapes the live SSE
+ * `message.completed` event already sends — never a separate "historical"
+ * shape. Populated only for `role === "assistant"` (a user message never
+ * carries a Source), and only when that turn actually produced evidence —
+ * `source` is absent and `knowledge_sources` is `[]` otherwise. */
 export interface SessionHistoryMessageDTO {
   message_id: string;
   turn_id: string;
@@ -375,6 +382,8 @@ export interface SessionHistoryMessageDTO {
   text: string;
   created_at: string;
   attachments: SessionHistoryAttachmentDTO[];
+  source?: SourceReferenceDTO;
+  knowledge_sources: KnowledgeSourceReferenceDTO[];
 }
 
 export interface SessionHistoryResponseDTO {

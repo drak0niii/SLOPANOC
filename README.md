@@ -27,7 +27,7 @@ checkpoint.
 - A specialist that reasons from governed operational knowledge (Generic
   Knowledge Management, Phase 5.1 — complete) in addition to Teams, and
   that can combine a user's attached image with Teams and/or governed
-  knowledge in the same reasoning turn (POST-5.1 B0–B6 — complete). ITSM,
+  knowledge in the same reasoning turn (POST-5.1 B, B0–B7 — complete). ITSM,
   alarm/fault, topology, and the other Operational Context integrations
   remain roadmap items (see [Roadmap](#roadmap)), not present today.
 
@@ -176,12 +176,11 @@ consistent target.
   integration, Case context, generic governed Knowledge (Phase 5.1 —
   complete, Incident Manager is its first reference consumer), and
   current-turn multimodal image evidence combined with Teams and/or
-  governed knowledge in the same specialist turn (POST-5.1 B0–B6 —
-  complete).
-- **NEXT:** POST-5.1 B7 (attachment lifecycle completion, real-UI
-  follow-up, full regression), then A5 (real TELCO/RAN MOP ingestion
-  through the existing, unchanged Generic KM pipeline), then Phase 4H
-  (security hardening).
+  governed knowledge in the same specialist turn (POST-5.1 B — multimodal
+  attachments, B0–B7 — **COMPLETE**, including B7's own real-stack live
+  validation).
+- **NEXT:** A5 (real TELCO/RAN MOP ingestion through the existing,
+  unchanged Generic KM pipeline), then Phase 4H (security hardening).
 - **FUTURE (target architecture, not yet designed in detail):** a Context
   Engineering Layer that assembles bounded context from Operational,
   Knowledge, and Case context for a specialist; a second specialist
@@ -239,8 +238,8 @@ clearly escalated.
   context, generic governed Knowledge, and multisource (image + Teams +
   governed-KM) specialist reasoning for a single request — all a
   prerequisite for the loop below, not the loop itself.
-- **NEXT:** POST-5.1 B7, then A5 (real TELCO/RAN knowledge content), then
-  Phase 4H security hardening.
+- **NEXT:** A5 (real TELCO/RAN knowledge content), then Phase 4H security
+  hardening. (POST-5.1 B7 is complete — see [Roadmap](#roadmap).)
 - **FUTURE:** a Troubleshooting Manager, the Context Engineering Layer, a
   persistent troubleshooting state, a next-best-diagnostic-action loop, and
   expanded operational integrations (5.2–5.7, see [Roadmap](#roadmap)).
@@ -531,8 +530,10 @@ SLOPANOC is not production-ready. Known gaps include at least:
 
 **Current:** Teams integration, core platform, Markdown rendering, Phase
 5.1 generic governed Knowledge, and POST-5.1 A–B (Cloud SQL, multimodal
-attachments through B6) are all complete. POST-5.1 B7 is next (see below);
-full detail and phase-by-phase topology in
+attachments, B0–B7, all COMPLETE including B7's own real-stack live
+validation) are all complete. **NEXT: A5** (real TELCO/RAN MOP
+ingestion), then Phase 4H (security hardening); full detail and
+phase-by-phase topology in
 [`docs/BUILD_SEQUENCE.md`](docs/BUILD_SEQUENCE.md).
 
 **Phase 5.1: Generic Knowledge Management Layer — COMPLETE.** A generic
@@ -581,8 +582,11 @@ bootstrap, and real runtime cutover + persistence validation — see
 [Local Cloud SQL PostgreSQL development](#local-cloud-sql-postgresql-development)
 and [Current limitations](#current-limitations--production-readiness).
 
-**POST-5.1 B: multimodal attachments.** B0–B6 done. B7 (Lifecycle + Real UI
-+ Full Regression) next.
+**POST-5.1 B: multimodal attachments.** ✅ COMPLETE (B0–B7). B7
+(Lifecycle + Real UI + Full Regression) is DONE — implementation,
+corrective passes, full automated regression, and real-stack live
+validation all passed; see the B7 section below for the complete closure
+evidence.
 Locked execution sequence (do not reorder): B0 [done] architecture + ADK
 persistence audit → B1 [done] Persistent Attachment Foundation → B2
 [done] Attachment Upload/Retrieve API → B3 [done] Complete Existing
@@ -603,8 +607,8 @@ endpoints and real browser rendering, plus a final live check confirming
 image-bearing user turns are non-editable while text-only turns remain
 editable, see below) → B5 Gemini/ADK
 Multimodal Runtime → B6
-Image + Teams + KM Operational Reasoning → B7 Lifecycle + Real UI + Full
-Regression.
+Image + Teams + KM Operational Reasoning → **B7 Lifecycle + Real UI + Full
+Regression [DONE]**.
 
 B4B added two new backend modules and three new routes, backend-only (no
 frontend change): `GET /api/sessions` (the caller's own saved-chat list --
@@ -1212,7 +1216,8 @@ used the actual production Teams connection). No `gs://` URI was ever
 exposed to the user or logged; no base64/`Part.from_bytes`/OCR was used
 at any point.
 
-**B6 is DONE.** B7 (Lifecycle + Real UI + Full Regression) is next.
+**B6 is DONE.** B7 (Lifecycle + Real UI + Full Regression) follows — see
+its own status below.
 
 A follow-up for B7 (not fixed in this pass): Tests B/C's UI rendered
 source chips roughly (a visible "svg" artifact) and showed two governed
@@ -1222,7 +1227,210 @@ legitimately containing two approved, content-overlapping fixtures, so
 two distinct governed references may correctly be selected/shown. B7
 should improve chip presentation/disambiguation without weakening
 provenance — backend selection must never be "deduped" merely because
-two chips look alike.
+two chips look alike. **Resolved in a B7 corrective pass, below:**
+distinct governed Knowledge evidence references are preserved and are
+now disambiguated in the UI using trusted document/section metadata.
+
+**B7 — Lifecycle + Real UI + Full Regression (✅ DONE — see the final
+real-stack live-validation summary at the end of this B7 section).**
+Closes the B3-documented
+orphan gap: an uploaded image removed from the draft before send used to
+stay `READY`/unlinked forever (a real Cloud SQL row plus a real GCS
+object, never reachable again). A new, session-ownership-scoped
+`DELETE /api/sessions/{session_id}/attachments/{attachment_id}` route
+(backed by a narrower entry point over the existing, since-B1
+`AttachmentService.mark_deleted` domain transition) deletes it —
+`READY → DELETED` only; a `LINKED` attachment (already part of a sent
+message) is always rejected, never deleted; repeated delete calls are
+idempotent. The frontend's existing `removeAttachment` now calls this
+automatically, best-effort, only for an already-uploaded (`ready`) image
+draft. The B6-reported "svg artifact" in source chips was audited
+directly against `SourceChip.tsx` and its own test suite (a clean
+accessible name, no stray text) and was not reproducible from source —
+treated as descriptive shorthand from the live-validation narration, not
+a confirmed defect; no code change was made for it. Full regression: full
+backend suite 2631 passed, 1 skipped (2617 B6 baseline + 14 new);
+standalone KM-tagged subset 846 passed (unchanged from B6); Teams-tagged
+subset 291 passed (unchanged from B6); full frontend suite 667 passed
+(662 B6 baseline + 5 new); `npm run build` and `npx tsc -b` both clean.
+No B5/B6 multimodal-propagation, evidence, provenance, or approval file
+was touched. **Live validation was not performed in this specific
+implementation pass** — it required a live browser session and Cloud
+SQL/GCS/Power Automate/Gemini credentials this agent does not have direct
+access to (the same limitation every prior live milestone in this project
+has had); per the Cloud SQL policy above, B7's own live validation had to
+use Cloud SQL for both database domains, never SQLite. **That live
+validation has since been performed by the user and PASSED in full** —
+see the final real-stack live-validation summary at the end of this B7
+section. B7's status at the time this specific pass completed was
+implementation-complete, pending live validation; B7 as a whole is now
+DONE.
+
+**B7 corrective pass — governed-KM source label disambiguation.** The
+real UI could show two genuinely distinct governed-KM Source chips on the
+same answer (e.g. two sections — "Verification" and "Escalation" — of the
+same approved document) both rendered with the identical generic text
+"Source · Governed knowledge," making them indistinguishable even though
+the underlying provenance was already correct. Fixed entirely in the
+frontend: `KnowledgeSourceReferenceDTO` already carried `title`/`section_
+heading`/`source_display_name`; the backend simply never used them for
+the chip's own label. A new `formatKnowledgeSourceLabel` helper now
+builds `"<title> · <section heading>"` (falling back progressively to
+`<title>` alone, then `<source display name>`, then the original generic
+text) — no backend change, no change to retrieval, evidence selection,
+provenance identity, ranking, KM storage, or Incident Manager behavior,
+and no deduplication of any kind: two distinct selected evidence
+identities still always render as two separate chips, only their text
+now differs. 11 new frontend tests (label fallback chain, two-sections-
+of-one-document stay visually distinct and both present, no `gs://`/
+`source_uri` in the rendered label, Teams presentation unchanged);
+frontend suite 678 passed (667 + 11); build and typecheck clean. No
+backend file changed. (B7 as a whole is now DONE — see the final
+live-validation summary at the end of this B7 section.)
+
+**B7 corrective pass — durable, turn-owned historical provenance
+persistence.** A genuine gap found during the label-disambiguation pass
+above: current-turn Teams/governed-KM provenance rode the live SSE
+`message.completed` event correctly, but `GET /api/sessions/{id}/history`
+never projected either kind at all, so a hard refresh, backend restart, or
+reopened saved chat silently lost a previously-grounded answer's source
+chips. Fixed with one new backend module, `backend/api/turn_source_
+references.py`, which persists a turn's exact `SourceReferenceDTO`/
+`KnowledgeSourceReferenceDTO` payload (the same DTOs the live SSE path
+already sends — never re-derived, never re-running `knowledge_search`) into
+one plain ADK session-state key keyed by turn id — no new table, no
+migration. Because the write is always the full accumulated dict, a real
+ADK `rewind_async` call correctly reverses a discarded turn's own
+provenance for free, using ADK's own existing state-delta replay
+mechanism (verified against installed ADK 1.33.0 source) — no new
+branch-selection logic was needed. `SessionHistoryMessageDTO` gained two
+additive fields (`source`, `knowledge_sources`); the frontend maps them
+onto the exact same `chat.sources`/`chat.knowledgeSources` structures the
+live path already populates, so `Message.tsx`/`SourceChip.tsx` needed no
+changes — live and hydrated rendering converge on one path. Cardinality is
+preserved exactly (two sections of one document still hydrate as two
+separate chips); no `source_uri`/`gs://`/internal identifier is ever
+persisted. 8 new backend tests (a real end-to-end `DatabaseSessionService`/
+`ChatService.run_turn` pass proving Teams + two governed-KM sections
+persist, reproject through history, and correctly get removed by a real
+rewind) plus 6 unit tests; 10 new frontend tests
+(`Message.historicalProvenance.test.tsx`, real `AppStateProvider`
+integration). One pre-existing allow-list test was widened for the two new
+DTO fields — the only existing assertion this pass changed. Full
+regression: backend suite 2639 passed, 1 skipped (2631 + 8 new); KM-keyword
+subset 791 passed; Teams-keyword subset 292 passed; frontend suite 688
+passed (678 + 10); build and typecheck clean. No KM retrieval/ranking/
+provenance-validation, multimodal, approval, or selection-continuation file
+was touched. **Live validation was not performed in this specific pass**
+(same environment limitation as the rest of B7) — this pass's own
+extension to the hard-refresh/backend-restart checklist (requiring the
+same source chips to reappear, not just the same text) was subsequently
+confirmed live and PASSED; see the final live-validation summary at the
+end of this B7 section. (B7 as a whole is now DONE.)
+
+**B7 live-regression corrective pass — governed-knowledge completion
+remediation lost current-turn image evidence.** A real user-run B7
+combined live validation (image showing checksum 7318/status GREEN,
+governed KM requiring 7319/GREEN, Teams naming TEAM-ORION as owner with no
+remediation approved) produced a fabricated answer — "Assuming the image
+shows a checksum of 7319 and a RED status indicator" — instead of using
+the real image. Root cause, proven by audit: `governed_knowledge_
+completion.py`'s bounded remediation (triggered whenever a turn declares
+`requires_governed_knowledge=true` but finishes with no selected KM
+evidence) built its nested `incident_manager` Content text-only,
+unconditionally — this remediation is a bare `Runner.run_async` call,
+never routed through `MultimodalAgentTool`, so B6's image-propagation
+mechanism never reached it, even though the ORIGINAL delegation had the
+image correctly. Fixed with one new function, `multimodal_turn_context
+.trusted_image_parts_from_content`, extracting the same trusted `file_
+data` Part(s) already sitting in chat_service.py's own turn-level
+`Content`, passed through a new `image_parts` parameter on the remediation
+function and appended to its own Content — mirroring `MultimodalAgentTool`
+'s own "text then trusted image parts" construction exactly. No registry,
+no attachment-id re-lookup, no new global state — the same in-memory Part
+objects are passed through a plain function argument within one call
+stack, so there is no channel for a different run to ever access them. A
+sibling remediation (`source_requirements_completion.py`) was found to
+share the same text-only pattern but was deliberately left unchanged — it
+only classifies a boolean pair and never produces user-facing text, so it
+cannot itself fabricate an observed value. 17 new backend tests
+(`test_p5_1_b7_governed_completion_image_evidence.py`), including a real
+end-to-end pipeline test proving the remediation model's own input
+genuinely contains the trusted image Part and that the final synthesis
+correctly reports FAIL/7318/7319/TEAM-ORION with no fabricated "assuming"/
+"RED" text. Two existing test mocks were widened for the new keyword-only
+parameter — the only existing assertions changed. Full regression: backend
+suite 2650 passed, 1 skipped (2639 + 11 net new); KM-keyword subset 791
+passed; Teams-keyword subset 292 passed; attachment/multimodal-keyword
+subset 204 passed; the full B6 multimodal-focused suite re-run unchanged
+at 30 passed; frontend suite 688 passed (untouched — backend-only pass);
+build and typecheck clean. `MultimodalAgentTool`, the fast-path image gate,
+`provenance_compliance.py`'s compliance retry, KM retrieval/ranking, and
+all Teams/attachment/provenance-hydration code from the prior corrective
+passes were audited and confirmed untouched. This pass's own required
+live re-confirmation (the corrected combined image + Teams + governed-KM
+result against the real stack) subsequently PASSED — see the final
+live-validation summary at the end of this B7 section. (B7 as a whole is
+now DONE.)
+
+**B7 live-regression corrective pass — exact-duplicate governed-KM
+provenance.** The user's re-run of the just-corrected combined scenario
+produced the right answer but showed four source chips instead of three —
+Teams, Verification, **Verification again**, Escalation — and the
+duplicate survived a hard refresh, proving it was persisted/reprojected,
+not a transient frontend artifact. Audit found every identity-based
+mechanism already in the codebase (`KnowledgeEvidenceSet`'s own model
+validator, `select_evidence`'s guarded append, `build_knowledge_source_
+references`'s pre-existing dedup — all keyed by the canonical
+`(knowledge_id, version_label, section_id)` identity) already
+structurally correct; the exact live-Gemini trigger could not be
+reproduced without live Cloud SQL/Gemini access. What was missing: no
+exact-identity normalization existed at the persistence boundary or the
+read-time history-projection boundary, so any duplicate reaching either
+point would be persisted/reprojected forever. Fixed with one new function,
+`dedupe_knowledge_source_references` (identity-only — never title/
+heading/content, so two genuinely distinct references from the same
+document always survive), applied both where `chat_service.py` finalizes
+a turn's `knowledge_sources` list (fixing both the live event and the
+persisted record from one point) and at `turn_source_references.py`'s
+read-time projection (a safety net for already-persisted historical
+duplicates, no migration, no KM re-query). 13 new backend tests, including
+a real end-to-end pipeline proving a pathological double-selection of the
+same identity still yields exactly Teams + Verification + Escalation (3
+chips), never four. No frontend code changed — the reducers already
+replace rather than accumulate per-message source state; 81 existing
+frontend tests re-run unchanged to confirm. Full regression: backend suite
+2663 passed, 1 skipped (2650 + 13); KM-keyword subset 792 passed;
+Teams-keyword subset 293 passed; B6 multimodal suite unchanged at 30
+passed; frontend suite unchanged at 688 passed; build and typecheck clean.
+No Aurora/checksum/GREEN/TEAM-ORION/section-name string appears in any
+production code path — only in this pass's own regression fixture.
+
+**B7 FINAL REAL-STACK LIVE VALIDATION — ✅ ALL TESTS PASSED.** Real
+stack: real React UI, real FastAPI backend, real Gemini 2.5 Flash via
+Vertex AI/ADK, real Cloud SQL PostgreSQL for both the general and the
+governed-KM runtime domains (each explicitly configured, per the
+mandatory Cloud SQL policy — no implicit fallback from
+`SLOPANOC_DATABASE_URL`), real private GCS attachment storage, real
+Power Automate Teams gateway, a real Microsoft Teams conversation
+("SLOPANOC Gateway Group Test"). Tests covered: READY-attachment cleanup;
+a durable image surviving hard refresh; a durable image and conversation
+surviving a real backend restart; image + Cloud SQL governed KM producing
+the correct FAIL/escalate result; image + real Teams; the full combined
+image + Teams + governed-KM scenario producing the correct result with no
+invented values (the live proof the multimodal-remediation corrective
+pass fixed the real defect); exactly three distinct source chips with no
+duplicate (the live proof the exact-duplicate-provenance corrective pass
+fixed the real defect); hard refresh and backend restart both preserving
+the same answer, image, and exactly three source references without
+re-prompting. SelectionCard continuation preserving the original trusted
+image remains previously live-proven (B6/earlier B7 validation) and
+regression-covered — it was not re-run in this final pass, since it was
+untouched by it. Full detail: CLAUDE.md's own B7 closure entry.
+
+**B7 — Lifecycle + Real UI + Full Regression — ✅ COMPLETE.** POST-5.1 B —
+Multimodal Attachments (B0–B7) — ✅ COMPLETE. **NEXT: A5** (real
+TELCO/RAN MOP ingestion), then Phase 4H (security hardening).
 
 Locked Gemini/ADK multimodal construction rule (B0, proven against the
 installed `google-adk==1.33.0`/`google-genai==1.75.0` stack, both by
@@ -1311,8 +1519,9 @@ sent with a chat message, no Gemini/ADK/`Part.from_uri` wiring exists in
 the live send path, and no saved-conversation rehydration exists — all
 still B4/B5.
 
-**Then — A5: real TELCO/RAN MOP ingestion** (after Attachments completes
-in full, not just B1). A5 ingests the 3 real TELCO/RAN MOPs through the
+**NEXT — A5: real TELCO/RAN MOP ingestion** (Attachments/POST-5.1 B is
+now complete in full, B0–B7 — A5 has not started). A5 ingests the 3 real
+TELCO/RAN MOPs through the
 existing, unchanged Generic KM pipeline (MOP → source adapter/import
 boundary → `IngestedKnowledgeDocument` → processing → governance →
 `KnowledgeRepository` → Cloud SQL PostgreSQL) — a separate milestone from

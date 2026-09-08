@@ -415,13 +415,12 @@ Teams
 Cases
 Generic KM Layer → Knowledge Context (Phase 5.1, complete)
 Current-turn multimodal image evidence, combined with Teams and/or
-  Knowledge Context in one specialist turn (POST-5.1 B0-B6, complete)
+  Knowledge Context in one specialist turn (POST-5.1 B, B0-B7, complete)
 ```
 
 ### Next
 
 ```text
-POST-5.1 B7 — attachment lifecycle / real UI / full regression
 A5 — real TELCO/RAN MOP ingestion (real knowledge content, same pipeline)
 Phase 4H — security hardening
 ```

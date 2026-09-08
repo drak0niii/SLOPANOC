@@ -147,11 +147,19 @@ from backend.api.run_trace import RunTraceRecorder
 from backend.api.schemas import ActiveCaseDTO, AssistantMessage, ChatResponse, PendingActionDTO
 from backend.api.session_service import APP_NAME, DEFAULT_USER_ID, ApiSessionService, get_session_service
 from backend.api.session_state_keys import record_user_turn_activity
-from backend.api.knowledge_source_reference import build_knowledge_source_references
+from backend.api.knowledge_source_reference import (
+    build_knowledge_source_references,
+    dedupe_knowledge_source_references,
+)
 from backend.api.source_reference import TeamsSourceCapture, resolve_authoritative_contributors
-from backend.api.multimodal_turn_context import discard_run_images, register_run_images
+from backend.api.multimodal_turn_context import (
+    discard_run_images,
+    register_run_images,
+    trusted_image_parts_from_content,
+)
 from backend.api.streaming_events import EventSequencer, Stage, StreamEvent, StreamEventType, status_data
 from backend.api.turn_context import bind_run_id, pop_message_texts, reset_run_id
+from backend.api.turn_source_references import TURN_SOURCE_REFERENCES_STATE_KEY, build_turn_source_references_delta
 from backend.attachments.repository import AttachmentRepository
 from backend.attachments.service import AttachmentService, get_attachment_service
 from backend.attachments.storage import ChatAttachmentStorage, get_attachment_storage
@@ -1504,6 +1512,14 @@ class ChatService:
                     question=_remediation_question(message_text),
                     chat_topic=chat_topic,
                     run_id=f"{sequencer.run_id}::governed-completion",
+                    # B7 live-regression corrective pass -- this turn's own
+                    # trusted image evidence (already validated once, into
+                    # `content`, above) must remain available across this
+                    # bounded remediation, exactly as it was for the
+                    # original delegation -- see governed_knowledge_
+                    # completion.py's own module docstring for the full
+                    # live-failure narrative this closes.
+                    image_parts=trusted_image_parts_from_content(content),
                 )
             except Exception:
                 _logger.warning(
@@ -1632,11 +1648,51 @@ class ChatService:
         # (no `knowledge_select_evidence` call this turn, or it was never
         # called at all) correctly omits the key entirely -- SEARCH RESULT
         # != EVIDENCE USED.
-        knowledge_sources = build_knowledge_source_references(selected_knowledge_evidence)
+        #
+        # B7 live-regression corrective pass -- a second, defensive exact-
+        # identity normalization pass (never title/heading/content-based --
+        # see knowledge_source_reference.py's own docstring) applied HERE,
+        # at the single point this turn's `knowledge_sources` list is
+        # finalized, so the live SSE event below AND the persisted
+        # provenance record (a few lines further down) are always built
+        # from the SAME already-safe list -- never two independently
+        # "mostly deduplicated" lists that could drift apart.
+        knowledge_sources = dedupe_knowledge_source_references(
+            build_knowledge_source_references(selected_knowledge_evidence)
+        )
         if knowledge_sources:
             message_completed_data["knowledge_sources"] = [
                 reference.model_dump(mode="json") for reference in knowledge_sources
             ]
+
+        # B7 corrective pass -- durably persists the SAME already-safe
+        # `source_reference`/`knowledge_sources` this turn just built for
+        # the live SSE event above, keyed by this turn's own real ADK
+        # `invocation_id` (`turn_invocation_id`, captured earlier from the
+        # Runner's first event -- the same identity `session_history_
+        # service.py`'s `turn_id` already uses). See turn_source_
+        # references.py's own module docstring for why plain ADK session
+        # state (never a new table/migration) is sufficient, and why this
+        # correctly disappears again if the turn is later rewound away
+        # (ADK's own event-order-based state-delta reversal, not a new
+        # mechanism). Written BEFORE the MESSAGE_COMPLETED event that
+        # announces it, matching this method's own "persist before
+        # announcing" discipline elsewhere. A turn with neither a Teams
+        # nor a governed-KM source has nothing to persist -- `build_turn_
+        # source_references_delta` returns `None` for that case, and no
+        # write happens at all.
+        if turn_invocation_id is not None:
+            turn_source_references_delta = build_turn_source_references_delta(
+                refreshed_session.state.get(TURN_SOURCE_REFERENCES_STATE_KEY),
+                turn_invocation_id,
+                source_reference,
+                knowledge_sources,
+            )
+            if turn_source_references_delta is not None:
+                await self._session_service.persist_state_delta(
+                    refreshed_session, {TURN_SOURCE_REFERENCES_STATE_KEY: turn_source_references_delta}
+                )
+
         yield sequencer.build(StreamEventType.MESSAGE_COMPLETED, message_completed_data)
 
         pending_action = map_pending_action(refreshed_session.state)

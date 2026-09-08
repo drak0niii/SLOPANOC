@@ -167,3 +167,16 @@ export async function postForm<T>(path: string, formData: FormData, signal?: Abo
 
   return (await response.json()) as T;
 }
+
+/**
+ * DELETE helper (POST-5.1 B7) — every current DELETE route in this API
+ * (attachment cleanup, and the pre-existing Case/session unlink route)
+ * returns 204 No Content, so this deliberately never attempts to parse a
+ * response body — unlike `postJson`/`patchJson`/`postForm`, there is
+ * nothing to return on success. Shares `throwForFailedResponse` with
+ * every other verb for identical SafeError mapping on failure.
+ */
+export async function deleteRequest(path: string): Promise<void> {
+  const response = await apiFetch(path, { method: "DELETE" });
+  if (!response.ok) return throwForFailedResponse(path, response);
+}

@@ -269,9 +269,11 @@ describe("SourceChip — Teams supporting evidence (snippet-authenticity fix)", 
 });
 
 describe("SourceChip — Knowledge (kind: 'knowledge', Phase 5.1J correction pass)", () => {
-  it("renders a compact 'Source · Governed knowledge' trigger", () => {
+  it("renders a compact 'Source · <title> · <section heading>' trigger (POST-5.1 B7 corrective pass)", () => {
     render(<SourceChip kind="knowledge" source={makeKnowledgeSource()} />);
-    expect(screen.getByRole("button", { name: /Source · Governed knowledge/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Source · Aurora Relay Verification Procedure · Verification/ }),
+    ).toBeInTheDocument();
   });
 
   it("opens the drawer showing title, document type, version, section, source, and supporting evidence", () => {
@@ -329,5 +331,63 @@ describe("SourceChip — Knowledge (kind: 'knowledge', Phase 5.1J correction pas
     render(<SourceChip kind="knowledge" source={source} />);
     fireEvent.click(screen.getByRole("button"));
     expect(screen.getByText(`"${longContent}"`)).toBeInTheDocument();
+  });
+});
+
+describe("SourceChip — Knowledge source disambiguation (POST-5.1 B7 corrective pass)", () => {
+  it("two references from the SAME document but different sections render with visually distinct labels, and BOTH remain present", () => {
+    const verification = makeKnowledgeSource({
+      source_id: "ks-verification",
+      section_id: "aurora-relay-verification:v1:s0",
+      section_heading: "Verification",
+    });
+    const escalation = makeKnowledgeSource({
+      source_id: "ks-escalation",
+      section_id: "aurora-relay-verification:v1:s1",
+      section_heading: "Escalation",
+    });
+
+    render(
+      <>
+        <SourceChip kind="knowledge" source={verification} />
+        <SourceChip kind="knowledge" source={escalation} />
+      </>,
+    );
+
+    const buttons = screen.getAllByRole("button");
+    expect(buttons).toHaveLength(2); // both distinct references still render — never merged/deduped
+    expect(
+      screen.getByRole("button", { name: /Source · Aurora Relay Verification Procedure · Verification/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Source · Aurora Relay Verification Procedure · Escalation/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to the title alone when section_heading is absent", () => {
+    const source = makeKnowledgeSource({ section_heading: null });
+    render(<SourceChip kind="knowledge" source={source} />);
+    expect(
+      screen.getByRole("button", { name: /^Source · Aurora Relay Verification Procedure$/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to 'Governed knowledge' when title and section_heading are both unusable", () => {
+    const source = makeKnowledgeSource({ title: "", section_heading: null, source_display_name: null });
+    render(<SourceChip kind="knowledge" source={source} />);
+    expect(screen.getByRole("button", { name: /Source · Governed knowledge/ })).toBeInTheDocument();
+  });
+
+  it("the chip's own accessible trigger text never contains a gs:// URI or any internal storage identifier", () => {
+    const source = makeKnowledgeSource();
+    render(<SourceChip kind="knowledge" source={source} />);
+    const button = screen.getByRole("button");
+    expect(button.textContent ?? "").not.toContain("gs://");
+    expect(button.textContent ?? "").not.toMatch(/source_uri/i);
+  });
+
+  it("Teams source presentation is completely unchanged by this pass", () => {
+    render(<SourceChip kind="teams" source={makeSource()} />);
+    expect(screen.getByRole("button", { name: /Source · Teams conversation/ })).toBeInTheDocument();
   });
 });

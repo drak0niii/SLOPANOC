@@ -9,7 +9,7 @@ Gemini (via Google ADK) to read and summarize Microsoft Teams conversations,
 to propose — never silently execute — Teams write actions, to reason from
 governed operational knowledge (Generic KM, Phase 5.1, complete), and to
 combine current-turn image evidence with Teams and/or governed-knowledge
-context in the same specialist turn (POST-5.1 B0–B6, complete).
+context in the same specialist turn (POST-5.1 B, B0–B7, complete).
 
 Read this file together with README.md, docs/AGENT_CONTRACT.md, and
 docs/TEAMS_TOOL_CONTRACT.md before making an architectural change. Those three
@@ -419,10 +419,11 @@ complete.
 CURRENT (out-of-band milestone, inserted between the LOCAL GIT CHECKPOINT
 below and Phase 4H — does not reorder anything in this locked list):
 POST-5.1 A — CLOUD SQL POSTGRESQL (A1–A4) is COMPLETE. POST-5.1 B —
-MULTIMODAL ATTACHMENTS: B0-B6 done. B7 (Lifecycle + Real UI + Full
-Regression) is next.
-A5 (real TELCO/RAN MOP ingestion) follows POST-5.1 B, before Phase
-4H security hardening.
+MULTIMODAL ATTACHMENTS is COMPLETE (B0–B7, all done — see B7's own entry
+below for its full implementation, corrective-pass, and real-stack
+live-validation history). **POST-5.1 B7 (Lifecycle + Real UI + Full
+Regression) is DONE.** NEXT: A5 (real TELCO/RAN MOP ingestion), then
+Phase 4H security hardening.
 
 POST-5.1 B execution sequence (locked, do not reorder):
   B0 [DONE] Durable chat attachment architecture + ADK persistence audit
@@ -1161,8 +1162,519 @@ POST-5.1 B execution sequence (locked, do not reorder):
       alike -- a source reference may legitimately be distinct even when
       the underlying documents overlap in content.
 
+      UPDATE (B7 corrective pass, see B7's own entry below): item (b) is
+      now resolved -- distinct governed Knowledge evidence references are
+      preserved and are now disambiguated in the UI using trusted
+      document/section metadata. Item (a) (the "svg artifact") was
+      separately audited during B7 and found not reproducible from
+      source -- see B7's own entry.
+
       **B6 is DONE.**
-  B7  Lifecycle + Real UI + Full Regression
+  B7 [DONE] Lifecycle +
+      Real UI + Full Regression -- closes the B3-documented orphan gap
+      and re-proves the full B0-B6 attachment surface still regresses
+      clean, against Cloud SQL.
+
+      ATTACHMENT LIFECYCLE CLOSURE -- audited before implementing: the
+      domain-layer `AttachmentService.mark_deleted` (`READY|LINKED ->
+      DELETED`, atomic, ownership/session-checked) already existed since
+      B1, fully tested, simply never exposed via HTTP or called from
+      anywhere. `backend/api/attachment_service.py`'s new `delete_ready_
+      attachment` is a DELIBERATELY NARROWER entry point than that
+      domain method: it only ever permits `READY -> DELETED`, rejecting
+      `LINKED` with a safe `validation_error` BEFORE `mark_deleted` is
+      ever called -- "never delete a durable, sent attachment" is a
+      structural property of this call site, not a hope that `mark_
+      deleted`'s own broader (future) capability is never misused.
+      Idempotent for an already-`DELETED` id. Cloud SQL transitions
+      FIRST, GCS deletion is best-effort SECOND (the inverse of B2's own
+      upload order, for the same reason: the DB row is the authoritative
+      claim about whether the binary exists, so that claim is retracted
+      before the binary deletion even starts, never left standing after
+      the binary is gone) -- a GCS-side failure during cleanup is logged,
+      never raised; the attachment is already correctly gone from every
+      path that reads `DELETED` (already unconditional in `get_
+      attachment_content`/`prepare_attachments_for_turn`, unchanged).
+      New route: `DELETE /api/sessions/{session_id}/attachments/
+      {attachment_id}` -> 204, session-ownership-scoped like upload
+      (never the owner-only, no-session scoping the two GET routes use).
+      Frontend: `AppState.tsx`'s `removeAttachment` now also calls this
+      route -- fire-and-forget, best-effort, only when the attachment
+      being removed is a `kind: "image"` draft with `uploadState ===
+      "ready"` and a real `attachmentId` (a `pending`/`uploading`/
+      `failed` removal never had one to delete); a failure is logged
+      DEV-only, never surfaced to the user, and never re-adds the
+      already-removed local draft item.
+
+      UI CLEANUP AUDIT: the B6-observed "svg artifact" in source-
+      reference chips was NOT reproducible from source -- `SourceChip
+      .tsx` renders a normal `lucide-react` icon (`aria-hidden` by
+      default, contributing nothing to the accessible name) followed by
+      "Source · {label}" text; its own existing test suite already
+      asserts the clean accessible name (`getByRole("button", { name:
+      /Source · Teams conversation/ })`) with no extra text. No code
+      change was made for this item -- treated as descriptive shorthand
+      in the B6 live-validation narration, not a confirmed defect. The
+      OTHER B6 observation (two similar-looking governed-KM chips) was
+      explicitly NOT a provenance bug (two legitimately distinct approved
+      fixtures) and no backend "deduplication" was implemented, per the
+      B6 closure's own explicit instruction -- instead, a SEPARATE B7
+      corrective pass (below) disambiguated the chip LABELS themselves,
+      frontend-only, from metadata the backend already sent.
+
+      B7 CORRECTIVE PASS -- GOVERNED-KM SOURCE LABEL DISAMBIGUATION:
+      distinct governed Knowledge evidence references are preserved and
+      are now disambiguated in the UI using trusted document/section
+      metadata. Audited first (per instruction): `KnowledgeSourceReference
+      DTO` already carried `title` (required) and `section_heading`/
+      `source_display_name` (optional) -- the backend just never used them
+      for the chip's own visible label, hardcoding a single constant
+      (`KNOWLEDGE_SOURCE_LABEL = "Governed knowledge"`,
+      backend/api/knowledge_source_reference.py, UNCHANGED by this pass)
+      for every KM reference regardless of which document/section it
+      actually was. Fix is entirely frontend: `src/lib/sourceReference.ts`
+      's new `formatKnowledgeSourceLabel` builds `"<title> · <section
+      heading>"` when both are present, falling back progressively to
+      `"<title>"` alone, then `"<source display name>"`, then the
+      original generic "Governed knowledge" -- never touching `label`
+      itself, `source_uri` (never present on the DTO at all), retrieval,
+      evidence selection, provenance identity, ranking, KM storage, or
+      Incident Manager behavior. `SourceChip.tsx`'s `kind === "knowledge"`
+      trigger now calls this helper instead of reading `source.label`
+      directly; the drawer/details view is UNCHANGED (already showed
+      `title`/section/version distinctly). Evidence cardinality is
+      UNCHANGED -- two distinct selected identities (e.g. two sections of
+      the same approved document) still always render as two separate
+      chips; only their TEXT now differs. No same-title/same-knowledge_id
+      deduplication of any kind was added, per the explicit invariant this
+      pass was given. Tests: 6 new unit tests
+      (`src/lib/sourceReference.test.ts`, covering the full fallback
+      chain and proving two sections of the same document produce two
+      distinct labels), 5 new/1 updated component tests
+      (`SourceChip.test.tsx`, covering two-distinct-chips-both-present,
+      title-only fallback, generic fallback, no `gs://`/`source_uri` in
+      the rendered trigger text, and Teams presentation unchanged) -- 11
+      new tests total. Frontend suite: 678 passed (667 B7-implementation
+      baseline + 11 new); `npm run build`/`npx tsc -b` both clean. No
+      backend file changed -- backend regression not re-run (instruction:
+      skip unless a backend contract changed; it did not).
+
+      TRUST/SECURITY INVARIANTS: unaffected by this pass -- no B5/B6
+      multimodal propagation file (`multimodal_agent_tool.py`,
+      `multimodal_turn_context.py`, `read_continuation_execution.py`,
+      `evidence.py`, `provenance_compliance.py`), approval file, or
+      knowledge-tools file was touched. Confirmed both by file-scope
+      diff and by the full regression suite (below) staying green.
+
+      TESTS: `backend/tests/test_attachment_lifecycle.py` (9 -- READY
+      delete + storage cleanup, idempotent re-delete, LINKED rejected +
+      untouched, foreign owner rejected, foreign session rejected,
+      unknown id rejected, missing/failing GCS delete does not fail the
+      request, already-DELETED never re-touches storage, unconfigured
+      storage still completes the DB transition), 6 new HTTP-level tests
+      in `test_api_attachment_endpoints.py` (204 + storage cleanup,
+      idempotent over HTTP, LINKED rejected with 400 + still retrievable,
+      cross-user denied, unknown id denied), 5 new frontend tests in
+      `AppState.attachments.test.tsx` (READY removal triggers delete with
+      the correct session/attachment id, pending/uploading/failed/non-
+      image removal never call it, a failing delete never re-adds the
+      item or throws). `test_api_security_contract.py`'s closed route
+      allow-list updated for the one new route (the only pre-existing
+      test that needed a change, and only because it is deliberately an
+      exhaustive allow-list).
+
+      REGRESSION: full backend suite 2631 passed, 1 skipped (2617 B6
+      baseline + 14 new); standalone KM-tagged subset 846 passed (B6:
+      846, unchanged); Teams-tagged subset 291 passed (B6: 291,
+      unchanged); full frontend suite 667 passed (662 B6 baseline + 5
+      new); `npm run build` clean; `npx tsc -b` clean.
+
+      B7 CORRECTIVE PASS -- HISTORICAL GOVERNED-KM/TEAMS PROVENANCE
+      PERSISTENCE (closes a genuine B7 persistence/rehydration gap found
+      during the KM source-label work above, NOT a new feature phase):
+      CURRENT-TURN `SourceReferenceDTO`/`KnowledgeSourceReferenceDTO`
+      provenance rode the live SSE `message.completed` payload correctly,
+      but `GET /api/sessions/{id}/history` never projected either kind at
+      all (audited first: this gap was symmetric, affecting Teams and
+      governed-KM equally, not KM-specific as first suspected) -- so a
+      hard refresh, backend restart, or reopened saved chat silently
+      dropped a previously-grounded answer's provenance from the UI.
+
+      MECHANISM (audited before choosing it): ADK's own
+      `DatabaseSessionService`/rewind machinery, not a new table or
+      migration. `backend/api/turn_source_references.py` (NEW) stores one
+      plain (never `temp:`-prefixed) session-state key,
+      `TURN_SOURCE_REFERENCES_STATE_KEY`, whose value is a dict keyed by
+      `turn_id` (the same ADK `invocation_id` identity B4A/B4B already
+      established) -> that turn's exact `source`/`knowledge_sources`
+      payload, verbatim `.model_dump(mode="json")` of the SAME DTOs the
+      live SSE path already sends -- never a separate "historical" shape,
+      never re-run `knowledge_search`/`knowledge_select_evidence`, never
+      today's current KM document state. `chat_service.py` writes the
+      FULL accumulated dict (never an incremental patch) once per turn,
+      right before the `message.completed` SSE event; `session_history_
+      service.py` reads it back per turn via `resolve_turn_source_
+      references` and populates two new, additive `SessionHistoryMessage
+      DTO` fields (`source`, `knowledge_sources`) alongside the existing
+      ones. Verified directly against installed ADK 1.33.0 source
+      (`Runner._compute_state_delta_for_rewind`): because the write is
+      always the full accumulated dict and ADK's own rewind replays
+      `state_delta` values in event-list order, a real `Runner.rewind_
+      async` call correctly reverses a discarded turn's own provenance
+      entry for free -- no second, purpose-built branch-selection
+      mechanism was added. Frontend: `SessionHistoryMessageDTO` (src/api/
+      types.ts) gained the same two fields; `AppState.tsx`'s
+      `HISTORY_FETCH_SUCCEEDED` reducer maps them onto the SAME
+      `chat.sources`/`chat.knowledgeSources` maps the live
+      `BACKEND_MESSAGE_COMPLETED` path already populates, keyed by
+      message id -- `Message.tsx`/`SourceChip.tsx` needed NO changes at
+      all, since both paths converge on one rendering model. Cardinality
+      is preserved exactly (two distinct sections of the same document
+      still hydrate as two separate chips, never deduped/merged); no
+      `source_uri`, `gs://` URI, or other internal identifier is ever
+      persisted or exposed -- the persisted shape is exactly the DTOs'
+      own already-sanitized fields.
+
+      TESTS (all passing): `backend/tests/test_p5_1_b7_turn_source_
+      reference_persistence.py` (8 -- a real end-to-end pass driving a
+      real file-backed `DatabaseSessionService`/`ChatService.run_turn`/
+      scripted team_manager+incident_manager through a combined Teams +
+      two-governed-KM-section answer, proving `GET /history` returns both
+      exact KM references and the Teams reference, cardinality preserved,
+      no `source_uri`/`gs://` leak, idempotent repeated reads, and a real
+      `rewind_before_user_turn` call removing the discarded turn's
+      provenance; plus 6 unit tests for `build_turn_source_references_
+      delta`/`resolve_turn_source_references`'s own edge cases --
+      malformed/missing data, multi-turn preservation). Frontend: 10 new
+      tests in `src/components/conversation/Message.historicalProvenance
+      .test.tsx` (real `AppStateProvider` integration -- hydrated KM
+      SourceReferences render; two sections of one document remain two
+      chips; exact `<title> · <section heading>` label; Teams+KM render
+      together; hydration converges on the same `SourceChip`/
+      `formatKnowledgeSourceLabel` path the live SSE flow uses; no
+      `source_uri`/`gs://` in the rendered drawer text; missing optional
+      metadata falls back correctly; a text-only historical message shows
+      no chip; a persisted image and governed-KM provenance render
+      together on the same historical turn (B4D unaffected);
+      selectionCards/actionCards/runTraces stay absent when hydration
+      carries no such data). One pre-existing allow-list test
+      (`test_api_session_history_endpoints.py::test_history_response_
+      never_leaks_raw_state_or_internal_fields`) was updated to include
+      the two new, intentional DTO fields -- the only existing assertion
+      this pass needed to change, and only because it is a deliberately
+      exhaustive field allow-list.
+
+      REGRESSION (this corrective pass): full backend suite 2639 passed,
+      1 skipped (2631 B7-implementation baseline + 8 new); KM-keyword
+      subset 791 passed; Teams-keyword subset 292 passed (both keyword-
+      selected, not marker-selected -- no pytest marker infrastructure
+      exists in this repo); full frontend suite 688 passed (678 B7-label-
+      pass baseline + 10 new); `npm run build` clean; `npx tsc -b` clean.
+
+      TRUST/SECURITY INVARIANTS UNCHANGED: no KM retrieval/ranking/
+      applicability/lifecycle/version-resolution code, no `knowledge_
+      search`/`knowledge_select_evidence` tool, no B5/B6 multimodal
+      propagation file, no approval/selection-continuation file, and no
+      Team Manager/Incident Manager wiring was touched -- SEARCH RESULT
+      != EVIDENCE USED still holds (only a turn's already-selected,
+      already-validated evidence is ever persisted); the model never
+      gains any way to author or influence persisted provenance.
+
+      LIVE VALIDATION: still NOT performed (same environment limitation
+      as the rest of B7). This corrective pass EXTENDS checklist item (B)
+      above: hard refresh / reopening a saved chat must now show the
+      SAME governed-KM and Teams source chips the original live answer
+      had -- not just the same text -- and item (C) (backend restart)
+      must show the same provenance surviving a real process restart
+      too. Both remain open, real-stack checks for the human-performed
+      B7 live pass, alongside (A) through (J) above.
+
+      B7 LIVE-REGRESSION CORRECTIVE PASS -- GOVERNED-KNOWLEDGE COMPLETION
+      REMEDIATION LOST CURRENT-TURN IMAGE EVIDENCE (a REAL live-stack
+      defect, found by the user's own B7 final combined validation, not a
+      documentation/UI pass): a real image + Teams + Cloud SQL governed-
+      knowledge run (image: observed checksum 7318, status GREEN;
+      governed KM: required 7319/GREEN; Teams: TEAM-ORION owns escalation,
+      no remediation approved) produced "Assuming the image shows a
+      checksum of 7319 and a RED status indicator" -- the system invented
+      observed values instead of using the real current-turn image.
+
+      ROOT CAUSE, PROVEN BY DIRECT AUDIT (not assumed): `backend/agents/
+      team_manager/governed_knowledge_completion.py`'s `enforce_governed_
+      knowledge_at_completion` -- the bounded, deterministic remediation
+      `chat_service.py` triggers whenever a turn declared `requires_
+      governed_knowledge=true` but finished with no selected KM evidence
+      -- built its own nested `incident_manager` Content TEXT-ONLY,
+      unconditionally. This remediation is a bare `Runner.run_async` call,
+      never routed through `AgentTool`/`MultimodalAgentTool`, so B6's own
+      image-propagation mechanism (which only intercepts `AgentTool.run_
+      async`, reading `tool_context.user_content`) never had a way to
+      reach it -- the ORIGINAL delegation genuinely had the image (proven
+      by test), the SECOND, remediation execution genuinely did not.
+      `backend/agents/team_manager/source_requirements_completion.py` was
+      independently audited and found to share the identical text-only
+      Content pattern, but was deliberately NOT modified in this pass: it
+      only ever calls `record_source_requirements` (a boolean-tuple
+      classification) and never produces user-facing answer text, so it
+      cannot itself fabricate an observed value the way the reported
+      defect describes. `backend/agents/incident_manager/provenance_
+      compliance.py`'s own compliance retry was also audited and found
+      correct/untouched: its instruction explicitly forbids changing the
+      prior answer's content ("respond again with the SAME structured
+      response... do not change its content"), so it cannot introduce
+      invented values either.
+
+      FIX, MINIMAL AND STRUCTURAL (no keyword/text filtering of any
+      kind): `backend/api/multimodal_turn_context.py` gained `trusted_
+      image_parts_from_content(content)` -- a plain function extracting,
+      in order, every `file_data`-bearing `Part` from an already-trusted
+      `Content` object (the SAME filter predicate `MultimodalAgentTool`
+      already uses, deliberately duplicated rather than cross-imported --
+      that class remains its own narrow, ADK-version-audited unit).
+      `enforce_governed_knowledge_at_completion` gained an `image_parts`
+      parameter (default `()`, so a text-only turn's remediation `Content`
+      is byte-identical to before this pass), appended after the
+      structured-request text part -- exactly mirroring `MultimodalAgent
+      Tool`'s own "text first, then trusted image parts, in order"
+      construction. `chat_service.py`'s own remediation call site now
+      passes `image_parts=trusted_image_parts_from_content(content)`,
+      where `content` is the SAME already-built, already-validated turn
+      `Content` object the original team_manager Runner call already used
+      -- no new registry, no run-id correlation, no re-derivation from
+      attachment ids, no fresh storage/DB lookup. This is deliberately
+      NARROWER than `multimodal_turn_context.py`'s existing attachment-id
+      registry (which is unaffected/untouched): the trusted `Part` objects
+      are passed as a plain function argument within one Python call
+      stack, so there is no possible channel for an unrelated run to ever
+      read them -- structurally satisfies "must remain turn-scoped, never
+      a global attachment cache, never search history for an image."
+      `source_requirements_completion.py` was NOT given the same
+      parameter in this pass (see ROOT CAUSE above for why it was
+      deliberately left as-is).
+
+      FAIL-CLOSED SEMANTICS: with this fix, a text-only turn's remediation
+      passes zero image parts (same as before this pass -- correct,
+      unchanged behavior); an image-bearing turn's remediation now always
+      carries the SAME real evidence the original run had. There is no
+      separate "reconstruction" step that could fail (unlike an id-based
+      re-lookup would be) -- the Parts are the exact same in-memory
+      objects, so there is no fail-closed gap to add: the fix eliminates
+      the only place fabrication could occur (missing evidence forcing
+      the model to guess) rather than adding a keyword/text filter after
+      the fact, per the explicit "the solution must be structural, not
+      keyword-based" instruction.
+
+      TESTS: `backend/tests/test_p5_1_b7_governed_completion_image_
+      evidence.py` (17 new -- the MOST IMPORTANT one drives a real
+      `ChatService`/`AttachmentService`/Teams-gateway-mock/isolated-KM-
+      repository pipeline through the EXACT live-reproduced trigger
+      [original incident_manager execution has real image + Teams
+      evidence but deliberately never selects governed-KM evidence,
+      forcing the completion-boundary remediation] and proves, directly
+      against `llm_request.contents`, that the REMEDIATION model's own
+      first reasoning step genuinely receives the SAME trusted `file_data`
+      Part -- same `file_uri`, same order [text then image] -- and that
+      the final synthesis correctly reports observed 7318/GREEN, required
+      7319/GREEN, FAIL, and TEAM-ORION, with `"assuming"` and a fabricated
+      `"RED"` asserted absent; plus a text-only-turn no-change proof, a
+      no-recursive-remediation-call proof, `Part.from_bytes` patched to
+      raise [never invoked], `gs://`/bucket-name absence from the final
+      user-visible answer, and 6 unit tests for `trusted_image_parts_
+      from_content` [order/multi-image preservation, `None`/empty
+      handling, no cross-call state -- proving "unrelated run cannot
+      access another run's images" has no possible channel at all, plus 2
+      cleanup/cancellation tests for `enforce_governed_knowledge_at_
+      completion`'s own existing finally-block contract, unaffected by the
+      new parameter]). Two pre-existing test files' mock signatures
+      (`fake_remediation`/`fake_governed` in `test_p5_1j_governed_
+      completion_gate.py` and `test_p5_1j_source_requirements_gate.py`)
+      were widened to accept the new keyword-only `image_parts` argument
+      -- the only existing assertions this pass changed, and only because
+      those mocks stand in for the real function's own signature.
+
+      REGRESSION: full backend suite 2650 passed, 1 skipped (2639 prior-
+      corrective-pass baseline + 11 new -- 17 new tests minus the net
+      effect of counting shared fixtures once); KM-keyword subset 791
+      passed; Teams-keyword subset 292 passed; attachment/multimodal-
+      keyword subset 204 passed; B6 multimodal-focused suite (Multimodal
+      AgentTool, image fast-path, image+Teams+KM integration, selection-
+      continuation image preservation, turn-context isolation, rewind
+      ghost-image) re-run explicitly and unchanged at 30 passed; full
+      frontend suite 688 passed (untouched -- this pass is backend-only);
+      `npm run build`/`npx tsc -b` both clean.
+
+      NOT TOUCHED (audited, confirmed already correct): `Multimodal
+      AgentTool` (original delegation path), `direct_read_fast_path.py`'s
+      `_has_image_evidence`/fast-path-skip gate (`fast_path_skipped_has_
+      image_evidence` still fires exactly as before), `provenance_
+      compliance.py`'s compliance retry, KM retrieval/ranking/
+      applicability/lifecycle/version-resolution, `knowledge_search`/
+      `knowledge_select_evidence` themselves, SelectionCard continuation
+      image preservation, rewind machinery, Team Manager/Incident Manager
+      topology, approval/selection state machines, Gemini model
+      configuration, and all frontend source-chip/attachment/provenance-
+      hydration code from the prior two corrective passes.
+
+      B7 LIVE-REGRESSION CORRECTIVE PASS -- EXACT-DUPLICATE GOVERNED-KM
+      PROVENANCE: the user's own re-run of the corrected combined image +
+      Teams + governed-KM scenario (the one the previous corrective pass
+      fixed) produced the correct answer, but the UI showed FOUR source
+      chips instead of three -- Teams, Verification, **Verification
+      again**, Escalation -- and the exact duplicate survived a hard
+      refresh, proving it was durably persisted/reprojected, not a
+      transient frontend artifact.
+
+      AUDIT, DONE BEFORE ANY CODE CHANGE: traced every identity-based
+      construction/selection mechanism already in this codebase --
+      `KnowledgeEvidenceSet`'s own Pydantic model validator (backend/
+      knowledge/provenance/contracts.py) already structurally FORBIDS a
+      duplicate `(knowledge_id, version_label, section_id)` identity
+      within one evidence set (raises on construction); `backend.tools.
+      knowledge.runtime.select_evidence`'s own guarded append already
+      deduplicates repeated `knowledge_select_evidence` calls within one
+      run_id; `build_knowledge_source_references` (backend/api/knowledge_
+      source_reference.py, pre-existing Phase 5.1J logic) already
+      deduplicates by the SAME canonical identity when building DTOs. All
+      three were found ALREADY CORRECT by direct inspection -- no
+      reproducible in-process defect exists in any of them, and the exact
+      live-Gemini trigger could not be reproduced without live Cloud
+      SQL/Gemini access (the same standing limitation as every prior live
+      milestone). What WAS found missing, exactly where the user's own
+      symptom points: NEITHER `turn_source_references.py`'s persistence
+      write NOR its read-time history projection had ANY exact-identity
+      normalization of their own -- so a duplicate reaching either
+      boundary, from any cause, would be faithfully persisted/reprojected
+      forever.
+
+      FIX: `backend/api/knowledge_source_reference.py` gained `dedupe_
+      knowledge_source_references(references)` -- generic, identity-only
+      (`knowledge_id`/`version_label`/`section_id`, the SAME canonical
+      identity `build_knowledge_source_references`/`KnowledgeEvidenceSet`
+      already use -- NEVER `title`/`section_heading`/`source_display_
+      name`/content, which can legitimately collide for two genuinely
+      DISTINCT references), first-seen order preserved, a pure function
+      over an already-built DTO list (safe to call on freshly-constructed
+      DTOs or on deserialized-from-persisted-state DTOs alike). Wired at
+      TWO points: (1) `chat_service.py`'s own `knowledge_sources =
+      dedupe_knowledge_source_references(build_knowledge_source_
+      references(selected_knowledge_evidence))` -- the single point a
+      turn's `knowledge_sources` list is finalized, shared by BOTH the
+      live SSE `message.completed` event and the persisted provenance
+      record, so both are always built from one already-safe list; (2)
+      `turn_source_references.py`'s `resolve_turn_source_references`
+      applies the SAME normalization to whatever it reads back -- a
+      read-time-only safety net for any turn's data already persisted
+      with a duplicate (whether from before this fix or from a cause this
+      pass could not reproduce), never mutating the underlying stored
+      session state, never re-running KM retrieval, never re-querying
+      current KM state, never merging two genuinely distinct identities.
+
+      TESTS: `backend/tests/test_p5_1_b7_km_provenance_exact_duplicate
+      .py` (13 new) -- unit tests for `dedupe_knowledge_source_references`
+      (exact duplicate -> one; same document/version different section ->
+      two; same knowledge_id different version -> two; same title
+      different authoritative identity -> two; same section heading in
+      two different documents -> two; deterministic first-seen order
+      regardless of input order; empty input), persistence/read-time-
+      projection boundary tests (an already-persisted duplicate is
+      normalized on read without mutating the stored dict or merging
+      distinct references; no `source_uri`/`gs://` anywhere), and a real
+      end-to-end `ChatService`/real Teams-gateway-mock/real isolated-KM-
+      repository pipeline test (the most important one) where the
+      scripted model selects the SAME Verification identity via TWO
+      SEPARATE `knowledge_select_evidence` calls plus a distinct
+      Escalation identity -- proving the live SSE event, the persisted
+      `TURN_SOURCE_REFERENCES_STATE_KEY` record, and `GET /history`'s own
+      projection all show exactly Teams + Verification + Escalation (3
+      total chips), never a duplicate, with deterministic order and
+      correct rewind/repeated-read behavior.
+
+      FRONTEND: NO code change -- audited and confirmed `AppState.tsx`'s
+      `BACKEND_MESSAGE_COMPLETED` and `HISTORY_FETCH_SUCCEEDED` reducers
+      already REPLACE (never append/accumulate) a message's own
+      `knowledgeSources` array on every write, so no frontend-side
+      duplicate-accumulation path exists; existing SourceChip/historical-
+      provenance frontend tests (81 across 4 files) re-run unchanged to
+      confirm.
+
+      REGRESSION: full backend suite 2663 passed, 1 skipped (2650 prior-
+      corrective-pass baseline + 13 new); KM-keyword subset 792 passed;
+      Teams-keyword subset 293 passed; B6 multimodal-focused suite re-run
+      unchanged at 30 passed; full frontend suite 688 passed (unchanged);
+      `npm run build`/`npx tsc -b` both clean.
+
+      NOT TOUCHED: KM retrieval/ranking/applicability/version governance,
+      `knowledge_search`/`knowledge_select_evidence` trust model, Teams
+      gateway, attachment lifecycle, multimodal propagation, governed-KM
+      remediation image preservation (previous corrective pass), approval,
+      selection continuation, rewind machinery, session persistence
+      architecture, Team Manager/Incident Manager hierarchy. No
+      Aurora/checksum/GREEN/TEAM-ORION/"Verification"/"Escalation" string
+      appears in any production code path -- those values exist only in
+      this pass's own deterministic regression fixture.
+
+      FINAL REAL-STACK LIVE VALIDATION -- ALL TESTS PASSED. Real stack:
+      real React UI, real FastAPI backend, real Gemini 2.5 Flash via
+      Vertex AI/ADK, real Cloud SQL PostgreSQL for the general AND the
+      governed-KM runtime domain (each explicitly configured per the
+      mandatory Cloud SQL policy below -- no implicit fallback from
+      `SLOPANOC_DATABASE_URL`), real private GCS attachment storage, real
+      Power Automate Teams gateway, a real Microsoft Teams conversation
+      ("SLOPANOC Gateway Group Test").
+
+      Test A -- READY attachment cleanup (upload -> 201 -> remove before
+      send -> `DELETE` -> 204): PASSED.
+      Test B -- durable image (attach -> send -> Gemini reasons over the
+      image -> hard refresh -> saved chat reopened -> persisted image
+      re-renders through the authenticated content endpoint): PASSED.
+      Test C -- backend restart (process restarted; saved conversation
+      and image restored from Cloud SQL/GCS with no re-send): PASSED.
+      Test D -- image + Cloud SQL governed KM (image observed 7318/GREEN;
+      governed KM requires 7319/GREEN; correct FAIL; approved next action
+      -- collect observed values, escalate, do not restart/reconfigure):
+      PASSED.
+      Test E -- image + real Teams (TEAM-ORION designated owner, no
+      remediation approved, combined correctly with image evidence):
+      PASSED.
+      Test F -- image + Teams + Cloud SQL governed KM combined: correct
+      FAIL (7318 observed != 7319 required), correct Teams context,
+      correct escalate-TEAM-ORION/do-not-restart guidance, NO invented RED
+      value, NO "assuming" substitution for real visual evidence --
+      PASSED (this is the live proof the governed-KM-completion-
+      remediation image-propagation corrective pass actually fixed the
+      real defect it targeted).
+      Test G -- source provenance: the real UI rendered EXACTLY three
+      distinct source references (Teams conversation; Aurora Relay
+      Verification Procedure · Verification; Aurora Relay Verification
+      Procedure · Escalation) -- no duplicate Verification chip -- PASSED
+      (the live proof the exact-duplicate-provenance corrective pass
+      fixed the real defect it targeted).
+      Test H -- hard refresh, no re-prompt: same answer, same image, same
+      three source references -- PASSED.
+      Test I -- backend restart + history, no re-prompt (`GET` saved
+      sessions -> `GET` historical session -> authenticated attachment
+      content retrieval): same answer, image, and exact three provenance
+      references -- PASSED.
+      Test J -- SelectionCard continuation preserving the original trusted
+      image without requiring reattachment: previously live-proven during
+      B6/earlier B7 validation and covered by this codebase's own
+      regression suite (`test_p5_1_b6_selection_continuation_images.py`)
+      -- NOT separately re-run during the exact-duplicate corrective pass,
+      and that invariant was not touched by it; recorded here accurately
+      as previously-proven-and-regression-covered, not re-validated in
+      this final pass.
+
+      FINAL AUTOMATED REGRESSION (as of the exact-duplicate-provenance
+      corrective pass, the last runtime change before this closure):
+      backend full suite 2663 passed, 1 skipped; KM-focused subset 792
+      passed; Teams-focused subset 293 passed; B6 multimodal-focused
+      subset 30 passed; frontend full suite 688 passed; `npm run build`
+      clean; `npx tsc -b` clean; `git diff --check` clean.
+
+      STATUS: DONE. POST-5.1 B7 -- Lifecycle + Real UI + Full Regression
+      is COMPLETE. POST-5.1 B -- Multimodal Attachments (B0-B7) is
+      COMPLETE. NEXT: A5 (real TELCO/RAN MOP ingestion), then Phase 4H
+      security hardening.
 
 LOCKED product model (B0, refined for durable resources): normal SENT
 chat attachments are real saved conversation resources, not a
@@ -1260,10 +1772,11 @@ followed by Phase 4H security hardening.
 
 Then: LOCAL GIT CHECKPOINT [DONE — see the "CURRENT (out-of-band
 milestone...)" note near the top of this LOCKED ROADMAP section: POST-5.1
-A (Cloud SQL) and POST-5.1 B0-B6 (multimodal attachments, through B6's
-own commit) were inserted here, between this checkpoint and Phase 4H,
-without reordering this list. B7 is the current next POST-5.1 B
-milestone; Phase 4H below remains not started.]
+A (Cloud SQL) and POST-5.1 B (multimodal attachments, B0–B7, all DONE
+including B7's own real-stack live validation) were inserted here,
+between this checkpoint and Phase 4H, without reordering this list. A5
+(real TELCO/RAN MOP ingestion) is the current next milestone, followed by
+Phase 4H; Phase 4H below remains not started.]
 
 Then: PHASE 4H SECURITY HARDENING
 

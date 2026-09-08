@@ -310,3 +310,142 @@ def test_cross_user_session_upload_denied(session_service, attachment_service, s
         assert response.status_code == 404
     finally:
         app.dependency_overrides.clear()
+
+
+# --- delete (POST-5.1 B7) ---------------------------------------------------
+
+
+def test_delete_ready_attachment_returns_204_and_removes_from_storage(
+    session_service, attachment_service, storage
+) -> None:
+    app.dependency_overrides[get_session_service] = lambda: session_service
+    app.dependency_overrides[get_attachment_service] = lambda: attachment_service
+    app.dependency_overrides[get_attachment_storage] = lambda: storage
+    try:
+        with TestClient(app) as c:
+            session_response = c.post("/api/sessions", headers={"X-SLOPANOC-DEV-USER": "alice"})
+            session_id = session_response.json()["session_id"]
+            upload = c.post(
+                f"/api/sessions/{session_id}/attachments",
+                files={"file": ("screenshot.png", _png_bytes(), "image/png")},
+                headers={"X-SLOPANOC-DEV-USER": "alice"},
+            )
+            attachment_id = upload.json()["attachment_id"]
+
+            response = c.delete(
+                f"/api/sessions/{session_id}/attachments/{attachment_id}",
+                headers={"X-SLOPANOC-DEV-USER": "alice"},
+            )
+            assert response.status_code == 204
+
+            # Deleted attachments are treated as not-found everywhere else.
+            follow_up = c.get(f"/api/attachments/{attachment_id}", headers={"X-SLOPANOC-DEV-USER": "alice"})
+            assert follow_up.status_code == 404
+        assert storage.delete_calls  # real GCS cleanup was actually attempted
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_delete_is_idempotent_over_http(session_service, attachment_service, storage) -> None:
+    app.dependency_overrides[get_session_service] = lambda: session_service
+    app.dependency_overrides[get_attachment_service] = lambda: attachment_service
+    app.dependency_overrides[get_attachment_storage] = lambda: storage
+    try:
+        with TestClient(app) as c:
+            session_response = c.post("/api/sessions", headers={"X-SLOPANOC-DEV-USER": "alice"})
+            session_id = session_response.json()["session_id"]
+            upload = c.post(
+                f"/api/sessions/{session_id}/attachments",
+                files={"file": ("screenshot.png", _png_bytes(), "image/png")},
+                headers={"X-SLOPANOC-DEV-USER": "alice"},
+            )
+            attachment_id = upload.json()["attachment_id"]
+
+            first = c.delete(
+                f"/api/sessions/{session_id}/attachments/{attachment_id}",
+                headers={"X-SLOPANOC-DEV-USER": "alice"},
+            )
+            second = c.delete(
+                f"/api/sessions/{session_id}/attachments/{attachment_id}",
+                headers={"X-SLOPANOC-DEV-USER": "alice"},
+            )
+        assert first.status_code == 204
+        assert second.status_code == 204
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_delete_rejects_a_linked_attachment(session_service, attachment_service, storage) -> None:
+    app.dependency_overrides[get_session_service] = lambda: session_service
+    app.dependency_overrides[get_attachment_service] = lambda: attachment_service
+    app.dependency_overrides[get_attachment_storage] = lambda: storage
+    try:
+        with TestClient(app) as c:
+            session_response = c.post("/api/sessions", headers={"X-SLOPANOC-DEV-USER": "alice"})
+            session_id = session_response.json()["session_id"]
+            upload = c.post(
+                f"/api/sessions/{session_id}/attachments",
+                files={"file": ("screenshot.png", _png_bytes(), "image/png")},
+                headers={"X-SLOPANOC-DEV-USER": "alice"},
+            )
+            attachment_id = upload.json()["attachment_id"]
+
+            # Link it, as if a real send had already happened.
+            await attachment_service.link_to_message(attachment_id, "alice", session_id, "turn-1")
+
+            response = c.delete(
+                f"/api/sessions/{session_id}/attachments/{attachment_id}",
+                headers={"X-SLOPANOC-DEV-USER": "alice"},
+            )
+            assert response.status_code == 400
+            assert not storage.delete_calls
+
+            # Still retrievable -- never deleted.
+            follow_up = c.get(f"/api/attachments/{attachment_id}", headers={"X-SLOPANOC-DEV-USER": "alice"})
+            assert follow_up.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_delete_cross_user_denied(session_service, attachment_service, storage) -> None:
+    app.dependency_overrides[get_session_service] = lambda: session_service
+    app.dependency_overrides[get_attachment_service] = lambda: attachment_service
+    app.dependency_overrides[get_attachment_storage] = lambda: storage
+    try:
+        with TestClient(app) as c:
+            session_response = c.post("/api/sessions", headers={"X-SLOPANOC-DEV-USER": "alice"})
+            session_id = session_response.json()["session_id"]
+            upload = c.post(
+                f"/api/sessions/{session_id}/attachments",
+                files={"file": ("screenshot.png", _png_bytes(), "image/png")},
+                headers={"X-SLOPANOC-DEV-USER": "alice"},
+            )
+            attachment_id = upload.json()["attachment_id"]
+
+            response = c.delete(
+                f"/api/sessions/{session_id}/attachments/{attachment_id}",
+                headers={"X-SLOPANOC-DEV-USER": "mallory"},
+            )
+        assert response.status_code == 404
+        assert not storage.delete_calls
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_delete_unknown_attachment_returns_404(session_service, attachment_service, storage) -> None:
+    app.dependency_overrides[get_session_service] = lambda: session_service
+    app.dependency_overrides[get_attachment_service] = lambda: attachment_service
+    app.dependency_overrides[get_attachment_storage] = lambda: storage
+    try:
+        with TestClient(app) as c:
+            session_response = c.post("/api/sessions", headers={"X-SLOPANOC-DEV-USER": "alice"})
+            session_id = session_response.json()["session_id"]
+
+            response = c.delete(
+                f"/api/sessions/{session_id}/attachments/does-not-exist",
+                headers={"X-SLOPANOC-DEV-USER": "alice"},
+            )
+        assert response.status_code == 404
+    finally:
+        app.dependency_overrides.clear()

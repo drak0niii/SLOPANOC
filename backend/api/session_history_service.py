@@ -67,6 +67,7 @@ from backend.api.session_state_keys import (
     derive_chat_title,
     is_genuine_user_content_event,
 )
+from backend.api.turn_source_references import resolve_turn_source_references
 from backend.attachments.models import ChatAttachmentStatus
 from backend.attachments.service import AttachmentService
 from backend.gateway.safe_error import validation_error
@@ -236,6 +237,17 @@ async def get_session_history(
             )
         )
         if turn.final_text is not None:
+            # B7 corrective pass -- re-projects this turn's own durably
+            # persisted Teams/governed-KM provenance (backend/api/turn_
+            # source_references.py), keyed by the SAME `turn.turn_id`
+            # (ADK invocation_id) this message already carries. `session
+            # .state` here is ALREADY the active-branch-consistent value
+            # ADK's own rewind mechanism maintains -- a discarded branch's
+            # own entry was already removed from state by rewind itself
+            # (see that module's own docstring); no separate filtering is
+            # needed here beyond what `_active_events`/`projected_turns`
+            # already do for the message list itself.
+            source, knowledge_sources = resolve_turn_source_references(session.state, turn.turn_id)
             messages.append(
                 SessionHistoryMessageDTO(
                     message_id=f"{turn.turn_id}:assistant",
@@ -244,6 +256,8 @@ async def get_session_history(
                     text=turn.final_text,
                     created_at=_iso(turn.final_timestamp or 0.0),
                     attachments=[],
+                    source=source,
+                    knowledge_sources=knowledge_sources,
                 )
             )
 

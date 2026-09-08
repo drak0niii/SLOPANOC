@@ -59,11 +59,38 @@ CancelledError`, which a bare `except Exception:` does not catch but a
 NEVER ADK session state, never Cloud SQL, never the frontend, never a log
 line, never a SourceReference -- purely an in-process correlation aid,
 exactly like `turn_context.py`'s own Teams-snippet mailbox.
+
+  3. B7 LIVE-REGRESSION CORRECTIVE PASS -- a bounded, tools-scoped
+     remediation Runner call (`governed_knowledge_completion.py`'s
+     `enforce_governed_knowledge_at_completion`) that is still logically
+     part of the SAME user turn, but is invoked as a bare `Runner.run_
+     async` call from `chat_service.py` itself -- never through
+     `AgentTool`/`MultimodalAgentTool` -- so need #1's mechanism (reading
+     `tool_context.user_content`) does not apply; there is no
+     `tool_context` at all. `trusted_image_parts_from_content`, below,
+     gives that call site a way to extract the SAME trusted `file_data`
+     Part(s) directly from `chat_service.py`'s own already-built, already-
+     validated turn `Content` (the very object need #1's `Multimodal
+     AgentTool._trusted_image_parts` reads indirectly via `tool_context
+     .user_content`) and pass them along explicitly as a plain function
+     argument -- never through this module's run-id-keyed store (need #2),
+     which only ever held ATTACHMENT IDS for the unrelated SelectionCard-
+     continuation need, not `Part` objects, and was never designed to
+     survive a remediation call's own `bind_run_id` reassignment anyway
+     (see that function's own docstring: it rebinds `current_run_id()` to
+     a distinct, suffixed remediation run_id, so a registry lookup at that
+     point would resolve the wrong -- or no -- entry). Passing already-
+     built `Part` objects directly through a function argument, scoped to
+     one Python call stack within the same turn, is strictly narrower and
+     safer than adding a THIRD run-id-keyed global store for the same
+     purpose -- there is nothing here for an unrelated run to ever read.
 """
 from __future__ import annotations
 
 import threading
 from typing import Optional, Sequence
+
+from google.genai import types
 
 from backend.api.turn_context import current_run_id
 
@@ -109,3 +136,27 @@ def discard_run_images(run_id: str) -> None:
     """
     with _lock:
         _store.pop(run_id, None)
+
+
+def trusted_image_parts_from_content(content: Optional[types.Content]) -> list[types.Part]:
+    """B7 live-regression corrective pass (need #3, see this module's own
+    top docstring) -- extracts, in order, every `file_data`-bearing `Part`
+    from an already-trusted `Content` object, for a bounded remediation
+    call site that has no `tool_context`/`user_content` to read from
+    (mirrors `MultimodalAgentTool._trusted_image_parts`'s own identical
+    filter predicate exactly, deliberately duplicated rather than shared
+    across modules -- that class is its own narrow, ADK-version-audited
+    unit per its own module docstring, and this is a plain, unrelated
+    function with no ADK-internals sensitivity of its own).
+
+    ONLY `file_data` parts are ever returned -- never a text part (the
+    caller's own remediation request text stays exactly where it already
+    is) and never `inline_data`/bytes (this codebase never constructs one
+    for a chat image -- B5's own locked rule). Returns `[]` for `None` or
+    a `Content` with no parts -- both safe, ordinary "no image evidence"
+    outcomes for a text-only turn, never an error.
+    """
+    parts = getattr(content, "parts", None)
+    if not parts:
+        return []
+    return [part for part in parts if getattr(part, "file_data", None) is not None]

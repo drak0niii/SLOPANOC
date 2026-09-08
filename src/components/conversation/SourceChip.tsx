@@ -2,7 +2,7 @@ import { FileText, MessagesSquare, NotebookText } from "../ui/icons";
 import type { Citation } from "../../types";
 import type { KnowledgeSourceReferenceDTO, SourceReferenceDTO } from "../../api/types";
 import { DrawerContent, DrawerRoot, DrawerTitle, DrawerTrigger } from "../ui/Drawer";
-import { formatEvidenceTimestamp, formatSourcePeriod } from "../../lib/sourceReference";
+import { formatEvidenceTimestamp, formatKnowledgeSourceLabel, formatSourcePeriod } from "../../lib/sourceReference";
 
 /**
  * The shared source/provenance affordance (pre-4H UX/provenance
@@ -57,7 +57,7 @@ export function SourceChip(props: SourceChipProps) {
           {props.kind === "knowledge" && (
             <>
               <NotebookText className="h-3 w-3" />
-              Source · {props.source.label}
+              Source · {formatKnowledgeSourceLabel(props.source)}
             </>
           )}
         </button>
