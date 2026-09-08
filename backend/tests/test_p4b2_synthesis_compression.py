@@ -51,8 +51,22 @@ from backend.agents.team_manager import read_continuation_execution as execution
 from backend.agents.team_manager.prompts import TEAM_MANAGER_TRUSTED_RESULT_INSTRUCTION
 from backend.agents.team_manager.read_continuation_execution import _SYNTHESIS_ONLY_INCIDENT_MANAGER
 from backend.api.session_service import ApiSessionService
+from backend.attachments.repository import AttachmentRepository
+from backend.attachments.service import AttachmentService
+from backend.attachments.storage import ChatAttachmentStorage
 from backend.selection.schemas import ResolvedReadContinuation
 from backend.tests._fakes import FakeResponse, message
+
+
+def _attachment_service() -> AttachmentService:
+    """POST-5.1 B6 -- this file's own continuations never carry
+    `attachment_ids`, so a fresh in-memory service only needs to satisfy
+    `execute_read_continuation`'s signature."""
+    return AttachmentService(AttachmentRepository("sqlite+aiosqlite:///:memory:"))
+
+
+def _attachment_storage() -> ChatAttachmentStorage:
+    return ChatAttachmentStorage(None)
 
 
 class _FakeEvent:
@@ -72,10 +86,12 @@ def test_generic_incident_manager_instruction_is_byte_for_byte_unchanged() -> No
     "NO TEAMS CONVERSATION NEEDED" branch making `chat_topic` genuinely
     optional, and a second pre-4H correction pass extended it once more
     with `requires_governed_knowledge` and combined Teams+KM guidance
-    (docs/KNOWLEDGE_CONTRACT.md's Phase 5.1J section) -- this is that
-    legitimate, intentional length, not P4B.2-era drift.
+    (docs/KNOWLEDGE_CONTRACT.md's Phase 5.1J section), and POST-5.1 B6
+    extended it once more with one concise "IMAGE EVIDENCE" paragraph
+    (multimodal input handling) -- this is that legitimate, intentional
+    length, not P4B.2-era drift.
     """
-    assert len(INCIDENT_MANAGER_INSTRUCTION) == 43956
+    assert len(INCIDENT_MANAGER_INSTRUCTION) == 45707
 
 
 def test_synthesis_only_agent_no_longer_uses_the_generic_instruction() -> None:
@@ -277,6 +293,8 @@ async def test_deterministic_path_preserves_every_finding_no_matter_how_many(mon
         parent_session_id=session_id,
         run_id="run-many-findings",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=ResolvedReadContinuation(
             selected_chat_id="chat-b2-id", selected_chat_topic="Chat B2", requested_time_range=None
         ),

@@ -39,12 +39,26 @@ from backend.api import selection_service
 from backend.api.chat_service import ChatService
 from backend.api.session_service import APP_NAME, ApiSessionService
 from backend.api.streaming_events import StreamEventType
+from backend.attachments.repository import AttachmentRepository
+from backend.attachments.service import AttachmentService
+from backend.attachments.storage import ChatAttachmentStorage
 from backend.gateway import power_automate_client as pac_module
 from backend.selection.schemas import ReadOperation, ResolvedReadContinuation
 from backend.selection.service import load_active_selection
 from backend.tests._api_fakes import FakeRunner
 from backend.tests._fakes import FakeResponse, chat, message
 from backend.tools.teams.list_chats import teams_list_chats
+
+
+def _attachment_service() -> AttachmentService:
+    """POST-5.1 B6 -- this file's own continuations never carry
+    `attachment_ids`, so a fresh in-memory service only needs to satisfy
+    `execute_read_continuation`'s signature."""
+    return AttachmentService(AttachmentRepository("sqlite+aiosqlite:///:memory:"))
+
+
+def _attachment_storage() -> ChatAttachmentStorage:
+    return ChatAttachmentStorage(None)
 
 
 class _Ctx:
@@ -292,6 +306,8 @@ async def test_deterministic_execution_uses_the_caller_supplied_canonical_sessio
         parent_session_id="parent-session-1",
         run_id="run-abc",
         parent_state={"selected_teams_chat_topic": "irrelevant here"},
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         # P4B: this test's own `_FakeIncidentManagerRunner` never touches
         # retrieval at all (by design -- it verifies SESSION lifecycle
         # plumbing, not retrieval) -- a non-empty `requested_time_range`
@@ -347,6 +363,8 @@ async def test_derived_session_never_appears_in_the_users_own_session_listing(
         parent_session_id="real-session-1",
         run_id="run-xyz",
         parent_state={},
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_continuation(),
     )
 

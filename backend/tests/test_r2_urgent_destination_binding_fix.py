@@ -38,9 +38,23 @@ from backend.agents.team_manager.read_continuation_execution import (
     get_resolved_chat_messages,
 )
 from backend.api.session_service import ApiSessionService
+from backend.attachments.repository import AttachmentRepository
+from backend.attachments.service import AttachmentService
+from backend.attachments.storage import ChatAttachmentStorage
 from backend.selection.schemas import ResolvedReadContinuation
 from backend.tests._fakes import FakeResponse, chat, message
 from backend.tools.teams.get_messages import KNOWN_MESSAGE_IDS_STATE_KEY
+
+
+def _attachment_service() -> AttachmentService:
+    """POST-5.1 B6 -- this file's own continuations never carry
+    `attachment_ids`, so a fresh in-memory service only needs to satisfy
+    `execute_read_continuation`'s signature."""
+    return AttachmentService(AttachmentRepository("sqlite+aiosqlite:///:memory:"))
+
+
+def _attachment_storage() -> ChatAttachmentStorage:
+    return ChatAttachmentStorage(None)
 
 
 class _Ctx:
@@ -172,6 +186,8 @@ async def test_2_underlying_retrieval_receives_the_authoritative_chat_id_not_a_m
         parent_session_id=session_id,
         run_id="run-authoritative",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(chat_id="chat-b2-id"),
     )
 
@@ -255,6 +271,8 @@ async def test_3_authoritative_destination_is_the_only_possible_outcome_across_r
         parent_session_id=session_id,
         run_id="run-a",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(chat_id="chat-a-id", chat_topic="Chat A"),
     )
 
@@ -265,6 +283,8 @@ async def test_3_authoritative_destination_is_the_only_possible_outcome_across_r
         parent_session_id=session_id,
         run_id="run-b",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(chat_id="chat-b-id", chat_topic="Chat B"),
     )
 
@@ -337,6 +357,8 @@ async def test_4_missing_binding_never_reaches_the_gateway_or_produces_a_trusted
         parent_session_id=session_id,
         run_id="run-missing-binding",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(),
     )
 
@@ -405,6 +427,8 @@ async def test_5_second_retrieval_attempt_in_the_same_continuation_is_blocked(mo
         parent_session_id=session_id,
         run_id="run-double",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(),
     )
 
@@ -548,6 +572,8 @@ async def test_7_no_result_is_accepted_when_retrieval_genuinely_returned_nothing
         parent_session_id=session_id,
         run_id="run-no-result",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(),
     )
 
@@ -608,6 +634,8 @@ async def test_8_gateway_failure_produces_a_safe_error_never_a_fabricated_summar
         parent_session_id=session_id,
         run_id="run-gateway-failure",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(),
     )
 

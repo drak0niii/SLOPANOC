@@ -80,12 +80,12 @@ for the full ADK-source-verified mechanism.
 from __future__ import annotations
 
 from google.adk.agents import Agent
-from google.adk.tools import AgentTool
 
 from backend.agents.team_manager.case_context import team_manager_instruction_provider
 from backend.agents.team_manager.direct_read_fast_path import _fast_path_incident_manager
 from backend.agents.team_manager.case_tools import record_case_analysis
 from backend.agents.team_manager.conversation_target import record_conversation_target
+from backend.agents.team_manager.multimodal_agent_tool import MultimodalAgentTool
 from backend.agents.team_manager.read_continuation_enforcement import enforce_read_continuation
 from backend.agents.team_manager.source_requirements import record_source_requirements
 from backend.agents.team_manager.selection_delegation_guard import (
@@ -98,7 +98,13 @@ from backend.config.settings import get_settings, get_shared_llm
 
 _settings = get_settings()
 
-incident_manager_tool = AgentTool(agent=_fast_path_incident_manager)
+# POST-5.1 B6: `MultimodalAgentTool` (multimodal_agent_tool.py), not the
+# base `AgentTool` -- a narrow subclass that additionally forwards this
+# turn's trusted current-turn image evidence (if any) into
+# incident_manager's nested Content. Same tool name/schema/nested-
+# call/output-validation semantics as before this pass -- see that
+# module's own docstring for the full ADK-source-verified rationale.
+incident_manager_tool = MultimodalAgentTool(agent=_fast_path_incident_manager)
 
 team_manager = Agent(
     name="team_manager",

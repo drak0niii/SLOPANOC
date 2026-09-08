@@ -149,6 +149,7 @@ from backend.api.session_service import APP_NAME, DEFAULT_USER_ID, ApiSessionSer
 from backend.api.session_state_keys import record_user_turn_activity
 from backend.api.knowledge_source_reference import build_knowledge_source_references
 from backend.api.source_reference import TeamsSourceCapture, resolve_authoritative_contributors
+from backend.api.multimodal_turn_context import discard_run_images, register_run_images
 from backend.api.streaming_events import EventSequencer, Stage, StreamEvent, StreamEventType, status_data
 from backend.api.turn_context import bind_run_id, pop_message_texts, reset_run_id
 from backend.attachments.repository import AttachmentRepository
@@ -814,6 +815,21 @@ class ChatService:
             except SafeErrorException as exc:
                 error = (exc.safe_error.error_code, exc.safe_error.user_message)
 
+        if error is None and prepared_attachments:
+            # POST-5.1 B6 -- makes this turn's own already-B5-validated
+            # attachment ids available to `tools/teams/list_chats.py`'s
+            # ambiguous-branch handling (deep inside a nested Incident
+            # Manager call), keyed by `sequencer.run_id` -- see
+            # multimodal_turn_context.py's own module docstring for why
+            # this is a SEPARATE, narrower mechanism from the trusted
+            # `Part`s themselves (which `MultimodalAgentTool` sources
+            # directly from `tool_context.user_content`, needing no
+            # registry at all). Registered here, before the Runner starts,
+            # so it is already populated by the time any nested tool call
+            # could read it; cleared unconditionally in this method's own
+            # `finally` below, on every exit path.
+            register_run_images(sequencer.run_id, [a.attachment_id for a in prepared_attachments])
+
         # POST-5.1 B5 -- multimodal Content construction. Text part first
         # (only when non-blank), then one `Part.from_uri(...)` per
         # validated attachment, in the EXACT order the caller supplied
@@ -932,6 +948,13 @@ class ChatService:
                     run_id=sequencer.run_id,
                     parent_state=dict(session.state),
                     continuation=pending_read_continuation,
+                    # POST-5.1 B6 -- same trusted attachment plumbing this
+                    # turn's own new-send path already uses; lets a
+                    # resumed continuation re-validate and re-attach its
+                    # own trusted image evidence (see read_continuation_
+                    # execution.py's own module docstring).
+                    attachment_service=self._attachment_service,
+                    attachment_storage=self._attachment_storage,
                 )
                 perf.mark("read_continuation_executed")
 
@@ -1262,6 +1285,11 @@ class ChatService:
             # test_chat_service_turn_context_lifecycle.py.
             message_texts_by_id = pop_message_texts(sequencer.run_id)
             reset_run_id(run_id_token)
+            # POST-5.1 B6 -- same unconditional, every-exit-path cleanup
+            # discipline as the mailbox above (success, a caught
+            # exception, or asyncio.CancelledError -- a `finally` runs on
+            # all three). Safe to call even when nothing was registered.
+            discard_run_images(sequencer.run_id)
             discard_active_read_continuation(session_id)
             # Latency-diagnosis pass: same "bind/store, try, finally:
             # clear" discipline -- guarantees no per-run model-call

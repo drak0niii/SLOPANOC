@@ -32,10 +32,26 @@ from backend.agents.team_manager.read_continuation_execution import (
     execute_read_continuation,
 )
 from backend.api.session_service import ApiSessionService
+from backend.attachments.repository import AttachmentRepository
+from backend.attachments.service import AttachmentService
+from backend.attachments.storage import ChatAttachmentStorage
 from backend.selection.schemas import ResolvedReadContinuation
 from backend.tests._fakes import FakeResponse, chat, message
 from backend.tools.teams.get_messages import KNOWN_MESSAGE_IDS_STATE_KEY
 from backend.tools.teams.schemas import TeamsMessage, TeamsMessageReference
+
+
+def _attachment_service() -> AttachmentService:
+    """POST-5.1 B6 -- every `_resolved_continuation()` in this file has an
+    empty `attachment_ids` (unchanged by this pass), so `execute_read_
+    continuation`'s new required params are never actually exercised here
+    -- a fresh in-memory-SQLite service is enough to satisfy the
+    signature."""
+    return AttachmentService(AttachmentRepository("sqlite+aiosqlite:///:memory:"))
+
+
+def _attachment_storage() -> ChatAttachmentStorage:
+    return ChatAttachmentStorage(None)
 
 
 class _FakeEvent:
@@ -133,6 +149,8 @@ async def test_no_time_range_continuation_reaches_exactly_one_incident_manager_m
         parent_session_id=session_id,
         run_id="run-one-call",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(),
     )
 
@@ -181,6 +199,8 @@ async def test_retrieval_happens_before_any_incident_manager_model_call(monkeypa
         parent_session_id=session_id,
         run_id="run-order",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(),
     )
 
@@ -284,6 +304,8 @@ async def test_large_chat_full_retrieval_reaches_synthesis_and_verifies(monkeypa
         parent_session_id=session_id,
         run_id="run-large",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(),
     )
 
@@ -311,6 +333,8 @@ async def test_deterministic_path_no_usable_messages_yields_no_result(monkeypatc
         parent_session_id=session_id,
         run_id="run-no-result",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(),
     )
 
@@ -358,6 +382,8 @@ async def test_deterministic_path_gateway_error_yields_safe_error_with_zero_mode
         parent_session_id=session_id,
         run_id="run-gateway-fail",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(),
     )
 
@@ -391,6 +417,8 @@ async def test_deterministic_path_gateway_failure_leaves_no_leaked_internal_sess
         parent_session_id=session_id,
         run_id="run-cleanup-check",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(),
     )
 
@@ -462,6 +490,8 @@ async def test_time_range_continuation_still_uses_the_model_driven_retrieval_too
         parent_session_id=session_id,
         run_id="run-time-range",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(requested_time_range="the last 7 days"),
     )
 

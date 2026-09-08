@@ -351,6 +351,8 @@ from backend.agents.team_manager.read_continuation_presentation import (
 )
 from backend.api.perf_timing import before_model_call
 from backend.api.turn_context import current_run_id
+from backend.attachments.service import get_attachment_service
+from backend.attachments.storage import get_attachment_storage
 from backend.selection.schemas import ReadOperation, ResolvedReadContinuation
 from backend.tools.teams.get_messages import KNOWN_MESSAGE_IDS_STATE_KEY
 from backend.tools.teams.list_chats import _safe_pending_question, _safe_read_operation
@@ -465,6 +467,39 @@ raw ids, no Teams content, no internal trust terminology -- see section 9.
 """
 
 
+def _has_image_evidence(tool_context: Any) -> bool:
+    """POST-5.1 B6 -- structural gate (instruction section 17): a request
+    delegated WITH trusted current-turn image evidence must never take
+    this shortcut, because the shortcut's whole point is to let `incident_
+    manager`'s own REAL model call be skipped entirely (`_fast_path_
+    before_model_callback`, below, returns a synthesized `LlmResponse`
+    without ever invoking Gemini for this turn) -- which would mean the
+    image is silently never reasoned over by anything.
+
+    `tool_context.user_content` here is `incident_manager`'s OWN nested
+    invocation's user content -- i.e. exactly the `Content`
+    `MultimodalAgentTool` (multimodal_agent_tool.py) already built for
+    THIS call, structured-request text plus any trusted image `Part`s
+    appended in order. Checking for a `file_data`-bearing part is a
+    trusted, STRUCTURAL runtime fact (an application-controlled `Part`
+    either is or isn't there) -- never natural-language/keyword routing
+    over the user's own wording (instruction section 17's own explicit
+    distinction).
+
+    Deliberately checked INDEPENDENTLY of `_requires_governed_knowledge`
+    (same function shape, different signal) -- an image-bearing request
+    must bypass this optimization even when `requires_governed_knowledge`
+    is false, since Teams-alone synthesis still cannot incorporate visual
+    evidence the way a normal `incident_manager` turn (which DOES receive
+    the same image `Part`s, per `MultimodalAgentTool`) can.
+    """
+    user_content = getattr(tool_context, "user_content", None)
+    parts = getattr(user_content, "parts", None) if user_content else None
+    if not parts:
+        return False
+    return any(getattr(part, "file_data", None) is not None for part in parts)
+
+
 def _requires_governed_knowledge(tool_context: Any) -> bool:
     """Reads `IncidentManagerRequest.requires_governed_knowledge` back
     from `tool_context.user_content` -- the SAME `types.Content` ADK's
@@ -534,6 +569,15 @@ def _capture_unique_match_for_fast_path(
     if _requires_governed_knowledge(tool_context):
         _perf_logger.info(
             "perf stage=fast_path_skipped_requires_governed_knowledge run_id=%s", current_run_id()
+        )
+        return None
+
+    if _has_image_evidence(tool_context):
+        # POST-5.1 B6 -- see `_has_image_evidence`'s own docstring: an
+        # image-bearing delegation must always get incident_manager's own
+        # real, image-seeing model turn, never this shortcut.
+        _perf_logger.info(
+            "perf stage=fast_path_skipped_has_image_evidence run_id=%s", current_run_id()
         )
         return None
 
@@ -638,6 +682,16 @@ async def _fast_path_before_model_callback(callback_context: Any, llm_request: A
         run_id=invocation_context.invocation_id,
         parent_state=dict(invocation_context.session.state),
         continuation=continuation,
+        # POST-5.1 B6 -- defensive-only: `_has_image_evidence` (above)
+        # already structurally prevents this fast path from ever engaging
+        # for an image-bearing delegation, so `continuation.attachment_ids`
+        # is always empty here in practice -- but `execute_read_
+        # continuation` requires these explicitly (never a silently
+        # unconfigured default), so the same real, global singletons
+        # `chat_service.py`'s own `get_chat_service()` uses are wired here
+        # too.
+        attachment_service=get_attachment_service(),
+        attachment_storage=get_attachment_storage(),
     )
     if result is None:
         result = _safe_fallback_error()

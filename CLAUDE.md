@@ -310,6 +310,53 @@ CURRENT PERSISTENCE / RUNTIME
   `SLOPANOC_KNOWLEDGE_DATABASE_URL` are not explicitly set to PostgreSQL —
   that default behavior is unrelated to whether Cloud SQL support itself
   is implemented and proven, which it now is.
+- ===============================================================
+  MANDATORY CLOUD SQL RUNTIME POLICY (adopted at B6 closure, applies to
+  B7 and every milestone after it)
+  ===============================================================
+  All live UI validation, all manual validation, all end-to-end
+  validation, all integration validation, all restart/persistence
+  validation, and all other production-like validation — for every
+  persistent SLOPANOC runtime domain, governed Knowledge included — MUST
+  use Cloud SQL PostgreSQL, never local SQLite/in-memory persistence.
+  SQLite/in-memory is permitted ONLY for isolated automated tests, where
+  storage isolation is a deliberate, correct choice (unit/integration
+  tests must keep using disposable SQLite exactly as they already do —
+  this policy governs live/manual/E2E/integration VALIDATION environments,
+  not the automated test suite).
+
+  Governed Knowledge MUST have its own explicit configuration set —
+  `SLOPANOC_KNOWLEDGE_DATABASE_URL` or
+  `SLOPANOC_KNOWLEDGE_DATABASE_SECRET_RESOURCE` — during any such
+  validation. `SLOPANOC_DATABASE_URL` and `SLOPANOC_KNOWLEDGE_DATABASE_URL`
+  remain LOGICALLY SEPARATE configuration concerns even when they
+  currently point at the same Cloud SQL database — do not introduce an
+  implicit fallback from the Knowledge setting to the general database
+  setting; the goal is explicit configuration per domain, never
+  configuration coupling.
+
+  If a future live/manual/E2E/integration environment has NEITHER
+  `SLOPANOC_KNOWLEDGE_DATABASE_URL` nor
+  `SLOPANOC_KNOWLEDGE_DATABASE_SECRET_RESOURCE` configured, that
+  environment is NOT a valid production-like KM validation environment —
+  no live KM validation result from it may be accepted as closing a
+  milestone. (Historical exception, preserved as an accurate record, not
+  reopened: POST-5.1 B6's own live Tests B/C correctly and knowingly used
+  the local SQLite governed-KM fallback — `KnowledgeDatabaseUrlSet=False`/
+  `KnowledgeSecretSet=False` at the time — because this policy did not
+  yet exist; this does not invalidate B6, and those tests must never be
+  rewritten as Cloud SQL tests. This policy governs B7 onward.)
+
+  B7 PRECONDITION (verify before B7 live validation begins, not performed
+  in this documentation pass): the normal SLOPANOC database runtime
+  resolves to Cloud SQL; the governed Knowledge runtime EXPLICITLY
+  resolves to Cloud SQL (its own env var/secret set, never inherited);
+  the Cloud SQL `slopanoc_knowledge_objects` table is reachable; any
+  controlled validation knowledge B7 needs already exists in Cloud SQL;
+  no live B7 result is accepted if governed KM silently resolved to local
+  `slopanoc_knowledge.db`. The actual Cloud SQL KM runtime setup/
+  environment migration happens after this B6 checkpoint, before B7 live
+  work — not part of this documentation pass.
 - Case/fault context (backend/cases/) is a separate, optional persistence
   layer from ordinary session/chat state — do not conflate the two.
 - Streaming is real SSE, with a background-task turn model — a turn runs as
@@ -364,7 +411,8 @@ complete.
 CURRENT (out-of-band milestone, inserted between the LOCAL GIT CHECKPOINT
 below and Phase 4H — does not reorder anything in this locked list):
 POST-5.1 A — CLOUD SQL POSTGRESQL (A1–A4) is COMPLETE. POST-5.1 B —
-MULTIMODAL ATTACHMENTS: B0-B5 done, B6 next.
+MULTIMODAL ATTACHMENTS: B0-B6 done. B7 (Lifecycle + Real UI + Full
+Regression) is next.
 A5 (real TELCO/RAN MOP ingestion) follows POST-5.1 B, before Phase
 4H security hardening.
 
@@ -779,11 +827,13 @@ POST-5.1 B execution sequence (locked, do not reorder):
       applies at once (regression-tested), never only after refresh.
       Regenerate needed no change -- already unconditionally hidden for
       every backend message (pre-existing Phase 4F decision, confirmed
-      still correct on audit). B6/B7 BOUNDARY: only the TOP-LEVEL Team
-      Manager Runner is multimodal -- a nested AgentTool call (Incident
-      Manager) does NOT inherit the image (B6, untouched); no keyword
-      routing added; no GCS deletion lifecycle, no persistent pin/unread
-      (B7). Covered by `backend/tests/test_attachments_repository.py`,
+      still correct on audit). B5/B6 BOUNDARY (superseded by B6, see
+      below): at B5 close, only the TOP-LEVEL Team Manager Runner was
+      multimodal -- a nested AgentTool call (Incident Manager) did NOT
+      yet inherit the image. B6 closes exactly that gap
+      (`MultimodalAgentTool`). No keyword routing added; no GCS deletion
+      lifecycle, no persistent pin/unread (still B7). Covered by
+      `backend/tests/test_attachments_repository.py`,
       `test_attachment_prepare_for_turn.py`,
       `test_chat_service_function_call_continuation.py` (the mandatory
       B4B non-regression + Content-construction proofs),
@@ -814,7 +864,296 @@ POST-5.1 B execution sequence (locked, do not reorder):
       that persistence class for text/history/rename; not re-confirmed
       live here for B5's own linkage mechanism specifically).
       **B5 is DONE.**
-  B6  Image + Teams + KM Operational Reasoning
+  B6 [DONE] Image + Teams + KM Operational Reasoning -- closes the
+      B5/B6 boundary gap: a nested `incident_manager` AgentTool call now
+      genuinely receives the SAME trusted current-turn image evidence
+      Team Manager sees, without making image identity model-controlled.
+
+      ADK AUDIT (installed 1.33.0 source, verified before implementing):
+      `AgentTool.run_async` builds the nested `Content` ONLY from
+      `input_schema.model_validate(args).model_dump_json(...)` -- the
+      calling invocation's own original multimodal `Content` is never
+      consulted. Separately verified: `tool_context.user_content`
+      (`ReadonlyContext.user_content`, a PUBLIC, documented property) IS
+      exactly team_manager's own top-level `Content` for this turn
+      (`Runner.run_async`'s `new_message` becomes `invocation_context
+      .user_content` -- `runners.py`, `_new_invocation_context`) --
+      already-isolated per-invocation, no registry needed for this call
+      site.
+
+      PROPAGATION MECHANISM -- `backend/agents/team_manager/multimodal_
+      agent_tool.py`'s `MultimodalAgentTool(AgentTool)`: a narrow
+      subclass (Option A, no ADK internals monkeypatched) overriding only
+      `run_async` -- identical to the base implementation except that
+      trusted `file_data` `Part`s from `tool_context.user_content` are
+      appended, in order, after the structured-request text part, before
+      the nested Runner starts. `incident_manager_tool` in team_manager/
+      agent.py now constructs `MultimodalAgentTool(agent=_fast_path_
+      incident_manager)` in place of the base `AgentTool` -- same name,
+      schema, nested call/return model, output validation, state-delta
+      forwarding; zero behavior change for a text-only turn (proven by
+      test).
+
+      RUN-SCOPED TRUSTED IMAGE IDENTITY -- `backend/api/multimodal_turn_
+      context.py`: a SEPARATE, narrower mechanism from the `Part`
+      propagation above, needed only where `attachment_id` itself (never
+      recoverable from a `Part.from_uri`, which carries only file_uri/
+      mime_type) must be captured for a LATER turn -- `tools/teams/
+      list_chats.py`'s ambiguous-with-candidates branch, when creating a
+      `PendingSelection`. In-process, run_id-keyed (reuses `turn_context
+      .current_run_id()`, the same already-proven correlation ContextVar),
+      registered by chat_service.py immediately after B5's own attachment
+      validation succeeds, discarded in the SAME `finally` block that
+      already cleans up the Teams-snippet mailbox/run_id -- never ADK
+      session state, never persisted, cleared on every exit path
+      including CancelledError.
+
+      DIRECT FAST-PATH STRUCTURAL BYPASS -- `direct_read_fast_path.py`'s
+      `_capture_unique_match_for_fast_path` gained `_has_image_evidence`
+      (mirrors the existing `_requires_governed_knowledge` gate exactly):
+      when the nested invocation's own `user_content` carries a
+      `file_data` part, the fast-path marker is never set, so incident_
+      manager's own REAL model turn always runs for an image-bearing
+      delegation -- proven end to end (a real ADK Runner, real gateway
+      mock) that the shortcut does NOT engage and the resulting second
+      model call genuinely still has the image in its own `llm_request
+      .contents`. Text-only fast-path behavior is completely unchanged
+      (regression-tested).
+
+      SELECTION-CONTINUATION IMAGE PRESERVATION (instruction's hardest
+      requirement) -- `PendingReadIntent`/`ResolvedReadContinuation`
+      (selection/schemas.py) each gained `attachment_ids: list[str]`,
+      server-captured only, never model/frontend-supplied:
+      `list_chats.py`'s ambiguous branch populates it from `multimodal_
+      turn_context.current_run_image_attachment_ids()`; `api/selection_
+      service.py`'s `choose()` copies it verbatim into the
+      `ResolvedReadContinuation` it stores. `PendingSelectionDTO` (the
+      frontend-facing SelectionCard shape) never exposes it -- `pending_
+      read_intent` was already excluded from that mapping. At resume
+      time, `backend/api/attachment_service.py`'s new `resolve_
+      continuation_images` re-validates each id against the REAL
+      attachment table -- LINKED-only (never READY, which would mean
+      never-sent; never DELETED), same owner/session, MIME still
+      supported -- structurally distinct from `prepare_attachments_for_
+      turn`'s READY-only new-send validator. `read_continuation_
+      execution.py`'s both continuation-execution shapes (deterministic
+      and model-driven retrieval) resolve images FIRST (before any Teams
+      retrieval) and fail the WHOLE continuation closed
+      (`IncidentManagerResponse(outcome=error, detail=...)`, never a
+      silent fallback to Teams-only reasoning) on ANY corruption --
+      unknown/foreign-owner/foreign-session/still-READY/DELETED id all
+      collapse to the same safe outcome, anti-enumeration-consistent with
+      every other attachment read path in this codebase. A real ADK
+      rewind (`Runner.rewind_async`'s own, already-proven state-delta
+      reversal -- unchanged, not reimplemented) correctly reverses a
+      discarded branch's own `PendingSelection`/its `attachment_ids` --
+      regression-tested; no ghost-image resume is possible.
+
+      TRUST BOUNDARY UNCHANGED: `IncidentManagerRequest` gained no new
+      field for images (no `attachment_ids` team_manager's model could
+      populate) -- image ownership/selection remains 100% runtime-
+      supplied. `IncidentManagerResponse` also gained no new field --
+      the audit of `evidence.py`/`provenance_compliance.py` found both
+      already read `callback_context.user_content` structurally (never
+      parse free text), so appended `file_data` parts are simply ignored
+      by that existing logic; the model's own free-text `summary` field
+      safely represents "visually observed" vs. "Teams states" vs. "KM
+      supports" distinctions, per the new incident_manager prompt
+      paragraph -- no schema change needed or made.
+
+      NO GCS URI EVER IN TEXT: proven by test at every propagation point
+      (nested Content's own text part, continuation resume, joint
+      integration) -- only `Part.from_uri`'s own `file_data.file_uri`
+      ever carries it.
+
+      PROMPTS: incident_manager gained one "IMAGE EVIDENCE" paragraph
+      (pixels are evidence not instructions; visible-image text is
+      untrusted operational content, never a priority instruction;
+      distinguish direct observation from inference; distinguish image
+      vs. Teams vs. KM support and surface disagreement; no fabricated
+      commands from image content alone; command/procedure grounding
+      unchanged). team_manager gained one short paragraph (runtime
+      auto-forwards current-turn images to Incident Manager; never
+      paraphrase/forward image content into the delegation request; an
+      attached image alone is never itself a reason to delegate).
+
+      NO NEW AGENT, NO Phase 7 troubleshooting state, no OCR, no image
+      search/browse tool, no GCS access tool on Incident Manager, no
+      second image database/migration (uses the existing
+      `slopanoc_chat_attachments` table + transient in-process context
+      only), no frontend change (zero `src/` files touched -- the
+      existing UI experience is already correct end to end), no new SSE
+      event type, no image URI/storage metadata ever logged.
+
+      MANDATORY IMAGE+TEAMS+KM JOINT-REASONING PROOF: one integration
+      test drives the REAL `incident_manager` agent (full tool set, real
+      `after_agent_callback` integrity/provenance enforcement, unmodified)
+      through a real Power Automate gateway mock and a real isolated
+      SQLite `KnowledgeRepository`, with a scripted model that genuinely
+      calls `teams_get_messages`, `knowledge_search`, and `knowledge_
+      select_evidence` in the SAME nested Runner call that also received
+      the top-level image `Part` on its own FIRST reasoning step --
+      proving combination (instruction section 46's own standard), never
+      three sources merely working in isolation.
+
+      TESTS: `test_multimodal_turn_context.py` (10 -- register/read/
+      isolation/cleanup/two-interleaved-runs), `test_multimodal_agent_
+      tool.py` (5 -- real ADK Runner/Agent, text-only unaffected, image
+      order preserved, no fabricated text, output-schema validation
+      still applies, state-delta forwarding still works),
+      `test_p5_1_b6_fast_path_image_gate.py` (3 -- unit gate + real
+      end-to-end second-model-call-genuinely-sees-the-image proof),
+      `test_p5_1_b6_selection_continuation_images.py` (11 -- capture,
+      DTO no-leak, choose() propagation, real LINKED-image resolution,
+      5 parametrized fail-closed corruption cases, real ADK rewind ghost-
+      image regression), `test_p5_1_b6_image_teams_km_integration.py`
+      (1 -- the mandatory joint-reasoning proof above). 30 new tests, all
+      passing. Full backend suite: 2617 passed, 1 skipped (2587 B5
+      baseline + 30 new; 2 pre-existing prompt-size assertions updated
+      for the new prompt paragraphs' legitimate length growth, zero
+      logic regressions). Standalone KM-tagged subset: 846 passed. Teams-
+      tagged subset: 291 passed. Frontend: zero files touched; a focused
+      selection/streaming contract subset (30 tests) re-run clean to
+      confirm no API-contract drift; full frontend suite/`npm run build`
+      not re-run (nothing frontend changed).
+
+      MULTIMODALAGENTTOOL VERSION-SENSITIVITY MAINTENANCE NOTE:
+      `MultimodalAgentTool` is a narrow subclass audited against
+      installed `google-adk==1.33.0`'s `AgentTool.run_async`, which it
+      mirrors line-for-line except for the one image-appending insertion
+      point (see multimodal_agent_tool.py's own module docstring). This
+      is an ADK-VERSION-SENSITIVE adapter, not a current defect: any
+      future `google-adk` upgrade MUST trigger a re-audit, before
+      assuming continued equivalence, of -- `AgentTool.run_async` itself,
+      nested Runner construction, nested Content construction, state-
+      delta forwarding, output-schema validation, event/result
+      extraction, and cleanup semantics. If any of these change upstream,
+      `MultimodalAgentTool` must be re-diffed against the new base
+      implementation before relying on it further.
+
+      LIVE OPERATIONAL MULTISOURCE VALIDATION -- ALL FOUR PLANNED PATHS
+      PASSED:
+
+      Test A -- IMAGE + TEAMS (PASSED). Real Teams conversation
+      "SLOPANOC Gateway Group Test" carried a Teams-only validation
+      marker (`NORTHSTAR-4281`); the attached image carried a pixel-only
+      fact ("RADIO DOT FOR MULTI OPERATOR") absent from all text. The
+      live answer correctly attributed each fact to its own source, never
+      conflating them. Backend trace, in order: team_manager model call
+      -> incident_manager model call -> teams_list_chats -> Power
+      Automate teams.listChats = ok -> `fast_path_skipped_has_image_
+      evidence` -> incident_manager continued its own real reasoning ->
+      teams_get_messages -> Power Automate teams.getMessages = ok ->
+      incident_manager final result -> team_manager final visible answer
+      -- direct, live confirmation that the direct/exact-match Teams fast
+      path is structurally skipped whenever trusted image evidence
+      exists, exactly the B6 invariant (`_has_image_evidence`,
+      direct_read_fast_path.py). No gs:// URI was exposed. Real run
+      `a2c52be5-0912-493a-9ade-b7275a474544`, real attachment
+      `315e08cb-a26b-430c-8b3b-c1ef5cff27e2`.
+
+      Test B -- IMAGE + GOVERNED KM (PASSED). Controlled test image
+      visibly showed "AURORA RELAY STATUS", observed checksum 7318,
+      observed status GREEN -- the image deliberately did NOT contain
+      7319. Governed KM required checksum 7319/status GREEN plus an
+      approved escalation procedure (collect observed values; escalate to
+      platform owner; do not restart/reconfigure). Live result correctly
+      concluded verification FAILED (7318 != 7319) and stated the
+      approved next action. Backend trace: incident_manager ->
+      knowledge_search -> knowledge_select_evidence -> incident_manager
+      grounded result -> team_manager final result -- live proof that
+      SEARCH RESULT != EVIDENCE USED held (selected evidence was
+      genuinely exercised, not merely available). Real run
+      `bec4d024-2efd-4804-ac09-96ae62c27be9`, real session
+      `e5507802-11ad-4d32-b1a3-7559ad4e71c9`, real attachment
+      `9bf55604-6fed-41bc-84d2-1c61b01e7d57`.
+
+      IMPORTANT KM STORAGE ACCURACY (Tests B/C): the live validation
+      shell had `SLOPANOC_KNOWLEDGE_DATABASE_URL` unset and no Knowledge
+      Secret Manager fallback configured (`DatabaseUrlSet=True` but
+      `KnowledgeDatabaseUrlSet=False`/`KnowledgeSecretSet=False`), so
+      `resolve_knowledge_database_url()` correctly fell back to the
+      documented zero-setup local SQLite path (`./slopanoc_knowledge.db`)
+      -- NOT Cloud SQL. Tests B/C therefore used: the real SLOPANOC UI,
+      the real backend, real Gemini/Vertex, the real private attachment
+      runtime, the real Generic KM tool/runtime path, and a real governed
+      `KnowledgeObject` repository -- populated with two APPROVED,
+      controlled end-to-end test fixtures, both titled "Aurora Relay
+      Verification Procedure": `E2E-KM-AURORA-001` v1 and
+      `aurora-relay-verification` v1 (both `technical_instruction`/
+      `approved`). This does NOT invalidate B6 -- the Generic KM
+      repository contract is deliberately dialect-neutral, and B6
+      validates the runtime/tool/reasoning contract, not a storage
+      dialect. Do not claim Cloud SQL KM was used in Tests B/C. Do not
+      imply A5 (real TELCO/RAN MOP ingestion) has started -- it has not.
+
+      Test C -- IMAGE + TEAMS + GOVERNED KM (PASSED, the strongest B6
+      multisource proof). Same image (checksum 7318, status GREEN); a
+      real Teams message in "SLOPANOC Gateway Group Test" stating the
+      designated platform owner is TEAM-ORION and that no remediation
+      action has been approved; the same governed checksum/status
+      requirement plus escalation procedure. Live UI correctly combined
+      all three into one answer: verification fails because 7318 !=
+      7319; escalate to TEAM-ORION; provide observed checksum/status; do
+      not restart/reconfigure without further approval. Backend trace, in
+      the SAME incident_manager execution: teams_list_chats ->
+      teams.listChats ok -> `fast_path_skipped_requires_governed_
+      knowledge` -> teams_get_messages -> teams.getMessages ok ->
+      knowledge_search -> knowledge_select_evidence -> incident_manager
+      final synthesis -> team_manager final answer -- direct live proof
+      IMAGE + TEAMS + GOVERNED KM combine in one specialist reasoning
+      path, not three sources merely working in isolation (instruction
+      section 46's own standard). Real run
+      `db5f5cf9-2f44-4985-96d4-b90a81c23d5d`, real session
+      `d3336d3c-554a-45a6-bb02-c2c84cffc40c`, real attachment
+      `73c8b130-6e27-446d-a3da-2f8a4b8aefa8`. An earlier attempt hit a
+      test-setup issue (the expected TEAM-ORION Teams message was not yet
+      retrievable) -- the system correctly reported it could not find
+      that fact rather than fabricating one; test setup was corrected and
+      the clean rerun above passed. Not a B6 defect.
+
+      Test D -- SELECTION CONTINUATION PRESERVES ORIGINAL IMAGE (PASSED).
+      An intentionally non-exact Teams name ("SLOPANOC Gateway Group")
+      produced a real ambiguous result and a real SelectionCard; choosing
+      "SLOPANOC Gateway Group Test" (`POST /api/sessions/{id}/selections/
+      {id}/choose` -> 200 OK) resumed the read on a SECOND backend
+      continuation. The user did NOT reattach the original image. The
+      resumed response still correctly referenced checksum 7318 -- a fact
+      that existed only in the ORIGINAL image -- proving the server-
+      captured `attachment_ids` reference (never frontend/model-supplied)
+      survived the SelectionCard boundary and was re-validated/re-
+      attached automatically. Backend trace: selection choose ->
+      messages/stream -> teams_evidence_prepared -> Power Automate
+      teams.getMessages = ok -> incident_synthesis_start ->
+      incident_manager model call -> incident_synthesis_complete ->
+      read_continuation_executed -> trusted_result_presentation_mode ->
+      team_manager final presentation. The selected Teams conversation
+      itself contained no comparison message for the checksum -- expected
+      and irrelevant to what Test D specifically proves (image-evidence
+      preservation across the continuation boundary, not Teams content
+      completeness). Real continuation run
+      `69848cdc-cda9-48ca-83f0-15f4608c47a1`.
+
+      LIVE VALIDATION SUMMARY: Test A PASSED. Test B PASSED. Test C
+      PASSED. Test D PASSED. This closes B6's live-validation
+      requirement.
+
+      B7 FOLLOW-UP RECORDED (not implemented in this pass): Tests B/C's
+      real UI rendered source-reference chips roughly (a visible "svg"
+      artifact in the chip presentation), and Test C showed two governed-
+      knowledge chips that looked similar. These are TWO DISTINCT
+      observations, never to be conflated: (a) source-chip rendering/
+      presentation polish is a genuine UI issue: (b) the two
+      similar-looking KM chips are NOT a provenance defect -- the
+      validation repository legitimately contains two approved, content-
+      overlapping Aurora Relay fixtures, so two distinct governed source
+      references may correctly be selected/displayed for the same
+      answer. B7 should improve chip presentation/disambiguation without
+      ever "deduping" backend provenance merely because two chips look
+      alike -- a source reference may legitimately be distinct even when
+      the underlying documents overlap in content.
+
+      **B6 is DONE.**
   B7  Lifecycle + Real UI + Full Regression
 
 LOCKED product model (B0, refined for durable resources): normal SENT

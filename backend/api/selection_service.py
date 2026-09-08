@@ -163,6 +163,10 @@ async def choose(
                 selected_chat_topic=topic,
                 question=read_intent.question,
                 requested_time_range=read_intent.requested_time_range,
+                # POST-5.1 B6 -- carried forward verbatim, never
+                # re-derived: see ResolvedReadContinuation.attachment_ids'
+                # own docstring.
+                attachment_ids=read_intent.attachment_ids,
             )
             store_read_continuation(delta, continuation)
 

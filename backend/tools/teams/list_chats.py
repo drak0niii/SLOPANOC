@@ -39,6 +39,7 @@ from typing import Any, Optional
 
 from google.adk.tools import ToolContext
 
+from backend.api.multimodal_turn_context import current_run_image_attachment_ids
 from backend.gateway.power_automate_client import (
     GatewayPayload,
     PowerAutomateClient,
@@ -198,6 +199,13 @@ def _match(
                         operation=_safe_read_operation(pending_operation),
                         question=_safe_pending_question(topic, pending_question),
                         requested_time_range=pending_time_range,
+                        # POST-5.1 B6 -- server-captured, never model-
+                        # supplied: this turn's own trusted current-turn
+                        # image attachment ids, if any (see multimodal_
+                        # turn_context.py's own module docstring). `()`
+                        # for a text-only request, or outside a chat_
+                        # service.py-driven turn -- both safe defaults.
+                        attachment_ids=list(current_run_image_attachment_ids()),
                     )
                 ),
             )

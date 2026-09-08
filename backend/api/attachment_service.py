@@ -326,3 +326,85 @@ async def prepare_attachments_for_turn(
         # never fire in practice; defensive only, against configuration
         # changing between upload and send.
         raise connector_unavailable("Attachment storage is not currently available.") from None
+
+
+async def resolve_continuation_images(
+    *,
+    attachment_service: AttachmentService,
+    storage: ChatAttachmentStorage,
+    user_id: str,
+    session_id: str,
+    attachment_ids: list[str],
+) -> list[PreparedAttachment]:
+    """POST-5.1 B6 -- re-resolves the `attachment_id`s a `ResolvedRead
+    Continuation` carries (instruction section 30) for a resumed Incident
+    Manager read, AFTER a `SelectionCard` ambiguity is chosen. Deliberately
+    a SEPARATE function from `prepare_attachments_for_turn` above, never a
+    parameterized variant of it -- these are two structurally different
+    operations with opposite status requirements:
+
+      NEW SEND (`prepare_attachments_for_turn`): the ONLY acceptable
+      status is READY -- a brand-new message may reference an
+      attachment exactly once, before it has ever been used.
+
+      CONTINUATION READ (this function): the ONLY acceptable status is
+      LINKED -- these ids came from a PRIOR turn's own already-completed,
+      already-B5-validated send (the turn that produced `selection_
+      needed`); by the time a continuation resumes, they are `LINKED` to
+      that earlier turn's own message, never still `READY` (which would
+      mean they were never actually sent) and never `DELETED`.
+
+    Every failure mode raises (never silently drops the image and falls
+    back to Teams/KM-only reasoning -- instruction section 32): unknown id,
+    foreign owner, foreign/different session, wrong status (`READY` or
+    `DELETED`), and unsupported MIME are all treated exactly like `prepare_
+    attachments_for_turn`'s own anti-enumeration discipline -- unknown/
+    foreign-owner/foreign-session/wrong-status collapse to the SAME safe
+    `not_found`, since a caller who does not already, legitimately own this
+    id learns nothing new from the distinction. The caller (`read_
+    continuation_execution.py`) MUST treat any exception here as "this
+    continuation cannot be resumed at all" -- a full turn failure, never a
+    partial one that silently proceeds without the image (instruction:
+    "Do not silently continue with Teams-only reasoning if the original
+    operational request required the image").
+
+    An empty `attachment_ids` returns `[]` immediately, no lookups --
+    identical shape to `prepare_attachments_for_turn`'s own early return,
+    for the common case of a continuation that never carried any images.
+    """
+    if not attachment_ids:
+        return []
+
+    records_by_id: dict[str, ChatAttachmentRecord] = {}
+    for attachment_id in attachment_ids:
+        try:
+            record = await attachment_service.get_owned(attachment_id, user_id)
+        except AttachmentNotFoundError as exc:
+            raise not_found("No such attachment was found.") from exc
+        if record.session_id != session_id:
+            raise not_found("No such attachment was found.")
+        if record.status != ChatAttachmentStatus.LINKED.value:
+            # Covers both a never-sent READY row (should be structurally
+            # unreachable -- a PendingReadIntent's own attachment_ids are
+            # only ever populated from a turn that just passed B5's own
+            # READY-only new-send validation, and that same turn's normal
+            # linkage runs before this continuation could ever be chosen
+            # -- but never assumed) and a since-DELETED row. Neither may
+            # ever silently resolve here.
+            raise not_found("No such attachment was found.")
+        if record.mime_type not in SUPPORTED_MIME_TYPES:
+            raise unsupported_media_type(f"Unsupported attachment type: {record.mime_type!r}.")
+        records_by_id[attachment_id] = record
+
+    try:
+        return [
+            PreparedAttachment(
+                attachment_id=attachment_id,
+                mime_type=records_by_id[attachment_id].mime_type,
+                size_bytes=records_by_id[attachment_id].size_bytes,
+                gcs_uri=storage.uri_for(records_by_id[attachment_id].storage_object_name),
+            )
+            for attachment_id in attachment_ids  # preserves the continuation's own order
+        ]
+    except AttachmentStorageUnavailableError:
+        raise connector_unavailable("Attachment storage is not currently available.") from None

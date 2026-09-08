@@ -120,8 +120,11 @@ from backend.agents.incident_manager.schemas import (
     IncidentManagerRequest,
     IncidentManagerResponse,
 )
+from backend.api.attachment_service import PreparedAttachment, resolve_continuation_images
 from backend.api.session_service import APP_NAME
-from backend.gateway.safe_error import validation_error
+from backend.attachments.service import AttachmentService
+from backend.attachments.storage import ChatAttachmentStorage
+from backend.gateway.safe_error import SafeErrorException, validation_error
 from backend.selection.read_resume import build_read_resume_message
 from backend.selection.schemas import PendingReadIntent, ResolvedReadContinuation
 from backend.tools.teams.get_messages import KNOWN_MESSAGE_IDS_STATE_KEY, DEFAULT_MAX_MESSAGES, teams_get_messages
@@ -601,6 +604,18 @@ _RETRIEVAL_NOT_VERIFIED_DETAIL = (
     "The assistant could not verify Teams retrieval for this request. Please try again."
 )
 
+_IMAGE_EVIDENCE_NOT_AVAILABLE_DETAIL = (
+    "The assistant could not verify the attached image evidence for this request. Please try again."
+)
+"""POST-5.1 B6 -- see `_resolve_continuation_images`' own docstring: this
+is the fail-CLOSED wording used whenever a continuation's own
+`attachment_ids` cannot be re-validated (deleted/foreign/wrong-status/
+unsupported-MIME/storage-unavailable). Deliberately distinct wording from
+`_RETRIEVAL_NOT_VERIFIED_DETAIL` (a Teams-retrieval concern) -- never
+reused for an unrelated failure class, and never a generic "something
+went wrong" that would obscure which evidence class failed to verify.
+"""
+
 _OUTCOMES_REQUIRING_VERIFIED_RETRIEVAL = frozenset(
     {IncidentManagerOutcome.OK.value, IncidentManagerOutcome.NO_RESULT.value}
 )
@@ -658,6 +673,65 @@ def _authoritative_retrieval_verified(outcome: Any, session_state: Any) -> bool:
         return KNOWN_MESSAGE_IDS_STATE_KEY in session_state
     except TypeError:
         return False
+
+
+async def _resolve_continuation_images(
+    *,
+    attachment_service: AttachmentService,
+    attachment_storage: ChatAttachmentStorage,
+    user_id: str,
+    session_id: str,
+    continuation: ResolvedReadContinuation,
+) -> Optional[list[PreparedAttachment]]:
+    """POST-5.1 B6 -- thin wrapper around `backend.api.attachment_service.
+    resolve_continuation_images` that converts its fail-closed exception
+    into a fail-closed `None` return, matching this module's own existing
+    "`None` means the caller must abort the whole continuation" idiom
+    (`execute_read_continuation`'s own docstring). Returns `[]` (never
+    `None`) for a continuation that never carried any images -- the
+    overwhelmingly common case -- so callers can treat "no images" and
+    "an empty resolved list" identically without a separate branch.
+    """
+    if not continuation.attachment_ids:
+        return []
+    try:
+        return await resolve_continuation_images(
+            attachment_service=attachment_service,
+            storage=attachment_storage,
+            user_id=user_id,
+            session_id=session_id,
+            attachment_ids=continuation.attachment_ids,
+        )
+    except SafeErrorException:
+        _logger.warning(
+            "read_continuation_execution: continuation image resolution failed -- failing closed"
+        )
+        return None
+
+
+def _image_resolution_failed_result(continuation: ResolvedReadContinuation) -> dict[str, Any]:
+    """See `_resolve_continuation_images`' own docstring -- the safe,
+    structured result substituted whenever re-validation of a
+    continuation's own image evidence fails. Mirrors `_fail_closed_
+    result`'s own shape/rationale for the analogous Teams-retrieval case,
+    with `chat_id`/`chat_title` still populated via `_apply_authoritative_
+    destination` (this failure has nothing to do with destination
+    resolution, which already succeeded)."""
+    result = IncidentManagerResponse(
+        outcome=IncidentManagerOutcome.ERROR, detail=_IMAGE_EVIDENCE_NOT_AVAILABLE_DETAIL
+    ).model_dump(mode="json", exclude_none=True)
+    return _apply_authoritative_destination(result, continuation)
+
+
+def _image_parts(images: list[PreparedAttachment]) -> list[types.Part]:
+    """POST-5.1 B6 -- canonical, order-preserving `PreparedAttachment` ->
+    `Part.from_uri` construction, shared by both continuation-execution
+    shapes below (deterministic and model-driven retrieval) -- never a
+    second, drifting implementation. Identical construction rule to B5's
+    own `chat_service.py` (`Part.from_uri(file_uri=..., mime_type=...)`,
+    NEVER `Part.from_bytes`) -- see CLAUDE.md's locked B0 rule.
+    """
+    return [types.Part.from_uri(file_uri=image.gcs_uri, mime_type=image.mime_type) for image in images]
 
 
 def _apply_authoritative_destination(result: dict[str, Any], continuation: ResolvedReadContinuation) -> dict[str, Any]:
@@ -755,20 +829,35 @@ async def _execute_via_model_driven_retrieval(
     *,
     session_service: BaseSessionService,
     user_id: str,
+    parent_session_id: str,
     internal_session_id: str,
     parent_state: dict[str, Any],
     continuation: ResolvedReadContinuation,
+    attachment_service: AttachmentService,
+    attachment_storage: ChatAttachmentStorage,
 ) -> Optional[dict[str, Any]]:
-    """UNCHANGED FROM THE PRIOR PASS (URGENT R2 fix), just extracted into
-    its own function: incident_manager itself calls `get_resolved_chat_
-    messages` (no `chat_id` parameter -- see this module's own docstring)
-    via its own reasoning. Used ONLY when `continuation.requested_time_
-    range` is present -- interpreting an arbitrary natural-language time
-    expression into UTC boundaries genuinely requires model reasoning (see
-    `execute_read_continuation`'s own docstring, "WHY THE TIME-RANGE
-    BRANCH STAYS MODEL-DRIVEN"), so this path intentionally still costs a
-    `get_current_time_context` round trip (or two) before synthesis.
+    """UNCHANGED FROM THE PRIOR PASS (URGENT R2 fix) except for the
+    POST-5.1 B6 image-resolution step below, just extracted into its own
+    function: incident_manager itself calls `get_resolved_chat_messages`
+    (no `chat_id` parameter -- see this module's own docstring) via its
+    own reasoning. Used ONLY when `continuation.requested_time_range` is
+    present -- interpreting an arbitrary natural-language time expression
+    into UTC boundaries genuinely requires model reasoning (see `execute_
+    read_continuation`'s own docstring, "WHY THE TIME-RANGE BRANCH STAYS
+    MODEL-DRIVEN"), so this path intentionally still costs a `get_
+    current_time_context` round trip (or two) before synthesis.
     """
+    # POST-5.1 B6 -- resolved BEFORE any session/Runner work, so a
+    # failure here costs nothing beyond the lookup itself and never
+    # leaves a derived session behind to clean up.
+    images = await _resolve_continuation_images(
+        attachment_service=attachment_service,
+        attachment_storage=attachment_storage,
+        user_id=user_id,
+        session_id=parent_session_id,
+        continuation=continuation,
+    )
+
     request = IncidentManagerRequest(
         chat_topic=continuation.selected_chat_topic,
         question=build_read_resume_message(
@@ -777,8 +866,14 @@ async def _execute_via_model_driven_retrieval(
         requested_time_range=continuation.requested_time_range,
     )
     content = types.Content(
-        role="user", parts=[types.Part.from_text(text=request.model_dump_json(exclude_none=True))]
+        role="user",
+        parts=[
+            types.Part.from_text(text=request.model_dump_json(exclude_none=True)),
+            *_image_parts(images or []),
+        ],
     )
+    if images is None:
+        return _image_resolution_failed_result(continuation)
 
     await session_service.create_session(
         app_name=_INTERNAL_SPECIALIST_APP_NAME,
@@ -808,9 +903,12 @@ async def _execute_via_deterministic_retrieval(
     *,
     session_service: BaseSessionService,
     user_id: str,
+    parent_session_id: str,
     internal_session_id: str,
     parent_state: dict[str, Any],
     continuation: ResolvedReadContinuation,
+    attachment_service: AttachmentService,
+    attachment_storage: ChatAttachmentStorage,
 ) -> Optional[dict[str, Any]]:
     """P4B: the application performs retrieval itself, in plain Python,
     BEFORE incident_manager's model ever runs -- used whenever `continuation
@@ -827,7 +925,22 @@ async def _execute_via_deterministic_retrieval(
     nothing incident_manager could usefully do with a failed retrieval it
     never attempted itself, and skipping the Runner entirely here also
     means a pure retrieval failure now costs zero model calls, not one.
+
+    POST-5.1 B6: this turn's own trusted image evidence (if any) is
+    resolved FIRST, before the Teams retrieval call itself -- a failure
+    here costs nothing beyond the lookup and never wastes a real Power
+    Automate round trip on a continuation that cannot be resumed anyway.
     """
+    images = await _resolve_continuation_images(
+        attachment_service=attachment_service,
+        attachment_storage=attachment_storage,
+        user_id=user_id,
+        session_id=parent_session_id,
+        continuation=continuation,
+    )
+    if images is None:
+        return _image_resolution_failed_result(continuation)
+
     state_capture = _StateCapture(dict(_seeded_state(parent_state, continuation)))
     _perf_logger.info("perf stage=teams_evidence_prepared")
     retrieval = teams_get_messages(continuation.selected_chat_id, tool_context=state_capture)
@@ -855,7 +968,11 @@ async def _execute_via_deterministic_retrieval(
         coverage=retrieval.get("coverage", {}),
     )
     content = types.Content(
-        role="user", parts=[types.Part.from_text(text=synthesis_request.model_dump_json(exclude_none=True))]
+        role="user",
+        parts=[
+            types.Part.from_text(text=synthesis_request.model_dump_json(exclude_none=True)),
+            *_image_parts(images),
+        ],
     )
 
     await session_service.create_session(
@@ -893,6 +1010,8 @@ async def execute_read_continuation(
     run_id: str,
     parent_state: dict[str, Any],
     continuation: ResolvedReadContinuation,
+    attachment_service: AttachmentService,
+    attachment_storage: ChatAttachmentStorage,
 ) -> Optional[dict[str, Any]]:
     """Runs `incident_manager`'s read path directly and deterministically
     for `continuation`, using the CALLER's own canonical `session_service`
@@ -928,17 +1047,23 @@ async def execute_read_continuation(
             result = await _execute_via_deterministic_retrieval(
                 session_service=session_service,
                 user_id=user_id,
+                parent_session_id=parent_session_id,
                 internal_session_id=internal_session_id,
                 parent_state=parent_state,
                 continuation=continuation,
+                attachment_service=attachment_service,
+                attachment_storage=attachment_storage,
             )
         else:
             result = await _execute_via_model_driven_retrieval(
                 session_service=session_service,
                 user_id=user_id,
+                parent_session_id=parent_session_id,
                 internal_session_id=internal_session_id,
                 parent_state=parent_state,
                 continuation=continuation,
+                attachment_service=attachment_service,
+                attachment_storage=attachment_storage,
             )
     finally:
         # P4B: a pure retrieval-failure early return in `_execute_via_

@@ -27,9 +27,23 @@ from google.genai import types
 
 from backend.agents.team_manager import read_continuation_execution as execution_module
 from backend.agents.team_manager.read_continuation_execution import execute_read_continuation
+from backend.attachments.repository import AttachmentRepository
+from backend.attachments.service import AttachmentService
+from backend.attachments.storage import ChatAttachmentStorage
 from backend.selection.schemas import ResolvedReadContinuation
 from backend.tests._fakes import FakeResponse, chat, message
 from backend.tools.teams.get_messages import KNOWN_MESSAGE_IDS_STATE_KEY
+
+
+def _attachment_service() -> AttachmentService:
+    """POST-5.1 B6 -- this file's own continuations never carry
+    `attachment_ids`, so a fresh in-memory service only needs to satisfy
+    `execute_read_continuation`'s signature."""
+    return AttachmentService(AttachmentRepository("sqlite+aiosqlite:///:memory:"))
+
+
+def _attachment_storage() -> ChatAttachmentStorage:
+    return ChatAttachmentStorage(None)
 
 
 class _Ctx:
@@ -159,6 +173,8 @@ async def test_hallucinated_ok_without_any_retrieval_is_rejected(monkeypatch: py
         parent_session_id=session_id,
         run_id="run-hallucinated",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(),
     )
 
@@ -212,6 +228,8 @@ async def test_legitimate_retrieval_for_the_authoritative_chat_is_accepted(monke
         parent_session_id=session_id,
         run_id="run-legit",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         # P4B: `_real_retrieval_runner` exercises `get_resolved_chat_
         # messages` directly (the model-driven retrieval path) -- a
         # non-empty `requested_time_range` keeps this continuation on
@@ -248,6 +266,8 @@ async def test_rejected_result_leaves_no_leaked_internal_session(monkeypatch: py
         parent_session_id=session_id,
         run_id="run-cleanup-check",
         parent_state=dict(session.state),
+        attachment_service=_attachment_service(),
+        attachment_storage=_attachment_storage(),
         continuation=_resolved_continuation(),
     )
 

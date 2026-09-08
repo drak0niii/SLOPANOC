@@ -150,7 +150,11 @@ def test_normal_instruction_stays_under_a_generous_size_ceiling() -> None:
     catch future silent re-bloat. Chars/4 is the same rough token
     approximation used throughout this pass's own audit.
     """
-    assert len(TEAM_MANAGER_INSTRUCTION) < 30000  # ~7500 tokens; was ~31.5k chars (~7.9k tok) pre-P4A
+    # POST-5.1 B6 legitimately extended this by one concise "IMAGE
+    # EVIDENCE" paragraph (~30996 chars) -- ceiling raised accordingly,
+    # still a generous margin above the current audited size, not a
+    # brittle exact pin.
+    assert len(TEAM_MANAGER_INSTRUCTION) < 32000  # ~8000 tokens; was ~31.5k chars (~7.9k tok) pre-P4A
 
 
 def test_trusted_result_instruction_is_substantially_smaller_than_normal_mode() -> None:

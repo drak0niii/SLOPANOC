@@ -110,6 +110,22 @@ class PendingReadIntent(BaseModel):
     operation: ReadOperation = ReadOperation.SUMMARIZE
     question: Optional[str] = None
     requested_time_range: Optional[str] = None
+    attachment_ids: list[str] = Field(default_factory=list)
+    """POST-5.1 B6 -- server-CAPTURED (never model/frontend-supplied) ids
+    of this request's own trusted current-turn image attachments, if any,
+    in the same order the user attached them. Populated ONLY from
+    `backend.api.multimodal_turn_context.current_run_image_attachment_ids`
+    at the exact point (`tools/teams/list_chats.py`'s ambiguous-with-
+    candidates branch) a `PendingReadIntent` is created -- never from a
+    tool argument, never from anything reachable from the model's own
+    output. Empty for a text-only request, or a request whose read never
+    reached ambiguity in the first place. See `ResolvedReadContinuation
+    .attachment_ids` for how this is carried forward once the user
+    resolves the ambiguity, and `backend.api.attachment_service.
+    resolve_continuation_images` for how it is re-validated (never
+    blindly trusted) before ever reaching a nested Incident Manager
+    Content on the resumed turn.
+    """
 
 
 class ResolvedReadContinuation(BaseModel):
@@ -146,6 +162,16 @@ class ResolvedReadContinuation(BaseModel):
     selected_chat_topic: str
     question: Optional[str] = None
     requested_time_range: Optional[str] = None
+    attachment_ids: list[str] = Field(default_factory=list)
+    """POST-5.1 B6 -- copied verbatim from the resolved `PendingSelection`
+    's own `pending_read_intent.attachment_ids` (`api/selection_service.py`
+    's `choose()`) -- the SAME server-captured ids `PendingReadIntent.
+    attachment_ids` documents, never re-derived or re-supplied by the
+    frontend/model at resume time. `read_continuation_execution.py`
+    re-validates each one (ownership, session, LINKED status, MIME) via
+    `backend.api.attachment_service.resolve_continuation_images` before
+    it ever becomes part of a nested Content -- this field is a reference,
+    never a pre-authorized capability."""
 
 
 class PendingSelection(BaseModel):
