@@ -5,8 +5,11 @@ Project Purpose
 SLOPANOC is an enterprise AI assistant for Microsoft Teams-based incident and
 operational collaboration. It began as a UI/UX-only prototype; that phase is
 over. A real React frontend and a real FastAPI backend now exist, orchestrating
-Gemini (via Google ADK) to read and summarize Microsoft Teams conversations
-and to propose — never silently execute — Teams write actions.
+Gemini (via Google ADK) to read and summarize Microsoft Teams conversations,
+to propose — never silently execute — Teams write actions, to reason from
+governed operational knowledge (Generic KM, Phase 5.1, complete), and to
+combine current-turn image evidence with Teams and/or governed-knowledge
+context in the same specialist turn (POST-5.1 B0–B6, complete).
 
 Read this file together with README.md, docs/AGENT_CONTRACT.md, and
 docs/TEAMS_TOOL_CONTRACT.md before making an architectural change. Those three
@@ -15,6 +18,11 @@ for day-to-day work in this repository and must never contradict them. If this
 file and the implementation ever disagree, the implementation wins — treat
 that as a signal this file needs a small correction, not that the code is
 wrong.
+
+docs/BUILD_SEQUENCE.md is the canonical, detailed, current strategic build
+sequence (Phase 0 through Phase 7) — read it for the full dependency
+progression and topology evolution behind the status markers in this file.
+docs/KNOWLEDGE_CONTRACT.md is the authoritative Generic KM contract.
 
 docs/PRODUCT.md and docs/UX_SPEC.md remain useful for original product/UX
 intent (Projects, global Knowledge, Connectors beyond Teams, Skills) — most of
@@ -1191,7 +1199,11 @@ IngestedKnowledgeDocument → processing → governance → KnowledgeRepository
 → Cloud SQL PostgreSQL) — a separate milestone from Attachments, not part
 of it.
 
-NEXT:
+COMPLETE (this section is preserved as it was originally written, when
+Phase 5.1 was still the next phase in this locked list — do not read the
+word order below as current status; see "Phase 5.1 is now complete" a
+few paragraphs down, and README.md/docs/BUILD_SEQUENCE.md, for the
+authoritative current status):
 
 PHASE 5.1 — GENERIC KNOWLEDGE MANAGEMENT LAYER
 
@@ -1246,7 +1258,12 @@ adapter (SharePoint/GCS/Drive/...) exists, and none is planned as part
 of 5.1 -- the next phase is the locked-roadmap LOCAL GIT CHECKPOINT
 followed by Phase 4H security hardening.
 
-Then: LOCAL GIT CHECKPOINT
+Then: LOCAL GIT CHECKPOINT [DONE — see the "CURRENT (out-of-band
+milestone...)" note near the top of this LOCKED ROADMAP section: POST-5.1
+A (Cloud SQL) and POST-5.1 B0-B6 (multimodal attachments, through B6's
+own commit) were inserted here, between this checkpoint and Phase 4H,
+without reordering this list. B7 is the current next POST-5.1 B
+milestone; Phase 4H below remains not started.]
 
 Then: PHASE 4H SECURITY HARDENING
 

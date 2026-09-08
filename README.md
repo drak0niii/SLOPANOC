@@ -8,7 +8,10 @@ such as creating a chat or sending a message.
 
 This repository contains a working backend and frontend, not a UI-only
 mockup. See [Current limitations / production readiness](#current-limitations--production-readiness)
-for what is intentionally not yet built.
+for what is intentionally not yet built, and
+[`docs/BUILD_SEQUENCE.md`](docs/BUILD_SEQUENCE.md) for the full Phase 0 →
+Phase 7 strategic build sequence and topology evolution behind today's
+checkpoint.
 
 ## What SLOPANOC is
 
@@ -21,9 +24,12 @@ for what is intentionally not yet built.
   Incident Manager) built on Google ADK, with deterministic Python code — not
   model reasoning — enforcing every security- and provenance-sensitive
   decision.
-- Currently a Teams-only assistant. Generic knowledge management, ITSM,
-  alarm/fault, topology, and other integrations are roadmap items (see
-  [Roadmap](#roadmap)), not present today.
+- A specialist that reasons from governed operational knowledge (Generic
+  Knowledge Management, Phase 5.1 — complete) in addition to Teams, and
+  that can combine a user's attached image with Teams and/or governed
+  knowledge in the same reasoning turn (POST-5.1 B0–B6 — complete). ITSM,
+  alarm/fault, topology, and the other Operational Context integrations
+  remain roadmap items (see [Roadmap](#roadmap)), not present today.
 
 ## Current capabilities
 
@@ -43,11 +49,18 @@ for what is intentionally not yet built.
 
 **Agent architecture**
 - Team Manager: the only agent that ever produces user-facing text.
-- Incident Manager: the Teams specialist, invoked by Team Manager through an
-  ADK `AgentTool` call (an in-process call/return, not a hand-off).
+- Incident Manager: the Teams and governed-knowledge specialist, invoked by
+  Team Manager through an ADK `AgentTool` call (an in-process call/return,
+  not a hand-off). It has both Teams tools and generic `knowledge_search`/
+  `knowledge_select_evidence` KM tools directly — there is no separate
+  Knowledge agent.
 - Deterministic resolution of what "this chat" refers to — the current
   SLOPANOC conversation, a previously-selected Teams chat, or a Teams chat
   named explicitly in the current message.
+- A user's current-turn image attachment is available to both Team Manager
+  and, when it delegates, to Incident Manager in the same reasoning turn —
+  runtime-supplied, never model-chosen (see
+  [POST-5.1 B](#roadmap)).
 
 **Microsoft Teams — read**
 - List/discover chats, deterministic name resolution, ambiguity handling via
@@ -140,31 +153,44 @@ flowchart TD
     User --> TM[Team Manager]
     TM --> IM[Incident Manager]
     IM --> TOOLS[Teams tools]
+    IM --> KMTOOLS[Governed KM tools]
     TOOLS --> PA[Power Automate]
+    KMTOOLS --> KMREPO[Knowledge Repository]
 ```
 
-This is the current topology. No other agent exists today. A future
-specialist (e.g. a Knowledge agent, see [Roadmap](#roadmap)) would attach to
-Team Manager the same way Incident Manager does.
+This is the current topology. Incident Manager is the only specialist, and
+it reasons from Teams and governed Knowledge directly, through its own two
+tool families — **there is no separate Knowledge agent, and none is
+planned** (Knowledge Context is a generic capability behind Incident
+Manager, not an agent of its own). A future second specialist
+(Troubleshooting Manager, see [Roadmap](#roadmap)) would attach to Team
+Manager the same way Incident Manager does.
 
 ## Architecture Evolution
 
 The sections above describe what is implemented today. This section shows
-where the architecture is headed, so Phase 5.1A and later phases are built
-toward a consistent target — none of the FUTURE/NEXT items below exist in
-the codebase yet.
+where the architecture is headed, so every future phase is built toward a
+consistent target.
 
 - **CURRENT (implemented):** Team Manager, Incident Manager, Teams
-  integration, Case context.
-- **NEXT (Phase 5.1, planned):** a Generic Knowledge Management Layer,
-  providing *Knowledge Context* — MOPs/SOPs/RCAs/KB articles live behind
-  this layer, never as raw sources a specialist reads directly.
+  integration, Case context, generic governed Knowledge (Phase 5.1 —
+  complete, Incident Manager is its first reference consumer), and
+  current-turn multimodal image evidence combined with Teams and/or
+  governed knowledge in the same specialist turn (POST-5.1 B0–B6 —
+  complete).
+- **NEXT:** POST-5.1 B7 (attachment lifecycle completion, real-UI
+  follow-up, full regression), then A5 (real TELCO/RAN MOP ingestion
+  through the existing, unchanged Generic KM pipeline), then Phase 4H
+  (security hardening).
 - **FUTURE (target architecture, not yet designed in detail):** a Context
   Engineering Layer that assembles bounded context from Operational,
   Knowledge, and Case context for a specialist; a second specialist
   (Troubleshooting Manager); a supervisory Head of Automated Operations
   agent; and expanded Operational Context sources (ITSM, alarms, topology,
   KPIs, change, handover — see [Roadmap](#roadmap)).
+
+See [`docs/BUILD_SEQUENCE.md`](docs/BUILD_SEQUENCE.md) for the full Phase
+0 → Phase 7 progression and topology diagrams for every phase in between.
 
 ```mermaid
 flowchart TD
@@ -174,17 +200,20 @@ flowchart TD
     IM --> CEL["Context Engineering Layer (FUTURE)"]
     TSM --> CEL
     CEL --> OC["Operational Context<br/>Teams (CURRENT)"]
-    CEL --> KC["Knowledge Context<br/>Generic KM Layer (NEXT)"]
+    CEL --> KC["Knowledge Context<br/>Generic KM Layer (CURRENT)"]
     CEL --> CC["Case Context<br/>Cases (CURRENT)"]
-    KC --> KM["MOP / SOP / RCA / KB<br/>(behind Generic KM — NEXT)"]
+    KC --> KM["MOP / SOP / RCA / KB<br/>(behind Generic KM — CURRENT platform, A5 adds real TELCO/RAN MOP content)"]
 ```
 
-Read this diagram as target architecture, not as a running system. The
-current, actually-running path remains exactly the [Architecture](#architecture)
-and [Agent topology](#agent-topology) sections above: the user talks to
-Team Manager, which delegates to Incident Manager, which uses Teams tools
-through Power Automate. Nothing about today's runtime changes until each
-labeled phase is actually built.
+Read this diagram as target architecture for the Context Engineering
+Layer/Troubleshooting Manager/Head of Automated Operations specifically —
+those three remain FUTURE, not yet built. Everything else marked CURRENT
+in the diagram is real and running today. The current, actually-running
+path remains exactly the [Architecture](#architecture) and
+[Agent topology](#agent-topology) sections above: the user talks to Team
+Manager, which delegates to Incident Manager, which uses Teams tools
+and/or governed-KM tools, through Power Automate and the Knowledge
+Repository respectively.
 
 ## Troubleshooting Product Strategy
 
@@ -207,11 +236,14 @@ the loop repeats until the fault is resolved, sufficiently narrowed, or
 clearly escalated.
 
 - **CURRENT:** Team Manager, Incident Manager, Teams integration, Case
-  context.
-- **NEXT (Phase 5.1):** the Generic KM Layer, providing Knowledge Context.
+  context, generic governed Knowledge, and multisource (image + Teams +
+  governed-KM) specialist reasoning for a single request — all a
+  prerequisite for the loop below, not the loop itself.
+- **NEXT:** POST-5.1 B7, then A5 (real TELCO/RAN knowledge content), then
+  Phase 4H security hardening.
 - **FUTURE:** a Troubleshooting Manager, the Context Engineering Layer, a
   persistent troubleshooting state, a next-best-diagnostic-action loop, and
-  expanded operational integrations (see [Roadmap](#roadmap)).
+  expanded operational integrations (5.2–5.7, see [Roadmap](#roadmap)).
 
 None of the iterative troubleshooting loop described above is implemented
 today — see `docs/TROUBLESHOOTING_STRATEGY.md` for the full strategy every
@@ -497,10 +529,13 @@ SLOPANOC is not production-ready. Known gaps include at least:
 
 ## Roadmap
 
-**Current:** Teams integration, core platform, and Markdown rendering are
-complete.
+**Current:** Teams integration, core platform, Markdown rendering, Phase
+5.1 generic governed Knowledge, and POST-5.1 A–B (Cloud SQL, multimodal
+attachments through B6) are all complete. POST-5.1 B7 is next (see below);
+full detail and phase-by-phase topology in
+[`docs/BUILD_SEQUENCE.md`](docs/BUILD_SEQUENCE.md).
 
-**Next — Phase 5.1: Generic Knowledge Management Layer.** A generic
+**Phase 5.1: Generic Knowledge Management Layer — COMPLETE.** A generic
 knowledge platform capability, not an Incident-Manager-specific feature.
 Initial knowledge object types are expected to include MOPs, SOPs, RCAs, KB
 articles, troubleshooting guides, operational procedures, and technical

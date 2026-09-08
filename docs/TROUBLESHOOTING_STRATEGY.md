@@ -403,6 +403,8 @@ The troubleshooting experience maps to the target architecture as follows:
 ```
 
 Current implementation status must remain clearly separated from future architecture.
+See `docs/BUILD_SEQUENCE.md` for the full, detailed phase-by-phase build
+sequence and topology evolution behind this summary.
 
 ### Current
 
@@ -411,13 +413,25 @@ Team Manager
 Incident Manager
 Teams
 Cases
+Generic KM Layer → Knowledge Context (Phase 5.1, complete)
+Current-turn multimodal image evidence, combined with Teams and/or
+  Knowledge Context in one specialist turn (POST-5.1 B0-B6, complete)
 ```
 
 ### Next
 
 ```text
-Generic KM Layer
-→ Knowledge Context
+POST-5.1 B7 — attachment lifecycle / real UI / full regression
+A5 — real TELCO/RAN MOP ingestion (real knowledge content, same pipeline)
+Phase 4H — security hardening
+```
+
+### Later
+
+```text
+5.2-5.7 — Operational Context integrations (ITSM, Alarms, Topology, KPIs,
+  Change, Handover)
+Phase 6 — Agent expansion + Context Engineering
 ```
 
 ### Future
@@ -425,8 +439,10 @@ Generic KM Layer
 ```text
 Troubleshooting Manager
 Context Engineering Layer
-Head of Automated Operations
-Expanded Operational Context
+Head of Automated Operations (optional future supervisory layer, never a
+  mandatory hop)
+Persistent Troubleshooting State + next-best-diagnostic-action loop
+  (Phase 7 — the product target this document defines)
 ```
 
 ---
