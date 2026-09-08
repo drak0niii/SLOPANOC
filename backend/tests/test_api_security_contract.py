@@ -231,14 +231,21 @@ def test_only_the_expected_routes_exist() -> None:
     assert _all_paths() == expected
 
 
-def test_chat_endpoint_only_accepts_a_message_field() -> None:
-    """The chat endpoint's request schema has exactly one field -- no
-    channel through which a client could specify a tool name, a raw ADK
-    action, or a state key to write.
+def test_chat_endpoint_only_accepts_message_and_attachment_ids_fields() -> None:
+    """POST-5.1 B5 -- the chat endpoint's request schema has exactly two
+    fields: `message` (free text) and `attachment_ids` (a plain list of
+    opaque, server-generated ids the client already received from its own
+    prior `POST /api/sessions/{id}/attachments` uploads). Still no channel
+    through which a client could specify a tool name, a raw ADK action, a
+    state key to write, a storage path/URI, or anything else -- every
+    `attachment_id` is independently re-validated server-side
+    (`prepare_attachments_for_turn`: existence, ownership, session, READY
+    status, MIME, limits) before it can influence model input at all; the
+    client never supplies a gs:// URI, bucket, or session id for it.
     """
     from backend.api.schemas import SendMessageRequest
 
-    assert set(SendMessageRequest.model_fields) == {"message"}
+    assert set(SendMessageRequest.model_fields) == {"message", "attachment_ids"}
 
 
 def test_approval_endpoints_only_accept_a_proposal_id_field() -> None:

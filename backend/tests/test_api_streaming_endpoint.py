@@ -83,6 +83,65 @@ def test_stream_endpoint_returns_event_stream_content_type(client: TestClient) -
     assert events[-1]["type"] == "run.completed"
 
 
+def test_stream_endpoint_accepts_attachment_ids_field(client: TestClient) -> None:
+    """POST-5.1 B5 -- the stream endpoint accepts the same
+    `SendMessageRequest` shape as the nonstream endpoint, including the
+    new `attachment_ids` field (empty here -- a normal text-only send
+    must remain completely unaffected)."""
+    session_id = client.post("/api/sessions").json()["session_id"]
+
+    with client.stream(
+        "POST",
+        f"/api/sessions/{session_id}/messages/stream",
+        json={"message": "hi", "attachment_ids": []},
+    ) as response:
+        assert response.status_code == 200
+        body = "".join(response.iter_text())
+
+    events = _parse_sse(body)
+    assert events[0]["type"] == "run.started"
+    assert events[-1]["type"] == "run.completed"
+    assert not any(e["type"] == "error" for e in events)
+
+
+def test_stream_endpoint_surfaces_a_duplicate_attachment_id_as_a_validation_error(client: TestClient) -> None:
+    """POST-5.1 B5 -- duplicate ids in one request are rejected
+    (instruction section 8) -- the stream endpoint's own `error` event
+    preserves the real `validation_error` code (unlike the nonstream
+    endpoint, which -- pre-existing, unrelated-to-B5 behavior -- collapses
+    every in-pipeline error uniformly to `run_failure`)."""
+    session_id = client.post("/api/sessions").json()["session_id"]
+
+    with client.stream(
+        "POST",
+        f"/api/sessions/{session_id}/messages/stream",
+        json={"message": "here", "attachment_ids": ["att-1", "att-1"]},
+    ) as response:
+        assert response.status_code == 200
+        body = "".join(response.iter_text())
+
+    events = _parse_sse(body)
+    error_events = [e for e in events if e["type"] == "error"]
+    assert len(error_events) == 1
+    assert error_events[0]["data"]["code"] == "validation_error"
+    assert events[-1]["type"] == "run.completed"
+    assert events[-1]["data"]["outcome"] == "error"
+
+
+def test_nonstream_endpoint_also_accepts_attachment_ids_field(client: TestClient) -> None:
+    """Both `POST /messages` and `POST /messages/stream` funnel through
+    the SAME canonical `ChatService.execute_turn_events` pipeline
+    (instruction section 19/49) -- proven here by the nonstream endpoint
+    accepting the identical request shape without error."""
+    session_id = client.post("/api/sessions").json()["session_id"]
+
+    response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"message": "hi", "attachment_ids": []},
+    )
+    assert response.status_code == 200
+
+
 def test_stream_wire_format_uses_sse_event_and_data_lines(client: TestClient) -> None:
     session_id = client.post("/api/sessions").json()["session_id"]
 

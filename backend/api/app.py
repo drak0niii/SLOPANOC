@@ -364,7 +364,7 @@ def create_app() -> FastAPI:
         user: UserContext = Depends(resolve_user_context),
         chat_service: ChatService = Depends(get_chat_service),
     ) -> ChatResponse:
-        return await chat_service.run_turn(session_id, body.message, user.user_id)
+        return await chat_service.run_turn(session_id, body.message, user.user_id, body.attachment_ids)
 
     @app.post("/api/sessions/{session_id}/messages/stream")
     async def stream_message(
@@ -388,7 +388,7 @@ def create_app() -> FastAPI:
 
         async def event_source():
             async with Aclosing(
-                chat_service.execute_turn_events(session_id, body.message, user.user_id)
+                chat_service.execute_turn_events(session_id, body.message, user.user_id, body.attachment_ids)
             ) as events:
                 async for event in events:
                     yield format_sse(event)

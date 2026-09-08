@@ -177,6 +177,41 @@ class AttachmentService:
             )
         return await self._repository.get(attachment_id)  # type: ignore[return-value]
 
+    async def link_many_to_message(
+        self,
+        attachment_ids: list[str],
+        owner_user_id: str,
+        session_id: str,
+        message_id: str,
+        now: Optional[datetime] = None,
+    ) -> None:
+        """POST-5.1 B5 -- atomic bulk `READY -> LINKED`, all attachments
+        to the SAME real ADK turn `message_id`. Deliberately does NOT
+        pre-validate each attachment individually (unlike
+        `link_to_message`'s single-attachment `_require_owned` +
+        status check) -- by the time this is called, every id has
+        already been fully validated by
+        `backend/api/attachment_service.py`'s `prepare_attachments_for_turn`
+        (existence, ownership, session, READY status, MIME, limits); this
+        method's own atomic conditional UPDATE is the re-check that
+        matters (defense against a narrow concurrent-transition race,
+        never the primary authorization boundary). Raises
+        `InvalidAttachmentTransitionError` (generic, safe message -- never
+        which specific id/why) if the atomic bulk transition did not
+        apply to every requested id; a no-op (never raises) for an empty
+        list.
+        """
+        if not attachment_ids:
+            return
+        linked_at = _now(now)
+        applied = await self._repository.link_many_to_message(
+            attachment_ids, owner_user_id, session_id, message_id, linked_at
+        )
+        if not applied:
+            raise InvalidAttachmentTransitionError(
+                "one or more attachments could not be linked to this turn -- linkage aborted, none were changed."
+            )
+
     async def mark_deleted(
         self,
         attachment_id: str,

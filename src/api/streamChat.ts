@@ -18,15 +18,27 @@ export function isAbortError(error: unknown): boolean {
 export interface StreamChatMessageParams {
   sessionId: string;
   message: string;
+  /** POST-5.1 B5 — READY backend attachment ids to include in this turn,
+   * in draft order (the exact order Gemini/ADK should see the images).
+   * Omitted/empty for a normal text-only send — the backend's own
+   * `SendMessageRequest.attachment_ids` defaults to `[]`, so this is
+   * never a breaking wire-shape change. */
+  attachmentIds?: string[];
   signal: AbortSignal;
   onEvent: (event: SSEEvent) => void;
 }
 
-export async function streamChatMessage({ sessionId, message, signal, onEvent }: StreamChatMessageParams): Promise<void> {
+export async function streamChatMessage({
+  sessionId,
+  message,
+  attachmentIds,
+  signal,
+  onEvent,
+}: StreamChatMessageParams): Promise<void> {
   const response = await fetch(`${getApiBaseUrl()}/api/sessions/${encodeURIComponent(sessionId)}/messages/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, attachment_ids: attachmentIds ?? [] }),
     signal,
   });
 

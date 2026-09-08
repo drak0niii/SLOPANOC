@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from dataclasses import dataclass
 from typing import Optional
 
 from fastapi import UploadFile
@@ -31,8 +32,13 @@ from starlette.concurrency import run_in_threadpool
 from backend.api.session_service import ApiSessionService
 from backend.attachments.models import ChatAttachmentRecord, ChatAttachmentStatus
 from backend.attachments.service import AttachmentNotFoundError, AttachmentService
-from backend.attachments.storage import ChatAttachmentStorage, build_object_name, generate_attachment_id
-from backend.attachments.validation import InvalidImageError, normalize_filename, validate_image_bytes
+from backend.attachments.storage import (
+    AttachmentStorageUnavailableError,
+    ChatAttachmentStorage,
+    build_object_name,
+    generate_attachment_id,
+)
+from backend.attachments.validation import SUPPORTED_MIME_TYPES, InvalidImageError, normalize_filename, validate_image_bytes
 from backend.config.settings import Settings
 from backend.gateway.safe_error import (
     connector_unavailable,
@@ -199,3 +205,124 @@ async def get_attachment_content(
         raise internal_error("The attachment content could not be retrieved.") from None
 
     return data, record
+
+
+# --- Multimodal turn preparation (POST-5.1 B5) ------------------------------
+
+
+@dataclass(frozen=True)
+class PreparedAttachment:
+    """TRUSTED, backend-internal input to model construction ONLY -- never
+    an API response shape (see `schemas.AttachmentHistoryDTO`/
+    `AttachmentResponse` for the frontend-safe views; those two never
+    carry `gcs_uri`, and this type is never serialized into either).
+
+    No `filename` -- the model doesn't need it, and keeping it out avoids
+    ever being tempted to build a URI or log line from it. No
+    `owner_user_id` -- ownership was already verified to construct this;
+    it has no further use once validation has passed.
+    """
+
+    attachment_id: str
+    mime_type: str
+    size_bytes: int
+    gcs_uri: str
+
+
+async def prepare_attachments_for_turn(
+    *,
+    attachment_service: AttachmentService,
+    storage: ChatAttachmentStorage,
+    settings: Settings,
+    user_id: str,
+    session_id: str,
+    attachment_ids: list[str],
+) -> list[PreparedAttachment]:
+    """POST-5.1 B5 -- validates every `attachment_id` a real multimodal
+    send supplied, BEFORE the Runner/Gemini ever sees any of them
+    (instruction section 12). Never trusts frontend upload state --
+    re-derives everything from the authoritative Cloud SQL record.
+
+    Validates, in order:
+      1. no duplicate ids (instruction section 8) -- structural, a plain
+         set-size comparison, never string matching.
+      2. count <= `settings.chat_attachment_max_images_per_turn`.
+      3. for each id: exists AND belongs to (`user_id`, `session_id`) --
+         unknown id and foreign-owner/foreign-session id are
+         DELIBERATELY indistinguishable (`not_found`, same anti-
+         enumeration discipline as every other attachment read path in
+         this codebase; never "that belongs to someone else").
+      4. `DELETED` -> treated identically to not-found (matches
+         `_attachment_response_status`'s existing convention elsewhere in
+         this module).
+      5. `LINKED` -> a distinct, safe-to-reveal `validation_error` (the
+         caller genuinely owns this attachment, so confirming it was
+         already used leaks nothing) -- instruction section 15: no
+         attachment replay/rebinding onto a different turn.
+      6. MIME must still be one of `SUPPORTED_MIME_TYPES` -- re-checked
+         here, never assumed from upload-time validation alone.
+      7. combined `size_bytes` <= `settings.chat_attachment_max_total_bytes_per_turn`.
+
+    Returns `PreparedAttachment`s in the EXACT order `attachment_ids` was
+    given (client/draft order) -- never database/dict iteration order
+    (instruction section 18/34) -- each carrying the internal `gs://` URI
+    Gemini/ADK will receive. An empty `attachment_ids` list returns `[]`
+    immediately, no lookups.
+    """
+    if not attachment_ids:
+        return []
+
+    if len(set(attachment_ids)) != len(attachment_ids):
+        raise validation_error("A message cannot reference the same attachment twice.")
+
+    if len(attachment_ids) > settings.chat_attachment_max_images_per_turn:
+        raise validation_error(
+            f"A message may include at most {settings.chat_attachment_max_images_per_turn} images."
+        )
+
+    records_by_id: dict[str, ChatAttachmentRecord] = {}
+    for attachment_id in attachment_ids:
+        try:
+            record = await attachment_service.get_owned(attachment_id, user_id)
+        except AttachmentNotFoundError as exc:
+            raise not_found("No such attachment was found.") from exc
+        if record.session_id != session_id:
+            # Same anti-enumeration discipline: a real attachment owned by
+            # this user but uploaded against a DIFFERENT session must look
+            # identical to "no such attachment" -- never confirm its
+            # existence under a session the caller didn't upload it to.
+            raise not_found("No such attachment was found.")
+        if record.status == ChatAttachmentStatus.DELETED.value:
+            raise not_found("No such attachment was found.")
+        if record.status == ChatAttachmentStatus.LINKED.value:
+            raise validation_error("This attachment has already been used in another message.")
+        # status is READY here -- the only state a NEW send may reference
+        # (instruction section 15).
+        if record.mime_type not in SUPPORTED_MIME_TYPES:
+            raise unsupported_media_type(f"Unsupported attachment type: {record.mime_type!r}.")
+        records_by_id[attachment_id] = record
+
+    total_bytes = sum(record.size_bytes for record in records_by_id.values())
+    if total_bytes > settings.chat_attachment_max_total_bytes_per_turn:
+        raise payload_too_large(
+            "The combined size of the attached images exceeds the "
+            f"{settings.chat_attachment_max_total_bytes_per_turn} byte limit."
+        )
+
+    try:
+        return [
+            PreparedAttachment(
+                attachment_id=attachment_id,
+                mime_type=records_by_id[attachment_id].mime_type,
+                size_bytes=records_by_id[attachment_id].size_bytes,
+                gcs_uri=storage.uri_for(records_by_id[attachment_id].storage_object_name),
+            )
+            for attachment_id in attachment_ids  # preserves CLIENT order, not dict/DB order
+        ]
+    except AttachmentStorageUnavailableError:
+        # Every referenced attachment is a genuinely READY row (a READY
+        # row can only exist if the bucket was configured at upload
+        # time -- see B2's own `upload_attachment` gate), so this should
+        # never fire in practice; defensive only, against configuration
+        # changing between upload and send.
+        raise connector_unavailable("Attachment storage is not currently available.") from None

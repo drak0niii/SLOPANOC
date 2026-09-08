@@ -93,7 +93,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from functools import lru_cache
-from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Protocol
+from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Protocol, Sequence
 
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.utils.context_utils import Aclosing
@@ -136,6 +136,7 @@ from backend.api.activity_translator import (
     selection_prepared_trace_step,
     translate_case_context_status,
 )
+from backend.api.attachment_service import PreparedAttachment, prepare_attachments_for_turn
 from backend.api.case_service import ACTIVE_CASE_ID_STATE_KEY, get_active_case_for_session
 from backend.api.conversation_target_capture import ConversationTargetCapture
 from backend.api.pending_action import map_pending_action
@@ -150,7 +151,11 @@ from backend.api.knowledge_source_reference import build_knowledge_source_refere
 from backend.api.source_reference import TeamsSourceCapture, resolve_authoritative_contributors
 from backend.api.streaming_events import EventSequencer, Stage, StreamEvent, StreamEventType, status_data
 from backend.api.turn_context import bind_run_id, pop_message_texts, reset_run_id
+from backend.attachments.repository import AttachmentRepository
+from backend.attachments.service import AttachmentService, get_attachment_service
+from backend.attachments.storage import ChatAttachmentStorage, get_attachment_storage
 from backend.cases.service import CaseService, get_case_service
+from backend.config.settings import get_settings
 from backend.gateway.safe_error import SafeErrorException, run_failure, validation_error
 from backend.selection.service import PENDING_READ_CONTINUATION_STATE_KEY, pop_read_continuation
 from backend.tools.knowledge.runtime import discard_knowledge_run_evidence_state, snapshot_selected_knowledge_evidence
@@ -166,6 +171,32 @@ _logger = logging.getLogger(__name__)
 # `execute_turn_events`'s module-level docstring addendum below for why a
 # background task + queue exists at all).
 _TURN_DONE = object()
+
+# POST-5.1 B5 -- an internal-only, fixed, generic descriptor used SOLELY
+# as the `question=` argument to the two secondary/remediation helpers
+# below (`request_source_requirements_declaration`,
+# `enforce_governed_knowledge_at_completion`) when a turn's real
+# `message_text` is blank (an image-only send). Both call sites only ever
+# run AFTER team_manager's own turn already produced a real `final_text`
+# -- this is never the user-facing answer, never written into
+# conversation history, never used as the visible chat title (`derive_
+# chat_title("")` already correctly falls back to "New chat" on its own,
+# unrelated to this constant), and never presented as user-authored text.
+# See `_remediation_question`'s own docstring for why a fixed fallback is
+# safer here than passing an empty string into functions that treat their
+# `question` argument as always-meaningful.
+_IMAGE_ONLY_REMEDIATION_QUESTION_FALLBACK = "[The user sent an image with no accompanying text.]"
+
+
+def _remediation_question(message_text: str) -> str:
+    """See `_IMAGE_ONLY_REMEDIATION_QUESTION_FALLBACK`'s own module-level
+    comment for the full safety contract. Only ever affects the two
+    bounded, tools-scoped remediation calls in `_run_turn_events` -- never
+    the real multimodal `Content` sent to the Runner (which correctly
+    omits a text part entirely for an image-only turn -- see that
+    method's own `content` construction).
+    """
+    return message_text if message_text.strip() else _IMAGE_ONLY_REMEDIATION_QUESTION_FALLBACK
 
 
 def _log_unexpected_background_turn_exception(task: "asyncio.Task[None]") -> None:
@@ -418,6 +449,8 @@ class ChatService:
         read_continuation_executor: Optional[
             Callable[..., Awaitable[Optional[dict[str, Any]]]]
         ] = None,
+        attachment_service: Optional[AttachmentService] = None,
+        attachment_storage: Optional[ChatAttachmentStorage] = None,
     ) -> None:
         self._session_service = session_service
         self._runner = runner if runner is not None else _build_runner(session_service)
@@ -464,6 +497,19 @@ class ChatService:
         # bare-default philosophy); the real runtime default is wired only
         # by `get_chat_service()` below, via `get_case_service()`.
         self._case_service = case_service if case_service is not None else CaseService()
+        # POST-5.1 B5 -- same bare-default philosophy as `case_service`
+        # above: a fresh in-memory-SQLite-backed `AttachmentService`/an
+        # unconfigured `ChatAttachmentStorage` (matching
+        # `get_attachment_storage()`'s own "safe to construct even when
+        # unset" design) for ad hoc/test construction; the real runtime
+        # default is wired only by `get_chat_service()` below, via
+        # `get_attachment_service()`/`get_attachment_storage()`.
+        self._attachment_service = (
+            attachment_service
+            if attachment_service is not None
+            else AttachmentService(AttachmentRepository("sqlite+aiosqlite:///:memory:"))
+        )
+        self._attachment_storage = attachment_storage if attachment_storage is not None else ChatAttachmentStorage(None)
         # Explicit ownership registry for background turn tasks (see
         # `execute_turn_events`) -- holds a strong reference to every
         # in-flight task so none can be silently garbage-collected
@@ -486,7 +532,11 @@ class ChatService:
         self._run_tasks: dict[tuple[str, str], asyncio.Task] = {}
 
     async def execute_turn_events(
-        self, session_id: str, message_text: str, user_id: str = DEFAULT_USER_ID
+        self,
+        session_id: str,
+        message_text: str,
+        user_id: str = DEFAULT_USER_ID,
+        attachment_ids: Sequence[str] = (),
     ) -> AsyncIterator[StreamEvent]:
         """THE canonical pipeline. PRECONDITION: the caller has already
         verified session ownership (`run_turn` below and the SSE route in
@@ -554,7 +604,7 @@ class ChatService:
             try:
                 async with self._session_service.lock_for(session_id, user_id):
                     async with Aclosing(
-                        self._run_turn_events(sequencer, session_id, message_text, user_id, perf)
+                        self._run_turn_events(sequencer, session_id, message_text, user_id, perf, attachment_ids)
                     ) as events:
                         async for event in events:
                             await queue.put(event)
@@ -598,6 +648,7 @@ class ChatService:
         message_text: str,
         user_id: str,
         perf: Optional[PerfTimer] = None,
+        attachment_ids: Sequence[str] = (),
     ) -> AsyncIterator[StreamEvent]:
         # `perf` defaults to a fresh timer so every existing/future direct
         # caller of this method (tests included) keeps working unchanged --
@@ -723,13 +774,74 @@ class ChatService:
         # to every general conversation" investigation.
         perf.mark("case_context_checked")
 
-        content = types.Content(role="user", parts=[types.Part.from_text(text=message_text)])
+        error: Optional[tuple[str, str]] = None
+        prepared_attachments: list[PreparedAttachment] = []
+
+        # POST-5.1 B5 -- structural "must have something" guard
+        # (instruction section 9): a blank message with zero attachments
+        # is invalid. Checked BEFORE attachment validation so a request
+        # that fails both reasons reports the more fundamental one.
+        # `error` set here (rather than raised) for the SAME reason every
+        # other failure in this method uses the `error` tuple instead of
+        # a bare raise -- this method has ALREADY yielded at least one
+        # event (the STATUS event above) by this point, so raising here
+        # would escape uncaught from `_drive()`'s `async for` in
+        # `execute_turn_events` with no ERROR event ever reaching the
+        # caller (verified against that method's own structure -- there
+        # is no `except` around the `async for`). Setting `error` and
+        # falling through to this method's own existing `if error is
+        # None:` gate (below, before the Runner call) and final `if
+        # error is not None: yield ERROR event` (much further down) reuses
+        # the one, already-correct error-reporting path.
+        if not message_text.strip() and not attachment_ids:
+            error = ("validation_error", "Please include a message or an attachment.")
+        elif attachment_ids:
+            # Instruction section 12: every supplied attachment id is
+            # validated server-side, BEFORE the Runner/Gemini ever sees
+            # any of them -- existence, ownership, session, READY status,
+            # MIME, and count/size limits (prepare_attachments_for_turn's
+            # own docstring has the full list). Never trusts the
+            # frontend's own upload/draft state.
+            try:
+                prepared_attachments = await prepare_attachments_for_turn(
+                    attachment_service=self._attachment_service,
+                    storage=self._attachment_storage,
+                    settings=get_settings(),
+                    user_id=user_id,
+                    session_id=session_id,
+                    attachment_ids=list(attachment_ids),
+                )
+            except SafeErrorException as exc:
+                error = (exc.safe_error.error_code, exc.safe_error.user_message)
+
+        # POST-5.1 B5 -- multimodal Content construction. Text part first
+        # (only when non-blank), then one `Part.from_uri(...)` per
+        # validated attachment, in the EXACT order the caller supplied
+        # `attachment_ids` (preserved end-to-end by
+        # `prepare_attachments_for_turn` -- never SQL/dict iteration
+        # order). NEVER `Part.from_bytes`/`Part.from_data`/base64 --
+        # `PreparedAttachment.gcs_uri` is the ONLY durable-image
+        # construction this codebase uses (see storage.py's `uri_for`
+        # docstring and CLAUDE.md's own locked B0 rule). Built even on
+        # the `error is not None` path (with whatever partial/empty
+        # inputs exist) purely so `content` is always a defined value --
+        # the `if error is None:` gate below ensures it is never actually
+        # sent to a Runner on that path.
+        content = types.Content(
+            role="user",
+            parts=[
+                *([types.Part.from_text(text=message_text)] if message_text.strip() else []),
+                *(
+                    types.Part.from_uri(file_uri=a.gcs_uri, mime_type=a.mime_type)
+                    for a in prepared_attachments
+                ),
+            ],
+        )
         run_config = RunConfig(streaming_mode=StreamingMode.SSE)
 
         final_text: Optional[str] = None
         status_cleared = False
         first_event_seen = False
-        error: Optional[tuple[str, str]] = None
         # POST-5.1 B4B DEFECT FIX -- captured (in-memory only, no session
         # I/O) the moment the first event of a real turn is observed; the
         # ACTUAL saved-chat bookkeeping write is deferred until this
@@ -793,7 +905,13 @@ class ChatService:
             # method's own `finally` comment). See read_continuation_
             # execution.py's module docstring for the full ADK-1.33.0-
             # verified mechanism.
-            if pending_read_continuation is not None:
+            #
+            # POST-5.1 B5: `error is None` added -- a turn whose
+            # attachment validation (or the blank-message-and-no-
+            # attachment guard) already failed above must never still run
+            # a read-continuation resolution; nothing below this point
+            # should execute at all once `error` is set.
+            if error is None and pending_read_continuation is not None:
                 call_event = synthetic_incident_manager_call_event(
                     pending_read_continuation.selected_chat_topic
                 )
@@ -973,6 +1091,66 @@ class ChatService:
                             # and its own real `.timestamp` once it is
                             # safe to do so.
                             turn_invocation_id = event.invocation_id
+
+                            # POST-5.1 B5 -- atomic bulk attachment
+                            # linkage, INLINE at this exact point (never
+                            # deferred to `finally` like the B4B
+                            # bookkeeping fix above needed) -- proven safe
+                            # by direct source inspection:
+                            # `AttachmentService.link_many_to_message`
+                            # writes ONLY to the separate
+                            # `slopanoc_chat_attachments` table via a plain
+                            # SQLAlchemy UPDATE, never through
+                            # `session_service.append_event()`; ADK's own
+                            # session-revision marker
+                            # (`StorageSession.get_update_marker()`,
+                            # `google/adk/sessions/schemas/v1.py`, verified
+                            # against the installed 1.33.0 source) is
+                            # derived EXCLUSIVELY from the `sessions`
+                            # table's own `update_time` column, which this
+                            # write can never touch -- there is no
+                            # trigger/FK/computed relationship between the
+                            # two tables, and this call never goes through
+                            # `DatabaseSessionService` at all. The real
+                            # user turn (text and/or image Content) is
+                            # already durably persisted at this point (the
+                            # same B4A happens-before proof `record_user_
+                            # turn_activity` relies on), so an attachment
+                            # only ever becomes LINKED once it genuinely
+                            # belongs to an ACTUAL persisted user turn
+                            # (instruction section 22) -- never merely
+                            # because the HTTP request arrived or
+                            # validation passed.
+                            if prepared_attachments:
+                                try:
+                                    await self._attachment_service.link_many_to_message(
+                                        [a.attachment_id for a in prepared_attachments],
+                                        user_id,
+                                        session_id,
+                                        turn_invocation_id,
+                                    )
+                                except Exception:
+                                    # Instruction section 25: a link
+                                    # failure AFTER the genuine user turn
+                                    # exists must never present a
+                                    # successful-looking response -- fail
+                                    # closed with the existing safe error
+                                    # contract, and stop consuming further
+                                    # Runner events (no further model/tool
+                                    # work is presented as having
+                                    # succeeded). The user turn itself
+                                    # still correctly stays durable/visible
+                                    # (this method's own `finally` block
+                                    # still runs, unaffected, below) --
+                                    # only the attachment stays READY
+                                    # (never fraudulently LINKED) and this
+                                    # turn's own response is reported as a
+                                    # failure.
+                                    error = (
+                                        "run_failure",
+                                        "The assistant could not complete this request. Please try again.",
+                                    )
+                                    break
 
                         status = translator.translate_event(event)
                         if status is not None:
@@ -1231,7 +1409,8 @@ class ChatService:
             )
             try:
                 declaration = await request_source_requirements_declaration(
-                    question=message_text, run_id=f"{sequencer.run_id}::declaration-remediation"
+                    question=_remediation_question(message_text),
+                    run_id=f"{sequencer.run_id}::declaration-remediation",
                 )
             except Exception:
                 _logger.warning(
@@ -1294,7 +1473,7 @@ class ChatService:
                     else None
                 )
                 final_text, selected_knowledge_evidence = await enforce_governed_knowledge_at_completion(
-                    question=message_text,
+                    question=_remediation_question(message_text),
                     chat_topic=chat_topic,
                     run_id=f"{sequencer.run_id}::governed-completion",
                 )
@@ -1575,7 +1754,11 @@ class ChatService:
             )
 
     async def run_turn(
-        self, session_id: str, message_text: str, user_id: str = DEFAULT_USER_ID
+        self,
+        session_id: str,
+        message_text: str,
+        user_id: str = DEFAULT_USER_ID,
+        attachment_ids: Sequence[str] = (),
     ) -> ChatResponse:
         # Raises `SafeErrorException` (not_found) for an unknown session, OR
         # a session that exists but belongs to a different user -- see
@@ -1588,7 +1771,9 @@ class ChatService:
         pending_action_data: Optional[dict] = None
         error_message: Optional[str] = None
 
-        async with Aclosing(self.execute_turn_events(session_id, message_text, user_id)) as events:
+        async with Aclosing(
+            self.execute_turn_events(session_id, message_text, user_id, attachment_ids)
+        ) as events:
             async for event in events:
                 if event.type == StreamEventType.MESSAGE_COMPLETED:
                     final_text = event.data.get("content")
@@ -1737,4 +1922,9 @@ def get_chat_service() -> ChatService:
     itself is stateless with respect to which session a given call targets
     (that's supplied per-call via `session_id`), so sharing it is safe.
     """
-    return ChatService(get_session_service(), case_service=get_case_service())
+    return ChatService(
+        get_session_service(),
+        case_service=get_case_service(),
+        attachment_service=get_attachment_service(),
+        attachment_storage=get_attachment_storage(),
+    )

@@ -366,8 +366,8 @@ Backend configuration is read from process environment variables
 | `SLOPANOC_KNOWLEDGE_DATABASE_SECRET_RESOURCE` | Secret Manager resource for the Knowledge database URL (deployment) | none |
 | `SLOPANOC_CHAT_ATTACHMENTS_BUCKET` | Private GCS bucket name for durable chat attachment binaries (POST-5.1 B1+) | none — attachment storage unavailable when unset; ordinary text chat is unaffected |
 | `SLOPANOC_CHAT_ATTACHMENT_MAX_BYTES` | Max single image upload size, enforced (POST-5.1 B2) | `8388608` (8 MiB) |
-| `SLOPANOC_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN` | Max images per message turn — defined, not yet enforced (future B5) | `4` |
-| `SLOPANOC_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN` | Max combined image bytes per turn — defined, not yet enforced (future B5) | `16777216` (16 MiB) |
+| `SLOPANOC_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN` | Max images per message turn, enforced (POST-5.1 B5) | `4` |
+| `SLOPANOC_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN` | Max combined image bytes per turn, enforced (POST-5.1 B5) | `16777216` (16 MiB) |
 | `SLOPANOC_SAVED_CHAT_LIST_LIMIT` | Recent-N cap for `GET /api/sessions` and its legacy-marker backfill scan (POST-5.1 B4B) — not real pagination, ADK's `list_sessions` has none | `50` |
 | `SLOPANOC_CASE_CONTEXT_MAX_ITEMS` | Max Case context items shown to the model | `12` |
 | `SLOPANOC_CASE_CONTEXT_MAX_CHARACTERS` | Max Case context characters shown to the model | `4000` |
@@ -546,8 +546,7 @@ bootstrap, and real runtime cutover + persistence validation — see
 [Local Cloud SQL PostgreSQL development](#local-cloud-sql-postgresql-development)
 and [Current limitations](#current-limitations--production-readiness).
 
-**Next — POST-5.1 B: multimodal attachments.** IN PROGRESS (B0–B4D done,
-B5 next).
+**POST-5.1 B: multimodal attachments.** B0–B5 done, B6 next.
 Locked execution sequence (do not reorder): B0 [done] architecture + ADK
 persistence audit → B1 [done] Persistent Attachment Foundation → B2
 [done] Attachment Upload/Retrieve API → B3 [done] Complete Existing
@@ -854,18 +853,153 @@ the same signal before any side effect (no `rewindSession`, no
 `createSession`, no text mutation, no dispatch), so the prohibition holds
 for any future caller, not only the UI. Text-only user messages are
 completely unaffected — existing edit/rewind behavior is unchanged and
-regression-tested. **Future B5 invariant**: once a live-sent turn can
-carry a real image, the frontend `Message` representing it must expose
-this same `persistedAttachments` (or an equivalent structured
-image-ownership) signal immediately, in the same turn — not only after a
-later reload — so this prohibition holds both before and after refresh;
-B5 has not implemented that yet. **Final live proof**: after the
+regression-tested. **B5 invariant, now fulfilled** (see the B5 section
+below): once a live-sent turn can carry a real image, the frontend
+`Message` representing it must expose this same `persistedAttachments`
+(or an equivalent structured image-ownership) signal immediately, in the
+same turn — not only after a later reload — so this prohibition holds
+both before and after refresh; B5 does exactly this, live-proven.
+**Final live proof (B4D correction pass)**: after the
 correction pass, a real hard refresh reopening "B4D attachment hydration
 fixture" confirmed the persisted image still renders, the original user
 text still renders, the image-bearing user prompt has no usable Edit
 action, and text-only user messages elsewhere retain normal Edit
 behavior — with no `rewindSession` call for the blocked direct-edit
 attempt. **B4D is DONE.**
+
+**POST-5.1 B5 — Gemini/ADK multimodal runtime.** **DONE.** This is the
+first milestone where a user can actually send an image to Gemini.
+`SendMessageRequest` gained
+`attachment_ids: list[str]` (default `[]`, fully backward-compatible);
+`message` is now optional (default `""`) so an image-only send is valid,
+enforced by a `model_validator` ("message or attachment_ids required")
+mapped to the same 400 SafeError shape a malformed request already got —
+never deep inside the turn pipeline. Every attachment id is independently
+re-validated server-side, before the Runner ever starts
+(`attachment_service.prepare_attachments_for_turn`): existence, ownership,
+session, `READY`-only (a `LINKED`/`DELETED` attachment is rejected —
+never replayed/rebound onto a different turn), MIME
+(`SUPPORTED_MIME_TYPES`, the same source of truth B2 already used),
+duplicate ids rejected, count/total-bytes limits enforced from
+`SLOPANOC_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN`/
+`_MAX_TOTAL_BYTES_PER_TURN` (no separate drifting constants in
+`chat_service.py`) — unknown and foreign-owner/foreign-session ids remain
+identically indistinguishable (anti-enumeration). The internal `gs://`
+URI is built ONLY on the backend
+(`ChatAttachmentStorage.uri_for`) and never reaches any API DTO/SSE
+event/log/frontend state. Multimodal `Content` uses `Part.from_uri`
+exclusively — `Part.from_bytes` is proven (a patched-and-asserted-never-
+called test) to never be used for durable attachment input; parts are
+text-first-if-present then images in the client's own requested order,
+never SQL/dict order.
+
+**Attachment linkage timing — audited, not guessed.** `READY → LINKED`
+happens INLINE, at the exact moment `_run_turn_events` observes the
+first Runner-yielded event (the same point B4B's own deferred bookkeeping
+write already proved the genuine user turn is durably persisted) — never
+deferred to `finally` like B4B's fix, because this write goes through a
+completely different mechanism: `AttachmentService.link_many_to_message`
+is a plain SQLAlchemy `UPDATE` against `slopanoc_chat_attachments` (one
+transaction, either every requested attachment transitions or none do —
+atomic, never a partial LINKED subset), never through
+`session_service.append_event()`. Direct source inspection of the
+installed ADK 1.33.0 (`StorageSession.get_update_marker()`,
+`google/adk/sessions/schemas/v1.py`) proved this is safe: the marker is
+derived exclusively from the `sessions` table's own `update_time` column,
+which a write to the separate `slopanoc_chat_attachments` table can never
+touch. A dedicated regression test reproduces the exact B4B production
+shape (function-call → tool → final text) with a real attachment linked
+at that same point, against a real file-backed `DatabaseSessionService`,
+and proves no "session has been modified in storage" staleness error
+occurs — B5 does not resurrect the B4B defect. A link failure after the
+genuine turn exists fails the whole turn closed (never a successful-
+looking response) and leaves the attachment `READY`, never fraudulently
+`LINKED`; the user's genuine turn itself still stays durable/visible,
+mirroring B4B's own "model failure after turn creation" rule.
+
+**Image-only turns are first-class.** A real bug was found (and fixed)
+during this pass' own audit: `session_history_service.py`'s turn
+projection previously skipped creating a turn entirely for a genuine user
+event with no text part (`_user_text` returning `None` was wrongly
+treated as "not genuine") — an image-only send would have silently
+vanished from history. Fixed; an image-only turn now appears with
+`text: ""` and its attachment reference, exactly like any other turn, and
+correctly counts for `has_visible_message`/`chat_activity_at`/legacy
+repair. Title falls back to "New chat" (never fabricated from image
+content) via the exact same `derive_chat_title("")` path a blank turn
+already used. `GET /history` continues to expose only
+`{attachment_id, filename, mime_type, size_bytes}` — never the `gs://`
+URI, with explicit regression coverage.
+
+**Frontend.** The B3 Send gate is replaced by real eligibility, not
+removed unconditionally: Send (and Enter) is enabled for an image-bearing
+draft only when every image is genuinely `ready` with a real backend
+`attachmentId` AND the turn is on the real backend branch (general
+workspace, no ad-hoc sources, no demo script) — mirrors `sendMessage`'s
+own `isBackendBranch` conditions exactly, so a project/demo/sourced chat
+never silently drops an image or runs a mock answer over it; Send simply
+stays unavailable. The LOCKED B4D invariant now holds immediately, not
+only after refresh: a just-sent image-bearing user `Message` gets
+`persistedAttachments` populated synchronously from the draft's own
+already-known upload metadata (never a `File`/`Blob`/draft `objectUrl`),
+which means the existing B4D edit-prohibition (UI hide + `AppState`
+hard guard) applies to it immediately, proven by a dedicated regression
+test. `runBackendChat`/`streamChatMessage` forward `attachment_ids` in
+draft order; a plain text send is completely unaffected (empty array,
+same wire shape). Regenerate needed no change at all — it was already
+hidden unconditionally for every backend-sourced message (a pre-existing
+Phase 4F decision, audited and confirmed still correct: no regenerate-turn
+endpoint exists for the real backend regardless of attachments).
+
+**B6/B7 boundary, explicitly not built here.** B5 makes only the
+TOP-LEVEL Team Manager Runner multimodal — a nested `AgentTool` call
+(Incident Manager) does NOT automatically inherit the original image;
+that propagation is B6, untouched. No keyword-based "if image, don't
+delegate" routing was added. No GCS deletion lifecycle, no persistent
+pin/unread, no automatic READY→LINKED path outside a real send — those
+remain B7/future work.
+
+Covered by `backend/tests/test_attachments_repository.py` (atomic
+`link_many_to_message`), `backend/tests/test_attachment_prepare_for_turn.py`
+(the full validation matrix), `backend/tests/test_chat_service_function_call_continuation.py`
+(the mandatory B4B staleness non-regression with real attachment linkage,
+Content-construction proofs, `Part.from_bytes` never called, link-failure
+fail-closed), `backend/tests/test_session_history_service.py` (image-only
+turns), `backend/tests/test_api_streaming_endpoint.py` (nonstream/stream
+request-shape consistency, duplicate-id rejection), and frontend
+`src/components/composer/PromptComposer.test.tsx`/
+`src/state/AppState.attachments.test.tsx`/`src/api/streamChat.test.ts` —
+full backend suite (2587 passed, 1 skipped) and full frontend suite (662
+passed) both clean, zero regressions; `npm run build` clean.
+
+**Live multimodal validation passed.** A real disposable session
+(`469f7cad-f60b-4a67-b079-ba52cc1bed90`, real turn
+`e-52df5f58-0d5b-4c50-be0e-5333c93c4de4`) proved the entire real path end
+to end, with no manual backend commands anywhere: the user attached a
+real PNG (`image.png`, `image/png`, 119629 bytes) through the real UI,
+waited for it to become `ready` (Send enabled automatically), and pressed
+Send normally. Real Vertex Gemini correctly read
+**"Fixed Access and SDH - DMs status"** directly from the image's own
+pixels — text never present in the filename, prompt, or metadata,
+conclusive proof the model genuinely saw the image via
+`Part.from_uri(gs://..., mime_type=...)`, never OCR/base64/
+`Part.from_bytes`/a public or signed URL/prompt simulation. The attachment
+transitioned `READY → LINKED` automatically as part of this same real
+send — no `AttachmentService.link_to_message` command was ever run.
+`GET /history` confirmed the attachment reference on the user message
+only (the assistant message, same `turn_id`, returned `attachments: []`),
+exposing only `{attachment_id, filename, mime_type, size_bytes}` — no
+`gs://`, bucket, `storage_object_name`, `owner_user_id`, or `sha256`
+anywhere. Before any refresh, the sent message already carried
+`persistedAttachments` and had no usable Edit action. After a hard
+refresh and reopening the saved chat, the original text, the image, and
+the Gemini answer all restored identically, and the image-bearing prompt
+remained non-editable — proving before-refresh and after-refresh
+semantics are identical. (A backend-restart persistence check was not
+separately exercised in this pass — B4B/B4D already proved that class of
+persistence for text/history and rename; nothing about B5's own linkage
+mechanism gives reason to expect it would behave differently, but it was
+not re-confirmed live here.) **B5 is DONE.**
 
 Product model: normal SENT chat attachments are real saved conversation
 resources, not a current-turn-only demo. Unsent draft = browser
@@ -915,8 +1049,8 @@ B2 added real endpoints, still with no frontend/Gemini/ADK wiring:
 
 `backend/config/settings.py` gained `SLOPANOC_CHAT_ATTACHMENT_MAX_BYTES`
 (enforced) plus `SLOPANOC_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN`/
-`SLOPANOC_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN` (defined now, not yet
-enforced anywhere — ready for B5's message-send validation).
+`SLOPANOC_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN` (defined here in B1;
+enforced later, at message-send time, once B5 shipped).
 `python-multipart` and `Pillow` are now direct pinned dependencies.
 
 B3 turned the existing mock-only attachment UI scaffolding into a real
@@ -943,11 +1077,14 @@ the real backend — a live picker upload and a live clipboard (Ctrl+V)
 paste, both against real Cloud SQL PostgreSQL metadata and the real
 private GCS bucket, not just component/unit tests.
 
-Real image **Send stays intentionally blocked** — B5 (the Gemini/ADK
-multimodal runtime) doesn't exist yet, so both `PromptComposer`'s
-`canSend` and `AppState`'s `sendMessage` hard-block whenever any
-image-kind attachment is present in the draft, in any state; there is no
-fallback to a text-only send and no fabricated response. Removing an
+Real image **Send stayed intentionally blocked in B3** — the Gemini/ADK
+multimodal runtime didn't exist yet, so both `PromptComposer`'s
+`canSend` and `AppState`'s `sendMessage` hard-blocked whenever any
+image-kind attachment was present in the draft, in any state; there was
+no fallback to a text-only send and no fabricated response. **Superseded
+by B5** (see above): Send is now enabled for a `ready` image on the real
+backend branch — the underlying B3 upload/retry/abort/limit machinery
+this paragraph describes is otherwise completely unchanged. Removing an
 already-**uploaded** attachment from the draft does **not** delete its
 GCS object or Cloud SQL row — B3 adds no delete endpoint or synchronous
 cleanup, so it is left as a `READY`, unlinked (`message_id IS NULL`) row,

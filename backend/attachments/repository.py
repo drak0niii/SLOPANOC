@@ -134,6 +134,53 @@ class AttachmentRepository:
             await session.commit()
             return result.rowcount == 1
 
+    async def link_many_to_message(
+        self,
+        attachment_ids: list[str],
+        owner_user_id: str,
+        session_id: str,
+        message_id: str,
+        linked_at: datetime,
+    ) -> bool:
+        """POST-5.1 B5 -- atomic bulk `READY -> LINKED` for a real
+        multimodal turn's attachments, ALL transitioning to the SAME
+        `message_id` (the owning turn's ADK invocation_id). ONE UPDATE
+        statement, never a loop of individual transitions -- the
+        conditional WHERE (id IN (...), owner, session, status=READY) is
+        itself the atomicity/ownership/state guard, identical in spirit
+        to `link_to_message`'s own single-row version. Returns `True` iff
+        EVERY requested id matched and transitioned (`rowcount ==
+        len(attachment_ids)`); otherwise the transaction is never
+        committed (equivalent to a rollback -- nothing this call touched
+        becomes durable) and `False` is returned, so the caller can never
+        observe a partially-linked set (e.g. 3 of 4 images LINKED, one
+        still READY) even under a concurrent transition or an invalid id
+        slipped in since request-time validation. Assumes `attachment_ids`
+        is already de-duplicated (the caller's job -- see
+        `backend/api/attachment_service.py`'s `prepare_attachments_for_turn`).
+        A vacuous `True` for an empty list -- nothing to link is trivially
+        atomic.
+        """
+        if not attachment_ids:
+            return True
+        await self.ensure_schema()
+        async with self._session_factory() as session:
+            result = await session.execute(
+                update(ChatAttachmentRecord)
+                .where(
+                    ChatAttachmentRecord.attachment_id.in_(attachment_ids),
+                    ChatAttachmentRecord.owner_user_id == owner_user_id,
+                    ChatAttachmentRecord.session_id == session_id,
+                    ChatAttachmentRecord.status == ChatAttachmentStatus.READY.value,
+                )
+                .values(status=ChatAttachmentStatus.LINKED.value, message_id=message_id, linked_at=linked_at)
+            )
+            if result.rowcount != len(attachment_ids):
+                await session.rollback()
+                return False
+            await session.commit()
+            return True
+
     async def mark_deleted(self, attachment_id: str, deleted_at: datetime) -> bool:
         """Atomic `READY|LINKED -> DELETED`. Returns `True` iff exactly
         one row transitioned; `False` if the attachment doesn't exist or

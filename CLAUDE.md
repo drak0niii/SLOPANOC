@@ -364,7 +364,7 @@ complete.
 CURRENT (out-of-band milestone, inserted between the LOCAL GIT CHECKPOINT
 below and Phase 4H — does not reorder anything in this locked list):
 POST-5.1 A — CLOUD SQL POSTGRESQL (A1–A4) is COMPLETE. POST-5.1 B —
-MULTIMODAL ATTACHMENTS is IN PROGRESS (B0-B4D done, B5 next).
+MULTIMODAL ATTACHMENTS: B0-B5 done, B6 next.
 A5 (real TELCO/RAN MOP ingestion) follows POST-5.1 B, before Phase
 4H security hardening.
 
@@ -405,10 +405,12 @@ POST-5.1 B execution sequence (locked, do not reorder):
       real Cloud SQL PostgreSQL (`slopanoc`) + the real private GCS bucket
       via a live picker upload and a live clipboard (Ctrl+V) paste, both
       through the real backend -- not just component/unit tests. Real
-      image Send remains INTENTIONALLY BLOCKED (B5 doesn't exist yet) --
-      `PromptComposer`'s `canSend` and `AppState`'s `sendMessage` both
-      hard-block whenever any image-kind attachment is present, in any
-      state; there is no fallback to a text-only or fabricated send.
+      image Send remained INTENTIONALLY BLOCKED in B3 (B5 didn't exist
+      yet) -- `PromptComposer`'s `canSend` and `AppState`'s `sendMessage`
+      both hard-blocked whenever any image-kind attachment was present, in
+      any state; no fallback to a text-only or fabricated send. SUPERSEDED
+      BY B5 (see below): Send is now enabled for a `ready` image on the
+      real backend branch.
       `NoAnswerNotice.tsx`'s old, separate metadata-only file-attach
       affordance was removed (not routed to the real pipeline) -- there
       is exactly one attachment entry point now. Removing an
@@ -716,20 +718,102 @@ POST-5.1 B execution sequence (locked, do not reorder):
       text mutation, no dispatch), so the prohibition holds for any
       future/programmatic caller, not only the UI. Text-only user
       messages are completely unaffected -- existing edit/rewind behavior
-      unchanged, regression-tested. FUTURE B5 INVARIANT: once a
-      live-sent turn can carry a real image, the frontend Message
-      representing it must expose this same `persistedAttachments` (or
-      an equivalent structured image-ownership) signal immediately, in
-      the same turn -- not only after a later reload -- so this
-      prohibition holds both before and after refresh; B5 has not
-      implemented that yet. FINAL LIVE PROOF -- after the correction
+      unchanged, regression-tested. B5 INVARIANT, NOW FULFILLED (see the
+      B5 entry below): once a live-sent turn can carry a real image, the
+      frontend Message representing it must expose this same
+      `persistedAttachments` (or an equivalent structured image-ownership)
+      signal immediately, in the same turn -- not only after a later
+      reload -- so this prohibition holds both before and after refresh;
+      B5 does exactly this, live-proven. FINAL LIVE PROOF (B4D correction
+      pass) -- after the correction
       pass, a real hard refresh reopening "B4D attachment hydration
       fixture" confirmed the persisted image still renders, the original
       user text still renders, the image-bearing user prompt has no
       usable Edit action, and text-only user messages elsewhere retain
       normal Edit behavior -- no rewindSession call for the blocked
       direct-edit attempt. **B4D is DONE.**
-  B5  Gemini/ADK Multimodal Runtime
+  B5  [DONE] Gemini/ADK Multimodal Runtime. First milestone where a user can
+      actually send an image to Gemini. `SendMessageRequest` gained
+      `attachment_ids: list[str]` (default `[]`, backward-compatible);
+      `message` now optional (default `""`) for image-only sends, gated
+      by a `model_validator` ("message or attachment_ids required") ->
+      the same 400 SafeError shape a malformed request already got.
+      Every attachment id re-validated server-side before the Runner
+      starts (`attachment_service.prepare_attachments_for_turn`):
+      existence, ownership, session, READY-only (no LINKED/DELETED
+      replay), MIME (SUPPORTED_MIME_TYPES), duplicate-id rejection,
+      count/total-bytes limits from existing settings (no drifting
+      duplicate constants) -- unknown/foreign-owner/foreign-session stay
+      anti-enumeration-identical. Internal gs:// URI built ONLY on the
+      backend (`ChatAttachmentStorage.uri_for`), never reaches any
+      DTO/SSE/log/frontend. `Part.from_uri` exclusively -- `Part.from_
+      bytes` proven never called (patched + asserted). LINKAGE TIMING,
+      audited not guessed: READY->LINKED happens INLINE at the first
+      Runner-yielded event (same point B4B's deferred write already
+      proved the turn is durable) via `AttachmentService.link_many_to_
+      message` -- a plain SQLAlchemy UPDATE on the SEPARATE
+      `slopanoc_chat_attachments` table, never through `session_service
+      .append_event()`. Direct inspection of installed ADK 1.33.0
+      (`StorageSession.get_update_marker()`, schemas/v1.py) proved the
+      session-revision marker is derived exclusively from the `sessions`
+      table's own `update_time` -- this write can never touch it. A
+      dedicated regression test reproduces the exact B4B production
+      shape (function-call -> tool -> final text) with a real attachment
+      linked at that point against a real file-backed
+      DatabaseSessionService and proves no staleness error -- B5 does
+      NOT resurrect the B4B defect. Link failure after a genuine turn
+      fails closed (attachment stays READY, never fraudulently LINKED).
+      BUG FOUND + FIXED during this pass' own audit:
+      session_history_service.py's turn projection previously dropped an
+      image-only turn entirely (`_user_text` returning None was treated
+      as "not genuine") -- fixed; image-only turns now appear with
+      text="" and count for has_visible_message/chat_activity_at/legacy
+      repair; title still correctly falls back to "New chat"; gs:// URI
+      still never exposed via GET /history (regression-tested).
+      FRONTEND: Send/Enter enabled for a `ready` image only on the real
+      backend branch (mirrors sendMessage's own isBackendBranch
+      conditions -- never silently mocks/drops an image elsewhere). The
+      LOCKED B4D invariant now holds IMMEDIATELY: a just-sent image
+      message gets `persistedAttachments` synchronously from the
+      draft's own upload metadata, so the existing edit-prohibition
+      applies at once (regression-tested), never only after refresh.
+      Regenerate needed no change -- already unconditionally hidden for
+      every backend message (pre-existing Phase 4F decision, confirmed
+      still correct on audit). B6/B7 BOUNDARY: only the TOP-LEVEL Team
+      Manager Runner is multimodal -- a nested AgentTool call (Incident
+      Manager) does NOT inherit the image (B6, untouched); no keyword
+      routing added; no GCS deletion lifecycle, no persistent pin/unread
+      (B7). Covered by `backend/tests/test_attachments_repository.py`,
+      `test_attachment_prepare_for_turn.py`,
+      `test_chat_service_function_call_continuation.py` (the mandatory
+      B4B non-regression + Content-construction proofs),
+      `test_session_history_service.py`, `test_api_streaming_endpoint.py`,
+      and frontend PromptComposer.test.tsx/AppState.attachments.test.tsx/
+      streamChat.test.ts -- full backend (2587 passed, 1 skipped) and
+      frontend (662 passed) suites clean, `npm run build` clean.
+      LIVE MULTIMODAL VALIDATION PASSED -- real disposable session
+      `469f7cad-f60b-4a67-b079-ba52cc1bed90`, real turn
+      `e-52df5f58-0d5b-4c50-be0e-5333c93c4de4`: real PNG (`image.png`,
+      image/png, 119629 bytes) attached through the real UI, Send enabled
+      automatically once READY, pressed normally -- no manual backend
+      command anywhere. Real Vertex Gemini correctly read "Fixed Access
+      and SDH - DMs status" directly from the image's own pixels (never
+      inferable from filename/prompt/metadata) -- conclusive proof of
+      real Part.from_uri multimodal input, never OCR/base64/
+      Part.from_bytes/a public or signed URL/prompt simulation. READY ->
+      LINKED happened automatically as part of this same real send.
+      GET /history confirmed the attachment on the user message only
+      (assistant, same turn_id, attachments: []), exposing only
+      {attachment_id, filename, mime_type, size_bytes} -- no gs:///
+      bucket/storage_object_name/owner_user_id/sha256. Before refresh:
+      persistedAttachments already present, Edit already unavailable.
+      After a hard refresh: text/image/answer all restored identically,
+      Edit still unavailable -- before-refresh and after-refresh
+      semantics proven identical. A backend-restart persistence check
+      was not separately exercised in this pass (B4B/B4D already proved
+      that persistence class for text/history/rename; not re-confirmed
+      live here for B5's own linkage mechanism specifically).
+      **B5 is DONE.**
   B6  Image + Teams + KM Operational Reasoning
   B7  Lifecycle + Real UI + Full Regression
 

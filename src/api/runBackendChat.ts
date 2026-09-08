@@ -70,6 +70,7 @@ export async function runBackendChat(
   message: string,
   handlers: BackendChatHandlers,
   signal: AbortSignal,
+  attachmentIds: string[] = [],
 ): Promise<void> {
   let sawRunCompleted = false;
 
@@ -77,6 +78,7 @@ export async function runBackendChat(
     await streamChatMessage({
       sessionId,
       message,
+      attachmentIds,
       signal,
       onEvent: (event) => {
         switch (event.type) {

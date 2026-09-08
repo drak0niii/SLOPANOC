@@ -131,6 +131,7 @@ describe("AppState integration — session lifecycle", () => {
       "second message, same chat",
       expect.anything(),
       expect.anything(),
+      expect.anything(),
     );
   });
 
@@ -339,7 +340,13 @@ describe("AppState integration — editMessage restores backend-chat editing (Ph
     // targets user-turn index 0 -- there was exactly one user message
     // (the one being edited) before it.
     expect(rewindSession).toHaveBeenCalledExactlyOnceWith("session-1", 0);
-    expect(runBackendChat).toHaveBeenLastCalledWith("session-1", "edited prompt", expect.anything(), expect.anything());
+    expect(runBackendChat).toHaveBeenLastCalledWith(
+      "session-1",
+      "edited prompt",
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
 
     const editedUserMessage = latest.activeMessages.find((m) => m.role === "user")!;
     expect(editedUserMessage.text).toBe("edited prompt");
@@ -685,6 +692,7 @@ describe("AppState integration — choosing a READ-kind selection resumes via th
       "Please provide a summary of the currently selected chat.",
       expect.anything(),
       expect.anything(),
+      expect.anything(),
     );
     const runBackendChatCall = (runBackendChat as ReturnType<typeof vi.fn>).mock.calls.at(-1)!;
     expect(runBackendChatCall[1]).not.toContain("Project Falcon Room");
@@ -793,6 +801,7 @@ describe("AppState integration — choosing a READ-kind selection resumes via th
     expect(runBackendChat).toHaveBeenLastCalledWith(
       "session-1",
       "Please provide a summary of the currently selected chat.",
+      expect.anything(),
       expect.anything(),
       expect.anything(),
     );

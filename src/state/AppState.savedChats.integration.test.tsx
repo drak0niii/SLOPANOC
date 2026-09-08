@@ -368,7 +368,13 @@ describe("AppState — B4C resume saved chat", () => {
     });
 
     expect(createSession).not.toHaveBeenCalled();
-    expect(runBackendChat).toHaveBeenCalledWith("s1", "one more message", expect.anything(), expect.anything());
+    expect(runBackendChat).toHaveBeenCalledWith(
+      "s1",
+      "one more message",
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
     expect(latest.state.activeChatId).toBe("s1");
     // No duplicate chat was created for the resumed conversation.
     expect(Object.keys(latest.state.chats)).toEqual(["s1"]);
@@ -580,7 +586,13 @@ describe("AppState — B4C edit/rewind regression on a hydrated transcript", () 
     expect(latest.state.chats.s1.messageIds).not.toContain("e-2:user");
     expect(latest.state.chats.s1.messageIds).not.toContain("e-2:assistant");
     expect(latest.state.messages["e-1:user"].text).toBe("first message, edited");
-    expect(runBackendChat).toHaveBeenCalledWith("s1", "first message, edited", expect.anything(), expect.anything());
+    expect(runBackendChat).toHaveBeenCalledWith(
+      "s1",
+      "first message, edited",
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 });
 

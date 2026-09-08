@@ -42,6 +42,23 @@ def _user_event(invocation_id: str, text: str, timestamp: Optional[float] = None
     return ev
 
 
+def _image_only_user_event(
+    invocation_id: str, file_uri: str, mime_type: str = "image/png", timestamp: Optional[float] = None
+) -> Event:
+    """POST-5.1 B5 -- a genuine user Content with ONLY a `file_data`/URI
+    part, no text part at all (an image-only send). Mirrors
+    `chat_service.py`'s own `content` construction for that case exactly.
+    """
+    ev = Event(
+        invocation_id=invocation_id,
+        author="user",
+        content=types.Content(role="user", parts=[types.Part.from_uri(file_uri=file_uri, mime_type=mime_type)]),
+    )
+    if timestamp is not None:
+        ev.timestamp = timestamp
+    return ev
+
+
 def _assistant_event(
     invocation_id: str,
     text: Optional[str] = None,
@@ -311,6 +328,65 @@ async def test_user_turn_with_no_final_assistant_response_returns_only_the_user_
     assert len(response.messages) == 1
     assert response.messages[0].role == "user"
     assert response.messages[0].text == "are you there?"
+
+
+@pytest.mark.asyncio
+async def test_image_only_user_turn_is_not_dropped_and_projects_empty_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    """POST-5.1 B5 fix: `_project_turns` previously skipped creating a
+    turn entirely for a genuine user event with no text part at all (an
+    image-only send) -- `_user_text` returning `None` was being treated
+    the same as "not a genuine event." Must now appear as a real, safe
+    `role="user"` message with `text=""`.
+    """
+    service = ApiSessionService()
+    session_id = await service.create_session("u1")
+    session = await service.get_session(session_id, "u1")
+    session = await _append(
+        service, session, _image_only_user_event("inv-1", "gs://bucket/chat-attachments/s1/att-1", timestamp=100.0)
+    )
+    await _append(service, session, _assistant_event("inv-1", "I see a red circle.", timestamp=101.0))
+
+    response = await history.get_session_history(service, _fresh_attachment_service(), session_id, "u1")
+
+    assert len(response.messages) == 2
+    user_msg, assistant_msg = response.messages
+    assert user_msg.role == "user"
+    assert user_msg.text == ""
+    assert user_msg.turn_id == "inv-1"
+    assert assistant_msg.text == "I see a red circle."
+
+
+@pytest.mark.asyncio
+async def test_image_only_first_turn_falls_back_to_new_chat_title_never_fabricated() -> None:
+    service = ApiSessionService()
+    session_id = await service.create_session("u1")
+    session = await service.get_session(session_id, "u1")
+    session = await _append(
+        service, session, _image_only_user_event("inv-1", "gs://bucket/chat-attachments/s1/att-1", timestamp=100.0)
+    )
+    await record_user_turn_activity(service, session, "", "inv-1")
+
+    session = await service.get_session(session_id, "u1")
+    assert session.state.get(HAS_VISIBLE_MESSAGE_STATE_KEY) is True
+    assert session.state.get(CHAT_TITLE_STATE_KEY) == "New chat"
+
+
+@pytest.mark.asyncio
+async def test_image_only_history_never_exposes_the_internal_gs_uri() -> None:
+    service = ApiSessionService()
+    session_id = await service.create_session("u1")
+    session = await service.get_session(session_id, "u1")
+    await _append(
+        service,
+        session,
+        _image_only_user_event("inv-1", "gs://secret-bucket/chat-attachments/s1/att-1", timestamp=100.0),
+    )
+
+    response = await history.get_session_history(service, _fresh_attachment_service(), session_id, "u1")
+
+    serialized = response.model_dump_json()
+    assert "gs://" not in serialized
+    assert "secret-bucket" not in serialized
 
 
 @pytest.mark.asyncio

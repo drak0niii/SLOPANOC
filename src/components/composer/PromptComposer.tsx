@@ -10,6 +10,7 @@ import { SourceChipRow } from "./SourceChipRow";
 import { cn } from "../../lib/cn";
 import { createId } from "../../lib/id";
 import { LONG_PASTE_THRESHOLD } from "../../lib/constants";
+import type { DraftImageAttachment } from "../../types";
 
 const MAX_TEXTAREA_HEIGHT = 240;
 
@@ -70,20 +71,36 @@ export function PromptComposer() {
   // existing disabled-Send treatment instead of offering a Stop control
   // that would silently do nothing when clicked.
   const hasAbortableRun = Boolean(activeChat?.run);
-  // POST-5.1 B3 interim gating — real image attachments cannot be sent to
-  // Gemini yet (B5 doesn't exist), so Send stays disabled whenever the
-  // draft holds one, in ANY upload state (pending/uploading/ready/failed).
-  // This must never degrade to a silent text-only send — the user has to
-  // resolve the attachment (wait, retry, or remove it) before Send is
-  // available again. Mirrored by a defensive backstop in AppState's
-  // `sendMessage` itself.
-  const hasBlockingImageAttachment = state.draft.attachments.some((a) => a.kind === "image");
+  // POST-5.1 B5 — real image attachments CAN now be sent (Gemini/ADK
+  // multimodal wiring exists). An image-bearing send is eligible only
+  // when EVERY image is genuinely `ready` with a real backend
+  // `attachmentId` — `pending`/`uploading`/`failed` all still block Send
+  // exactly as before (instruction section 29): this must never degrade
+  // to a silent text-only send, or silently omit an unfinished/failed
+  // image. Mirrored by a defensive backstop in AppState's `sendMessage`
+  // itself.
+  const imageAttachments = state.draft.attachments.filter(
+    (a): a is DraftImageAttachment => a.kind === "image",
+  );
+  const hasImageAttachment = imageAttachments.length > 0;
+  // Mirrors `sendMessage`'s own `isBackendBranch` three conditions in
+  // AppState.tsx exactly (general workspace scope, no ad-hoc "chat room"
+  // sources, no active demo script) — same mirroring `queueImageFiles`'s
+  // own eligibility check already relies on (instruction section 30):
+  // a chat/turn that would not route to the real backend anyway must
+  // never silently drop the image, run a mock answer over it, or claim
+  // it was analysed — Send simply stays unavailable.
+  const isRealBackendEligible =
+    state.workspaceScope.type === "general" && state.draft.sources.length === 0 && !activeChat?.demoRun;
+  const hasUnusableImageAttachment =
+    hasImageAttachment &&
+    (!isRealBackendEligible || imageAttachments.some((a) => a.uploadState !== "ready" || !a.attachmentId));
   const canSend =
     (state.draft.text.trim().length > 0 ||
       state.draft.attachments.length > 0 ||
       state.draft.sources.length > 0) &&
     !isRunActive &&
-    !hasBlockingImageAttachment;
+    !hasUnusableImageAttachment;
 
   function resize() {
     const el = textareaRef.current;

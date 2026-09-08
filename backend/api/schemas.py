@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from backend.cases.schemas import CaseMemberRole, CaseStatus, ContextItemKind
 
@@ -18,7 +18,45 @@ class CreateSessionResponse(BaseModel):
 
 
 class SendMessageRequest(BaseModel):
-    message: str = Field(min_length=1, description="The user's message to Team Manager.")
+    """POST-5.1 B5 -- `message` alone was previously required non-empty;
+    now optional (default `""`) so an image-only turn (no text at all)
+    is a valid request shape. `attachment_ids` defaults to `[]`, so every
+    pre-B5 text-only client sending only `{"message": "..."}` is
+    completely unaffected (instruction section 7's backwards-
+    compatibility requirement).
+
+    The cross-field structural rule -- "blank message AND zero
+    attachments is invalid" -- IS enforced here, via `model_validator`:
+    this is a pure request-SHAPE concern (no DB/session access needed to
+    decide it), so it belongs at the wire-schema boundary, mapped by
+    FastAPI's own `RequestValidationError` handler to the exact same 400
+    SafeError shape (`errorCode="validation_error"`) a client already
+    gets for any other malformed request body -- preserving the pre-B5
+    behavior of rejecting an empty-message request at 400, not deep
+    inside the turn pipeline. `chat_service.py`'s `_run_turn_events` ALSO
+    re-checks the same condition, as a defense-in-depth backstop for any
+    direct/programmatic caller of `ChatService.run_turn`/
+    `execute_turn_events` that bypasses this HTTP-layer validation
+    entirely (mirrors the same "UI + hard structural guard, never just
+    one layer" discipline already established for the B4D image-edit
+    prohibition).
+    """
+
+    message: str = Field(default="", description="The user's message to Team Manager.")
+    attachment_ids: list[str] = Field(
+        default_factory=list,
+        description=(
+            "READY attachment ids (from POST /api/sessions/{id}/attachments) to include in this turn, "
+            "in the order they should appear. Never a LINKED or DELETED attachment -- see "
+            "attachment_service.prepare_attachments_for_turn for the full validation this list is put through."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _require_message_or_attachment(self) -> "SendMessageRequest":
+        if not self.message.strip() and not self.attachment_ids:
+            raise ValueError("Please include a message or an attachment.")
+        return self
 
 
 class RewindSessionRequest(BaseModel):

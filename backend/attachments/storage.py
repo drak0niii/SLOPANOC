@@ -121,6 +121,24 @@ class ChatAttachmentStorage:
         bucket = self._require_bucket()
         return bucket.blob(object_name).exists()
 
+    def uri_for(self, object_name: str) -> str:
+        """POST-5.1 B5 -- the internal `gs://` URI Gemini/ADK receives for
+        a durable attachment (`Part.from_uri(file_uri=...)`). BACKEND-ONLY:
+        never returned in any API DTO, SSE event, log line, or frontend
+        state -- see `chat_service.py`'s multimodal Content construction,
+        the only caller. Cheap and synchronous (no GCS client needed just
+        to format a string) -- raises the same
+        `AttachmentStorageUnavailableError` as every other operation here
+        if no bucket is configured, so a caller can never silently build a
+        URI against an unconfigured bucket.
+        """
+        if not self._bucket_name:
+            raise AttachmentStorageUnavailableError(
+                "SLOPANOC_CHAT_ATTACHMENTS_BUCKET is not configured -- chat "
+                "attachment storage is unavailable."
+            )
+        return f"gs://{self._bucket_name}/{object_name}"
+
 
 @lru_cache(maxsize=1)
 def get_attachment_storage() -> ChatAttachmentStorage:

@@ -645,8 +645,8 @@ describe("AppState — object URL lifecycle", () => {
   });
 });
 
-describe("AppState — sendMessage interim gating for real image attachments", () => {
-  it("sendMessage is a no-op while any image attachment is present, in any upload state", async () => {
+describe("AppState — POST-5.1 B5 sendMessage eligibility for real image attachments", () => {
+  it("sendMessage is a no-op while an image attachment is still uploading", async () => {
     renderHarness();
     uploadAttachment.mockImplementation(() => new Promise(() => {}));
 
@@ -668,6 +668,132 @@ describe("AppState — sendMessage interim gating for real image attachments", (
     // No assistant message was fabricated for a send that never happened.
     const chatId = latest.state.activeChatId!;
     expect(latest.state.chats[chatId].messageIds).toEqual([]);
+  });
+
+  it("sendMessage is a no-op while an image attachment upload has failed", async () => {
+    renderHarness();
+    uploadAttachment.mockRejectedValue(new Error("boom"));
+
+    act(() => {
+      latest.queueImageFiles([pngFile()]);
+    });
+    await flush();
+    expect(imageDrafts()[0].uploadState).toBe("failed");
+
+    act(() => {
+      latest.setDraftText("please look at this");
+    });
+    act(() => {
+      latest.sendMessage();
+    });
+    await flush();
+
+    expect(runBackendChat).not.toHaveBeenCalled();
+    const chatId = latest.state.activeChatId!;
+    expect(latest.state.chats[chatId].messageIds).toEqual([]);
+  });
+});
+
+describe("AppState — POST-5.1 B5 real image send: immediate persistedAttachments", () => {
+  it("sends a ready image with text: Message.persistedAttachments set immediately, attachmentIds forwarded, no File/Blob/objectUrl in the sent message", async () => {
+    renderHarness();
+    uploadAttachment.mockResolvedValue({
+      attachment_id: "att-1",
+      filename: "photo.png",
+      mime_type: "image/png",
+      size_bytes: 100,
+      status: "ready",
+    });
+
+    act(() => {
+      latest.queueImageFiles([pngFile()]);
+    });
+    await flush();
+    expect(imageDrafts()[0].uploadState).toBe("ready");
+
+    act(() => {
+      latest.setDraftText("here's a screenshot");
+    });
+    act(() => {
+      latest.sendMessage();
+    });
+    await flush();
+
+    expect(runBackendChat).toHaveBeenCalledOnce();
+    const call = (runBackendChat as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call[0]).toBe("session-1");
+    expect(call[1]).toBe("here's a screenshot");
+    expect(call[4]).toEqual(["att-1"]); // attachmentIds, draft order
+
+    const chatId = latest.state.activeChatId!;
+    const userMessageId = latest.state.chats[chatId].messageIds[0];
+    const userMessage = latest.state.messages[userMessageId];
+    expect(userMessage.persistedAttachments).toEqual([
+      { attachmentId: "att-1", filename: "photo.png", mimeType: "image/png", sizeBytes: 100 },
+    ]);
+    // The image went into persistedAttachments, never the legacy mock
+    // attachments field (which is empty here since there were no
+    // non-image attachments in this draft).
+    expect(userMessage.attachments).toEqual([]);
+    // No File/Blob/draft objectUrl ever entered the sent message.
+    expect(JSON.stringify(userMessage)).not.toMatch(/objectUrl|blob:/);
+  });
+
+  it("sends a ready image-only draft (no typed text) — text is empty, image still attached", async () => {
+    renderHarness();
+    uploadAttachment.mockResolvedValue({
+      attachment_id: "att-1",
+      filename: "photo.png",
+      mime_type: "image/png",
+      size_bytes: 100,
+      status: "ready",
+    });
+
+    act(() => {
+      latest.queueImageFiles([pngFile()]);
+    });
+    await flush();
+
+    act(() => {
+      latest.sendMessage();
+    });
+    await flush();
+
+    expect(runBackendChat).toHaveBeenCalledOnce();
+    const chatId = latest.state.activeChatId!;
+    const userMessageId = latest.state.chats[chatId].messageIds[0];
+    const userMessage = latest.state.messages[userMessageId];
+    expect(userMessage.text).toBe("");
+    expect(userMessage.persistedAttachments).toEqual([
+      { attachmentId: "att-1", filename: "photo.png", mimeType: "image/png", sizeBytes: 100 },
+    ]);
+  });
+
+  it("preserves draft order across multiple images, end to end into persistedAttachments and attachmentIds", async () => {
+    renderHarness();
+    uploadAttachment
+      .mockResolvedValueOnce({ attachment_id: "att-1", filename: "one.png", mime_type: "image/png", size_bytes: 10, status: "ready" })
+      .mockResolvedValueOnce({ attachment_id: "att-2", filename: "two.png", mime_type: "image/png", size_bytes: 20, status: "ready" });
+
+    act(() => {
+      latest.queueImageFiles([pngFile("one.png"), pngFile("two.png")]);
+    });
+    await flush();
+    expect(imageDrafts()).toHaveLength(2);
+    expect(imageDrafts().every((d) => d.uploadState === "ready")).toBe(true);
+
+    act(() => {
+      latest.sendMessage();
+    });
+    await flush();
+
+    const call = (runBackendChat as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call[4]).toEqual(["att-1", "att-2"]);
+
+    const chatId = latest.state.activeChatId!;
+    const userMessageId = latest.state.chats[chatId].messageIds[0];
+    const userMessage = latest.state.messages[userMessageId];
+    expect(userMessage.persistedAttachments!.map((a) => a.attachmentId)).toEqual(["att-1", "att-2"]);
   });
 });
 
@@ -725,5 +851,46 @@ describe("AppState — POST-5.1 B3 overflow-UX auto-dismiss", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("AppState — POST-5.1 B5/B4D: edit prohibition holds immediately after a real image send", () => {
+  it("editMessage on a just-sent image-bearing message is a structural no-op, before any refresh", async () => {
+    renderHarness();
+    uploadAttachment.mockResolvedValue({
+      attachment_id: "att-1",
+      filename: "photo.png",
+      mime_type: "image/png",
+      size_bytes: 100,
+      status: "ready",
+    });
+
+    act(() => {
+      latest.queueImageFiles([pngFile()]);
+    });
+    await flush();
+    act(() => {
+      latest.setDraftText("here's a screenshot");
+    });
+    act(() => {
+      latest.sendMessage();
+    });
+    await flush();
+
+    const chatId = latest.state.activeChatId!;
+    const userMessageId = latest.state.chats[chatId].messageIds[0];
+    expect(latest.state.messages[userMessageId].persistedAttachments).toHaveLength(1);
+
+    const stateBefore = latest.state;
+    act(() => {
+      latest.editMessage(userMessageId, "trying to edit an image message");
+    });
+    await flush();
+
+    // No rewind, no new session, nothing dispatched at all.
+    expect(rewindSession).not.toHaveBeenCalled();
+    expect(createSession).toHaveBeenCalledOnce(); // only the original upload/send session creation
+    expect(latest.state.messages[userMessageId].text).toBe("here's a screenshot");
+    expect(latest.state).toBe(stateBefore);
   });
 });

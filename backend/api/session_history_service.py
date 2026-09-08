@@ -145,12 +145,18 @@ def _project_turns(events: list[Any]) -> list[_Turn]:
 
     for event in events:
         if is_genuine_user_content_event(event):
-            text = _user_text(event)
-            if text is None:
-                continue
+            # POST-5.1 B5 fix: an image-only user turn (Content with only
+            # file_data/URI parts, no text part at all) has `_user_text(
+            # event) is None` -- a turn must still be created for it
+            # (instruction section 10: "do NOT drop the turn merely
+            # because it has no text part"). `user_timestamp is None` is
+            # the correct "not yet set" sentinel here (an event's own
+            # `.timestamp` is never None), NOT `user_text is None` --
+            # `user_text` is now always a real string (possibly `""`)
+            # once a turn has been observed at all.
             turn = _get(event.invocation_id)
-            if turn.user_text is None:
-                turn.user_text = text
+            if turn.user_timestamp is None:
+                turn.user_text = _user_text(event) or ""
                 turn.user_timestamp = event.timestamp
             continue
 
@@ -160,19 +166,24 @@ def _project_turns(events: list[Any]) -> list[_Turn]:
             turn.final_text = final_text
             turn.final_timestamp = event.timestamp
 
-    return [turns[turn_id] for turn_id in order if turns[turn_id].user_text is not None]
+    return [turns[turn_id] for turn_id in order if turns[turn_id].user_timestamp is not None]
 
 
 def _genuine_user_events_in_order(events: list[Any]) -> list[Any]:
-    """Every genuine, real-text-bearing user event, in chronological
-    order, from an ALREADY active-branch-filtered event list. The FIRST
-    entry is what `chat_title` should be derived from; the LAST entry's
-    `.timestamp` is what `chat_activity_at` should be repaired to (the
-    most recent genuine turn still on the active branch -- never a
-    rewound-away one, since `_active_events` has already excluded those
-    before this function ever sees the list).
+    """Every genuine user event (text-bearing OR image-only -- POST-5.1
+    B5 fix, instruction section 10: an image-only genuine user turn must
+    count as a visible chat turn, not be silently excluded from legacy-
+    repair consideration), in chronological order, from an ALREADY
+    active-branch-filtered event list. The FIRST entry is what
+    `chat_title` should be derived from (an image-only first turn
+    correctly falls back to "New chat" -- see `derive_chat_title`'s own
+    empty-string handling, unchanged); the LAST entry's `.timestamp` is
+    what `chat_activity_at` should be repaired to (the most recent
+    genuine turn still on the active branch -- never a rewound-away one,
+    since `_active_events` has already excluded those before this
+    function ever sees the list).
     """
-    return [e for e in events if is_genuine_user_content_event(e) and _user_text(e)]
+    return [e for e in events if is_genuine_user_content_event(e)]
 
 
 async def get_session_history(

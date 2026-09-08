@@ -134,3 +134,47 @@ describe("streamChatMessage", () => {
     await expect(promise).rejects.toSatisfy((error: unknown) => isAbortError(error));
   });
 });
+
+describe("streamChatMessage — POST-5.1 B5 request body", () => {
+  it("sends attachment_ids in draft order, alongside message", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: bodyStreamFromChunks([sseFrame("run.completed", { outcome: "ok" }, 1)]),
+    } as unknown as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await streamChatMessage({
+      sessionId: "s1",
+      message: "here's a screenshot",
+      attachmentIds: ["att-2", "att-1"],
+      signal: new AbortController().signal,
+      onEvent: () => {},
+    });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({
+      message: "here's a screenshot",
+      attachment_ids: ["att-2", "att-1"],
+    });
+  });
+
+  it("defaults attachment_ids to an empty array for a normal text-only send", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: bodyStreamFromChunks([sseFrame("run.completed", { outcome: "ok" }, 1)]),
+    } as unknown as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await streamChatMessage({
+      sessionId: "s1",
+      message: "hello",
+      signal: new AbortController().signal,
+      onEvent: () => {},
+    });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({ message: "hello", attachment_ids: [] });
+  });
+});

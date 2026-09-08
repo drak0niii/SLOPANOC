@@ -21,6 +21,7 @@ import type {
   DraftImageAttachment,
   Message,
   Project,
+  PersistedAttachmentReference,
   ProjectFile,
   ProjectSettingsSection,
   RunTraceRecord,
@@ -282,6 +283,14 @@ export type Action =
          * duplicate-send guard and activity indicator are live
          * immediately. */
         runToken?: string;
+        /** POST-5.1 B5 — the LOCKED B4D invariant: a just-sent image-
+         * bearing turn's user message must carry `persistedAttachments`
+         * immediately, using the already-known successful upload
+         * metadata (never waiting for a browser refresh/B4D rehydration
+         * to populate it) — see AppState.tsx's `sendMessage` for how this
+         * is built from the draft's own READY image attachments, in
+         * draft order. Metadata only — never a File/Blob/draft objectUrl. */
+        persistedAttachments?: PersistedAttachmentReference[];
       };
     }
   | {
@@ -729,7 +738,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "SEND_MESSAGE": {
       const {
         chatId, isNewChat, userMessageId, assistantMessageId, text, attachments, sources, timestamp, demoRun,
-        runToken,
+        runToken, persistedAttachments,
       } = action.payload;
 
       const chat: Chat = isNewChat
@@ -757,6 +766,9 @@ export function reducer(state: AppState, action: Action): AppState {
         attachments,
         sources: sources && sources.length > 0 ? sources : undefined,
         createdAt: timestamp,
+        // POST-5.1 B5 — the LOCKED B4D invariant (immediate, not only
+        // after refresh): see the action payload's own docstring.
+        persistedAttachments: persistedAttachments && persistedAttachments.length > 0 ? persistedAttachments : undefined,
       };
       const assistantMessage: Message = {
         id: assistantMessageId,
@@ -3069,6 +3081,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       assistantMessageId: string,
       rawText: string,
       existingSessionId: string | undefined,
+      attachmentIds: string[] = [],
     ) => {
       const controller = new AbortController();
       runControllersRef.current.set(chatId, controller);
@@ -3122,6 +3135,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
               }),
           },
           controller.signal,
+          attachmentIds,
         );
       } catch {
         // createSession() itself failing, before any SSE stream ever opened.
@@ -3440,23 +3454,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const sendMessage = useCallback((overrideText?: string) => {
-    // POST-5.1 B3 interim gating — Gemini/ADK multimodal wiring (B5) does
-    // not exist yet, so a real image attachment must never be allowed to
-    // silently disappear into a text-only send, and the user must never be
-    // shown an assistant response that implies the image was considered.
-    // Hard-block here as a defensive backstop to PromptComposer's own
-    // `canSend` gate — this function simply does nothing while any image
-    // attachment (in any upload state) is present in the draft.
-    const hasBlockingImageAttachment = state.draft.attachments.some((a) => a.kind === "image");
-    if (hasBlockingImageAttachment) return;
-
     const typedText = (overrideText ?? state.draft.text).trim();
 
-    // The gate above guarantees no image-kind entry survives past this
-    // point — narrow `DraftAttachment[]` down to the plain `Attachment[]`
-    // the rest of this function (and the `SEND_MESSAGE` payload, which
-    // feeds `Message.attachments`) has always worked with, rather than
-    // assuming the union away.
+    // POST-5.1 B5 — narrow `DraftAttachment[]` into the two shapes the
+    // rest of this function needs: real image drafts (now sendable) and
+    // everything else (`Attachment[]`, unchanged — the existing mock/
+    // file/folder/pasted-text presentation path, which the `SEND_MESSAGE`
+    // payload's `attachments` field has always carried).
+    const imageAttachments = state.draft.attachments.filter(
+      (a): a is DraftImageAttachment => a.kind === "image",
+    );
     const nonImageAttachments = state.draft.attachments.filter(
       (a): a is Attachment => a.kind !== "image",
     );
@@ -3469,7 +3476,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const existingPastedAttachments = nonImageAttachments.filter((a) => a.isPastedText);
     const pastedContent = existingPastedAttachments.map((a) => a.content ?? "").join("\n\n");
     const rawText = [typedText, pastedContent].filter(Boolean).join("\n\n");
-    if (!rawText && nonImageAttachments.length === 0) return;
+    // POST-5.1 B5 — an image-only send (rawText empty, no non-image
+    // attachments, but real images present) is now valid; only a
+    // genuinely empty draft (no text, no attachments of any kind) is
+    // rejected here.
+    if (!rawText && nonImageAttachments.length === 0 && imageAttachments.length === 0) return;
 
     // Anything not already caught at paste time — typed directly, or pasted
     // through a path the composer didn't intercept — still gets converted
@@ -3519,8 +3530,39 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     // a confirmed product decision, not an oversight).
     const isBackendBranch =
       draftSources.length === 0 && !activeDemoRun && state.workspaceScope.type === "general";
+
+    // POST-5.1 B5 — real image attachments can now be sent, but ONLY on
+    // the real backend branch, and ONLY once every image is genuinely
+    // `ready` with a real backend `attachmentId`. Hard-block here as a
+    // defensive backstop to PromptComposer's own `canSend` gate
+    // (instruction section 29/30) — never silently drop the image, and
+    // never fall through to a mock/demo/project answer that would
+    // falsely imply the image was considered.
+    if (imageAttachments.length > 0) {
+      const allImagesReady = imageAttachments.every((a) => a.uploadState === "ready" && a.attachmentId);
+      if (!isBackendBranch || !allImagesReady) return;
+    }
+
     const runToken = isBackendBranch ? createId("run") : undefined;
     const existingBackendSessionId = state.chats[chatId]?.backendSessionId;
+
+    // POST-5.1 B5 — the LOCKED B4D invariant: build the just-sent user
+    // message's `persistedAttachments` immediately, from the draft's own
+    // already-known successful upload metadata, in draft order — never
+    // waiting for a browser refresh/B4D history rehydration to populate
+    // it. Metadata only (attachmentId/filename/mimeType/sizeBytes) —
+    // never the draft's own File/Blob/objectUrl. `attachmentIds` (the
+    // same ids, same order) is what actually goes to the backend.
+    const persistedAttachments: PersistedAttachmentReference[] | undefined =
+      imageAttachments.length > 0
+        ? imageAttachments.map((a) => ({
+            attachmentId: a.attachmentId!,
+            filename: a.filename,
+            mimeType: a.mimeType,
+            sizeBytes: a.sizeBytes,
+          }))
+        : undefined;
+    const attachmentIds = imageAttachments.map((a) => a.attachmentId!);
 
     dispatch({
       type: "SEND_MESSAGE",
@@ -3535,11 +3577,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         timestamp,
         demoRun: newChatDemoRun,
         runToken,
+        persistedAttachments,
       },
     });
 
     if (isBackendBranch) {
-      void beginBackendRun(chatId, runToken!, assistantMessageId, rawText, existingBackendSessionId);
+      void beginBackendRun(chatId, runToken!, assistantMessageId, rawText, existingBackendSessionId, attachmentIds);
       return;
     }
 

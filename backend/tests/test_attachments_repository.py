@@ -102,6 +102,90 @@ async def test_link_to_message_fails_for_unknown_attachment(repo: AttachmentRepo
     assert applied is False
 
 
+# --- link_many_to_message (POST-5.1 B5 -- atomic bulk linkage) -------------
+
+
+@pytest.mark.asyncio
+async def test_link_many_to_message_all_ready_all_transition(repo: AttachmentRepository) -> None:
+    await repo.add(_record("att-1", owner_user_id="alice", session_id="s1"))
+    await repo.add(_record("att-2", owner_user_id="alice", session_id="s1"))
+    await repo.add(_record("att-3", owner_user_id="alice", session_id="s1"))
+    linked_at = datetime.now(timezone.utc)
+
+    applied = await repo.link_many_to_message(["att-1", "att-2", "att-3"], "alice", "s1", "turn-1", linked_at)
+
+    assert applied is True
+    for attachment_id in ("att-1", "att-2", "att-3"):
+        stored = await repo.get(attachment_id)
+        assert stored.status == ChatAttachmentStatus.LINKED.value
+        assert stored.message_id == "turn-1"
+
+
+@pytest.mark.asyncio
+async def test_link_many_to_message_empty_list_is_a_vacuous_no_op(repo: AttachmentRepository) -> None:
+    assert await repo.link_many_to_message([], "alice", "s1", "turn-1", datetime.now(timezone.utc)) is True
+
+
+@pytest.mark.asyncio
+async def test_link_many_to_message_one_already_linked_rolls_back_the_whole_set(repo: AttachmentRepository) -> None:
+    """The atomicity requirement: if even ONE requested attachment is not
+    a matching READY row (already LINKED here), NONE of the others may
+    become LINKED either -- never a partial 2-of-3 outcome.
+    """
+    await repo.add(_record("att-1", owner_user_id="alice", session_id="s1"))
+    await repo.add(_record("att-2", owner_user_id="alice", session_id="s1", status=ChatAttachmentStatus.LINKED.value))
+    await repo.add(_record("att-3", owner_user_id="alice", session_id="s1"))
+
+    applied = await repo.link_many_to_message(
+        ["att-1", "att-2", "att-3"], "alice", "s1", "turn-1", datetime.now(timezone.utc)
+    )
+
+    assert applied is False
+    # att-1 and att-3 were genuinely READY and eligible, but must remain
+    # untouched -- the whole set failed atomically.
+    assert (await repo.get("att-1")).status == ChatAttachmentStatus.READY.value
+    assert (await repo.get("att-3")).status == ChatAttachmentStatus.READY.value
+    stored_2 = await repo.get("att-2")
+    assert stored_2.status == ChatAttachmentStatus.LINKED.value
+    assert stored_2.message_id is None  # untouched -- still whatever it was before this call
+
+
+@pytest.mark.asyncio
+async def test_link_many_to_message_foreign_owner_rolls_back_the_whole_set(repo: AttachmentRepository) -> None:
+    await repo.add(_record("att-1", owner_user_id="alice", session_id="s1"))
+    await repo.add(_record("att-2", owner_user_id="bob", session_id="s1"))  # foreign owner
+
+    applied = await repo.link_many_to_message(["att-1", "att-2"], "alice", "s1", "turn-1", datetime.now(timezone.utc))
+
+    assert applied is False
+    assert (await repo.get("att-1")).status == ChatAttachmentStatus.READY.value
+    assert (await repo.get("att-2")).status == ChatAttachmentStatus.READY.value
+
+
+@pytest.mark.asyncio
+async def test_link_many_to_message_wrong_session_rolls_back_the_whole_set(repo: AttachmentRepository) -> None:
+    await repo.add(_record("att-1", owner_user_id="alice", session_id="s1"))
+    await repo.add(_record("att-2", owner_user_id="alice", session_id="s2"))  # different session
+
+    applied = await repo.link_many_to_message(["att-1", "att-2"], "alice", "s1", "turn-1", datetime.now(timezone.utc))
+
+    assert applied is False
+    assert (await repo.get("att-1")).status == ChatAttachmentStatus.READY.value
+    assert (await repo.get("att-2")).status == ChatAttachmentStatus.READY.value
+
+
+@pytest.mark.asyncio
+async def test_link_many_to_message_unknown_id_rolls_back_the_whole_set(repo: AttachmentRepository) -> None:
+    await repo.add(_record("att-1", owner_user_id="alice", session_id="s1"))
+
+    applied = await repo.link_many_to_message(
+        ["att-1", "does-not-exist"], "alice", "s1", "turn-1", datetime.now(timezone.utc)
+    )
+
+    assert applied is False
+    assert (await repo.get("att-1")).status == ChatAttachmentStatus.READY.value
+
+
 @pytest.mark.asyncio
 async def test_mark_deleted_from_ready(repo: AttachmentRepository) -> None:
     await repo.add(_record("att-1"))

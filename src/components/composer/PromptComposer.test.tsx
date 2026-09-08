@@ -15,7 +15,11 @@ vi.mock("./AttachmentChipRow", () => ({ AttachmentChipRow: () => null }));
 vi.mock("./SourceChipRow", () => ({ SourceChipRow: () => null }));
 
 const mockAppState: {
-  state: { draft: { text: string; attachments: unknown[]; sources: unknown[] }; composerNudgeAt: number };
+  state: {
+    draft: { text: string; attachments: unknown[]; sources: unknown[] };
+    composerNudgeAt: number;
+    workspaceScope: { type: "general" } | { type: "project"; projectId: string };
+  };
   activeChat: Chat | null;
   activeMessages: MessageType[];
   setDraftText: ReturnType<typeof vi.fn>;
@@ -24,7 +28,11 @@ const mockAppState: {
   sendMessage: ReturnType<typeof vi.fn>;
   stopActiveRun: ReturnType<typeof vi.fn>;
 } = {
-  state: { draft: { text: "", attachments: [], sources: [] }, composerNudgeAt: 0 },
+  state: {
+    draft: { text: "", attachments: [], sources: [] },
+    composerNudgeAt: 0,
+    workspaceScope: { type: "general" },
+  },
   activeChat: null,
   activeMessages: [],
   setDraftText: vi.fn(),
@@ -75,6 +83,10 @@ function makeImageAttachment(overrides: Partial<Record<string, unknown>> = {}) {
     file: new File(["x"], "screenshot.png", { type: "image/png" }),
     objectUrl: "blob:mock-url",
     uploadState: "ready",
+    // POST-5.1 B5 — a genuinely ready-to-send draft image always has a
+    // real backend attachmentId by the time uploadState reaches "ready"
+    // (see AppState.tsx's UPDATE_DRAFT_IMAGE_ATTACHMENT reducer case).
+    attachmentId: "att-1",
     filename: "screenshot.png",
     mimeType: "image/png",
     sizeBytes: 1,
@@ -83,7 +95,11 @@ function makeImageAttachment(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 beforeEach(() => {
-  mockAppState.state = { draft: { text: "", attachments: [], sources: [] }, composerNudgeAt: 0 };
+  mockAppState.state = {
+    draft: { text: "", attachments: [], sources: [] },
+    composerNudgeAt: 0,
+    workspaceScope: { type: "general" },
+  };
   mockAppState.activeChat = null;
   mockAppState.activeMessages = [];
   mockAppState.sendMessage.mockClear();
@@ -308,8 +324,8 @@ describe("PromptComposer — resting vs. focus glow (Phase 4G hardening pass)", 
   });
 });
 
-describe("PromptComposer — POST-5.1 B3 interim Send gating for real image attachments", () => {
-  it.each(["pending", "uploading", "ready", "failed"] as const)(
+describe("PromptComposer — POST-5.1 B5 Send eligibility for real image attachments", () => {
+  it.each(["pending", "uploading", "failed"] as const)(
     "disables Send while a draft image attachment is %s, even with typed text present",
     (uploadState) => {
       mockAppState.state.draft.text = "here's a screenshot";
@@ -323,18 +339,76 @@ describe("PromptComposer — POST-5.1 B3 interim Send gating for real image atta
     },
   );
 
-  it("blocks Enter from submitting while a real image attachment is present", () => {
-    mockAppState.state.draft.text = "hello";
+  it("enables Send once a draft image attachment is ready, on the real backend (general) branch", () => {
+    mockAppState.state.draft.text = "here's a screenshot";
     mockAppState.state.draft.attachments = [makeImageAttachment()];
+    render(<PromptComposer />);
+
+    expect(screen.getByRole("button", { name: "Send message" })).not.toBeDisabled();
+  });
+
+  it("enables Send for a ready image-only draft (no typed text)", () => {
+    mockAppState.state.draft.attachments = [makeImageAttachment()];
+    render(<PromptComposer />);
+
+    expect(screen.getByRole("button", { name: "Send message" })).not.toBeDisabled();
+  });
+
+  it("still disables Send if a 'ready' image is somehow missing its real backend attachmentId", () => {
+    mockAppState.state.draft.attachments = [makeImageAttachment({ attachmentId: undefined })];
+    render(<PromptComposer />);
+
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+  });
+
+  it("disables Send for a ready image when the workspace is project-scoped (not the real backend branch)", () => {
+    mockAppState.state.draft.text = "here's a screenshot";
+    mockAppState.state.draft.attachments = [makeImageAttachment()];
+    mockAppState.state.workspaceScope = { type: "project", projectId: "p1" };
+    render(<PromptComposer />);
+
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+  });
+
+  it("disables Send for a ready image when an ad-hoc source is attached (mock read-chat-room branch)", () => {
+    mockAppState.state.draft.text = "here's a screenshot";
+    mockAppState.state.draft.attachments = [makeImageAttachment()];
+    mockAppState.state.draft.sources = [{ id: "src-1", kind: "teams_channel", scope: "Ops Bridge" }];
+    render(<PromptComposer />);
+
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+  });
+
+  it("disables Send for a ready image when the active chat is following a demo script", () => {
+    mockAppState.state.draft.text = "here's a screenshot";
+    mockAppState.state.draft.attachments = [makeImageAttachment()];
+    mockAppState.activeChat = makeChat({ demoRun: { scenarioId: "ru-advise", step: 0 } });
+    render(<PromptComposer />);
+
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+  });
+
+  it("blocks Enter from submitting while a real image attachment is still uploading", () => {
+    mockAppState.state.draft.text = "hello";
+    mockAppState.state.draft.attachments = [makeImageAttachment({ uploadState: "uploading" })];
     render(<PromptComposer />);
 
     fireEvent.keyDown(screen.getByLabelText("Message"), { key: "Enter" });
     expect(mockAppState.sendMessage).not.toHaveBeenCalled();
   });
 
-  it("re-enables Send once every image attachment has been removed from the draft", () => {
+  it("Enter submits once a real image attachment is ready", () => {
     mockAppState.state.draft.text = "hello";
     mockAppState.state.draft.attachments = [makeImageAttachment()];
+    render(<PromptComposer />);
+
+    fireEvent.keyDown(screen.getByLabelText("Message"), { key: "Enter" });
+    expect(mockAppState.sendMessage).toHaveBeenCalled();
+  });
+
+  it("re-enables Send once every image attachment has been removed from the draft", () => {
+    mockAppState.state.draft.text = "hello";
+    mockAppState.state.draft.attachments = [makeImageAttachment({ uploadState: "uploading" })];
     const { rerender } = render(<PromptComposer />);
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
 
