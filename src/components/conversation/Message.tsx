@@ -26,7 +26,9 @@ import { RunTrace } from "./RunTrace";
 import { ApprovalCard } from "./ApprovalCard";
 import { SelectionCard } from "./SelectionCard";
 import { MessageMarkdown } from "./MessageMarkdown";
+import { PersistedImageAttachment } from "./PersistedImageAttachment";
 import { cn } from "../../lib/cn";
+import { hasPersistedImageAttachment } from "../../lib/persistedAttachments";
 import { useAppState } from "../../state/AppState";
 import { Tooltip } from "../ui/Tooltip";
 import { formatFullTimestamp, formatShortDate } from "../../lib/format";
@@ -364,6 +366,13 @@ function UserMessageActions({
   const hasAttachments = Boolean(message.attachments && message.attachments.length > 0);
   const pastedTextAttachment = message.attachments?.find((a) => a.isPastedText);
 
+  // POST-5.1 B4D correction pass — LOCKED PRODUCT RULE: no Edit affordance
+  // at all for a user turn that owns a durable, server-linked image
+  // (see src/lib/persistedAttachments.ts). This is the UI-level
+  // reflection only — the real enforcement boundary is AppState.tsx's
+  // `editMessage` hard guard below.
+  if (hasPersistedImageAttachment(message)) return null;
+
   if (hasAttachments) {
     if (!pastedTextAttachment) return null;
     return (
@@ -642,6 +651,19 @@ export function Message({ message }: { message: MessageType }) {
           <div className="flex flex-wrap justify-end gap-1.5">
             {message.attachments!.map((a) => (
               <AttachmentCard key={a.id} attachment={a} />
+            ))}
+          </div>
+        )}
+        {/* POST-5.1 B4D — durable, server-owned image references from a
+            rehydrated saved chat. A SEPARATE field/row from the mock
+            `attachments` block above (never merged) — preserves exact
+            server order, one PersistedImageAttachment per reference, and
+            one image's failure never affects the others or the text
+            below. */}
+        {message.persistedAttachments && message.persistedAttachments.length > 0 && (
+          <div className="flex flex-wrap justify-end gap-1.5">
+            {message.persistedAttachments.map((reference) => (
+              <PersistedImageAttachment key={reference.attachmentId} reference={reference} />
             ))}
           </div>
         )}

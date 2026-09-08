@@ -711,3 +711,102 @@ describe("AppState — B4C correction pass: global savedChatsHydrationStatus", (
     await waitFor(() => expect(latest.state.savedChatsHydrationStatus).toBe("loaded"));
   });
 });
+
+describe("AppState — B4D correction pass: image-bearing user turns are not editable (hard guard)", () => {
+  it("editMessage on an image-bearing user message is a structural no-op: no rewindSession, no createSession, nothing changes", async () => {
+    listSavedSessions.mockResolvedValue({
+      sessions: [{ session_id: "s1", title: "Fixture Chat", updated_at: "2026-09-07T22:25:09.620902+00:00" }],
+    });
+    getSessionHistory.mockResolvedValue({
+      session_id: "s1",
+      messages: [
+        {
+          message_id: "e-1:user",
+          turn_id: "e-1",
+          role: "user",
+          text: "here's a screenshot",
+          created_at: "2026-09-07T22:25:09.620902+00:00",
+          attachments: [
+            { attachment_id: "att-1", filename: "screenshot.png", mime_type: "image/png", size_bytes: 12345 },
+          ],
+        },
+      ],
+    });
+    renderHarness();
+    await waitFor(() => expect(latest.state.chats.s1).toBeDefined());
+    await act(async () => {
+      latest.selectChat("s1");
+    });
+    await waitFor(() => expect(latest.state.chats.s1.historyHydrationStatus).toBe("loaded"));
+
+    const before = latest.state;
+
+    await act(async () => {
+      latest.editMessage("e-1:user", "trying to edit an image message");
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(rewindSession).not.toHaveBeenCalled();
+    expect(createSession).not.toHaveBeenCalled();
+    expect(runBackendChat).not.toHaveBeenCalled();
+    expect(latest.state.messages["e-1:user"].text).toBe("here's a screenshot");
+    expect(latest.state.messages["e-1:user"].persistedAttachments).toEqual([
+      { attachmentId: "att-1", filename: "screenshot.png", mimeType: "image/png", sizeBytes: 12345 },
+    ]);
+    expect(latest.state.chats.s1.messageIds).toEqual(["e-1:user"]);
+    expect(latest.state.chats.s1.backendSessionId).toBe("s1");
+    // Nothing was dispatched at all — state is referentially the same object.
+    expect(latest.state).toBe(before);
+  });
+
+  it("editMessage still works normally for a text-only user message in the very same chat (no regression)", async () => {
+    listSavedSessions.mockResolvedValue({
+      sessions: [{ session_id: "s1", title: "Fixture Chat", updated_at: "2026-09-07T22:25:09.620902+00:00" }],
+    });
+    getSessionHistory.mockResolvedValue({
+      session_id: "s1",
+      messages: [
+        {
+          message_id: "e-1:user",
+          turn_id: "e-1",
+          role: "user",
+          text: "plain text message",
+          created_at: "2026-09-07T22:25:09.620902+00:00",
+          attachments: [],
+        },
+        {
+          message_id: "e-1:assistant",
+          turn_id: "e-1",
+          role: "assistant",
+          text: "plain answer",
+          created_at: "2026-09-07T22:25:12.000000+00:00",
+          attachments: [],
+        },
+      ],
+    });
+    rewindSession.mockResolvedValue({ session_id: "s1" });
+    runBackendChat.mockImplementation(async (_sessionId, _message, handlers) => {
+      handlers.onRunStarted("server-run-1");
+      handlers.onCompleted("edited answer");
+      handlers.onRunCompleted("ok");
+    });
+
+    renderHarness();
+    await waitFor(() => expect(latest.state.chats.s1).toBeDefined());
+    await act(async () => {
+      latest.selectChat("s1");
+    });
+    await waitFor(() => expect(latest.state.chats.s1.historyHydrationStatus).toBe("loaded"));
+
+    await act(async () => {
+      latest.editMessage("e-1:user", "plain text message, edited");
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(rewindSession).toHaveBeenCalledWith("s1", 0);
+    expect(createSession).not.toHaveBeenCalled();
+    expect(latest.state.messages["e-1:user"].text).toBe("plain text message, edited");
+  });
+});

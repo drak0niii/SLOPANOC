@@ -212,6 +212,18 @@ export interface Message {
    * Already sanitized/safe to render directly — falls back to a generic
    * string in the renderer if absent. */
   errorMessage?: string;
+  /** POST-5.1 B4D — durable, server-owned image references for a rehydrated
+   * saved-chat USER message, mapped verbatim (server order preserved) from
+   * `SessionHistoryMessageDTO.attachments` — see AppState.tsx's
+   * `HISTORY_FETCH_SUCCEEDED` mapping. Deliberately a SEPARATE field from
+   * `attachments` (the existing mock/file/folder/pasted-text presentation
+   * path, untouched by B4D) and from `DraftImageAttachment` (unsent
+   * browser `File`/`Blob` state) — metadata only, never a `File`/`Blob`/
+   * `objectUrl`/storage location. `undefined`/absent for every
+   * non-rehydrated message (mock, demo, or a message from a live backend
+   * run in the current session — B5 is what will eventually populate this
+   * for a freshly sent turn, not B4D). */
+  persistedAttachments?: PersistedAttachmentReference[];
 }
 
 /** Identifies which deterministic executive-demo script a chat is following. */

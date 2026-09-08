@@ -364,7 +364,7 @@ complete.
 CURRENT (out-of-band milestone, inserted between the LOCAL GIT CHECKPOINT
 below and Phase 4H — does not reorder anything in this locked list):
 POST-5.1 A — CLOUD SQL POSTGRESQL (A1–A4) is COMPLETE. POST-5.1 B —
-MULTIMODAL ATTACHMENTS is IN PROGRESS (B0–B4C done, B4D next).
+MULTIMODAL ATTACHMENTS is IN PROGRESS (B0-B4D done, B5 next).
 A5 (real TELCO/RAN MOP ingestion) follows POST-5.1 B, before Phase
 4H security hardening.
 
@@ -634,7 +634,101 @@ POST-5.1 B execution sequence (locked, do not reorder):
       chat afterward reloaded the exact same transcript again, proving
       the rename never detached the underlying session identity.
       **B4C is DONE.**
-  B4D Attachment-reference hydration + restart/rewind/live validation
+  B4D [DONE] Attachment-reference hydration + secure persisted
+      image rendering + restart/rewind/live validation. Does NOT send
+      images to Gemini and does not touch model input in any way (B5,
+      untouched) -- the B3 image Send gate remains fully closed. History
+      DTO `attachments` (typed since B4C, deliberately unmapped) now map
+      onto a NEW `Message.persistedAttachments` field -- metadata only
+      (`attachmentId`/`filename`/`mimeType`/`sizeBytes`), never a
+      File/Blob/objectUrl, never merged with the existing mock
+      `attachments` field. Binary rendering reuses the existing,
+      unmodified B2 `GET /api/attachments/{id}/content` route
+      (authenticated + ownership-checked, anti-enumeration -- unknown and
+      foreign-owner attachments return the identical generic SafeError)
+      through one new `client.ts` helper (`getBlob`) and one new
+      `api/attachments.ts` function (`getAttachmentContent`) -- no new
+      backend route, no GCS/bucket/signed-URL knowledge anywhere in the
+      frontend (verified: no `gs://`/`storage_object_name`/`bucket`/
+      `sha256`/`owner_user_id` string anywhere in frontend source). A new
+      self-contained `PersistedImageAttachment` component (no AppState
+      dependency, no global binary cache) does fetch-on-mount -> Blob ->
+      `URL.createObjectURL` -> `<img>` -> revoke-on-replace/unmount,
+      rendered additively inside `Message.tsx`'s existing user-message
+      branch. An unsupported MIME type never fetches at all -- a safe
+      "Unsupported format" state. A content-fetch failure never fails the
+      transcript, `historyHydrationStatus`, or any sibling image -- only
+      that one image's own safe "Image unavailable" + Retry (regression-
+      tested: a real image failure alongside real history success leaves
+      `historyHydrationStatus: "loaded"` untouched). No content binary is
+      ever fetched merely because a chat is summarized at boot or because
+      history loads -- only once an actual `<img>`-bearing message is
+      actually rendered. Edit/rewind needs zero code changes -- discarding
+      a later turn already deletes its message (and therefore its
+      `persistedAttachments`) wholesale via existing reducer logic, and
+      the corresponding renderer simply unmounts, triggering its own
+      abort/revoke cleanup automatically (regression-tested against a
+      real two-turn hydrated fixture where the discarded turn owns an
+      image). Covered by `src/api/attachments.test.ts`,
+      `src/state/AppState.savedChats.reducer.test.ts` (DTO mapping),
+      `src/components/conversation/PersistedImageAttachment.test.tsx`
+      (loading/success/cleanup/StrictMode/failure+retry/unsupported-MIME/
+      multiple-instance isolation), and
+      `src/components/conversation/Message.persistedAttachments.test.tsx`
+      (real AppStateProvider-backed: history/image-failure boundary,
+      lazy content-fetch network boundary, successful render, edit/rewind
+      ghost-attachment regression) -- full frontend suite and
+      `npm run build` both clean, zero regressions.
+      LIVE IMAGE HYDRATION VALIDATED -- real disposable session
+      `78a5b7c8-a675-4bb1-9372-b3fa0d641cdc`, real turn
+      `e-4faba7ae-82f1-4d82-9cf2-b30a12824f2c`: a real PNG (`00001.PNG`,
+      image/png, 180337 bytes) was uploaded through the unmodified real
+      `POST /api/sessions/{id}/attachments` route (real GCS write + Cloud
+      SQL READY row), then linked via the existing
+      `AttachmentService.link_to_message` in a one-off, disposable,
+      never-committed local invocation (READY -> LINKED, message_id =
+      the real ADK turn_id) -- no production route added, no fixture
+      code committed, no backend behavior changed. `GET /history`
+      returned exactly `{attachment_id, filename, mime_type, size_bytes}`
+      on the owning USER message only (assistant attachments empty), no
+      gs:///bucket/storage/owner metadata exposed. After a hard refresh,
+      the real browser rendered `00001.PNG` inside the owning user
+      message end to end: Cloud SQL reference -> GET /history ->
+      PersistedAttachmentReference -> authenticated GET
+      /api/attachments/{id}/content -> private GCS binary -> Blob ->
+      transient object URL -> real <img> -- no direct GCS access, no
+      signed URL, no public bucket, no base64, no durable browser
+      storage.
+      CORRECTION PASS (locked) -- image-bearing user turns are
+      intentionally non-editable. A user turn that owns a durable,
+      server-linked image reference owns evidence tied to its original
+      ADK turn/invocation; a text-only edit/rewind of that prompt while
+      silently retaining/dropping/re-associating the image would create
+      ambiguous attachment semantics this product has not designed yet.
+      Multimodal edit/rewrite semantics are not defined. The single
+      authoritative signal (`src/lib/persistedAttachments.ts`'s
+      `hasPersistedImageAttachment`) is `message.persistedAttachments`'s
+      presence -- never inferred from text/filename/regex/DOM. Enforced
+      twice: `Message.tsx`'s `UserMessageActions` hides the Edit action
+      entirely for such a message, and -- the real boundary --
+      `AppState.tsx`'s `editMessage` hard-guards on the same signal
+      before any side effect (no rewindSession, no createSession, no
+      text mutation, no dispatch), so the prohibition holds for any
+      future/programmatic caller, not only the UI. Text-only user
+      messages are completely unaffected -- existing edit/rewind behavior
+      unchanged, regression-tested. FUTURE B5 INVARIANT: once a
+      live-sent turn can carry a real image, the frontend Message
+      representing it must expose this same `persistedAttachments` (or
+      an equivalent structured image-ownership) signal immediately, in
+      the same turn -- not only after a later reload -- so this
+      prohibition holds both before and after refresh; B5 has not
+      implemented that yet. FINAL LIVE PROOF -- after the correction
+      pass, a real hard refresh reopening "B4D attachment hydration
+      fixture" confirmed the persisted image still renders, the original
+      user text still renders, the image-bearing user prompt has no
+      usable Edit action, and text-only user messages elsewhere retain
+      normal Edit behavior -- no rewindSession call for the blocked
+      direct-edit attempt. **B4D is DONE.**
   B5  Gemini/ADK Multimodal Runtime
   B6  Image + Teams + KM Operational Reasoning
   B7  Lifecycle + Real UI + Full Regression

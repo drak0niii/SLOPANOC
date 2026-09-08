@@ -64,6 +64,7 @@ import { classifyApprovalFailure } from "../lib/approvalCard";
 import { classifyAttachmentUploadFailure } from "../lib/attachmentError";
 import { classifySelectionFailure } from "../lib/selectionCard";
 import { createId } from "../lib/id";
+import { hasPersistedImageAttachment } from "../lib/persistedAttachments";
 import {
   ACCEPTED_IMAGE_MIME_TYPES,
   ATTACHMENT_LIMIT_NOTICE_DURATION_MS,
@@ -2013,12 +2014,25 @@ export function reducer(state: AppState, action: Action): AppState {
           // why a malformed one fails the whole request instead of
           // reaching here with an invented fallback time.
           createdAt: Date.parse(dto.created_at),
+          // POST-5.1 B4D — durable, server-owned image references, mapped
+          // verbatim in server order into the DEDICATED `persistedAttachments`
+          // field (never the existing mock/file/folder `attachments` field,
+          // and never a File/Blob/objectUrl — metadata only). The backend
+          // already guarantees only LINKED attachments on the owning USER
+          // message ever appear here (assistant messages always get `[]`) —
+          // never re-derived/re-filtered on this side. `undefined` (not an
+          // empty array) when there are none, matching every other optional
+          // Message field's own "absent means none" convention.
+          persistedAttachments:
+            dto.attachments.length > 0
+              ? dto.attachments.map((a) => ({
+                  attachmentId: a.attachment_id,
+                  filename: a.filename,
+                  mimeType: a.mime_type,
+                  sizeBytes: a.size_bytes,
+                }))
+              : undefined,
         };
-        // POST-5.1 B4C — dto.attachments is deliberately NOT mapped onto
-        // Message.attachments here. Persisted-attachment reference
-        // hydration/rendering is B4D, not B4C (see this file's own
-        // instruction history) — surfacing them now would silently imply
-        // rendering support that does not exist yet.
       }
 
       return {
@@ -3816,6 +3830,21 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       if (!message || message.role !== "user") return;
       const chat = state.chats[message.chatId];
       if (!chat) return;
+
+      // POST-5.1 B4D correction pass — LOCKED PRODUCT RULE: a user turn
+      // that owns a durable, server-linked image attachment is
+      // intentionally immutable until multimodal edit/rewrite semantics
+      // are explicitly designed (see src/lib/persistedAttachments.ts).
+      // This is the REAL enforcement boundary — a structured, hard guard
+      // that runs before ANY side effect (no rewindSession call, no
+      // createSession call, no text mutation, no EDIT_MESSAGE dispatch,
+      // no attachment-state change) — so it protects against a future UI
+      // caller, a test invoking this function directly, or any other
+      // accidental programmatic call, not just the hidden Edit button in
+      // Message.tsx. Text-only user messages are completely unaffected —
+      // this check is the ONLY thing added to the existing edit/rewind
+      // path below.
+      if (hasPersistedImageAttachment(message)) return;
 
       const assistantMessageId = createId("msg");
       const isFirstMessage = chat.messageIds[0] === messageId;

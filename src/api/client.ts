@@ -115,6 +115,23 @@ export async function getJson<T>(path: string): Promise<T> {
 }
 
 /**
+ * Binary GET helper (POST-5.1 B4D) — currently only `GET
+ * /api/attachments/{id}/content` (persisted chat-image rehydration).
+ * Mirrors `getJson` exactly except for the final `.blob()` instead of
+ * `.json()`, and forwards an optional `AbortSignal` so a caller (a
+ * persisted-image component unmounting or re-targeting a new reference)
+ * can cancel an in-flight fetch. Shares the exact same
+ * `throwForFailedResponse` SafeError mapping as every other verb — a
+ * failed/unauthorized/unknown attachment id never leaks a raw response
+ * body, same contract as `postJson`/`getJson`/`patchJson`/`postForm`.
+ */
+export async function getBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+  const response = await apiFetch(path, { signal });
+  if (!response.ok) return throwForFailedResponse(path, response);
+  return response.blob();
+}
+
+/**
  * JSON PATCH helper (POST-5.1 B4C) — currently only `PATCH
  * /api/sessions/{id}` (durable manual rename). Mirrors `postJson` exactly,
  * differing only in HTTP method.

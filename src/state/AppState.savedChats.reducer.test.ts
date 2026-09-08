@@ -366,3 +366,123 @@ describe("reducer — B4C correction pass: global savedChatsHydrationStatus", ()
     expect(state.savedChatsHydrationStatus).toBe("loaded");
   });
 });
+
+describe("reducer — B4D: history DTO attachments -> Message.persistedAttachments", () => {
+  function seedHydrated(): AppState {
+    return { ...initialState, chats: { s1: hydratedChat() }, chatOrder: ["s1"] };
+  }
+
+  it("a message with zero attachments maps to persistedAttachments undefined", () => {
+    let state = seedHydrated();
+    state = reducer(state, { type: "HISTORY_FETCH_STARTED", payload: { chatId: "s1" } });
+    state = reducer(state, {
+      type: "HISTORY_FETCH_SUCCEEDED",
+      payload: { chatId: "s1", response: historyResponse() },
+    });
+    expect(state.messages["e-1:user"].persistedAttachments).toBeUndefined();
+    expect(state.messages["e-1:assistant"].persistedAttachments).toBeUndefined();
+  });
+
+  it("a user message with one attachment maps the exact reference", () => {
+    let state = seedHydrated();
+    state = reducer(state, { type: "HISTORY_FETCH_STARTED", payload: { chatId: "s1" } });
+    state = reducer(state, {
+      type: "HISTORY_FETCH_SUCCEEDED",
+      payload: {
+        chatId: "s1",
+        response: historyResponse({
+          messages: [
+            {
+              message_id: "e-1:user",
+              turn_id: "e-1",
+              role: "user",
+              text: "here's a screenshot",
+              created_at: "2026-09-07T22:25:09.620902+00:00",
+              attachments: [
+                { attachment_id: "att-1", filename: "screenshot.png", mime_type: "image/png", size_bytes: 12345 },
+              ],
+            },
+          ],
+        }),
+      },
+    });
+    expect(state.messages["e-1:user"].persistedAttachments).toEqual([
+      { attachmentId: "att-1", filename: "screenshot.png", mimeType: "image/png", sizeBytes: 12345 },
+    ]);
+  });
+
+  it("a user message with four attachments maps all of them in server order", () => {
+    let state = seedHydrated();
+    const attachmentDtos = [1, 2, 3, 4].map((n) => ({
+      attachment_id: `att-${n}`,
+      filename: `image-${n}.png`,
+      mime_type: "image/png",
+      size_bytes: n * 1000,
+    }));
+    state = reducer(state, { type: "HISTORY_FETCH_STARTED", payload: { chatId: "s1" } });
+    state = reducer(state, {
+      type: "HISTORY_FETCH_SUCCEEDED",
+      payload: {
+        chatId: "s1",
+        response: historyResponse({
+          messages: [
+            {
+              message_id: "e-1:user",
+              turn_id: "e-1",
+              role: "user",
+              text: "four images",
+              created_at: "2026-09-07T22:25:09.620902+00:00",
+              attachments: attachmentDtos,
+            },
+          ],
+        }),
+      },
+    });
+    expect(state.messages["e-1:user"].persistedAttachments).toEqual([
+      { attachmentId: "att-1", filename: "image-1.png", mimeType: "image/png", sizeBytes: 1000 },
+      { attachmentId: "att-2", filename: "image-2.png", mimeType: "image/png", sizeBytes: 2000 },
+      { attachmentId: "att-3", filename: "image-3.png", mimeType: "image/png", sizeBytes: 3000 },
+      { attachmentId: "att-4", filename: "image-4.png", mimeType: "image/png", sizeBytes: 4000 },
+    ]);
+  });
+
+  it("assistant message attachments are always empty from the backend and never surface persistedAttachments", () => {
+    let state = seedHydrated();
+    state = reducer(state, { type: "HISTORY_FETCH_STARTED", payload: { chatId: "s1" } });
+    state = reducer(state, {
+      type: "HISTORY_FETCH_SUCCEEDED",
+      payload: { chatId: "s1", response: historyResponse() },
+    });
+    expect(state.messages["e-1:assistant"].persistedAttachments).toBeUndefined();
+  });
+
+  it("never carries File/Blob/objectUrl/storage metadata — metadata-only reference", () => {
+    let state = seedHydrated();
+    state = reducer(state, { type: "HISTORY_FETCH_STARTED", payload: { chatId: "s1" } });
+    state = reducer(state, {
+      type: "HISTORY_FETCH_SUCCEEDED",
+      payload: {
+        chatId: "s1",
+        response: historyResponse({
+          messages: [
+            {
+              message_id: "e-1:user",
+              turn_id: "e-1",
+              role: "user",
+              text: "img",
+              created_at: "2026-09-07T22:25:09.620902+00:00",
+              attachments: [
+                { attachment_id: "att-1", filename: "screenshot.png", mime_type: "image/png", size_bytes: 12345 },
+              ],
+            },
+          ],
+        }),
+      },
+    });
+    const reference = state.messages["e-1:user"].persistedAttachments![0];
+    expect(Object.keys(reference).sort()).toEqual(["attachmentId", "filename", "mimeType", "sizeBytes"]);
+    const serialized = JSON.stringify(reference);
+    expect(serialized).not.toMatch(/gs:\/\//);
+    expect(serialized).not.toMatch(/objectUrl|storage_object_name|bucket|sha256|owner_user_id/i);
+  });
+});

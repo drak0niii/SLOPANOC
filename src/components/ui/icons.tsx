@@ -34,6 +34,8 @@ export {
   FolderClosed,
   FolderInput,
   FolderMinus,
+  Image,
+  ImageOff,
   Info,
   Lightbulb,
   ListChecks,

@@ -37,6 +37,16 @@ vi.mock("../../state/AppState", () => ({
   useAppState: () => mockAppState,
 }));
 
+// POST-5.1 B4D correction pass — a user message with `persistedAttachments`
+// now renders a PersistedImageAttachment, which fetches real content on
+// mount. This file only cares whether the Edit action is present/absent,
+// never actual image loading — mocked to a permanently-pending promise so
+// no real (unmocked) fetch fires and no state update lands after a test's
+// own assertions/unmount, which would otherwise produce act() warnings.
+vi.mock("../../api/attachments", () => ({
+  getAttachmentContent: () => new Promise(() => {}),
+}));
+
 import { Message } from "./Message";
 import { TooltipProvider } from "../ui/Tooltip";
 
@@ -546,6 +556,99 @@ describe("Message — user message Edit affordance (Phase 4G hardening pass — 
     expect(mockAppState.editMessage).not.toHaveBeenCalled();
     expect(screen.queryByRole("textbox", { name: /edit message/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+  });
+});
+
+describe("Message — B4D correction pass: image-bearing user turns are not editable", () => {
+  it("(A) a text-only user message still shows the Edit action, exactly as before", () => {
+    mockAppState.activeChat = makeChat({ backendSessionId: "s1" });
+    const message = makeMessage({ role: "user", status: "complete", text: "send an update" });
+
+    render(withProvider(<Message message={message} />));
+
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+  });
+
+  it("(B) a user message with one persisted attachment has no Edit action", () => {
+    mockAppState.activeChat = makeChat({ backendSessionId: "s1" });
+    const message = makeMessage({
+      role: "user",
+      status: "complete",
+      text: "here's a screenshot",
+      persistedAttachments: [
+        { attachmentId: "att-1", filename: "screenshot.png", mimeType: "image/png", sizeBytes: 100 },
+      ],
+    });
+
+    render(withProvider(<Message message={message} />));
+
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  it("(C) a user message with multiple persisted attachments has no Edit action", () => {
+    mockAppState.activeChat = makeChat({ backendSessionId: "s1" });
+    const message = makeMessage({
+      role: "user",
+      status: "complete",
+      text: "here are a few screenshots",
+      persistedAttachments: [
+        { attachmentId: "att-1", filename: "one.png", mimeType: "image/png", sizeBytes: 100 },
+        { attachmentId: "att-2", filename: "two.png", mimeType: "image/png", sizeBytes: 200 },
+      ],
+    });
+
+    render(withProvider(<Message message={message} />));
+
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  it("(D) assistant message behavior is unaffected by persistedAttachments (assistant messages never carry them anyway)", () => {
+    mockAppState.activeChat = makeChat({ backendSessionId: "s1" });
+    const message = makeMessage({ role: "assistant", status: "complete", text: "an answer" });
+
+    render(withProvider(<Message message={message} />));
+
+    // No Edit control exists for assistant messages at all, before or
+    // after this correction — Regenerate is the equivalent action, and it
+    // remains hidden for a backend-sourced message (Phase 4F behavior,
+    // unrelated to this change).
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Regenerate" })).not.toBeInTheDocument();
+  });
+
+  it("(E) removing persistedAttachments from an otherwise-identical fixture restores normal text-edit eligibility", () => {
+    mockAppState.activeChat = makeChat({ backendSessionId: "s1" });
+    const withImage = makeMessage({
+      role: "user",
+      status: "complete",
+      text: "here's a screenshot",
+      persistedAttachments: [
+        { attachmentId: "att-1", filename: "screenshot.png", mimeType: "image/png", sizeBytes: 100 },
+      ],
+    });
+
+    const { rerender } = render(withProvider(<Message message={withImage} />));
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+
+    const textOnly = { ...withImage, persistedAttachments: undefined };
+    rerender(withProvider(<Message message={textOnly} />));
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+  });
+
+  it("no Edit action for a persisted-image message even on a mock-path (no backendSessionId) chat", () => {
+    mockAppState.activeChat = makeChat(); // no backendSessionId
+    const message = makeMessage({
+      role: "user",
+      status: "complete",
+      text: "here's a screenshot",
+      persistedAttachments: [
+        { attachmentId: "att-1", filename: "screenshot.png", mimeType: "image/png", sizeBytes: 100 },
+      ],
+    });
+
+    render(withProvider(<Message message={message} />));
+
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
   });
 });
 
