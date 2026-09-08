@@ -36,6 +36,7 @@ from google.adk.tools import ToolContext
 from backend.approval.schemas import WriteOperation
 from backend.approval.service import create_action_proposal
 from backend.gateway.safe_error import SafeErrorException
+from backend.tools.teams.message_formatting import format_teams_message
 from backend.tools.teams.state_keys import (
     SELECTED_TEAMS_CHAT_ID_STATE_KEY,
     SELECTED_TEAMS_CHAT_TOPIC_STATE_KEY,
@@ -159,22 +160,29 @@ def teams_propose_send_message(
     Args:
       chat_id: The resolved Teams chat id (from `teams_list_chats` or the
         currently selected chat) -- never invented.
-      message: The exact message text. This exact text is what the user
-        will be asked to approve, and the only text that may later be
-        sent -- see write_validation.py.
+      message: The message text, in your own plain prose/paragraphs/lists.
+        POST-B7 UI/UX refinement (Item 1, corrective pass): this is
+        deterministically reformatted into clean, structured PLAIN TEXT
+        (see message_formatting.py -- never HTML, per a real live test
+        proving the current Power Automate/Teams write path does not
+        render HTML as intended) BEFORE it becomes the approved payload --
+        the FORMATTED text is what the user is asked to approve, and the
+        only text that may later be sent (see write_validation.py) --
+        never write your own markup here, and never re-propose the same
+        content merely to "fix" its formatting.
       tool_context: ADK-injected; see module docstring.
 
     Returns:
       On success, safe proposal info (`proposal_id`, `operation`,
-      `status`, `chat_id`, `message`, and `target_display_name` when the
-      destination chat's human-readable topic is already authoritatively
-      known -- see `_resolve_target_display_name`) -- deliberately no
-      expiry field (see `_proposal_info`'s docstring). On a validation
-      failure, a dict with a single `error` key -- no proposal is
-      created.
+      `status`, `chat_id`, `message` (the formatted plain text that was
+      approved), and `target_display_name` when the destination chat's
+      human-readable topic is already authoritatively known -- see
+      `_resolve_target_display_name`) -- deliberately no expiry field (see
+      `_proposal_info`'s docstring). On a validation failure, a dict with
+      a single `error` key -- no proposal is created.
     """
     try:
-        payload = normalize_send_message_payload(chat_id, message)
+        payload = normalize_send_message_payload(chat_id, format_teams_message(message))
     except SafeErrorException as exc:
         return {"error": exc.safe_error.to_dict()}
 

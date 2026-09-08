@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Image, ImageOff } from "../ui/icons";
+import { Image, ImageOff, Maximize2 } from "../ui/icons";
 import { getAttachmentContent } from "../../api/attachments";
 import { ACCEPTED_IMAGE_MIME_TYPES } from "../../lib/constants";
 import { cn } from "../../lib/cn";
+import { DialogContent, DialogRoot, DialogTitle, DialogTrigger } from "../ui/Dialog";
 import type { PersistedAttachmentReference } from "../../types";
 
 type LoadState = "loading" | "loaded" | "error" | "unsupported";
@@ -26,6 +27,16 @@ const PLACEHOLDER_CLASS =
  * unmount) — the object URL is never stored anywhere durable, never
  * serialized, and is not itself the source of truth (that remains private
  * GCS + the Cloud SQL attachment row this reference points at).
+ *
+ * POST-B7 UI/UX refinement (Items 3/4) — renders as a COMPACT thumbnail
+ * (never the previous large, up-to-256px inline image) with a click-to-
+ * preview modal (Radix `Dialog`, the same primitive used project-wide).
+ * The preview reuses this SAME `objectUrl` — it is never re-fetched, never
+ * re-uploaded, never re-ingested; opening/closing the dialog touches no
+ * attachment/chat state at all. Because this ONE component already
+ * renders both a just-sent (live) image and a rehydrated (historical)
+ * one, this thumbnail/preview treatment applies identically to both —
+ * there is no second, separate image-rendering path to keep in sync.
  */
 export function PersistedImageAttachment({ reference }: { reference: PersistedAttachmentReference }) {
   const supported = isAcceptedImageMime(reference.mimeType);
@@ -138,11 +149,36 @@ export function PersistedImageAttachment({ reference }: { reference: PersistedAt
     );
   }
 
+  const alt = `Attached image: ${reference.filename}`;
+
   return (
-    <img
-      src={objectUrl ?? undefined}
-      alt={`Attached image: ${reference.filename}`}
-      className={cn("max-h-64 max-w-full rounded-xl border border-subtle/60 object-contain")}
-    />
+    <DialogRoot>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Open larger preview of ${reference.filename}`}
+          className={cn(
+            "group relative block overflow-hidden rounded-xl border border-subtle/60",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
+          )}
+        >
+          <img src={objectUrl ?? undefined} alt={alt} className="max-h-32 max-w-48 object-contain" />
+          <span
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute inset-0 flex items-center justify-center bg-inverse/0 opacity-0",
+              "transition-opacity duration-150 group-hover:bg-inverse/25 group-hover:opacity-100",
+              "group-focus-visible:bg-inverse/25 group-focus-visible:opacity-100",
+            )}
+          >
+            <Maximize2 className="h-4 w-4 text-white drop-shadow" />
+          </span>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[90vh] max-w-[90vw] p-4">
+        <DialogTitle className="sr-only">{reference.filename}</DialogTitle>
+        <img src={objectUrl ?? undefined} alt={alt} className="max-h-[80vh] max-w-[85vw] rounded-lg object-contain" />
+      </DialogContent>
+    </DialogRoot>
   );
 }

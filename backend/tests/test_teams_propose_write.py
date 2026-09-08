@@ -13,6 +13,7 @@ from typing import Any, Optional
 from backend.approval.canonical import compute_payload_hash
 from backend.approval.schemas import ProposalStatus, WriteOperation
 from backend.approval.service import PENDING_ACTION_PROPOSAL_STATE_KEY, load_active_proposal
+from backend.tools.teams.message_formatting import format_teams_message
 from backend.tools.teams.propose_write import teams_propose_create_chat, teams_propose_send_message
 
 
@@ -146,7 +147,10 @@ def test_valid_send_message_proposal() -> None:
     assert result["operation"] == "teams.sendMessage"
     assert result["status"] == "pending"
     assert result["chat_id"] == "c1"
-    assert result["message"] == "Hello team"
+    # POST-B7 UI/UX refinement (Item 1): the APPROVED message is the
+    # deterministically formatted HTML, never the model's raw text --
+    # this is the whole point of formatting before proposal creation.
+    assert result["message"] == format_teams_message("Hello team")
     assert "proposal_id" in result
 
 
@@ -162,7 +166,8 @@ def test_send_message_proposal_hash_matches_the_exact_normalized_payload() -> No
 
     stored = load_active_proposal(ctx.state)
     expected_hash = compute_payload_hash(
-        WriteOperation.TEAMS_SEND_MESSAGE.value, {"chatId": "c1", "message": "Hello team"}
+        WriteOperation.TEAMS_SEND_MESSAGE.value,
+        {"chatId": "c1", "message": format_teams_message("Hello team")},
     )
     assert stored.payload_hash == expected_hash
 

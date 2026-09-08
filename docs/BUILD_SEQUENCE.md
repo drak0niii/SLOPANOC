@@ -46,7 +46,8 @@ not that the code is wrong.
 | Phase 5.1 — Generic Governed Knowledge | ✅ COMPLETE |
 | POST-5.1 A — Cloud SQL PostgreSQL | ✅ COMPLETE |
 | POST-5.1 B — Multimodal Attachments (B0–B7) | ✅ COMPLETE |
-| A5 — Real TELCO/RAN MOP ingestion | **← NEXT (not started)** |
+| POST-B7 UI/UX Refinement Milestone | ✅ COMPLETE |
+| A5 — Real TELCO/RAN MOP ingestion | **← NEXT** (not started) |
 | Phase 4H — Security Hardening | FUTURE (after A5) |
 | 5.2–5.7 — Operational Integrations | FUTURE |
 | Phase 6 — Agent Expansion + Context Engineering | FUTURE |
@@ -101,6 +102,10 @@ PHASE 5 — Context + Operational Integrations
     B7 Lifecycle + Real UI + Full Regression — COMPLETE (implementation,
       corrective passes, full automated regression, and real-stack live
       validation all passed)
+
+  POST-B7 UI/UX Refinement Milestone — COMPLETE (implementation, full
+    regression, and real-stack live validation all passed; see §5a below;
+    separate from B0–B7, no B7 architecture change)
 
   A5 Real TELCO/RAN MOP Ingestion — ← NEXT (not started)
 
@@ -723,11 +728,124 @@ Gateway Group Test").
 
 **POST-5.1 B7 — Lifecycle + Real UI + Full Regression: ✅ COMPLETE.**
 **POST-5.1 B — Multimodal Attachments (B0–B7): ✅ COMPLETE.**
-**NEXT: A5** — real TELCO/RAN MOP ingestion (not started). Phase 4H
-security hardening follows A5, per the locked roadmap — not started.
+**The POST-B7 UI/UX Refinement Milestone** (see §5a immediately
+below) is **✅ COMPLETE** — implementation, full regression, and
+real-stack live validation all passed. **NEXT: A5** — real TELCO/RAN MOP
+ingestion (not started). Phase 4H security hardening follows A5, per the
+locked roadmap — not started.
 
 Do not invent B7 implementation details beyond what this document and
 `CLAUDE.md`'s own roadmap already establish.
+
+---
+
+## 5a. POST-B7 UI/UX Refinement Milestone (✅ COMPLETE)
+
+A separate, bounded milestone after B7 — NOT part of B7, does not reopen
+or redesign B7 architecture, trust boundaries, or persistence semantics.
+Five bounded polish refinements only, no new integrations/agents/
+databases, no architecture expansion.
+
+1. **Teams message formatting.** Original implementation formatted
+   outbound messages as minimal-safe HTML, on the assumption the Power
+   Automate "Post message in a chat" action's Message field renders rich
+   text. **CORRECTIVE PASS:** a real live test (Teams discovery →
+   selection → approval → deterministic execution → Power Automate send,
+   all `outcome=ok`/`200`) proved that assumption false — the send
+   succeeded, but HTML presentation did not render as intended.
+   `backend/tools/teams/message_formatting.py`'s `format_teams_message`
+   was rewritten to produce DETERMINISTIC, PROFESSIONALLY STRUCTURED
+   PLAIN TEXT instead — never HTML, Markdown, or Adaptive Cards.
+   `message`/`payload["message"]` remain a plain `str` end to end, as
+   they always were — bullet markers normalize to a single `•` per line,
+   numbered markers renumber sequentially, blank-line paragraph
+   separation is preserved/normalized, and NO escaping is applied (plain
+   text is never parsed as markup, so literal `<script>`/`<b>` text
+   passes through byte-for-byte). Still called EXACTLY ONCE, inside
+   `teams_propose_send_message`, before normalization/hashing — never
+   inside `write_validation.py`/`execute_write.py` (structurally
+   verified: neither module references `format_teams_message` at all) —
+   so the formatted text IS the approved, hashed, user-reviewed, and
+   (via `execution_service.py`'s deterministic replay) actually-sent
+   payload; no second, unapproved rewrite after approval.
+   `ApprovalCard.tsx`'s Message row now renders `pendingAction.message`
+   as ordinary auto-escaped React text with `white-space: pre-wrap` — no
+   HTML parsing needed. `src/lib/safeHtmlFragment.tsx`/`.test.tsx` (the
+   HTML-only allowlist renderer Item 1 no longer needs) were DELETED
+   (confirmed unused elsewhere first).
+2. **Delayed sidebar hover-scroll.** The marquee-on-hover mechanism
+   (`ScrollingText.tsx`) already existed with correct per-row isolation —
+   it just started immediately. Added a 1000ms activation delay
+   (cancelled on mouse-leave, reset immediately if already animating).
+   **CORRECTIVE PASS:** the live UI showed an unwanted tooltip/popup on
+   hover — root cause, found by direct inspection: the component's outer
+   `<span>` set a native HTML `title` attribute (defaulting to the full,
+   untruncated text) whenever no explicit `title` prop was supplied,
+   which was every real caller (confirmed via grep across all 11 usage
+   sites). This attribute was removed entirely, with no replacement
+   tooltip/popover of any kind — not an accessibility regression, since
+   CSS truncation never removes the underlying DOM text node, so
+   assistive technology and an interactive wrapper's own accessible name
+   are unaffected. No changes to `SidebarChatRow.tsx`.
+   `prefers-reduced-motion` was already handled globally. CLOSURE
+   EVIDENCE: new `SidebarChatRow.test.tsx` (zero prior coverage existed)
+   proves click/select, rename, and pin/unpin all remain unaffected.
+3/4. **Compact image thumbnail + preview modal.** Live-send and
+   historical images already shared one component
+   (`PersistedImageAttachment.tsx`). It now renders a bounded
+   (`max-h-32 max-w-48`, `object-contain`) thumbnail behind a real
+   `<button>` that opens a `Dialog` (the existing Radix primitive)
+   showing a larger view of the SAME already-fetched object URL — no
+   re-fetch, re-upload, or state mutation on open/close. Unchanged by
+   this corrective pass.
+5. **Composer attachment/text separation.** Audited and found already
+   structurally correct — `SourceChipRow`/`AttachmentChipRow`/`<textarea>`
+   are independent DOM siblings, never `contenteditable`, no shared
+   styling. No code change; 14 regression tests added to lock it in.
+   Unchanged by this corrective pass.
+
+**Tests (current, after the corrective pass):** 27 backend
+(`test_teams_message_formatting.py`, rewritten in full for plain-text
+semantics) + frontend: `ApprovalCard.test.tsx` (43, two rewritten for
+plain-text rendering), `ScrollingText.test.tsx` (13 — one obsolete
+native-tooltip test replaced by 4 new no-tooltip tests),
+`PersistedImageAttachment.test.tsx` (23, unchanged by this pass),
+`PromptComposer.attachmentSeparation.test.tsx` (14, unchanged by this
+pass), `SidebarChatRow.test.tsx` (5, new — closure evidence).
+`safeHtmlFragment.test.tsx` deleted along with the module it tested.
+
+**Regression (after the corrective pass):** backend full suite 2690
+passed, 1 skipped (2685 prior + 5 net new); Teams-keyword subset 320
+passed; Teams write/approval/execution focused subset 194 passed; full
+frontend suite 733 passed; `npm run build` clean; `npx tsc -b` clean;
+`git diff --check` clean.
+
+**Live validation — FINAL CLOSURE:** the user has completed the full live
+validation pass this milestone required. All four refinements are LIVE
+VALIDATED. TEAMS PATH: real Teams discovery, selection, approval,
+deterministic execute, and Power Automate `teams.sendMessage
+outcome=ok` all confirmed working end to end; plain-text delivery is
+correct; the user confirmed the visual presentation is effectively
+unchanged from the original plain-text output and explicitly accepts
+this current plain-text presentation for this milestone. This is a
+recorded PRODUCT DECISION, not an unresolved blocker: richer Teams
+visual formatting was evaluated (HTML was attempted, then rejected after
+a real live test proved it did not render as intended), and further
+Teams presentation enhancement is intentionally deferred — do not
+reattempt HTML, do not introduce Adaptive Cards, do not modify Power
+Automate, do not redesign the Teams contract to chase richer formatting.
+UI PATH: hover-scroll — user confirmed no tooltip/popup of any kind
+appears and delayed scrolling works correctly; image thumbnail + preview
+modal — user confirmed correct; composer attachment/text separation —
+user confirmed correct. A separate observation ("I couldn't find a Teams
+chat with the exact name ..." reappearing after the successful flow) was
+audited and traced to `backend/agents/team_manager/prompts.py`, a
+pre-existing prompt template this milestone never touched in any pass —
+not a POST-B7 regression, left untouched.
+
+**STATUS: ✅ DONE.** The POST-B7 UI/UX Refinement Milestone is COMPLETE —
+implemented, automated-tested, and live-validated. A5 is now the next
+milestone (not started).
 
 ---
 

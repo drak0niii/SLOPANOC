@@ -136,6 +136,36 @@ describe("ApprovalCard — pending detail rendering", () => {
     expect(screen.getByRole("button", { name: "Send" })).toBeInTheDocument();
   });
 
+  it("POST-B7 Item 1 (corrective pass): renders a backend-formatted plain-text message with structure preserved visually via whitespace-pre-wrap, never as HTML", () => {
+    renderCard({
+      dto: sendMessageAction({
+        message: "Overview:\n\n• Check power\n• Check cabling",
+      }),
+    });
+
+    // Rendered as one plain-text node — real newlines/bullets, not markup.
+    const messageText = screen.getByText(/Overview:/);
+    expect(messageText.textContent).toBe("Overview:\n\n• Check power\n• Check cabling");
+    expect(messageText.className).toContain("whitespace-pre-wrap");
+    expect(document.querySelector("ul")).toBeNull();
+    expect(document.querySelector("li")).toBeNull();
+    expect(document.querySelector("strong")).toBeNull();
+  });
+
+  it("POST-B7 Item 1 (corrective pass): literal angle-bracket text is shown as plain visible text, never parsed as markup", () => {
+    renderCard({
+      dto: sendMessageAction({ message: '<p>Hi<img src=x onerror="window.__pwned=true"></p>' }),
+    });
+
+    // React text interpolation renders this as inert text content — the
+    // literal string is visible, never parsed/executed as HTML.
+    expect(
+      screen.getByText('<p>Hi<img src=x onerror="window.__pwned=true"></p>'),
+    ).toBeInTheDocument();
+    expect(document.querySelector("img")).toBeNull();
+    expect((window as unknown as { __pwned?: boolean }).__pwned).toBeUndefined();
+  });
+
   it("never renders the raw chat_id as the destination for sendMessage — falls back to a neutral placeholder when no display name is available", () => {
     renderCard({ dto: sendMessageAction({ target_display_name: null }) });
 

@@ -99,7 +99,7 @@ export function ApprovalCard({ chatId, messageId }: { chatId: string; messageId:
                   label="Destination"
                   value={pendingAction.target_display_name || "Selected Teams conversation"}
                 />
-                <DetailRow label="Message" value={pendingAction.message || "—"} />
+                <MessageDetailRow message={pendingAction.message} />
               </>
             )}
           </div>
@@ -249,6 +249,34 @@ function DetailRow({ label, value }: { label: string; value: string }) {
     <div className="flex gap-1.5">
       <span className="shrink-0 text-tertiary">{label}:</span>
       <span className="break-words text-secondary">{value}</span>
+    </div>
+  );
+}
+
+/** POST-B7 UI/UX refinement (Item 1) — `pendingAction.message` for a
+ * `teams.sendMessage` proposal is now a small, backend-formatted HTML
+ * fragment (see `backend/tools/teams/message_formatting.py`), never raw
+ * markdown/plain text dumped as-is. Rendered through
+ * `renderSafeTeamsMessageHtml` (an allowlist-only parser, never
+ * `dangerouslySetInnerHTML`) so the user reviews the SAME structure
+ * (paragraphs/lists/short headings) that will actually reach Teams,
+ * instead of literal `<p>`/`<ul>` tags as visible text. */
+/** POST-B7 UI/UX refinement (Item 1), CORRECTIVE PASS — `pendingAction
+ * .message` for a `teams.sendMessage` proposal is deterministic
+ * STRUCTURED PLAIN TEXT (see `backend/tools/teams/message_formatting
+ * .py`), never HTML — a real live test proved the Power Automate/Teams
+ * write path does not render HTML as intended. Rendered as plain React
+ * text (`{message}`, auto-escaped, no `dangerouslySetInnerHTML`, no HTML
+ * parsing of any kind needed) with `whitespace-pre-wrap` so the
+ * formatter's own blank-line paragraph separation and per-line list
+ * markers (already real `\n` characters in the string) are visually
+ * preserved exactly as approved — never collapsed by default HTML
+ * whitespace rules. */
+function MessageDetailRow({ message }: { message: string | null }) {
+  return (
+    <div className="flex gap-1.5">
+      <span className="shrink-0 text-tertiary">Message:</span>
+      <span className="min-w-0 flex-1 whitespace-pre-wrap break-words text-secondary">{message || "—"}</span>
     </div>
   );
 }

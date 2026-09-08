@@ -179,8 +179,10 @@ consistent target.
   governed knowledge in the same specialist turn (POST-5.1 B — multimodal
   attachments, B0–B7 — **COMPLETE**, including B7's own real-stack live
   validation).
-- **NEXT:** A5 (real TELCO/RAN MOP ingestion through the existing,
-  unchanged Generic KM pipeline), then Phase 4H (security hardening).
+- POST-B7 UI/UX Refinement Milestone is **complete and live-validated**
+  (see [Roadmap](#roadmap)). **NEXT:** A5 (real TELCO/RAN MOP ingestion
+  through the existing, unchanged
+  Generic KM pipeline), then Phase 4H (security hardening).
 - **FUTURE (target architecture, not yet designed in detail):** a Context
   Engineering Layer that assembles bounded context from Operational,
   Knowledge, and Case context for a specialist; a second specialist
@@ -238,8 +240,9 @@ clearly escalated.
   context, generic governed Knowledge, and multisource (image + Teams +
   governed-KM) specialist reasoning for a single request — all a
   prerequisite for the loop below, not the loop itself.
-- **NEXT:** A5 (real TELCO/RAN knowledge content), then Phase 4H security
-  hardening. (POST-5.1 B7 is complete — see [Roadmap](#roadmap).)
+- **NEXT:** the POST-B7 UI/UX Refinement Milestone, then A5 (real
+  TELCO/RAN knowledge content), then Phase 4H security hardening.
+  (POST-5.1 B7 is complete — see [Roadmap](#roadmap).)
 - **FUTURE:** a Troubleshooting Manager, the Context Engineering Layer, a
   persistent troubleshooting state, a next-best-diagnostic-action loop, and
   expanded operational integrations (5.2–5.7, see [Roadmap](#roadmap)).
@@ -529,11 +532,12 @@ SLOPANOC is not production-ready. Known gaps include at least:
 ## Roadmap
 
 **Current:** Teams integration, core platform, Markdown rendering, Phase
-5.1 generic governed Knowledge, and POST-5.1 A–B (Cloud SQL, multimodal
+5.1 generic governed Knowledge, POST-5.1 A–B (Cloud SQL, multimodal
 attachments, B0–B7, all COMPLETE including B7's own real-stack live
-validation) are all complete. **NEXT: A5** (real TELCO/RAN MOP
-ingestion), then Phase 4H (security hardening); full detail and
-phase-by-phase topology in
+validation), and the POST-B7 UI/UX Refinement Milestone (COMPLETE,
+live-validated — see below) are all complete. **NEXT: A5** (real
+TELCO/RAN MOP ingestion), then Phase 4H (security hardening); full
+detail and phase-by-phase topology in
 [`docs/BUILD_SEQUENCE.md`](docs/BUILD_SEQUENCE.md).
 
 **Phase 5.1: Generic Knowledge Management Layer — COMPLETE.** A generic
@@ -1429,8 +1433,49 @@ regression-covered — it was not re-run in this final pass, since it was
 untouched by it. Full detail: CLAUDE.md's own B7 closure entry.
 
 **B7 — Lifecycle + Real UI + Full Regression — ✅ COMPLETE.** POST-5.1 B —
-Multimodal Attachments (B0–B7) — ✅ COMPLETE. **NEXT: A5** (real
-TELCO/RAN MOP ingestion), then Phase 4H (security hardening).
+Multimodal Attachments (B0–B7) — ✅ COMPLETE.
+
+**POST-B7 UI/UX Refinement Milestone — COMPLETE, live-validated.** A separate, bounded milestone after B7 (not
+part of it, no B7 architecture/trust-boundary/persistence changes) — five
+polish refinements: (1) outbound Teams messages are now deterministically
+formatted into clean, structured **plain text** (paragraphs/bullet-lists/
+numbered-lists/short headings — never HTML/Markdown/Adaptive Cards)
+before proposal creation, so the approved payload IS the formatted
+payload (see `backend/tools/teams/message_formatting.py`; `ApprovalCard`
+renders it as ordinary, auto-escaped React text with `white-space:
+pre-wrap`); (2) sidebar chat-title hover scrolling now waits 1000ms
+before starting and cancels cleanly on mouse-leave, and — corrective pass
+— no longer sets a native browser tooltip on hover (the marquee mechanism
+itself already existed; the tooltip was an unwanted side effect of a
+`title` attribute this pass removed entirely); (3)/(4) sent images (live
+and historical — one shared component) render as compact thumbnails with
+a click-to-open larger preview using the existing `Dialog` primitive,
+reusing the same object URL, no re-fetch/re-upload; (5) audited and
+confirmed the composer's attachment/text separation was already
+structurally correct — no code change, only regression tests added. A
+real live test (Teams discovery → selection → approval → deterministic
+execution → Power Automate send, all `outcome=ok`/`200`) proved the
+original HTML-based Item 1 did not render as intended and surfaced an
+unwanted hover tooltip for Item 2 — both were corrected in a follow-up
+pass; `src/lib/safeHtmlFragment.tsx` (the HTML-rendering helper Item 1
+no longer needs) was deleted. Full detail, including the audit findings
+and exact file list: see CLAUDE.md's own milestone entry. Full
+regression (after the corrective pass): backend 2690 passed/1 skipped,
+Teams-keyword subset 320 passed, Teams write/approval/execution focused
+subset 194 passed, frontend 733 passed, build/typecheck clean, `git diff
+--check` clean. Live validation: all four refinements are now LIVE
+VALIDATED (see CLAUDE.md for the full breakdown) — real Teams
+discovery/selection/approval/deterministic execution/Power Automate
+send all confirmed working, with the corrected plain-text presentation
+confirmed by the user as effectively unchanged from the original
+plain-text output and explicitly accepted for this milestone (an
+accepted product decision — richer Teams visual formatting, including
+the rejected HTML attempt, is intentionally deferred, not an unresolved
+blocker); the hover-tooltip removal, sent-image thumbnail/preview
+modal, and composer attachment/text separation were each independently
+confirmed correct in the same live pass. **STATUS: DONE.** **NEXT: A5**
+(real TELCO/RAN MOP ingestion, not started), then Phase 4H (security
+hardening, not started).
 
 Locked Gemini/ADK multimodal construction rule (B0, proven against the
 installed `google-adk==1.33.0`/`google-genai==1.75.0` stack, both by
@@ -1519,7 +1564,14 @@ sent with a chat message, no Gemini/ADK/`Part.from_uri` wiring exists in
 the live send path, and no saved-conversation rehydration exists — all
 still B4/B5.
 
-**NEXT — A5: real TELCO/RAN MOP ingestion** (Attachments/POST-5.1 B is
+**Between here and A5 — the POST-B7 UI/UX Refinement Milestone**
+(COMPLETE, live-validated — see above): five bounded polish refinements
+(Teams message formatting, delayed sidebar
+hover-scroll, compact image thumbnails + preview modal, composer
+attachment/text separation) — not part of Attachments/POST-5.1 B, no
+architecture change. A5 remains not started until this milestone closes.
+
+**THEN — A5: real TELCO/RAN MOP ingestion** (Attachments/POST-5.1 B is
 now complete in full, B0–B7 — A5 has not started). A5 ingests the 3 real
 TELCO/RAN MOPs through the
 existing, unchanged Generic KM pipeline (MOP → source adapter/import

@@ -154,6 +154,22 @@ implicit consequence of this function's existence.
   execution call; there is no separate identity-lookup tool or agent).
 - `teams_propose_send_message` requires an existing chat and the exact
   message text.
+- **POST-B7 UI/UX refinement (Item 1, corrective pass):**
+  `teams_propose_send_message` deterministically formats the model's raw
+  `message` text into clean, structured PLAIN TEXT
+  (`backend/tools/teams/message_formatting.py` — paragraphs, bullet/
+  numbered lists, short headings) BEFORE normalization/hashing. `message`
+  remains, and has always been, a plain `str` end to end — a real live
+  test proved the current Power Automate/Teams write path does not render
+  HTML as intended, so this module deliberately never generates HTML,
+  Markdown, or Adaptive Cards; it only normalizes plain-text presentation
+  (list markers, blank-line spacing, line endings). This runs exactly
+  once, here — never inside `write_validation.py` or `execute_write.py`
+  — so the formatted text IS the approved payload: what is hashed, what
+  `ApprovalCard` shows the user (as plain text, `white-space: pre-wrap`,
+  no HTML parsing of any kind), and what the real (Phase 4G) execution
+  path in `backend/api/execution_service.py` replays verbatim to Power
+  Automate. No second, unapproved rewrite ever happens after approval.
 - Both normalize the payload, then call
   `backend/approval/service.py::create_action_proposal`, which
   deterministically generates the proposal id, a content-addressed payload

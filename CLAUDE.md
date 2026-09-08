@@ -422,8 +422,10 @@ POST-5.1 A — CLOUD SQL POSTGRESQL (A1–A4) is COMPLETE. POST-5.1 B —
 MULTIMODAL ATTACHMENTS is COMPLETE (B0–B7, all done — see B7's own entry
 below for its full implementation, corrective-pass, and real-stack
 live-validation history). **POST-5.1 B7 (Lifecycle + Real UI + Full
-Regression) is DONE.** NEXT: A5 (real TELCO/RAN MOP ingestion), then
-Phase 4H security hardening.
+Regression) is DONE.** NEXT: the POST-B7 UI/UX Refinement Milestone (see
+its own entry below) — IMPLEMENTATION COMPLETE / FINAL LIVE VALIDATION
+PENDING — then A5 (real TELCO/RAN MOP ingestion, not started), then
+Phase 4H security hardening (not started).
 
 POST-5.1 B execution sequence (locked, do not reorder):
   B0 [DONE] Durable chat attachment architecture + ADK persistence audit
@@ -1673,8 +1675,291 @@ POST-5.1 B execution sequence (locked, do not reorder):
 
       STATUS: DONE. POST-5.1 B7 -- Lifecycle + Real UI + Full Regression
       is COMPLETE. POST-5.1 B -- Multimodal Attachments (B0-B7) is
-      COMPLETE. NEXT: A5 (real TELCO/RAN MOP ingestion), then Phase 4H
-      security hardening.
+      COMPLETE. NEXT: POST-B7 UI/UX Refinement Milestone (see its own
+      entry immediately below) -- IMPLEMENTATION COMPLETE / FINAL LIVE
+      VALIDATION PENDING -- then A5 (real TELCO/RAN MOP ingestion, not
+      started), then Phase 4H security hardening (not started).
+
+===================================================================
+POST-B7 UI/UX REFINEMENT MILESTONE -- IMPLEMENTATION COMPLETE / FINAL
+LIVE VALIDATION PENDING
+===================================================================
+
+A SEPARATE, bounded milestone after B7 -- NOT part of B7, does not reopen
+or redesign any B7 architecture/trust boundary/persistence semantics.
+Five bounded polish refinements to the current SLOPANOC experience, no
+new integrations, no new agents, no new databases, no architecture
+expansion.
+
+1. TEAMS CHAT MESSAGE FORMATTING. Root cause: outbound `message` was
+   always a raw, unstructured string -- the Power Automate "Post message
+   in a chat" action's Message field is confirmed (by the user) to be
+   rich-text/HTML, so a multi-paragraph/list answer rendered as one wall
+   of text. Fix: `backend/tools/teams/message_formatting.py`'s new
+   `format_teams_message` -- deterministic, generic markdown-lite plain
+   text -> minimal-safe HTML (paragraphs, bullet/numbered lists, a short
+   heading-like line ending in `:`; every text run passed through
+   `html.escape` before being wrapped in one of six hardcoded tags: `<p>`,
+   `<br>`, `<ul>`, `<ol>`, `<li>`, `<strong>` -- never a general-purpose
+   Markdown/HTML renderer, never Adaptive Cards). TRUST BOUNDARY: called
+   EXACTLY ONCE, inside `teams_propose_send_message`
+   (backend/tools/teams/propose_write.py), on the model's raw text,
+   BEFORE `normalize_send_message_payload`/hashing -- never inside
+   `write_validation.py` or `execute_write.py`. The formatted text IS the
+   approved payload: what is hashed, what the user reviews in
+   `ApprovalCard`, and what the real (Phase 4G) deterministic execution
+   path (`backend/api/execution_service.py`) replays VERBATIM to
+   `teams_send_message`/Power Automate -- proven safe by direct audit of
+   that replay path (it reads `proposal.payload["message"]` straight from
+   the stored, already-approved proposal, never re-derives from model
+   text). Formatting exactly once, before hashing, means there is no
+   second, unapproved rewrite after approval, and (deliberately) means
+   re-running the formatter on its own output is never exercised anywhere
+   in this codebase (idempotency was considered and explicitly avoided as
+   a requirement by construction, not assumed safe by accident -- see the
+   module's own docstring). Frontend: `ApprovalCard.tsx`'s Message row now
+   renders through a NEW `src/lib/safeHtmlFragment.tsx`
+   (`renderSafeTeamsMessageHtml`) -- an allowlist-only `DOMParser`-based
+   walker, deliberately NOT `dangerouslySetInnerHTML` (defense in depth):
+   it reproduces ONLY the same six tags, NEVER copies any attribute from
+   the source string (so an injected `onerror`/`href`/`style` is always
+   discarded regardless of tag), and drops `<script>`/`<style>` content
+   entirely. `docs/TEAMS_TOOL_CONTRACT.md` §6 updated to document this.
+   22 new backend tests (`test_teams_message_formatting.py`) + 12 new
+   frontend tests (`safeHtmlFragment.test.tsx`) + 2 new `ApprovalCard`
+   tests, covering the full format scope, escaping/XSS-safety, and the
+   approval-payload-binding proof. Five pre-existing tests in
+   `test_teams_propose_write.py`/`test_teams_execute_write.py` were
+   updated -- their fixtures previously called execute-time tools with the
+   model's RAW original text (identity-transform-safe before this pass);
+   now correctly supply the FORMATTED text, mirroring exactly what
+   `execution_service.py` really replays -- the only existing assertions
+   this item changed.
+
+   CORRECTIVE PASS (real live-test finding): a genuine live Teams write
+   (SLOPANOC -> Team Manager -> Incident Manager -> Power Automate ->
+   Teams selection -> approval -> execution -> Microsoft Teams, confirmed
+   end to end -- `teams.listChats outcome=ok`, selection `choose 200`,
+   `approve 200`, `power_automate_gateway operation=teams.sendMessage
+   outcome=ok`, `execute 200`) proved the HTML formatting above did NOT
+   render as intended through the real Power Automate/Teams path -- the
+   send succeeded, but presentation failed. `format_teams_message`
+   (`backend/tools/teams/message_formatting.py`) was REWRITTEN to
+   produce DETERMINISTIC, PROFESSIONALLY STRUCTURED PLAIN TEXT instead --
+   never HTML, Markdown, or Adaptive Cards. `message`/`payload["message"]`
+   remain, and have always been, a plain `str` end to end -- only the
+   CONTENT changed (paragraphs stay paragraphs, `- item`/`* item`/`•
+   item` bullets normalize to a single `•` marker per line, `1.`/`1)`
+   numbered items normalize to sequential `N.` markers, a short line
+   ending in `:` is kept as a plain heading line, blank-line block
+   separation is preserved/normalized) -- no HTML escaping is applied or
+   needed, since plain text is never parsed as markup by anything
+   downstream: literal `<script>`/`<b>` text in the model's own answer
+   now passes through byte-for-byte, unlike the (correct, but no longer
+   necessary) escaping the HTML version required. The exact same trust
+   boundary applies unchanged: formatted exactly once, in `teams_propose_
+   send_message`, before hashing -- never inside `write_validation.py`/
+   `execute_write.py`, which have zero reference to `format_teams_
+   message` at all (structurally guaranteed, tested). Frontend:
+   `ApprovalCard.tsx`'s Message row now renders `pendingAction.message`
+   as ordinary React text (`{message}`, auto-escaped, no HTML parsing of
+   any kind) with `whitespace-pre-wrap` so the formatter's own blank-line/
+   per-line structure (real `\n` characters) remains visually correct.
+   `src/lib/safeHtmlFragment.tsx`/`safeHtmlFragment.test.tsx` -- the
+   allowlist-only HTML renderer built for the (now-obsolete) HTML path --
+   were DELETED entirely (confirmed via grep: used nowhere else). The
+   backend test file was rewritten in full for plain-text semantics (27
+   tests, replacing the prior 22 HTML-oriented ones) -- single/multiple
+   paragraphs, bullet/numbered lists, headings, blank-line normalization,
+   Unicode/special-character/URL/command preservation, literal `<...>`/
+   script-like text surviving byte-for-byte (never interpreted as
+   markup), and the full formatter-runs-once/proposal-binding/verbatim-
+   replay proof chain. `ApprovalCard.test.tsx`'s two HTML-specific tests
+   were rewritten for plain-text rendering (still 43 total). `docs/
+   TEAMS_TOOL_CONTRACT.md` §6 corrected to describe plain text, not HTML.
+
+2. DELAYED HORIZONTAL SCROLL ON HOVER. Audit found the marquee-on-hover
+   mechanism (`src/components/ui/ScrollingText.tsx`, already wired into
+   `SidebarChatRow.tsx`) already existed, with correct per-row-isolated
+   local state and correct overflow-only-when-genuine detection -- it
+   simply started the scroll animation immediately on `mouseEnter`, with
+   no delay and no `mouseLeave` cancellation. Fix: a new
+   `HOVER_ACTIVATION_DELAY_MS = 1000` gate -- `handleEnter` now starts a
+   1000ms `setTimeout` (cleared/replaced on any new enter) before calling
+   the pre-existing `startScrolling` logic; `handleLeave` (new) clears any
+   pending timer and, if the animation had already started, resets it
+   immediately (`setRun(null)`) rather than letting an in-flight pass
+   finish. An unmount effect clears any pending timer. No changes to
+   `SidebarChatRow.tsx` -- each row already owns its own independent
+   `ScrollingText` instance, so no cross-row coordination was ever needed.
+   `prefers-reduced-motion` was already handled globally
+   (`src/index.css`'s existing wildcard `@media (prefers-reduced-motion:
+   reduce)` block collapses ALL animation durations to near-zero) -- no
+   change needed. 10 new tests (`ScrollingText.test.tsx`, fake timers)
+   proving the delay, per-row isolation, leave-before/after-activation
+   cancellation, timer-leak safety, and unmount safety.
+
+   CORRECTIVE PASS (real live-test finding): the live UI showed a
+   tooltip/popup appearing on hover, which the product explicitly does
+   not want -- hovering an overflowing row should ONLY ever produce the
+   delayed scroll, nothing else. Root cause, found by direct inspection
+   (never guessed): `ScrollingText`'s outer `<span>` set a native HTML
+   `title` attribute, defaulting to the full, untruncated `children` text
+   whenever no explicit `title` prop was supplied -- which is every real
+   caller in this codebase (confirmed via grep: none of the 11 call
+   sites, including `SidebarChatRow.tsx`, ever passed one). Browsers
+   render a native tooltip from that attribute on hover, independent of
+   and in addition to this component's own scroll animation -- this was
+   an intentional accessibility-fallback decision in the original
+   implementation, but not one the product wants. FIX: the `title`
+   attribute (and the now-fully-unused `title` prop) were removed
+   entirely from `ScrollingText.tsx` -- no replacement tooltip/popover of
+   any kind was added. This is NOT an accessibility regression: CSS
+   truncation (`overflow-hidden`/`text-ellipsis`) never removes the
+   underlying DOM text node, only its visual rendering, so a screen
+   reader (or any assistive technology reading DOM text content) still
+   encounters the full, untruncated text exactly as before; for an
+   interactive wrapper (`SidebarChatRow`'s own `<button>`), the
+   accessible name is computed from that same full text content, never
+   from the removed `title` attribute. No other tooltip/popover source
+   was found for chat rows (grep confirmed the codebase's separate custom
+   `Tooltip` component, used elsewhere in the sidebar for icon buttons,
+   was never wired to `SidebarChatRow`/`ScrollingText`). 4 new tests
+   replace the one now-obsolete "native title attribute is always
+   present" test (13 total in `ScrollingText.test.tsx`), proving no
+   `title` attribute and no `[role="tooltip"]`/Radix popper wrapper ever
+   appears, at rest, mid-delay, or once scrolling. CLOSURE EVIDENCE (new
+   `src/components/shell/SidebarChatRow.test.tsx`, 5 tests -- this
+   component had zero prior test coverage of any kind, confirmed via
+   grep, so these are new coverage, not duplicates): click/select still
+   calls `onSelect`; opening the row menu and choosing Rename still
+   enters edit mode and calls `renameChat` with the new title on Enter;
+   choosing Pin/Unpin still calls `togglePin` with the chat id; all
+   proven with a genuinely overflowing title so the interaction with this
+   pass's own hover change is exercised in the same render, not merely
+   asserted in isolation.
+
+3/4. SENT IMAGE THUMBNAIL + PREVIEW MODAL. Audit found live-send and
+   historical/hydrated images were ALREADY converged on one shared
+   component (`PersistedImageAttachment.tsx`) -- no dual-path problem to
+   fix. It rendered at up to `max-h-64` (256px) inline, with no click
+   affordance. Fix: the successful-load branch now renders a compact
+   thumbnail (`max-h-32 max-w-48 object-contain` -- bounded, no cropping/
+   distortion, aspect ratio preserved) wrapped in a real `<button>`
+   (`DialogTrigger asChild`) with a hover/focus-visible expand-icon
+   overlay (`Maximize2`), opening a `DialogContent` (the SAME
+   `src/components/ui/Dialog.tsx` Radix primitive used project-wide) that
+   reuses the EXACT SAME `objectUrl` this component already fetched --
+   NEVER a second `getAttachmentContent` call, never a re-upload, never a
+   chat/attachment state mutation. Radix's own Dialog gives Escape-to-
+   close, click-outside-to-close, a built-in accessible X (`aria-
+   label="Close"`), and correct focus trap/return for free -- an `sr-only`
+   `DialogTitle` supplies the required accessible dialog name. Because
+   this is the ONE shared component for both live and historical images,
+   the thumbnail/preview treatment applies identically to both without
+   any special-casing. 23 tests total in `PersistedImageAttachment.
+   test.tsx` (12 pre-existing, all still green unchanged + 16 new)
+   covering aspect-ratio/sizing, click-to-open, Escape/X-close, zero
+   re-fetch/re-upload/re-ingest on open or close, object-URL reuse (not a
+   second `createObjectURL` call), multi-image correctness, and keyboard
+   activation.
+
+5. ATTACHMENT/TEXT FORMATTING SEPARATION IN THE COMPOSER. AUDIT FOUND
+   THIS ALREADY CORRECT -- no code change was made. `PromptComposer.tsx`
+   already renders `SourceChipRow`, `AttachmentChipRow`, and the real
+   `<textarea>` as three independent DOM siblings under one padded
+   container, each with its own explicit Tailwind classes; the text input
+   was never `contenteditable`, and attachments were never inline tokens
+   inside the text. 14 new regression tests
+   (`PromptComposer.attachmentSeparation.test.tsx`, using the REAL
+   `AttachmentChipRow` rather than the stubbed-out version
+   `PromptComposer.test.tsx` uses for its own unrelated send-gating focus)
+   lock this in: typed text is never affected by attach/paste/remove/
+   retry, the textarea is never wrapped by or nested inside attachment
+   markup, multiple attachments never leak styling onto the textarea, and
+   no draft text is ever duplicated or lost across an attachment's
+   lifecycle.
+
+NO ARCHITECTURE EXPANSION: no Knowledge Agent, Troubleshooting Manager,
+Head of Automated Operations, Context Engineering runtime, ITSM/alarms/
+topology/KPI/Change/Handover, direct Microsoft Graph, new database, new
+attachment ownership model, new agent hierarchy, or new orchestration
+framework was introduced. No keyword/regex natural-language routing was
+added anywhere.
+
+REGRESSION: full backend suite 2685 passed, 1 skipped (2663 B7-closure
+baseline + 22 new); KM-keyword subset 792 passed (unchanged); Teams-
+keyword subset 315 passed (293 + 22 new); B6/B7 multimodal + attachment-
+lifecycle + provenance-focused subset (MultimodalAgentTool, image fast-
+path, image+Teams+KM integration, selection-continuation image
+preservation, turn-context isolation, governed-completion image
+evidence, attachment lifecycle, historical provenance persistence,
+exact-duplicate provenance normalization) re-run explicitly and
+unchanged at 71 passed; full frontend suite 737 passed (688 + 49 new);
+`npm run build` clean; `npx tsc -b` clean.
+
+CORRECTIVE PASS REGRESSION (hover-popup removal + plain-text Teams
+formatting + closure-evidence tests): full backend suite 2690 passed, 1
+skipped (2685 + 5 net new -- 27 rewritten plain-text formatter tests
+replacing the prior 22 HTML-oriented ones); Teams-keyword subset 320
+passed (315 + 5 net new); Teams write/approval/execution focused subset
+(message formatting, propose/execute write, write validation, security
+contract, prompt contracts, Power Automate client, execution endpoints,
+approval service) 194 passed; full frontend suite 733 passed (737 - 12
+removed `safeHtmlFragment` tests + 3 net `ScrollingText` change + 5 new
+`SidebarChatRow` tests); `npm run build` clean; `npx tsc -b` clean;
+`git diff --check` clean.
+
+LIVE VALIDATION -- FINAL CLOSURE: the user has now completed the full
+live validation pass this milestone required. All four refinements are
+LIVE VALIDATED:
+
+1. TEAMS OUTBOUND MESSAGE -- LIVE VALIDATED. Real Teams discovery, real
+   selection, real approval, real deterministic execution, and a real
+   Power Automate `teams.sendMessage` all confirmed working end to end.
+   Plain-text delivery is correct. The user confirmed the visual
+   presentation is effectively unchanged from the ORIGINAL (pre-B7)
+   plain-text output and EXPLICITLY ACCEPTS this current plain-text
+   presentation for the current milestone. This is a recorded PRODUCT
+   DECISION, not an unresolved blocker: enhanced Teams visual formatting
+   was evaluated during this milestone (HTML was attempted first, then
+   rejected after a real live test proved it does not render as intended
+   through the current Power Automate/Teams path -- see the corrective
+   pass above), and further Teams presentation enhancement is
+   INTENTIONALLY DEFERRED, not attempted again in this milestone. Do
+   NOT reattempt HTML, do NOT introduce Adaptive Cards, do NOT modify
+   Power Automate, do NOT redesign the Teams contract to chase richer
+   visual formatting -- the deterministic plain-text path
+   (`backend/tools/teams/message_formatting.py`) is the accepted,
+   final implementation for this milestone.
+2. SIDEBAR HOVER BEHAVIOR -- LIVE VALIDATED. User confirmed: no
+   tooltip/popup of any kind appears; delayed scrolling works correctly;
+   current behavior is correct as implemented.
+3. SENT-IMAGE THUMBNAIL + PREVIEW MODAL -- LIVE VALIDATED. User
+   confirmed: thumbnail presentation is correct; preview-modal behavior
+   is correct.
+4. COMPOSER ATTACHMENT/TEXT SEPARATION -- LIVE VALIDATED. User
+   confirmed: attachment and typed text remain properly separated.
+
+OBSERVATION, AUDITED, NOT ACTED ON (recorded, not reopened): an earlier
+live run in this milestone's own corrective pass showed "I couldn't find
+a Teams chat with the exact name ..." reappearing after an earlier
+successful selection/approval/execution flow. Traced (read-only, no code
+changed) to `backend/agents/team_manager/prompts.py` -- a pre-existing
+prompt template in the frozen Teams read/selection flow. Zero file this
+milestone has touched, across all three passes, overlaps with Teams chat
+resolution, `SelectionCard`/`selection_service.py`, or any orchestration/
+routing code -- confirmed not a POST-B7 regression, left untouched.
+
+STATUS: DONE. POST-B7 UI/UX REFINEMENT MILESTONE IS COMPLETE. All five
+refinements (Teams message formatting -- plain text, accepted;
+delayed hover-scroll with no tooltip; compact image thumbnail; image
+preview modal; composer attachment/text separation) are implemented,
+automated-tested, and live-validated. NEXT: A5 (real TELCO/RAN MOP
+ingestion) -- NOT STARTED. Then Phase 4H security hardening -- NOT
+STARTED.
+
+===================================================================
 
 LOCKED product model (B0, refined for durable resources): normal SENT
 chat attachments are real saved conversation resources, not a

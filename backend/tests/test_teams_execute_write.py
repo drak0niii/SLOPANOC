@@ -25,6 +25,7 @@ from backend.approval.service import (
 from backend.gateway import power_automate_client as pac_module
 from backend.tests._fakes import FakeResponse
 from backend.tools.teams.execute_write import teams_create_chat, teams_send_message
+from backend.tools.teams.message_formatting import format_teams_message
 from backend.tools.teams.propose_write import teams_propose_create_chat, teams_propose_send_message
 
 _NOW = datetime(2026, 8, 31, 12, 0, 0, tzinfo=timezone.utc)
@@ -188,12 +189,18 @@ def test_exact_approved_payload_reaches_the_gateway(monkeypatch: pytest.MonkeyPa
     spy = _install_gateway(monkeypatch, FakeResponse(200, {"id": "c1"}))
     state = _approved_send_message_session()
 
-    result = teams_send_message("c1", "Hello team", tool_context=_FakeToolContext(state))
+    # POST-B7 UI/UX refinement (Item 1): the real (Phase 4G) execution
+    # path replays the STORED, already-formatted proposal payload
+    # verbatim (see backend/api/execution_service.py) -- this call
+    # mirrors that exactly, rather than the model's original raw text.
+    result = teams_send_message(
+        "c1", format_teams_message("Hello team"), tool_context=_FakeToolContext(state)
+    )
 
     assert "error" not in result
     assert len(spy.calls) == 1
     assert spy.calls[0]["chatId"] == "c1"
-    assert spy.calls[0]["message"] == "Hello team"
+    assert spy.calls[0]["message"] == format_teams_message("Hello team")
 
 
 # --- EXECUTION -------------------------------------------------------------
@@ -203,7 +210,9 @@ def test_successful_send_message_consumes_the_proposal(monkeypatch: pytest.Monke
     _install_gateway(monkeypatch, FakeResponse(200, {"id": "c1"}))
     state = _approved_send_message_session()
 
-    teams_send_message("c1", "Hello team", tool_context=_FakeToolContext(state))
+    teams_send_message(
+        "c1", format_teams_message("Hello team"), tool_context=_FakeToolContext(state)
+    )
 
     stored = load_active_proposal(state)
     assert stored.status.value == "consumed"
@@ -236,7 +245,14 @@ def test_definite_gateway_failure_does_not_consume_the_proposal(monkeypatch: pyt
     monkeypatch.setattr(pac_module.requests, "post", lambda *a, **k: FakeResponse(500, {}))
     state = _approved_send_message_session()
 
-    result = teams_send_message("c1", "Hello team", tool_context=_FakeToolContext(state))
+    # Must supply the SAME (formatted) text that was approved, so this
+    # genuinely reaches the gateway and exercises the 500 path being
+    # tested here -- a raw/mismatched payload would be denied by
+    # authorize_write before ever reaching Power Automate, silently
+    # testing the wrong thing.
+    result = teams_send_message(
+        "c1", format_teams_message("Hello team"), tool_context=_FakeToolContext(state)
+    )
 
     assert "error" in result
     stored = load_active_proposal(state)
@@ -295,12 +311,13 @@ def test_modified_chat_title_after_approval_cannot_execute(monkeypatch: pytest.M
 def test_replay_after_successful_execution_is_denied(monkeypatch: pytest.MonkeyPatch) -> None:
     spy = _install_gateway(monkeypatch, FakeResponse(200, {"id": "c1"}))
     state = _approved_send_message_session()
+    formatted = format_teams_message("Hello team")
 
-    first = teams_send_message("c1", "Hello team", tool_context=_FakeToolContext(state))
+    first = teams_send_message("c1", formatted, tool_context=_FakeToolContext(state))
     assert "error" not in first
     assert len(spy.calls) == 1
 
-    second = teams_send_message("c1", "Hello team", tool_context=_FakeToolContext(state))
+    second = teams_send_message("c1", formatted, tool_context=_FakeToolContext(state))
 
     assert "error" in second
     assert len(spy.calls) == 1  # no second gateway call

@@ -1,5 +1,5 @@
 import { StrictMode } from "react";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PersistedAttachmentReference } from "../../types";
 
@@ -83,6 +83,145 @@ describe("PersistedImageAttachment — success", () => {
     expect(img).toHaveAttribute("alt", "Attached image: diagram.png");
     // No base64/data URL ever generated.
     expect(img.getAttribute("src")).not.toMatch(/^data:/);
+  });
+});
+
+describe("PersistedImageAttachment — compact thumbnail + preview modal (POST-B7 Items 3/4)", () => {
+  it("1/2. renders as a compact thumbnail preserving aspect ratio (object-contain, bounded size)", async () => {
+    getAttachmentContent.mockResolvedValue(pngBlob());
+    render(<PersistedImageAttachment reference={reference()} />);
+
+    const img = await screen.findByRole("img");
+    expect(img.className).toContain("object-contain");
+    expect(img.className).toContain("max-h-32");
+    expect(img.className).not.toContain("max-h-64"); // the old, large inline size is gone
+  });
+
+  it("3. a persisted/hydrated image (this component's only rendering path) uses the same thumbnail treatment", async () => {
+    // This component IS the shared rendering path for both live-send and
+    // historical images (see AppState.tsx/Message.tsx — both feed the
+    // same `PersistedAttachmentReference` into this one component), so
+    // proving it here proves both call sites converge on one treatment.
+    getAttachmentContent.mockResolvedValue(pngBlob());
+    render(<PersistedImageAttachment reference={reference({ filename: "history.png" })} />);
+    const img = await screen.findByRole("img");
+    expect(img.className).toContain("max-h-32");
+  });
+
+  it("4/5/6. clicking the thumbnail opens a larger preview, constrained to the viewport", async () => {
+    getAttachmentContent.mockResolvedValue(pngBlob());
+    render(<PersistedImageAttachment reference={reference({ filename: "diagram.png" })} />);
+    const trigger = await screen.findByRole("button", { name: "Open larger preview of diagram.png" });
+
+    fireEvent.click(trigger);
+
+    const dialog = await screen.findByRole("dialog");
+    const images = within(dialog).getAllByRole("img");
+    expect(images).toHaveLength(1);
+    expect(images[0].className).toContain("max-h-[80vh]");
+    expect(images[0].className).toContain("max-w-[85vw]");
+  });
+
+  it("7/8. the dialog has an accessible X close button, and Escape closes it", async () => {
+    getAttachmentContent.mockResolvedValue(pngBlob());
+    render(<PersistedImageAttachment reference={reference()} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Open larger preview/ }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeInTheDocument();
+
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("7b. clicking the X closes the dialog", async () => {
+    getAttachmentContent.mockResolvedValue(pngBlob());
+    render(<PersistedImageAttachment reference={reference()} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Open larger preview/ }));
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("9/10/11. opening/closing the preview never re-fetches, re-uploads, or re-ingests — no new network call at all", async () => {
+    getAttachmentContent.mockResolvedValue(pngBlob());
+    render(<PersistedImageAttachment reference={reference()} />);
+    await screen.findByRole("img");
+    expect(getAttachmentContent).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Open larger preview/ }));
+    await screen.findByRole("dialog");
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    // Still exactly one fetch, from the original mount — opening/closing
+    // the modal never issued a second one.
+    expect(getAttachmentContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("12. the preview reuses the SAME object URL the thumbnail already created (never a fresh blob)", async () => {
+    getAttachmentContent.mockResolvedValue(pngBlob());
+    const createSpy = vi.spyOn(URL, "createObjectURL");
+    render(<PersistedImageAttachment reference={reference()} />);
+    const thumbnail = await screen.findByRole("img");
+    const thumbnailSrc = thumbnail.getAttribute("src");
+
+    fireEvent.click(await screen.findByRole("button", { name: /Open larger preview/ }));
+    const dialog = await screen.findByRole("dialog");
+    const previewImg = within(dialog).getAllByRole("img")[0];
+
+    expect(previewImg.getAttribute("src")).toBe(thumbnailSrc);
+    expect(createSpy).toHaveBeenCalledTimes(1); // never a second createObjectURL call
+  });
+
+  it("13. object URL revocation on unmount still works with the dialog present", async () => {
+    getAttachmentContent.mockResolvedValue(pngBlob());
+    const revokeSpy = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const { unmount } = render(<PersistedImageAttachment reference={reference()} />);
+    await screen.findByRole("img");
+
+    unmount();
+    expect(revokeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("14. multiple image messages each open their OWN correct image", async () => {
+    getAttachmentContent.mockImplementation((id: string) =>
+      Promise.resolve(new Blob([new Uint8Array(id === "att-a" ? [1] : [2])], { type: "image/png" })),
+    );
+    render(
+      <>
+        <PersistedImageAttachment reference={reference({ attachmentId: "att-a", filename: "a.png" })} />
+        <PersistedImageAttachment reference={reference({ attachmentId: "att-b", filename: "b.png" })} />
+      </>,
+    );
+    await screen.findAllByRole("img");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open larger preview of b.png" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("img")).toHaveAttribute("alt", "Attached image: b.png");
+  });
+
+  it("15. the thumbnail trigger is keyboard-activatable (native <button> semantics)", async () => {
+    getAttachmentContent.mockResolvedValue(pngBlob());
+    render(<PersistedImageAttachment reference={reference()} />);
+    const trigger = await screen.findByRole("button", { name: /Open larger preview/ });
+
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+    fireEvent.keyDown(trigger, { key: "Enter" });
+    fireEvent.click(trigger); // jsdom does not auto-dispatch a click for Enter on a real <button>
+    await screen.findByRole("dialog");
+  });
+
+  it("16. still opens correctly for a hard-refresh-hydrated image (same component, no special-casing)", async () => {
+    getAttachmentContent.mockResolvedValue(pngBlob());
+    render(<PersistedImageAttachment reference={reference({ filename: "after-refresh.png" })} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open larger preview of after-refresh.png" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("img")).toHaveAttribute("alt", "Attached image: after-refresh.png");
   });
 });
 
