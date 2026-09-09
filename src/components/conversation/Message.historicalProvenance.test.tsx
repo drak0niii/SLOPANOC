@@ -178,11 +178,11 @@ describe("Message + AppState — B7 corrective pass: historical Source/Knowledge
 
     expect(latest.state.chats.s1.knowledgeSources?.["e-1:assistant"]).toEqual([kmSource()]);
     expect(
-      screen.getByRole("button", { name: /Source · Aurora Relay Verification Procedure · Verification/ }),
+      screen.getByRole("button", { name: /Source · Aurora Relay Verification Procedure · v1/ }),
     ).toBeInTheDocument();
   });
 
-  it("2. two governed-KM references from the same document but different sections remain two separate chips after hydration", async () => {
+  it("2. two governed-KM references from the same document+version consolidate into ONE chip covering both matched sections after hydration (POST-A5 refinement, Track B)", async () => {
     const verification = kmSource({ source_id: "ks-verification", section_id: "aurora-relay:v1:s0" });
     const escalation = kmSource({
       source_id: "ks-escalation",
@@ -202,16 +202,20 @@ describe("Message + AppState — B7 corrective pass: historical Source/Knowledge
       },
     ]);
 
+    // The underlying trusted per-section provenance is still fully
+    // preserved (two distinct SourceReferenceDTO entries) -- only the
+    // message-level PRESENTATION consolidates into one chip.
     expect(latest.state.chats.s1.knowledgeSources?.["e-1:assistant"]).toHaveLength(2);
-    expect(
-      screen.getByRole("button", { name: /Source · Aurora Relay Verification Procedure · Verification/ }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /Source · Aurora Relay Verification Procedure · Escalation/ }),
-    ).toBeInTheDocument();
+    const sourceButtons = screen.getAllByRole("button", { name: /Source ·/ });
+    expect(sourceButtons).toHaveLength(1);
+    expect(sourceButtons[0]).toHaveTextContent("Source · Aurora Relay Verification Procedure · v1");
+
+    fireEvent.click(sourceButtons[0]);
+    expect(screen.getAllByText("Verification").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Escalation").length).toBeGreaterThan(0);
   });
 
-  it("3. the hydrated chip's label uses the exact '<title> · <section heading>' format, identical to formatKnowledgeSourceLabel", async () => {
+  it("3. the hydrated chip's label uses the exact '<title> · <version_label>' consolidated group format", async () => {
     await seedAndOpen([
       {
         message_id: "e-1:assistant",
@@ -224,9 +228,7 @@ describe("Message + AppState — B7 corrective pass: historical Source/Knowledge
       },
     ]);
     const button = screen.getByRole("button", { name: /Source ·/ });
-    expect(button.textContent?.replace(/\s+/g, " ").trim()).toBe(
-      "Source · Aurora Relay Verification Procedure · Verification",
-    );
+    expect(button.textContent?.replace(/\s+/g, " ").trim()).toBe("Source · Aurora Relay Verification Procedure · v1");
   });
 
   it("4. Teams + governed-KM sources on the same historical answer render together", async () => {
@@ -245,18 +247,19 @@ describe("Message + AppState — B7 corrective pass: historical Source/Knowledge
 
     expect(screen.getByRole("button", { name: /Source · Ops Bridge/ })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Source · Aurora Relay Verification Procedure · Verification/ }),
+      screen.getByRole("button", { name: /Source · Aurora Relay Verification Procedure · v1/ }),
     ).toBeInTheDocument();
   });
 
-  it("5. hydration renders through the exact same SourceChip/formatKnowledgeSourceLabel path the live SSE flow uses — no separate 'historical' rendering", async () => {
-    // Message.tsx's rendering branch (kind="knowledge" -> SourceChip ->
-    // formatKnowledgeSourceLabel) is a single, unconditional code path
-    // reached identically whether `chat.knowledgeSources` was populated by
-    // HISTORY_FETCH_SUCCEEDED (this test) or by BACKEND_MESSAGE_COMPLETED
-    // (SourceChip.test.tsx's own direct-render unit tests) — there is no
-    // separate "historical" branch to diverge. Asserting the exact string
-    // here, for a DTO SourceChip.test.tsx also exercises directly, is
+  it("5. hydration renders through the exact same SourceChip/groupKnowledgeSourceReferences path the live SSE flow uses — no separate 'historical' rendering", async () => {
+    // Message.tsx's rendering branch (chat.knowledgeSources ->
+    // groupKnowledgeSourceReferences -> SourceChip kind="knowledge-group")
+    // is a single, unconditional code path reached identically whether
+    // `chat.knowledgeSources` was populated by HISTORY_FETCH_SUCCEEDED
+    // (this test) or by BACKEND_MESSAGE_COMPLETED (SourceChip.groups.
+    // test.tsx's own direct-render unit tests) — there is no separate
+    // "historical" branch to diverge. Asserting the exact string here, for
+    // a DTO SourceChip.groups.test.tsx also exercises directly, is
     // sufficient proof of convergence.
     await seedAndOpen([
       {
@@ -273,7 +276,7 @@ describe("Message + AppState — B7 corrective pass: historical Source/Knowledge
       .getByRole("button", { name: /Source ·/ })
       .textContent?.replace(/\s+/g, " ")
       .trim();
-    expect(label).toBe("Source · Aurora Relay Verification Procedure · Verification");
+    expect(label).toBe("Source · Aurora Relay Verification Procedure · v1");
   });
 
   it("6. no source_uri or gs:// URI ever appears in the hydrated provenance rendering", async () => {
@@ -317,7 +320,7 @@ describe("Message + AppState — B7 corrective pass: historical Source/Knowledge
       },
     ]);
     expect(
-      screen.getByRole("button", { name: /^Source · Aurora Relay Verification Procedure$/ }),
+      screen.getByRole("button", { name: /^Source · Aurora Relay Verification Procedure · v1$/ }),
     ).toBeInTheDocument();
   });
 
@@ -373,7 +376,7 @@ describe("Message + AppState — B7 corrective pass: historical Source/Knowledge
     const img = await screen.findByRole("img");
     expect(img).toHaveAttribute("alt", "Attached image: screenshot.png");
     expect(
-      screen.getByRole("button", { name: /Source · Aurora Relay Verification Procedure · Verification/ }),
+      screen.getByRole("button", { name: /Source · Aurora Relay Verification Procedure · v1/ }),
     ).toBeInTheDocument();
   });
 

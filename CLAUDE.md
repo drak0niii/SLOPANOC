@@ -397,11 +397,18 @@ CURRENT PERSISTENCE / RUNTIME
   SQL: ADK session persistence, Case/Fault Context, the approval/session-
   state persistence mechanism, and the Governed Knowledge repository all
   proven to persist correctly, including surviving a backend restart, with
-  local SQLite confirmed untouched during that validation. SQLite remains
+  local SQLite confirmed untouched during that validation. SQLite remained
   the zero-setup LOCAL DEFAULT when `SLOPANOC_DATABASE_URL`/
-  `SLOPANOC_KNOWLEDGE_DATABASE_URL` are not explicitly set to PostgreSQL —
-  that default behavior is unrelated to whether Cloud SQL support itself
-  is implemented and proven, which it now is.
+  `SLOPANOC_KNOWLEDGE_DATABASE_URL` were not explicitly set to PostgreSQL,
+  at the time this paragraph was written — that default behavior was
+  unrelated to whether Cloud SQL support itself was implemented and
+  proven, which it already was. SUPERSEDED for normal runtime by the
+  POST-A5 "Cloud SQL-only runtime hardening" refinement below (see the
+  "MANDATORY CLOUD SQL RUNTIME POLICY" / "POST-A5 REFINEMENT UPDATE"
+  paragraphs further down this list) — normal backend startup no longer
+  silently falls back to local SQLite for either domain; it fails fast
+  instead. SQLite remains the default only for the isolated automated
+  test suite, which now opts in explicitly.
 - ===============================================================
   MANDATORY CLOUD SQL RUNTIME POLICY (adopted at B6 closure, applies to
   B7 and every milestone after it)
@@ -449,6 +456,44 @@ CURRENT PERSISTENCE / RUNTIME
   `slopanoc_knowledge.db`. The actual Cloud SQL KM runtime setup/
   environment migration happens after this B6 checkpoint, before B7 live
   work — not part of this documentation pass.
+
+  POST-A5 REFINEMENT UPDATE — CODE-ENFORCED, NOT JUST A DOCUMENTED POLICY
+  (final corrective pass): as of the POST-A5 "Cloud SQL-only runtime
+  hardening" refinement, this policy is enforced by `backend/api/runtime_
+  database_policy.py`, wired into `backend/api/app.py`'s `_lifespan`
+  startup hook. Normal backend startup now fails fast (a safe
+  `ConfigurationError`, no resolved URL or credential ever logged) unless
+  BOTH persistence domains resolve to EXACTLY the `postgresql` SQLAlchemy
+  dialect — a POSITIVE requirement, not merely "not sqlite": an unset
+  variable (previously a silent local-SQLite fallback), an explicit
+  `sqlite+aiosqlite://` URL, a `mysql`/`mariadb`/`oracle`/`mssql`-style
+  URL, and an unparseable URL are all rejected identically — AND unless
+  `SLOPANOC_SESSION_BACKEND == "database"` (ADK's `InMemorySessionService`
+  "memory" mode is REJECTED for normal runtime too, since it never
+  persists to Cloud SQL at all, regardless of what `SLOPANOC_DATABASE_URL`
+  is set to).
+
+  THERE IS NO ENVIRONMENT VARIABLE THAT WEAKENS THIS POLICY. An earlier
+  pass of this refinement added `SLOPANOC_ALLOW_SQLITE_RUNTIME` as a
+  config-based test opt-out; that was corrected and removed entirely (no
+  such `Settings` property exists) because any env var is, by
+  construction, something a real deployment's configuration could also
+  set, accidentally or otherwise — defeating the whole guarantee. The
+  ONLY way the automated test suite stays hermetic (no live Cloud SQL/
+  Auth Proxy/ADC needed) for a test that instantiates the real FastAPI app
+  is a pure Python-level dependency substitution:
+  `backend/tests/conftest.py`'s autouse fixture
+  (`bypass_runtime_database_policy_for_tests`) monkeypatches the
+  *function reference* `backend.api.app` itself calls
+  (`backend.api.app.validate_runtime_database_configuration`) with a
+  stub — no environment/configuration value from outside a test process
+  can reach or trigger this. Mirrors the exact pattern this codebase
+  already uses for `warmup_shared_model`. This module never inspects
+  pytest internals (`PYTEST_CURRENT_TEST`/`sys.modules`/stack frames) and
+  never will. `resolve_database_url()`/`resolve_knowledge_database_url()`
+  themselves are deliberately unchanged (still plain, policy-free
+  resolution) so tests that construct an isolated SQLite repository/
+  session service directly continue to work exactly as before.
 - Case/fault context (backend/cases/) is a separate, optional persistence
   layer from ordinary session/chat state — do not conflate the two.
 - Streaming is real SSE, with a background-task turn model — a turn runs as
@@ -510,7 +555,10 @@ corrective-pass, and real-stack live-validation history). **POST-5.1 B7
 Refinement Milestone (see its own entry below) is COMPLETE and
 live-validated. **A5 — Knowledge Island Ingestion Foundation + Real
 TELCO/RAN Compound Knowledge Validation (see its own entry below) is
-COMPLETE and live-validated.**
+COMPLETE and live-validated.** **POST-A5 REFINEMENT — Cloud SQL-only
+runtime hardening + Source Drawer source+version consolidation (see its
+own entry below) is COMPLETE and live-validated.** This refinement does
+NOT reorder the roadmap below — 5.X remains NEXT.
 
 **ROADMAP REALIGNMENT (locked, replaces the previous A5 → Phase 4H →
 5.2–5.7 → Phase 6 order — see docs/BUILD_SEQUENCE.md §2a for the full
@@ -2717,6 +2765,143 @@ post-A5 roadmap realignment (docs/BUILD_SEQUENCE.md §2a) — followed by
 Phase 6A, then Phase 4H security hardening, then 5.2–5.7, then Phase 6B.
 Phase 4H is not cancelled; it is scheduled after Phase 6A instead of
 directly after A5.
+
+===================================================================
+POST-A5 REFINEMENT — CLOUD SQL-ONLY RUNTIME HARDENING + SOURCE DRAWER
+SOURCE+VERSION CONSOLIDATION — COMPLETE
+===================================================================
+
+A bounded, out-of-band refinement milestone, inserted after A5 and
+before 5.X — does NOT reorder the roadmap (5.X remains NEXT, NOT
+STARTED). Root-caused by a real live-UI corrective-pass finding: a
+manual backend restart with no explicit database env vars silently
+resolved BOTH persistence domains to an empty/stale local SQLite
+fallback instead of the real, fully-populated Cloud SQL corpus — a
+configuration/environment defect, not a retrieval/provenance bug. Two
+independent tracks, both complete:
+
+TRACK A — Cloud SQL-only runtime hardening. `backend/api/runtime_
+database_policy.py` (NEW) — `validate_runtime_database_configuration`,
+wired into `backend/api/app.py`'s existing `_lifespan` startup hook
+(the application's one real startup boundary; unchanged otherwise) —
+fails closed (`ConfigurationError`, never leaking a resolved URL/
+credential) unless the resolved SQLAlchemy dialect for BOTH domains is
+EXACTLY `postgresql` (a POSITIVE requirement — sqlite, mysql/mariadb,
+oracle, mssql, a missing variable, and an unparseable URL are all
+rejected identically) AND `session_backend == "database"` (ADK's own
+`InMemorySessionService` "memory" mode is REJECTED for normal runtime,
+never exempted — it never persists to Cloud SQL regardless of what
+`SLOPANOC_DATABASE_URL` is set to). THERE IS NO ENVIRONMENT VARIABLE
+THAT WEAKENS THIS — a first pass of this correction added
+`SLOPANOC_ALLOW_SQLITE_RUNTIME` as a config-based escape hatch; this was
+itself corrected and fully removed (no such `Settings` property exists)
+because any env var is, by construction, something a real deployment's
+configuration could also set, accidentally or otherwise. The automated
+suite instead stays hermetic via a new `backend/tests/conftest.py`
+autouse fixture (`bypass_runtime_database_policy_for_tests`) that
+monkeypatches the *function reference* `backend.api.app` itself calls
+(`backend.api.app.validate_runtime_database_configuration`) with a
+stub — a pure Python-level dependency substitution no environment/
+configuration value can reach — mirroring the exact pattern this
+codebase already uses for `warmup_shared_model`; no `PYTEST_CURRENT_
+TEST`/`sys.modules`/stack-inspection hack anywhere.
+`resolve_database_url()`/`resolve_knowledge_database_url()` themselves
+are deliberately UNCHANGED (still plain, policy-free resolution) —
+enforcement lives only at the one real startup boundary, so the many
+existing tests that explicitly configure an isolated SQLite URL through
+those two methods directly (never through `_lifespan`) are completely
+unaffected. A sanitized dialect-only startup log line
+(`session_database_backend=.../knowledge_database_backend=...`, always
+`postgresql`/`postgresql` on success) was added to `_lifespan` — never a
+full URL, username, password, or Secret Manager payload.
+
+TRACK B — Source Drawer source+version consolidation. Real live Aurora
+behavior showed fragmented, repetitive source chips (one per selected
+SECTION, e.g. separate "· Verification" and "· Escalation" chips for the
+same document/version). `src/lib/sourceReference.ts` gained
+`groupKnowledgeSourceReferences` (pure, deterministic
+`KnowledgeSourceReferenceDTO[] -> KnowledgeSourceGroup[]`) and
+`formatKnowledgeSourceGroupLabel` — grouping identity is
+`(knowledge_id, version_label, evidence_source_id)` (audited against
+`backend/knowledge/domain/models.py`'s `KnowledgeObject`: `source` is a
+single OBJECT-level field — one `KnowledgeSource` per `knowledge_id`+
+`version_label`, shared by every section/artifact of that object — so
+`evidence_source_id` can never legitimately vary within one
+`(knowledge_id, version_label)` pair for real backend data; including it
+is a defensive strengthening of the identity, not a behavior change for
+correctly-formed data) — never `source_id` (a synthetic per-DTO
+`uuid4`, a completely different field despite the similar name), never
+title/section-heading/display-name/content, which can legitimately
+collide across genuinely distinct sources. Section-level dedup is by
+exact `section_id` only, first-seen order preserved. `SourceChip.tsx`
+gained an additive `kind: "knowledge-group"` variant (the existing
+single-section `kind: "knowledge"` variant is completely untouched, so
+all of its own existing tests still pass unmodified) rendering ONE
+message-level chip ("Source · <title> · <version_label>") whose drawer
+shows the document/version header, a Source block, BLUE-highlighted
+"Matched sections" chips (one per distinct selected section, `bg-info`/
+`text-info`/`border-info` — the existing design-system info token, not a
+new palette), and one Supporting Evidence block PER section, in order,
+exact trusted content only. `Message.tsx`'s rendering now runs
+`activeChat.knowledgeSources[message.id]` through
+`groupKnowledgeSourceReferences` before mapping to chips — the SAME
+already-trusted, already-persisted per-section `KnowledgeSourceReference
+DTO` list backs both the live SSE and rehydrated-historical paths, so a
+browser refresh reprojects the identical grouped UI with no duplicate
+chips and no second "grouped" persistence shape. No backend DTO/wire
+contract change was needed or made; `knowledge_select_evidence`
+semantics, retrieval, ranking, applicability, and provenance validation
+are completely untouched — SEARCH RESULT != EVIDENCE USED still holds,
+since every rendered group is still built entirely from real, already-
+validated, already-selected per-section evidence references.
+
+REAL LIVE VALIDATION (real Cloud SQL PostgreSQL for both domains, real
+Vertex Gemini, a freshly started backend process with explicit env vars,
+real HTTP SSE — not ASGITransport/TestClient): a real Aurora query
+("do you know anything about aurora relay?" then "checksum is 73190
+pink") against the pre-existing `E2E-KM-AURORA-001` fixture (not
+reseeded) naturally selected BOTH the Verification and Escalation
+sections in the same turn, confirming the real multi-section
+consolidation scenario end to end at the data layer (frontend grouping
+of this exact shape is proven by `SourceChip.groups.test.tsx`/
+`sourceReference.test.ts`'s deterministic component/unit tests, since no
+browser-automation tool was available in this session to click through
+the rendered UI itself — not claimed here). VSWR non-regression re-
+confirmed against the same fresh Cloud SQL runtime: `A5-VALIDATION-
+DOCUMENT1` still resolved, no restart permitted, single governed source,
+matching the original A5 correction. Negative runtime validation (a
+separate controlled process, real `TestClient`-driven `_lifespan`
+trigger): missing DB config fails closed with no local `.db` file
+created/touched; an explicit SQLite runtime URL is rejected the same
+way; valid Cloud SQL config for both domains starts normally with the
+correct sanitized log line. The real Cloud SQL corpus (4 objects:
+`A5-VALIDATION-DOCUMENT1`, `A5-VALIDATION-ROGERS-4G`, `A5-VALIDATION-
+ROGERS-4G5G`, `E2E-KM-AURORA-001`) was confirmed byte-for-byte unchanged
+before and after all validation; the local `slopanoc_sessions.db`/
+`slopanoc_knowledge.db` files' modification timestamps were confirmed
+unchanged throughout.
+
+REGRESSION: full backend suite passed with no regressions (10 new
+`backend/tests/test_runtime_database_policy.py` tests, KM-keyword and
+Incident-Manager-keyword subsets both re-run clean); full frontend suite
+752 passed, 0 failed (new coverage: `sourceReference.test.ts`'s grouping/
+label cases, `SourceChip.groups.test.tsx`'s component cases, plus
+`Message.historicalProvenance.test.tsx`'s pre-existing per-section-chip
+assertions deliberately updated to the new consolidated-group behavior —
+the intended UI change this milestone makes, not a regression);
+`npm run build`/`npx tsc -b` both clean; `git diff --check` clean.
+
+NOT TOUCHED: Knowledge search/retrieval/ranking/applicability/lifecycle,
+`knowledge_select_evidence` semantics, provenance validation, Teams
+source chips (`kind: "teams"`), legacy MOP citation semantics
+(`kind: "mop"`), one-step troubleshooting, SSE trust gating, Case
+context, Team Manager/Incident Manager topology. No Knowledge Agent, no
+Troubleshooting Manager, no 5.X/6A scope.
+
+STATUS: **POST-A5 REFINEMENT — Cloud SQL-only runtime hardening + Source
+Drawer source+version consolidation is COMPLETE and live-validated.**
+NEXT: **5.X — Teams Rich Content / Media Retrieval** (NOT STARTED),
+unchanged by this refinement.
 
 COMPLETE (this section is preserved as it was originally written, when
 Phase 5.1 was still the next phase in this locked list — do not read the

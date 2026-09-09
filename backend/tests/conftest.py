@@ -47,6 +47,48 @@ def disable_model_warmup_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def bypass_runtime_database_policy_for_tests(monkeypatch: pytest.MonkeyPatch) -> None:
+    """POST-A5 refinement (Track A, final corrective pass): `backend.api.
+    app._lifespan` now fails closed (`ConfigurationError`) unless BOTH
+    persistence domains resolve to real PostgreSQL AND `session_backend ==
+    "database"` -- see `backend.api.runtime_database_policy`'s own
+    docstring. There is NO environment variable that can weaken this for a
+    real deployment (an earlier pass's `SLOPANOC_ALLOW_SQLITE_RUNTIME` was
+    removed for exactly this reason -- any env var is something a real
+    deployment's configuration could also, even accidentally, set).
+
+    The ONLY way this suite stays hermetic (no live Cloud SQL/Auth Proxy/
+    ADC needed) for a test that instantiates the real FastAPI app (whose
+    `lifespan` would otherwise reject the suite's own SQLite defaults on
+    entry) is a pure Python-level dependency substitution: this fixture
+    monkeypatches the *function reference* `backend.api.app` itself calls
+    (`backend.api.app.validate_runtime_database_configuration`) with a
+    stub that always returns `("postgresql", "postgresql")` and never
+    raises -- no environment/configuration value can reach or trigger this
+    from outside a test process. Never inspects `PYTEST_CURRENT_TEST`/
+    `sys.modules`/stack frames -- mirrors the exact pattern this codebase
+    already uses for `warmup_shared_model`
+    (`test_model_warmup.py::test_lifespan_invokes_warmup_exactly_once_on_
+    real_app_startup` monkeypatches `backend.api.app.warmup_shared_model`
+    the same way).
+
+    A test that specifically exercises the REAL policy function
+    (`test_runtime_database_policy.py`) is completely unaffected -- it
+    imports `validate_runtime_database_configuration` directly from
+    `backend.api.runtime_database_policy`, never through `backend.api.
+    app`'s own patched module-level reference. A test that specifically
+    needs to prove `_lifespan` itself really enforces the real policy on a
+    genuine app boot restores the real function via its own
+    `monkeypatch.setattr` call, the same override pattern already used by
+    `test_model_warmup.py` against `disable_model_warmup_by_default`.
+    """
+    def _always_postgresql(_settings: object) -> tuple[str, str]:
+        return ("postgresql", "postgresql")
+
+    monkeypatch.setattr("backend.api.app.validate_runtime_database_configuration", _always_postgresql)
+
+
+@pytest.fixture(autouse=True)
 def clear_direct_fast_path_registries() -> None:
     """P4B.3 direct-unique fast path (direct_read_fast_path.py) keeps two
     small, run-id-keyed, module-level dicts/sets (`_pending_trusted_

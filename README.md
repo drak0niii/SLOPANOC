@@ -480,9 +480,26 @@ export GOOGLE_CLOUD_LOCATION=<your-vertex-location>   # e.g. us-central1
 
 ### Local Cloud SQL PostgreSQL development
 
-The default local backend, and the default for `python -m pytest`, is
-still zero-setup SQLite — nothing below is required unless you explicitly
-want to run against Cloud SQL PostgreSQL locally.
+**Mandatory Cloud SQL runtime policy (POST-A5 refinement, Track A; final
+corrective pass):** starting the real backend (`uvicorn backend.api.app
+:app`, or anything else that runs its `lifespan`) now REQUIRES Cloud SQL
+PostgreSQL for BOTH persistence domains — `SLOPANOC_DATABASE_URL`
+(session/Case) and `SLOPANOC_KNOWLEDGE_DATABASE_URL` (Governed Knowledge),
+configured explicitly and separately (they may point at the same
+database, but neither is ever inferred from the other) — AND requires
+`SLOPANOC_SESSION_BACKEND` to be `"database"` (the default; ADK's
+`InMemorySessionService` "memory" mode is rejected for normal runtime,
+since it never persists to Cloud SQL at all). Startup fails fast, with a
+safe error, unless the resolved SQLAlchemy dialect for BOTH domains is
+exactly `postgresql` — sqlite, mysql/mariadb, oracle, mssql, a missing
+variable (which used to silently fall back to a local `.db` file), and an
+unparseable URL are all rejected identically. **There is no environment
+variable that weakens this policy** — the automated `pytest` suite stays
+hermetic instead via a pure Python-level dependency substitution
+(`backend/tests/conftest.py`'s autouse fixture monkeypatches the function
+reference `backend.api.app` itself calls; no configuration value from
+outside a test process can reach or trigger this). See
+`backend/api/runtime_database_policy.py` for the enforcement itself.
 
 A Cloud SQL PostgreSQL 18 instance exists for this purpose
 (`sloc-anoc-sandbox01`, project `pr-msn-dev-gl-slopai-01`, region
@@ -505,10 +522,16 @@ your IAM database username's `@` URL-encoded as `%40`, e.g.:
 
 ```bash
 export SLOPANOC_DATABASE_URL="postgresql+asyncpg://your.iam.user%40example.com@127.0.0.1:5432/slopanoc"
+export SLOPANOC_KNOWLEDGE_DATABASE_URL="postgresql+asyncpg://your.iam.user%40example.com@127.0.0.1:5432/slopanoc"
+export GOOGLE_GENAI_USE_VERTEXAI="true"
 ```
 
 Never commit a real, username-specific connection URL anywhere in this
-repository — it is a per-developer local override only.
+repository — it is a per-developer local override only. Both database
+variables must be set explicitly (see the mandatory Cloud SQL runtime
+policy above) — setting only one, or leaving either unset, causes normal
+backend startup to fail fast with a safe configuration error rather than
+silently falling back to local SQLite for the other domain.
 
 ### Environment variables
 
@@ -532,10 +555,10 @@ Backend configuration is read from process environment variables
 | `SLOPANOC_MODEL` | Gemini model name | `gemini-2.5-flash` |
 | `SLOPANOC_POWER_AUTOMATE_TIMEOUT_SECONDS` | Gateway HTTP timeout | `10` |
 | `SLOPANOC_ACTION_PROPOSAL_EXPIRY_SECONDS` | How long a write proposal stays approvable | `600` |
-| `SLOPANOC_SESSION_BACKEND` | `memory` or `database` | `database` |
-| `SLOPANOC_DATABASE_URL` | SQLAlchemy async URL for session + Case/Fault persistence | `sqlite+aiosqlite:///./slopanoc_sessions.db` |
+| `SLOPANOC_SESSION_BACKEND` | `memory` or `database` — normal runtime REQUIRES `database` (`memory` is REJECTED at real app startup, no exceptions) | `database` |
+| `SLOPANOC_DATABASE_URL` | SQLAlchemy async URL for session + Case/Fault persistence — normal runtime REQUIRES this (or the secret-resource variant) to resolve to exactly the `postgresql` dialect; see the mandatory Cloud SQL runtime policy above | `sqlite+aiosqlite:///./slopanoc_sessions.db` (this fallback is REJECTED at real app startup — there is no override) |
 | `SLOPANOC_DATABASE_SECRET_RESOURCE` | Secret Manager resource for the database URL (deployment) | none |
-| `SLOPANOC_KNOWLEDGE_DATABASE_URL` | SQLAlchemy async URL for Governed Knowledge persistence (separate setting — see [Local Cloud SQL PostgreSQL development](#local-cloud-sql-postgresql-development)) | `sqlite+aiosqlite:///./slopanoc_knowledge.db` |
+| `SLOPANOC_KNOWLEDGE_DATABASE_URL` | SQLAlchemy async URL for Governed Knowledge persistence (separate setting — see [Local Cloud SQL PostgreSQL development](#local-cloud-sql-postgresql-development)) — normal runtime REQUIRES this to resolve to exactly the `postgresql` dialect too | `sqlite+aiosqlite:///./slopanoc_knowledge.db` (same rejection as above) |
 | `SLOPANOC_KNOWLEDGE_DATABASE_SECRET_RESOURCE` | Secret Manager resource for the Knowledge database URL (deployment) | none |
 | `SLOPANOC_CHAT_ATTACHMENTS_BUCKET` | Private GCS bucket name for durable chat attachment binaries (POST-5.1 B1+) | none — attachment storage unavailable when unset; ordinary text chat is unaffected |
 | `SLOPANOC_CHAT_ATTACHMENT_MAX_BYTES` | Max single image upload size, enforced (POST-5.1 B2) | `8388608` (8 MiB) |
@@ -649,10 +672,17 @@ SLOPANOC is not production-ready. Known gaps include at least:
   Alembic-managed and applied to Cloud SQL; ADK's own session schema is
   self-managed by ADK and intentionally excluded from Alembic; the real
   FastAPI runtime has been proven against Cloud SQL, including session/
-  Case/Knowledge persistence surviving a backend restart. SQLite remains
-  the local zero-setup default when `SLOPANOC_DATABASE_URL`/
-  `SLOPANOC_KNOWLEDGE_DATABASE_URL` are not set. What's still missing:
-  local Cloud SQL validation so far used the developer's own IAM identity
+  Case/Knowledge persistence surviving a backend restart. As of the
+  POST-A5 Cloud SQL-only runtime hardening refinement (final corrective
+  pass), normal backend startup REQUIRES both `SLOPANOC_DATABASE_URL` and
+  `SLOPANOC_KNOWLEDGE_DATABASE_URL` to resolve to exactly the `postgresql`
+  dialect, and REQUIRES `SLOPANOC_SESSION_BACKEND=database` — local
+  SQLite and the `memory` session backend are both rejected at startup
+  with no override of any kind (see the mandatory Cloud SQL runtime
+  policy above); the automated test suite stays hermetic via a
+  Python-level dependency substitution in `conftest.py`, never an
+  environment variable. What's still missing: local Cloud SQL validation
+  so far used the developer's own IAM identity
   (a member of both the `slopanoc_migrator` and `slopanoc_runtime`
   database roles); a real deployment needs a dedicated runtime service
   account scoped only to `slopanoc_runtime`, and Secret Manager-based DB

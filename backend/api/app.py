@@ -168,6 +168,7 @@ schemas.py's docstring on that field.
 """
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -222,9 +223,12 @@ from backend.attachments.models import ChatAttachmentRecord
 from backend.attachments.service import AttachmentService, get_attachment_service
 from backend.attachments.storage import ChatAttachmentStorage, get_attachment_storage
 from backend.cases.service import CaseService, get_case_service
+from backend.api.runtime_database_policy import validate_runtime_database_configuration
 from backend.config.model_warmup import warmup_shared_model
 from backend.config.settings import Settings, get_settings
 from backend.gateway.safe_error import SafeErrorException
+
+_logger = logging.getLogger(__name__)
 
 
 def _case_response(case) -> CaseResponse:
@@ -295,7 +299,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     behavior (after `yield`) is unmodified -- there is nothing for this
     pass to clean up (the shared model client is never closed; see model_
     warmup.py's own docstring on why).
+
+    POST-A5 refinement (Track A): `validate_runtime_database_
+    configuration` runs FIRST, before warm-up -- unlike warm-up this is
+    NOT best-effort; a `ConfigurationError` here is intentionally allowed
+    to propagate and abort startup (see runtime_database_policy.py's own
+    docstring). Only a sanitized dialect-name pair is ever logged, never
+    a resolved URL/credential.
     """
+    session_backend_name, knowledge_backend_name = validate_runtime_database_configuration(get_settings())
+    _logger.info(
+        "startup database_backend session=%s knowledge=%s",
+        session_backend_name,
+        knowledge_backend_name,
+    )
     await warmup_shared_model()
     yield
 

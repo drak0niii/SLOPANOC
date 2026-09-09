@@ -2,7 +2,13 @@ import { FileText, MessagesSquare, NotebookText } from "../ui/icons";
 import type { Citation } from "../../types";
 import type { KnowledgeSourceReferenceDTO, SourceReferenceDTO } from "../../api/types";
 import { DrawerContent, DrawerRoot, DrawerTitle, DrawerTrigger } from "../ui/Drawer";
-import { formatEvidenceTimestamp, formatKnowledgeSourceLabel, formatSourcePeriod } from "../../lib/sourceReference";
+import {
+  formatEvidenceTimestamp,
+  formatKnowledgeSourceGroupLabel,
+  formatKnowledgeSourceLabel,
+  formatSourcePeriod,
+  type KnowledgeSourceGroup,
+} from "../../lib/sourceReference";
 
 /**
  * The shared source/provenance affordance (pre-4H UX/provenance
@@ -23,7 +29,8 @@ import { formatEvidenceTimestamp, formatKnowledgeSourceLabel, formatSourcePeriod
 export type SourceChipProps =
   | { kind: "mop"; citation: Citation }
   | { kind: "teams"; source: SourceReferenceDTO }
-  | { kind: "knowledge"; source: KnowledgeSourceReferenceDTO };
+  | { kind: "knowledge"; source: KnowledgeSourceReferenceDTO }
+  | { kind: "knowledge-group"; group: KnowledgeSourceGroup };
 
 // MOP's trigger is unchanged byte-for-byte from the pre-refactor
 // SourceCitation.tsx — no visual regression for existing MOP call sites.
@@ -60,12 +67,19 @@ export function SourceChip(props: SourceChipProps) {
               Source · {formatKnowledgeSourceLabel(props.source)}
             </>
           )}
+          {props.kind === "knowledge-group" && (
+            <>
+              <NotebookText className="h-3 w-3" />
+              Source · {formatKnowledgeSourceGroupLabel(props.group)}
+            </>
+          )}
         </button>
       </DrawerTrigger>
       <DrawerContent className="flex flex-col overflow-y-auto p-5">
         {props.kind === "mop" && <MopSourceDetails citation={props.citation} />}
         {props.kind === "teams" && <TeamsSourceDetails source={props.source} />}
         {props.kind === "knowledge" && <KnowledgeSourceDetails source={props.source} />}
+        {props.kind === "knowledge-group" && <KnowledgeSourceGroupDetails group={props.group} />}
       </DrawerContent>
     </DrawerRoot>
   );
@@ -254,6 +268,68 @@ function KnowledgeSourceDetails({ source }: { source: KnowledgeSourceReferenceDT
         <p className="mt-2 border-l-2 border-accent/40 pl-3 text-sm italic leading-relaxed text-secondary">
           "{source.content}"
         </p>
+      </div>
+    </>
+  );
+}
+
+/** POST-A5 refinement (Track B) — consolidated source+version drawer
+ * content: ONE document/version header, ALL matched sections (blue-
+ * highlighted), and one Supporting Evidence block PER section — never a
+ * single flattened blob. Every field rendered here still comes from the
+ * same trusted `KnowledgeSourceReferenceDTO` entries `KnowledgeSourceDetails`
+ * above already renders one at a time; this is presentation-only
+ * aggregation, not a new provenance source. `source_uri` is never present
+ * on the DTO at all (same guarantee as the single-section drawer above). */
+function KnowledgeSourceGroupDetails({ group }: { group: KnowledgeSourceGroup }) {
+  return (
+    <>
+      <DrawerTitle>{group.title || "Governed knowledge"}</DrawerTitle>
+
+      <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+        <span className="rounded-full bg-accent/10 px-2 py-0.5 font-medium text-accent">
+          {formatDocumentType(group.documentType)}
+        </span>
+        <span className="text-tertiary">·</span>
+        <span className="text-tertiary">{group.versionLabel}</span>
+      </div>
+
+      <div className="mt-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-tertiary">Source</p>
+        <p className="mt-1 text-sm text-secondary">
+          {group.sourceDisplayName ?? group.sourceSystem}
+          {group.sourceDisplayName ? <span className="text-tertiary"> · {group.sourceSystem}</span> : null}
+        </p>
+        <p className="text-sm text-tertiary">{group.evidenceSourceId}</p>
+      </div>
+
+      <div className="mt-5">
+        <p className="text-xs font-medium uppercase tracking-wide text-tertiary">Matched sections</p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {group.sections.map((section) => (
+            <span
+              key={section.section_id}
+              className="rounded-full border border-info/30 bg-info/10 px-2 py-0.5 text-xs font-medium text-info"
+            >
+              {section.section_heading ?? "Section"}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-col gap-4">
+        <p className="text-sm font-medium text-tertiary">Supporting evidence</p>
+        {group.sections.map((section) => (
+          <div key={section.section_id}>
+            <p className="text-xs font-medium uppercase tracking-wide text-tertiary">
+              {section.section_heading ?? "Section"}
+            </p>
+            {section.source_locator && <p className="mt-0.5 text-xs text-tertiary">{section.source_locator}</p>}
+            <p className="mt-1.5 border-l-2 border-info/40 pl-3 text-sm italic leading-relaxed text-secondary">
+              "{section.content}"
+            </p>
+          </div>
+        ))}
       </div>
     </>
   );

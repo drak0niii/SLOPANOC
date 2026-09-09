@@ -17,6 +17,7 @@ import { ScrollingText } from "../ui/ScrollingText";
 import { SOURCE_KIND_BY_ID } from "../../data/workspaceSources";
 import { SourceCitation } from "./SourceCitation";
 import { SourceChip } from "./SourceChip";
+import { groupKnowledgeSourceReferences } from "../../lib/sourceReference";
 import { ActionProposalCard } from "./ActionProposalCard";
 import { ConnectorUnavailableCard } from "./ConnectorUnavailableCard";
 import { ConnectorSuggestionsCard } from "./ConnectorSuggestionsCard";
@@ -746,8 +747,8 @@ export function Message({ message }: { message: MessageType }) {
                 {activeChat?.sources?.[message.id] && (
                   <SourceChip kind="teams" source={activeChat.sources[message.id]} />
                 )}
-                {activeChat?.knowledgeSources?.[message.id]?.map((knowledgeSource) => (
-                  <SourceChip key={knowledgeSource.source_id} kind="knowledge" source={knowledgeSource} />
+                {groupKnowledgeSourceReferences(activeChat?.knowledgeSources?.[message.id]).map((group) => (
+                  <SourceChip key={group.groupKey} kind="knowledge-group" group={group} />
                 ))}
               </div>
             )}
