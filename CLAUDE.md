@@ -184,6 +184,75 @@ includes" or "the system does" — those phrasings are reserved for what
   early.
 
 ===================================================================
+ARCHITECTURE INVARIANTS — KNOWLEDGE / MEMORY / SKILLS / TOOLS / MCP /
+AGENTS (added post-A5, documentation/mental-model alignment only)
+===================================================================
+
+SLOPANOC uses one canonical mental model across Knowledge/RAG, Memory,
+Skills, Tools/Connectors/MCP, Context Engineering, and Agents. Full
+definitions live in docs/AGENT_CONTRACT.md §3a, docs/KNOWLEDGE_CONTRACT.md
+§22, docs/TROUBLESHOOTING_STRATEGY.md §12a, and README.md's "Canonical
+mental model" subsection — this section exists so a future coding session
+does not have to rediscover them, and does not accidentally violate them.
+Read the invariants below as constraints on ALL future work, not just A5:
+
+- MOP ≠ Skill. SOP ≠ Skill. RCA ≠ Memory. All four (MOP/SOP/RCA/KB) are
+  `KnowledgeDocumentType` values inside Generic KM — content, not
+  behavior. A (FUTURE, not built) Skill is a reusable behavioral
+  procedure a specialist selects and executes; it may RETRIEVE a MOP, it
+  never IS one.
+- Chat history ≠ Approved Knowledge. Case Context ≠ Approved Knowledge.
+  Experience Memory (FUTURE) ≠ organisational truth. All three are
+  memory/operational-state concepts, never `KnowledgeObject`s with a real
+  `LifecycleStatus`. None of them may silently become Approved Knowledge
+  — only the existing human-gated `CANDIDATE → APPROVED` governance
+  transition (docs/KNOWLEDGE_CONTRACT.md §14/§22.4) can do that, and an
+  agent (or a future Experience Memory mechanism) observing something
+  repeatedly is never sufficient on its own.
+- Knowledge Context ≠ Knowledge Agent. There is no Knowledge Agent,
+  planned or built. Generic Governed Knowledge is a Knowledge Context
+  provider consumed through tool contracts (`knowledge_search`/
+  `knowledge_select_evidence`), never its own reasoning boundary.
+- Skill ≠ Agent. Tool ≠ Agent. A Skill (FUTURE) and a Tool (CURRENT —
+  Teams tools; FUTURE — other connectors) are both things an Agent uses,
+  never a competing reasoning boundary. Do not create a new named agent
+  (a "VSWR Agent," a "Cell Down Agent") for work that can instead be
+  represented as a Skill executed by an existing specialist — see the
+  existing "Future agent expansion principles" in docs/AGENT_CONTRACT.md
+  §12 and this file's own "Preserve the current frozen runtime
+  architecture" rule above.
+- MCP ≠ mandatory integration architecture. MCP (FUTURE, optional) is one
+  possible transport for exposing a tool/connector, not a required
+  rewrite of every existing typed integration. Do not relabel the current
+  Teams integration (Incident Manager → typed Python Teams tools → Power
+  Automate client → Power Automate → Microsoft Teams) as MCP.
+- RAG ≠ Knowledge Repository. RAG is the retrieval MECHANISM Generic KM's
+  existing retrieval/ranking/provenance pipeline already implements
+  (docs/KNOWLEDGE_CONTRACT.md §16, §18, §22.1) — it is how the ONE
+  `KnowledgeRepository` gets queried, never a second repository or
+  competing source of truth.
+- Model inference ≠ trusted operational fact. Unchanged from the existing
+  "TRUST / CONTROL PRINCIPLES" section below — this applies equally to
+  any future Skill/Memory/Context Engineering work: a model's own
+  inferred/suggested fact never becomes a trusted dimension value,
+  applicability fact, or Approved Knowledge claim merely by being stated
+  confidently or repeatedly.
+- Ingestion ≠ approval. Ingesting a document (or, in the future,
+  recording an Experience Memory entry) only ever produces a CANDIDATE —
+  never an APPROVED `KnowledgeObject` — per the existing, unmodified
+  governance lifecycle (docs/KNOWLEDGE_CONTRACT.md §5/§14).
+- Authority ordering (non-strict, but this one line is load-bearing): an
+  explicit Approved procedural prohibition always outranks Experience
+  Memory / prior pattern information. Example: an Approved MOP saying "do
+  not restart for VSWR Over Threshold" remains authoritative even if
+  Experience Memory shows three prior VSWR cases were restarted.
+
+None of Skills, Experience Memory, Context Engineering, Troubleshooting
+Manager, or MCP is implemented by this section — it is a documentation/
+mental-model alignment pass only, performed after A5's completion, and
+does not reorder the locked roadmap below or reopen A5.
+
+===================================================================
 NON-NEGOTIABLE TROUBLESHOOTING PRODUCT STRATEGY
 ===================================================================
 
@@ -422,10 +491,11 @@ POST-5.1 A — CLOUD SQL POSTGRESQL (A1–A4) is COMPLETE. POST-5.1 B —
 MULTIMODAL ATTACHMENTS is COMPLETE (B0–B7, all done — see B7's own entry
 below for its full implementation, corrective-pass, and real-stack
 live-validation history). **POST-5.1 B7 (Lifecycle + Real UI + Full
-Regression) is DONE.** NEXT: the POST-B7 UI/UX Refinement Milestone (see
-its own entry below) — IMPLEMENTATION COMPLETE / FINAL LIVE VALIDATION
-PENDING — then A5 (real TELCO/RAN MOP ingestion, not started), then
-Phase 4H security hardening (not started).
+Regression) is DONE.** The POST-B7 UI/UX Refinement Milestone (see its
+own entry below) is COMPLETE and live-validated. **A5 — Knowledge Island
+Ingestion Foundation + Real TELCO/RAN Compound Knowledge Validation
+(see its own entry below) is COMPLETE and live-validated.** Phase 4H
+security hardening is NEXT — not started.
 
 POST-5.1 B execution sequence (locked, do not reorder):
   B0 [DONE] Durable chat attachment architecture + ADK persistence audit
@@ -1675,14 +1745,15 @@ POST-5.1 B execution sequence (locked, do not reorder):
 
       STATUS: DONE. POST-5.1 B7 -- Lifecycle + Real UI + Full Regression
       is COMPLETE. POST-5.1 B -- Multimodal Attachments (B0-B7) is
-      COMPLETE. NEXT: POST-B7 UI/UX Refinement Milestone (see its own
-      entry immediately below) -- IMPLEMENTATION COMPLETE / FINAL LIVE
-      VALIDATION PENDING -- then A5 (real TELCO/RAN MOP ingestion, not
-      started), then Phase 4H security hardening (not started).
+      COMPLETE. The POST-B7 UI/UX Refinement Milestone (see its own
+      entry immediately below) is COMPLETE and live-validated. A5
+      (Knowledge Island ingestion foundation + real TELCO/RAN compound
+      knowledge validation) is COMPLETE and live-validated (see its own
+      entry further below). Phase 4H security hardening is NEXT -- not
+      started.
 
 ===================================================================
-POST-B7 UI/UX REFINEMENT MILESTONE -- IMPLEMENTATION COMPLETE / FINAL
-LIVE VALIDATION PENDING
+POST-B7 UI/UX REFINEMENT MILESTONE -- COMPLETE
 ===================================================================
 
 A SEPARATE, bounded milestone after B7 -- NOT part of B7, does not reopen
@@ -1955,9 +2026,11 @@ STATUS: DONE. POST-B7 UI/UX REFINEMENT MILESTONE IS COMPLETE. All five
 refinements (Teams message formatting -- plain text, accepted;
 delayed hover-scroll with no tooltip; compact image thumbnail; image
 preview modal; composer attachment/text separation) are implemented,
-automated-tested, and live-validated. NEXT: A5 (real TELCO/RAN MOP
-ingestion) -- NOT STARTED. Then Phase 4H security hardening -- NOT
-STARTED.
+automated-tested, and live-validated. NEXT (at the time this milestone
+closed): A5 -- Knowledge Island Ingestion Foundation + Real TELCO/RAN
+Compound Knowledge Validation (see its own entry below) -- since
+COMPLETE and live-validated. Phase 4H security hardening is NEXT --
+NOT STARTED.
 
 ===================================================================
 
@@ -1995,6 +2068,621 @@ unchanged Generic KM pipeline (MOP → source adapter/import boundary →
 IngestedKnowledgeDocument → processing → governance → KnowledgeRepository
 → Cloud SQL PostgreSQL) — a separate milestone from Attachments, not part
 of it.
+
+A5 — KNOWLEDGE ISLAND INGESTION FOUNDATION + REAL TELCO/RAN COMPOUND
+KNOWLEDGE VALIDATION. **IMPLEMENTATION COMPLETE — REAL LIVE-RUNTIME
+(Gemini/Vertex, Cloud SQL) VALIDATION PENDING.** Proves the EXISTING
+Generic Governed Knowledge architecture (unchanged: domain/governance/
+repository/retrieval/provenance/tools boundaries) can safely ingest,
+structure, persist, and cite real COMPOUND operational knowledge
+(DOCX/XLSX/PDF/TXT, embedded/nested artifacts, images) — never a
+one-off MOP-specific pipeline, never a new agent, never a new
+Knowledge Agent, never Phase 4H/6/7 architecture.
+
+GENERIC COMPOUND-ARTIFACT DOMAIN MODEL (new, additive-only):
+`backend/knowledge/domain/artifacts.py` — `KnowledgeArtifact` (open
+`kind` string, never a closed enum — mirrors `KnowledgeSection
+.section_type`'s own open-string design), `ArtifactExtractionStatus`
+(COMPLETE/PARTIAL/FAILED/SKIPPED, a genuinely bounded state machine),
+`validate_artifact_lineage` (unique `artifact_id`, no dangling
+`parent_artifact_id`). `IngestedKnowledgeDocument`, `KnowledgeSection`
+(+`StructuredKnowledgeSection`), and `KnowledgeObject` each gained one
+additive, optional field (`artifacts`/`artifact_id`) — every existing
+plain-text document/section is byte-for-byte unaffected (`artifacts=[]`,
+`artifact_id=None`); `KnowledgeEvidenceReference`/`KnowledgeEvidenceItem`
+(provenance) gained the matching optional `artifact_id`/`artifact`
+field, resolved by `provenance/service.py`'s `build_evidence_set`
+ONLY from the same freshly-refetched governed object the section itself
+is revalidated against (never a caller/model claim) — hierarchical
+provenance (section → artifact → parent artifact → ... → root) flows
+through the EXISTING evidence architecture, never a parallel citation
+system. `governance/service.py`'s `materialize_candidate` carries
+`artifacts`/`section.artifact_id` through unchanged, and gained one new
+optional, explicit `section_roles: dict[section_key, section_type]`
+kwarg (trusted-caller-only, never inferred — 5.1E still never fabricates
+a semantic type on its own initiative) so an operator/ingestion-time
+caller may assert PROCEDURE/EXAMPLE_OUTPUT/etc. authority distinction
+using the section_type field that was already fully open. **No Alembic
+migration was needed or added** — `slopanoc_knowledge_objects`' existing
+`payload` JSON-blob column absorbs the new artifact/lineage data
+transparently (empirically proven: a real artifact-bearing
+`KnowledgeObject`, including a `storage_ref`, round-trips through
+`SqlAlchemyKnowledgeRepository` — dialect-neutral, so this holds for
+SQLite and Cloud SQL PostgreSQL identically).
+
+EXTRACTION (`backend/knowledge/ingestion/{extraction.py,extractors/}`,
+all inside the existing, unchanged `backend/knowledge/` dependency
+boundary — `python-docx`/`pypdf`/`openpyxl` are document-format
+parsers, not cloud/vendor SDKs, so they may live here; confirmed by the
+existing, unmodified `test_dependency_boundary.py`):
+`extraction.py` — SHA-256 `hash_bytes`, deterministic
+(non-random-UUID) `deterministic_artifact_id` (stable across re-
+ingestion of identical content — the structural basis for idempotent
+re-ingestion), `ExtractionLimits`/`ExtractionBudget` (defensive
+recursion-depth/artifact-count/artifact-size/total-expanded-size
+bounds, new `Settings.knowledge_ingestion_max_*` properties, defaults
+chosen against this milestone's real corpus with headroom, never
+tuned to one file), `sniff_media_type` (real OOXML `[Content_Types]
+.xml`/PDF-magic-byte container inspection — extension never trusted,
+per instruction). `extractors/docx.py` — real DOCX paragraph/heading/
+table/hyperlink extraction in true document order (the standard
+`_iter_block_items` OOXML-body-walk idiom, not `.paragraphs`+`.tables`
+naively re-joined), Word heading styles promoted to Markdown ATX
+syntax so the EXISTING, UNMODIFIED 5.1D `HeadingStructureProcessor`
+segments DOCX text with zero new processor; embedded media/objects
+discovered via the real `word/_rels/document.xml.rels` relationship
+graph (with a raw-member-scan fallback), a `vbaProject.bin` (macro)
+member is reported/skipped, never executed. `extractors/xlsx.py` —
+Workbook → Sheet → header/row structure (never one flattened blob),
+formulas read as literal strings (`data_only=False`) and NEVER
+evaluated, a header-only template still yields real, retrievable
+content. `extractors/pdf.py` — one artifact per page, page text +
+1-based page locator, encrypted PDFs detected and reported (never
+guessed); `pypdf` has no embedded-action/script execution capability
+at all, so no explicit disabling step exists or is needed; OCR is
+deliberately not implemented (out of scope). `extractors/txt.py` —
+verbatim line-structure preservation. `extractors/dispatch.py` — the
+recursive orchestrator (`extract_root_document`/
+`extract_embedded_artifact`): every embedded object's real container
+format is sniffed (never trusted from its internal member name),
+recursion only continues for a further-recursable kind (currently
+DOCX), a defensive limit or an unrecognized/legacy-OLE/encrypted
+embedded object becomes ONE skipped/failed artifact node — never
+aborts the parent's own processing (partial failure/atomicity,
+instruction section 46) — proven live against a real 3-level-deep
+synthetic fixture and against the real corpus (see below). Zero path
+traversal surface exists BY CONSTRUCTION: every extractor reads only
+`ZipFile.read(member) -> bytes` into memory; nothing is ever written
+to a filesystem path, so a malicious member name (e.g. `"../../evil
+.bin"`) has no traversal target at all (proven by test).
+
+DURABLE ARTIFACT STORAGE (Layer B) — `backend/knowledge_ingestion/
+artifact_storage.py` (concrete `google.cloud.storage` user; lives
+OUTSIDE `backend/knowledge/` entirely, exactly like `backend/tools/
+knowledge/` lives outside `backend/knowledge/tools/`, because
+`google.cloud`/`google.adk`/`google.genai` imports are forbidden
+anywhere under `backend/knowledge/`, enforced by the existing,
+unmodified dependency-boundary test): a deliberate, line-for-line-
+inspired mirror of `backend/attachments/storage.py`'s pattern (lazy
+client construction, `put_bytes_if_absent`/`get_bytes`/`exists`/
+`uri_for`) but a SEPARATE module/bucket setting
+(`SLOPANOC_KNOWLEDGE_ARTIFACTS_BUCKET`, independently resolved, never
+falling back to `SLOPANOC_CHAT_ATTACHMENTS_BUCKET`) and, critically,
+NO chat-attachment `READY/LINKED/DELETED` lifecycle at all — a
+Knowledge artifact's authority is decided entirely by the existing
+CANDIDATE/APPROVED/ARCHIVE governance boundary, a genuinely different
+question. Object keys are CONTENT-HASH-ADDRESSED
+(`knowledge-artifacts/<hash[0:2]>/<hash>`), never attachment-id-
+addressed — this makes deduplication (instruction section 34, Case C:
+"different parent MOPs, same embedded binary -> deduplicate, preserve
+both parent relationships") a structural property of the key itself,
+proven both synthetically and against the real corpus (see below).
+**LIVE-VALIDATED against the real, already-provisioned GCS project**
+(`pr-msn-dev-gl-slopai-01`, Application Default Credentials — real,
+not mocked): a real upload, a real second-upload-correctly-skipped
+(content-hash dedup), a real byte-identical download round-trip, real
+`gs://` URI construction, and a full self-cleaning delete leaving zero
+residue — using synthetic, non-sensitive payload bytes (never real
+corpus content) against the real, existing `slopanoc-chat-attachments-
+sandbox01` bucket's project (no dedicated `slopanoc-knowledge-
+artifacts-*` bucket has been provisioned yet — this is the SAME kind
+of "production deployment identity/configuration not yet exercised"
+gap README.md's own CURRENT LIMITATIONS section already documents for
+chat attachments, not a new one; provisioning a dedicated bucket is an
+infrastructure action outside this implementation pass's authority).
+
+MULTIMODAL IMAGE INTERPRETATION BOUNDARY (Layer G) —
+`backend/knowledge/ingestion/image_interpretation.py`: a generic,
+ADK/Gemini-independent `ImageInterpreter` Protocol (mirrors
+`KnowledgeSourceAdapter`/`KnowledgeContentProcessor`'s own Protocol-
+then-concrete-implementation pattern) plus `apply_image_interpretation`
+(pure orchestration: updates only `kind="image"` artifacts that have
+raw bytes available, marks a successful result `derived=True`
+[instruction section 16: SOURCE vs DERIVED — the original image binary
+in durable storage always remains the source of truth, never
+overwritten by the model's own description text], marks a failed
+result `extraction_status=PARTIAL` with the real error preserved,
+never raises, never fabricates a description, never lets one image's
+failure affect any other artifact). The concrete implementation,
+`backend/knowledge_ingestion/gemini_image_interpreter.py`, reuses the
+EXISTING shared model client (`get_shared_llm()`,
+`backend/config/settings.py` — the SAME process-cached `BaseLlm`
+instance `team_manager`/`incident_manager` themselves use; no second
+Gemini/Vertex client architecture was built) via the SAME bounded,
+one-shot `Agent`+`Runner`+`InMemorySessionService` pattern this
+codebase already uses four other places (`provenance_compliance.py`,
+`governed_knowledge_completion.py`, `source_requirements_completion
+.py`, `read_continuation_execution.py`) — no tools, so it structurally
+cannot execute anything, approve knowledge, or set applicability/
+lifecycle; the image's own pixel content is treated as untrusted
+visual evidence to describe, never an instruction to follow (mirrors
+the existing B6 "IMAGE EVIDENCE" prompt principle). **Live-attempted
+against this session's real environment**: real `google.cloud.storage`
+access worked (Application Default Credentials), but real Gemini/
+Vertex access did NOT — this backend's model client currently resolves
+to Google AI Studio mode with no API key configured in this session
+(`GOOGLE_GENAI_USE_VERTEXAI` unset), not the deployed environment's
+real Vertex AI path; the attempt correctly failed CLOSED with a clear,
+captured error (`succeeded=False`, real error text preserved, no
+crash, no fabricated description) — itself a genuine, useful proof
+that the Layer G failure path behaves correctly under a REAL failure
+condition, not merely a synthetic mock. Real live image interpretation
+therefore remains VALIDATION PENDING the deployed environment's own
+Vertex AI configuration — do not claim it has been live-proven.
+
+ADMIN/DEV INGESTION ENTRY POINT (instruction section 52) —
+`backend/knowledge_ingestion/local_file_adapter.py`:
+`ingest_local_file`/`ingest_local_files` accept ONLY explicit file
+paths (never recursively scan a filesystem location), are READ-ONLY
+(never mutate/move/delete the source file — proven by test), and
+independently, gracefully degrade when `storage`/`interpreter` are
+unconfigured (a structural-only run still succeeds and reports
+`storage_configured=False`, never a hard failure) — this is
+deliberately NOT a public upload API/UI (none was built). Produces a
+structural-only `IngestionReport` per file (instruction section 53:
+artifact counts by kind, max nesting depth, skipped items with
+reasons, upload/dedup/image-interpretation counts) — never real
+document content, safe to log.
+
+ONE-COMMAND-AT-A-TIME BEHAVIOR (Layer K, instruction section 6/7) —
+PROMPT-ONLY change, `backend/agents/incident_manager/prompts.py`'s
+`INCIDENT_MANAGER_INSTRUCTION` gained two new paragraphs
+("ITERATIVE TROUBLESHOOTING -- ONE CHECK/COMMAND AT A TIME" and
+"COMMAND TRUST AND PRESERVATION"): the DEFAULT posture for a
+troubleshooting question is one grounded diagnostic action per turn,
+then wait for the user's evidence before the next one — never a fixed
+truncation engine, since an explicit user request for the full
+procedure is honored in the same turn (natural-language judgment, no
+keyword/regex routing, consistent with this codebase's existing
+"no keyword-based intent routing" invariant); commands must be
+reproduced exactly from Approved, selected governed knowledge, never
+paraphrased/invented, with example/reference evidence explicitly never
+gaining normative authority merely by resembling a procedure. No new
+Troubleshooting Manager, no persistent Troubleshooting State, no
+hypothesis engine — this is ordinary conversational judgment from
+existing session context plus the existing `knowledge_search`/
+`knowledge_select_evidence` tools, exactly as instructed.
+`INCIDENT_MANAGER_INSTRUCTION`'s own byte-length regression assertion
+(`test_p4b2_synthesis_compression.py`, the same test that has tracked
+every prior legitimate prompt extension since P4B.2) was updated for
+this addition (45707 -> 48730 chars) — the only existing assertion
+this change required, and only because it is a deliberately exact
+length check.
+
+REAL CORPUS VALIDATION (instruction section 68) — `backend/tests/
+test_knowledge_real_corpus_validation.py`, auto-skipping (never
+fabricating a result) if the three real files are unavailable, reads
+them directly from their real, external, out-of-repository paths
+(never copied/moved/staged/committed) and PASSED, live, in this
+environment: all 3 real root documents recognized; `Document1.docx`
+correctly has zero compound structure (plain text) and its critical
+VSWR-Over-Threshold "No restart" rule survives extraction verbatim,
+distinct from the document's other 7 restart-allowed alarm cases; both
+real Rogers MOPs are correctly recognized as compound (19 artifacts
+each: 1 embedded DOCX carrying 7 of its OWN nested images at depth 1 —
+real 2-level recursion — 1 embedded XLSX with 1 real sheet, 1 legacy OLE
+object [CORRECTED by the A5 corrective pass below: this OLE object's own
+real embedded TXT/log payload, "EnodeB_HC.txt", is now safely extracted
+rather than merely reported as unsupported — this original finding was
+itself incomplete, not merely a documentation gap], and 8 root-level
+images); every artifact has a real,
+deterministic SHA-256 `content_hash`; the two real Rogers documents
+share at least one byte-identical embedded artifact (their common
+"Microsoft_Word_Document.docx"/"Microsoft_Excel_Worksheet.xlsx"
+boilerplate attachments) with matching `content_hash` — real Case-C
+deduplication evidence, not synthetic; parent/child lineage is
+internally consistent for every nested artifact. This test file itself
+contains no real MOP paragraph text, no extracted screenshots, no
+internal IPs/hostnames/URLs (a dedicated self-check test proves this
+about its own source).
+
+DEPENDENCIES ADDED (all justified, all pinned in requirements.txt):
+`python-docx==1.2.0` (DOCX text/headings/tables/relationships/embedded-
+object discovery — nothing else in this codebase covers this),
+`pypdf==6.15.0` (mature, bounded PDF page text extraction, no
+script/action execution capability), `openpyxl==3.1.2` (XLSX workbook/
+sheet/cell structure, formulas read as literal data, never evaluated)
+— the latter two were already present in this development environment
+but unpinned/undeclared; both are now deliberately pinned to the
+versions this environment already runs and tests against, matching
+this repository's existing "pinned to what this environment currently
+runs against, proven by the test suite" convention. No macro/VBA
+execution library, no OCR library, no external vector database, no new
+agent orchestration framework.
+
+REGRESSION (original implementation pass; see CORRECTIVE PASS below for
+the current, superseding counts): full backend suite 2822 passed, 1
+skipped (2690 POST-B7 baseline + 132 net new — ~185 new A5 tests across
+domain/ingestion/processing/governance/provenance/local-file-adapter/
+real-corpus layers, minus a handful of pre-existing tests intentionally
+updated for legitimate, documented contract extensions:
+`IngestedKnowledgeDocument`'s field allow-list, `KnowledgeEvidenceItem`'s
+field allow-list, and `INCIDENT_MANAGER_INSTRUCTION`'s exact-length
+assertion — the only existing assertions this milestone changed, and
+only because each is a deliberately exhaustive/exact check);
+KM-focused subset (`backend/tests/knowledge/`) 807 passed; Incident
+Manager/Teams/B6/B7 multimodal/attachment-lifecycle/history-provenance
+subsets all re-run unchanged; `npm run build`/`npx tsc -b` both clean
+(no frontend file was touched by A5); `git diff --check` clean.
+
+NOT BUILT, BY DESIGN, PER EXPLICIT INSTRUCTION: no `MopRepository`/
+`SopRepository`/`RcaRepository`/vendor-named KM table or pipeline, no
+Knowledge Agent, no Troubleshooting Manager, no Head of Automated
+Operations, no Context Engineering runtime, no persistent
+Troubleshooting State, no ITSM/Alarm/Topology/KPI/Change/Handover
+integration, no direct Microsoft Graph, no autonomous execution, no
+arbitrary shell/SQL/HTTP tool, no external vector database, no Alembic
+migration (proven unnecessary), no SharePoint/GCS/Drive/Confluence
+concrete source adapter (only the local-file admin/dev adapter this
+milestone's own instruction calls for), no OCR pipeline, no public
+knowledge-upload API/UI.
+
+STATUS AT THIS POINT (superseded — see "A5 FINAL LIVE-RUNTIME RETEST"
+and the "STATUS: A5 ... is COMPLETE" block further above for the
+authoritative, current status): **A5 — IMPLEMENTATION COMPLETE; REAL
+LIVE-RUNTIME (Gemini/Vertex, Cloud SQL PostgreSQL) VALIDATION PENDING**
+the deployed environment's own Vertex AI/Cloud SQL configuration (not
+available in this implementation session — see above for exactly what
+WAS/was not live-validated: real GCS storage was live-proven; real
+Gemini multimodal interpretation and real Cloud SQL persistence for
+artifact-bearing objects were not, though SQLite persistence of the
+identical dialect-neutral schema was proven, and the Gemini failure
+path itself was proven correct under a real failure condition). Do not
+mark A5 fully COMPLETE, and do not start Phase 4H, until a full
+real-runtime pass (React → FastAPI → Team Manager → Incident Manager →
+Generic Governed Knowledge → Cloud SQL → Gemini/Vertex) — the same kind
+of live pass every prior milestone in this project has required a human
+to perform in the real deployed environment — confirms retrieval
+quality, one-command behavior, and grounded citation against Approved
+real corpus knowledge end to end.
+
+A5 CORRECTIVE PASS — three targeted implementation/evidence gaps closed
+before real-runtime validation begins, per an independent pre-A5 audit
+of the real corpus:
+
+CORRECTION 1 — REAL EMBEDDED OLE TXT/LOG SUPPORT. The original pass's
+"1 unsupported legacy OLE object" finding was itself incomplete: both
+real Rogers MOPs' `word/embeddings/oleObject1.bin` is a genuine OLE2
+Compound-File-Binary (CFB) container (magic bytes confirmed) wrapping a
+classic OLE 1.0 "Package" (`Insert Object > Create from File`) embed —
+its real payload is a health-check log file named `EnodeB_HC.txt`
+(confirmed byte-identical, 163 lines, zero non-printable characters, a
+real AMOS terminal session capture, in BOTH real Rogers MOPs). New
+module `backend/knowledge/ingestion/extractors/ole.py`:
+`is_ole_compound_file`/`extract_ole_package_payload`, using ONLY
+`olefile` (new dependency, pinned `olefile==0.47`) — a narrow, mature,
+pure-Python OLE2-CFB reader with NO code-execution capability of any
+kind (no VBA/macro interpreter, no COM/Word/Excel automation, no shell/
+subprocess) — never a broader office-automation/forensics framework
+(`oletools` was evaluated and explicitly rejected for this reason: its
+own dependency tree pulls in a GUI file-dialog library and a VBA
+p-code decompiler, neither appropriate here). Parses the well-documented
+`"\x01Ole10Native"` stream layout (size/version/filename/paths/reserved
+bytes/payload-length/payload) via plain `struct` unpacking on bytes
+already read by `olefile` — never guesses: any structural inconsistency
+(bad length, missing stream, corrupt directory, not a CFB file at all)
+returns `None`, and the caller falls back to the pre-existing safe
+"legacy OLE object, not further decomposed" SKIPPED artifact, exactly
+as before this correction. Wired into `extractors/dispatch.py`'s
+existing OLE2-detection branch: a successfully-parsed payload becomes a
+NEW `kind="ole_package"` container artifact (COMPLETE, replacing the
+old always-SKIPPED `embedded_object` classification for this case) with
+the extracted payload recursively dispatched as ITS OWN child artifact
+through the EXISTING generic pipeline (by extension/content: `image`/
+`docx`/`xlsx`/`pdf`/`txt_log`/`unsupported_artifact` — no OLE-specific
+child-classification logic was added). ARTIFACT ROLE: the extracted log
+is `kind="txt_log"` (never a normative-procedure kind); the existing,
+unmodified Incident Manager prompt language ("EXAMPLE/REFERENCE
+evidence — a screenshot, HISTORICAL OUTPUT, or sample value the source
+shows only as illustration") already covers a terminal/log capture
+explicitly, so no prompt change was needed or made. 17 new focused
+tests (`test_ingestion_extractors_ole.py`, synthetic-only — a hand-built
+minimal CFB container, since `olefile` is read-only and cannot itself
+construct fixtures) covering safe discovery, TXT extraction, line
+preservation, parent lineage, deterministic hashing, a structural
+no-execution proof (AST-level: the module imports/calls no
+subprocess/COM/exec-capable name), malformed/corrupt-CFB safe failure,
+unsupported-OLE safe reporting, and budget/depth enforcement. Real
+corpus re-validated: `EnodeB_HC.txt` now discovered in BOTH real Rogers
+MOPs, correctly parented under a new `ole_package` container artifact,
+zero unsupported/skipped OLE objects remaining, zero sensitive log
+content persisted into any repository file.
+
+CORRECTION 2 — CONTENT DEDUP VS. LINEAGE OCCURRENCE, PROVEN. Audited
+and PROVEN CORRECT with no bug found: `deterministic_artifact_id`
+derives an artifact's own identity from `(parent_artifact_id, kind,
+position, content_hash)` TOGETHER, never `content_hash` alone — so
+CONTENT IDENTITY (the sole input to GCS's content-addressed storage
+key, `build_artifact_object_name`) and ARTIFACT OCCURRENCE IDENTITY
+(`artifact_id`/`parent_artifact_id`) are structurally distinct by
+construction. 5 new proof tests
+(`test_ingestion_dedup_lineage.py`, synthetic) covering all three
+conceptual cases the corrective instruction distinguished: Case A
+(identical binary, two separate root documents — proven via the
+pre-existing cross-document test plus a new explicit one), Case B
+(identical binary occurring twice within ONE root under two DIFFERENT
+parent artifacts — both occurrences survive as two distinct artifact
+records with distinct `artifact_id`/`parent_artifact_id`, sharing only
+`content_hash`), Case C (identical binary at two different nesting
+depths within one root — same result). No correction to the domain
+model was required — the existing design already satisfies "one stored
+binary, many independently-recoverable occurrences."
+
+CORRECTION 3 — NESTING DEPTH SEMANTICS, AUDITED AND DOCUMENTED. The
+original "max depth 1" reporting is VALID under the design's own,
+already-documented convention: the root document itself is never
+represented as an artifact at all (`KnowledgeArtifact`'s own module
+docstring), so `depth=0` means "embedded directly in the root" and
+`depth=1` means "nested one level inside that" — confirmed self-
+consistent, no correction needed. The invariant that actually matters
+— "the full parent chain must be recoverable deterministically" — was
+proven directly against the real corpus (`test_root_to_embedded_docx_to_nested_image_hierarchical_provenance`):
+walking `parent_artifact_id` from a real nested image back through the
+real embedded Word document to the (unrepresented) root reconstructs
+the exact, correct chain, independent of the absolute depth numbers.
+
+REGRESSION (A5 corrective pass, supersedes the original pass's counts
+above): full backend suite **2846 passed, 1 skipped** (2822 original-
+pass baseline + 24 net new); KM-focused subset **829 passed** (807 +
+22); `npm run build`/`npx tsc -b` both clean (no frontend file touched);
+`git diff --check` clean. New dependency: `olefile==0.47` (justified
+above). STATUS UNCHANGED (at that point): **A5 — IMPLEMENTATION
+COMPLETE; REAL LIVE-RUNTIME VALIDATION PENDING** — that corrective pass
+closed implementation/evidence gaps only; it did not attempt, and does
+not claim, live Gemini/Vertex or Cloud SQL validation.
+
+A5 FIRST LIVE-RUNTIME VALIDATION PASS (real Vertex Gemini, real Cloud
+SQL PostgreSQL, real GCS, real FastAPI app — never direct Gemini calls
+for conversational acceptance tests): most gates passed live, including
+the two most safety-critical ones (VSWR restart prohibition; mandatory
+conflict isolation between the 4G-only and combined 4G/5G documents'
+differing timing values, never blended). One gate failed reproducibly,
+twice, including after a legitimate prompt-strengthening attempt: the
+model did not reliably stay to one diagnostic action/command at a time
+by default — it gave 3-4 step numbered procedures even when asked "what
+should I check?" Per this project's own explicit stop condition, A5 was
+NOT marked COMPLETE at that point; it remained **A5 — IMPLEMENTATION
+COMPLETE / REAL LIVE-RUNTIME VALIDATION PENDING**, with the exact
+blocker recorded (prompt-only self-restraint proven unreliable, twice).
+
+A5 FINAL CORRECTIVE IMPLEMENTATION PASS — closes the one-command defect
+with a deterministic runtime mechanism (never a third attempt at a
+stronger prompt paragraph), plus three further live-testing findings,
+per explicit instruction limiting production-code changes to exactly
+these four bounded areas:
+
+CORRECTION A — deterministic one-command-at-a-time enforcement.
+`backend/agents/incident_manager/schemas.py` gained a typed
+`TroubleshootingGuidance` field (`TroubleshootingInteractionMode`:
+`NEXT_STEP`/`FULL_PROCEDURE`; `TroubleshootingStep`) on
+`IncidentManagerResponse`, populated via Gemini's own schema-guided
+structured output — far more reliable than free-text self-restraint.
+`backend/api/troubleshooting_guidance_context.py` (NEW) is a run-scoped,
+in-process store (same proven pattern as `multimodal_turn_context.py`)
+plus `render_troubleshooting_guidance`, a pure deterministic Python
+renderer: in `NEXT_STEP` mode it structurally NEVER reads
+`full_procedure_steps` at all — leaking a later step is not a prompt
+failure mode to guard against, it is a code path that does not exist.
+`evidence.py`'s existing `after_agent_callback` captures/renders it as
+defense in depth; `chat_service.py` gained a HARD completion-boundary
+override that unconditionally replaces the turn's final answer with the
+deterministic rendering whenever `troubleshooting_guidance` was
+populated — mirroring the exact, already-proven
+`enforce_governed_knowledge_at_completion` pattern (Python emits a typed
+field as `final_text` with zero model paraphrase involved). Default is
+`NEXT_STEP`; `FULL_PROCEDURE` requires the user to actually ask for the
+full procedure (model semantic judgment, deterministically rendered —
+never keyword/regex routing). NOT Phase 7: no Troubleshooting State, no
+hypothesis engine, no diagnostic graph — a single typed field on one
+existing response schema, rendered by one pure function.
+
+LIVE DEFECT FOUND AND FIXED DURING THIS CORRECTION (real, reproducible,
+found via direct live-stack testing, not anticipated by the
+instruction): the first live rerun showed `troubleshooting_guidance`
+genuinely being populated by the model (confirmed by direct
+instrumentation) but the user-visible answer still not matching the
+deterministic renderer's own output at all. Root cause, found by
+tracing the exact code path: `chat_service.py`'s own turn-scoped
+cleanup `finally` block called `discard_troubleshooting_guidance(run_id)`
+BEFORE the later completion-boundary override ever got to
+`pop_troubleshooting_guidance(run_id)` — the captured guidance was wiped
+by this codebase's own cleanup discipline before it could be consumed,
+silently falling back to team_manager's own free-text paraphrase (the
+exact unreliable behavior this correction exists to eliminate). Fixed by
+adopting the SAME snapshot-before-discard shape this file already uses
+for `selected_knowledge_evidence` immediately above it in the same
+`finally` block: the guidance is now popped (read + cleared) into a
+local variable inside that early `finally`, and the later override
+consumes the local snapshot rather than re-popping an already-cleared
+store. Re-verified live immediately after the fix: the rendered answer
+now matches `render_troubleshooting_guidance`'s exact output
+byte-for-byte. Full backend regression re-run clean after this fix
+(counts below) — this was the single most safety-relevant defect found
+in this entire A5 effort, since it is the exact mechanism the whole
+correction exists to guarantee.
+
+SEPARATE LIVE DEFECT FOUND AND FIXED (Correction D wiring, found via the
+full backend suite, not live Gemini testing, but would have broken real
+production conversational turns): `IncidentManagerRequest.
+known_applicability_facts` was first declared as
+`dict[str, list[str]] = Field(default_factory=dict, ...)`, which
+triggered `pydantic_core.PydanticSerializationError: Unable to serialize
+unknown type: ..._HAS_DEFAULT_FACTORY_CLASS` inside ADK's OWN production
+tracing code (`google.adk.telemetry.tracing.trace_call_llm`) on every
+real LLM call through incident_manager — 24 test files failed with this
+exact error. Fixed by changing the field to
+`Optional[dict[str, list[str]]] = Field(default=None, ...)` (plain
+`None` default instead of `default_factory=dict`); confirmed clean
+against the isolated failing test and then the full suite.
+
+CORRECTION B — EMF/WMF image understanding. Real live-validation
+testing had found 4 of 15 real embedded images failed Gemini
+interpretation outright (`400 INVALID_ARGUMENT: Provided image is not
+valid`) because they are EMF/WMF vector images, not a raster format
+Gemini accepts. Audited real corpus EMF bytes directly; found Pillow
+(already a pinned dependency — no new dependency added) can rasterize
+them via its own bundled `WmfImagePlugin`/Windows GDI path
+(`Image.core.drawwmf`), confirmed against 3 real corpus EMF files
+producing genuinely meaningful, non-blank raster output.
+`backend/knowledge/ingestion/image_interpretation.py` gained
+`rasterize_vector_image` — attempts PNG rasterization for
+`image/x-emf`/`image/x-wmf` before interpretation, falls back to the
+original bytes/media type on any failure (never a crash, never a
+regression versus prior behavior), and records
+`rasterized_from`/`rasterized_to` provenance metadata. Honestly
+documented limitation: this is a Windows-GDI-specific mechanism: it may
+not be available on a Linux/Cloud Run production deployment, in which
+case rasterization safely returns `None` and behavior degrades to
+exactly the pre-correction path, never a hard failure. No Office/COM
+automation, no shell/macro execution, no new dependency.
+
+CORRECTION C — native-source-evidence precedence over derived evidence.
+Live testing had found a query for native XLSX report fields sometimes
+cited the image-derived description of a spreadsheet screenshot instead
+of the real XLSX header text. `KnowledgeRetrievalItem` gained
+`is_derived: bool`. `backend/knowledge/retrieval/service.py`'s ranking
+now buckets relevance score first (`_relevance_bucket`, width `0.15`,
+deliberately generic — not query-tuned, not XLSX/Rogers-specific), then
+tie-breaks WITHIN a bucket by `is_derived` (native wins), then exact
+relevance, then the existing applicability/identity tie-breakers — so
+native content wins only among "sufficiently similar" relevance
+candidates, never suppressing a genuinely more-relevant derived
+candidate outright.
+
+CORRECTION D — live applicability-context propagation.
+`ApplicabilityContext` was always empty at runtime; document selection
+came from lexical ranking/model reasoning alone, never deterministic
+applicability. `IncidentManagerRequest` gained
+`known_applicability_facts: Optional[dict[str, list[str]]]`, populated
+by team_manager's OWN model ONLY from facts EXPLICITLY, LITERALLY stated
+in the CURRENT user message — never inferred, mirroring the existing
+trust discipline already governing `chat_topic`/`question`. A NEW
+`before_agent_callback` on incident_manager
+(`capture_known_applicability_context`, using the same
+`ReadonlyContext.user_content` mechanism `MultimodalAgentTool` already
+relies on) captures it into a new run-scoped store
+(`backend/api/applicability_context_capture.py`), consumed by
+`backend/tools/knowledge/runtime.py`'s `get_or_init_run_state` on first
+`knowledge_search` call. Model-inferred/suggested facts never reach this
+path; when no explicit fact is stated, `ApplicabilityContext` stays
+empty exactly as before this correction (safe default, never a guess).
+Not Phase 6 Context Engineering; no hardcoded TELCO vocabulary — the
+dimension keys are open, whatever the model captures verbatim.
+
+FOCUSED TESTS (all new, all passing): 14 tests for
+`troubleshooting_guidance_context.py`'s store/renderer (NEXT_STEP never
+leaks later steps; FULL_PROCEDURE allows multiple grounded steps;
+command preservation; no persistent state), 8 tests for `evidence.py`'s
+capture/render wiring, 10 tests for `rasterize_vector_image` (wrong
+media type no-op, malformed bytes safe failure, successful
+rasterization, Pillow-exception fallback, provenance metadata, wiring
+into `apply_image_interpretation`), 7 tests for the source-precedence
+tie-break (equivalent relevance → native wins twice; highly-relevant
+derived still outranks barely-relevant native; unrelated native never
+outranks relevant derived), 14 tests for
+`applicability_context_capture.py`'s store/callback/`get_or_init_run_
+state` consumption, 5 end-to-end tests through the REAL, unmodified
+`KnowledgeRetrievalService.retrieve()` proving known-4G-context MATCH,
+known-4G-context excluding a conflicting 5G-only document,
+known-4G5G-context MATCH, missing-discriminator UNKNOWN (never a guess,
+never blended), and NOT_APPLICABLE never overridden by high lexical
+relevance.
+
+REGRESSION (final corrective pass, supersedes all prior counts): full
+backend suite **2904 passed, 1 skipped** (2846 corrective-pass-#1
+baseline + 58 net new); KM-focused subset **965 passed**; Incident
+Manager-focused subset **76 passed** (unchanged — none of the new test
+files match that keyword filter by name); `npm run build`/`npx tsc -b`
+both clean (no frontend file touched by this pass); `git diff --check`
+clean.
+
+A5 FINAL LIVE-RUNTIME RETEST (real Vertex Gemini 2.5 Flash, real Cloud
+SQL PostgreSQL, real GCS, the real FastAPI app via ASGI — never direct
+Gemini calls for conversational tests). The 3 real corpus files were
+re-ingested (previous `A5-VALIDATION-*` records deleted first) so the
+EMF-rasterization correction was genuinely exercised — read-back
+confirmed **15/15 images interpreted, 0 failed** for both Rogers
+documents (previously 11/15, 4 failed). All 8 mandatory retests passed:
+
+Test A (one-command, first turn): PASSED — exactly one diagnostic
+action, one login+read command sequence, evidence requested; content
+matched `render_troubleshooting_guidance`'s deterministic output
+byte-for-byte.
+Test B (same-session follow-up): PASSED — exactly one further action,
+one command, deterministic rendering confirmed.
+Test C (full-procedure override, explicit "give me the full procedure,
+all steps"): PASSED — `FULL_PROCEDURE` mode correctly selected, 7
+grounded numbered steps with real commands, deterministic rendering
+confirmed.
+Test D (state-changing prerequisite, two turns): PASSED — with no
+diagnostic evidence yet, the turn gave a safe descriptive overview with
+NO concrete/executable command at all (this specific bare-statement
+wording, without an explicit question, did not populate
+`troubleshooting_guidance` — a live wording-sensitivity worth recording
+honestly, but the underlying safety property held: nothing executable
+leaked). With evidence supplied on the second turn, the response
+correctly gave exactly one further diagnostic action (determine DUS vs.
+Baseband unit type) and explicitly withheld the state-changing reset
+command until that prerequisite is confirmed.
+Test E (native XLSX preference): PASSED — the real native XLSX header
+row was cited verbatim, with no image-derived screenshot description
+substituted.
+Test F (known 4G applicability context): PASSED with a recorded nuance
+— known facts were correctly captured and both genuinely-applicable
+documents (the 4G-only and the 4G/5G-combined MOP both legitimately
+apply to a 4G node under the deterministic, list-overlap applicability
+contract) were correctly retained; the live answer transparently noted
+the two documents' differing timing values ("5 or 10 minutes, depending
+on the specific procedure") rather than fabricating a blended number —
+correct per the contract, though a future refinement could bias toward
+the more narrowly-applicable single-technology document when several
+genuinely match.
+Test G (applicability ambiguity, no technology stated): PASSED —
+committed cleanly to one document's specific value, never blending into
+a fabricated composite figure.
+Test H (EMF/WMF interpretation): PASSED — three distinct, previously-
+unavailable images now correctly described and cited (a Citrix Gateway
+login page, an RRU status command-line interface, a Microsoft
+verification-code prompt), confirming the rasterization correction's
+live effect.
+
+NOT_APPLICABLE is never bypassable by ranking (proven at the Python
+level, section-D tests above) and was not observed to be bypassed live.
+No keyword/regex routing was added anywhere in this final corrective
+pass.
+
+STATUS: **A5 — Knowledge Island Ingestion Foundation + Real TELCO/RAN
+Compound Knowledge Validation is COMPLETE.** Real live-runtime
+validation (Gemini/Vertex, Cloud SQL PostgreSQL, GCS, the real FastAPI
+app) has been performed end to end, including the two safety-critical
+gates (VSWR prohibition, mandatory conflict isolation) and all 8 gates
+retested after the final corrective pass. Two genuine, previously-
+undiscovered defects were found and fixed during this pass (the
+completion-boundary discard-ordering bug; the Pydantic
+`default_factory` serialization bug) — both confirmed via full backend
+regression and, for the first, via direct live re-verification. NEXT:
+Phase 4H security hardening (not started in this pass, per explicit
+instruction).
 
 COMPLETE (this section is preserved as it was originally written, when
 Phase 5.1 was still the next phase in this locked list — do not read the
@@ -2059,9 +2747,12 @@ Then: LOCAL GIT CHECKPOINT [DONE — see the "CURRENT (out-of-band
 milestone...)" note near the top of this LOCKED ROADMAP section: POST-5.1
 A (Cloud SQL) and POST-5.1 B (multimodal attachments, B0–B7, all DONE
 including B7's own real-stack live validation) were inserted here,
-between this checkpoint and Phase 4H, without reordering this list. A5
-(real TELCO/RAN MOP ingestion) is the current next milestone, followed by
-Phase 4H; Phase 4H below remains not started.]
+between this checkpoint and Phase 4H, without reordering this list. The
+POST-B7 UI/UX Refinement Milestone (also inserted here, also DONE) and
+A5 (Knowledge Island ingestion foundation + real TELCO/RAN compound
+knowledge validation — DONE, including real live-runtime validation)
+were inserted here, before Phase 4H; Phase 4H below is the current next
+phase and remains not started.]
 
 Then: PHASE 4H SECURITY HARDENING
 

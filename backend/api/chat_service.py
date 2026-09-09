@@ -157,7 +157,14 @@ from backend.api.multimodal_turn_context import (
     register_run_images,
     trusted_image_parts_from_content,
 )
+from backend.agents.incident_manager.schemas import TroubleshootingGuidance
+from backend.api.applicability_context_capture import discard_known_applicability_context
 from backend.api.streaming_events import EventSequencer, Stage, StreamEvent, StreamEventType, status_data
+from backend.api.troubleshooting_guidance_context import (
+    discard_troubleshooting_guidance,
+    pop_troubleshooting_guidance,
+    render_troubleshooting_guidance,
+)
 from backend.api.turn_context import bind_run_id, pop_message_texts, reset_run_id
 from backend.api.turn_source_references import TURN_SOURCE_REFERENCES_STATE_KEY, build_turn_source_references_delta
 from backend.attachments.repository import AttachmentRepository
@@ -899,6 +906,14 @@ class ChatService:
         # references from authoritative backend data, never from model
         # text/agent_payload.
         selected_knowledge_evidence: list[Any] = []
+        # A5 final corrective pass: same snapshot-before-discard shape as
+        # `selected_knowledge_evidence` immediately above -- the
+        # completion-boundary override that consumes this lives AFTER
+        # this turn's own `finally` block (which must unconditionally
+        # clear the run-scoped store on every exit path), so the value
+        # must be captured into this local BEFORE that clear, never
+        # re-popped from the (by then already-cleared) store later.
+        captured_troubleshooting_guidance: Optional[TroubleshootingGuidance] = None
         run_id_token = bind_run_id(sequencer.run_id)
         # Production hardening pass #3: tracks whether `PENDING_
         # SPECIALIST_RESULT_STATE_KEY` was actually written this turn, so
@@ -1298,6 +1313,24 @@ class ChatService:
             # exception, or asyncio.CancelledError -- a `finally` runs on
             # all three). Safe to call even when nothing was registered.
             discard_run_images(sequencer.run_id)
+            # A5 final corrective pass -- mirrors `selected_knowledge_
+            # evidence`'s own snapshot-before-discard shape immediately
+            # above: `pop_troubleshooting_guidance` both reads AND clears
+            # the run-scoped entry here, before the completion-boundary
+            # override (later in this method, after this try/except/
+            # finally) ever runs -- a later, second pop against the same
+            # run_id would incorrectly see nothing. `discard_
+            # troubleshooting_guidance` remains a safe, redundant backstop
+            # for any exit path that somehow reaches here without a
+            # registration ever happening (a no-op in that case).
+            captured_troubleshooting_guidance = pop_troubleshooting_guidance(sequencer.run_id)
+            discard_troubleshooting_guidance(sequencer.run_id)
+            # A5 final corrective pass (Correction D) -- same unconditional
+            # cleanup discipline: a registered known-applicability context
+            # must never survive past the one turn that registered it,
+            # whether or not knowledge_search was ever actually called
+            # (which is what would otherwise consume/pop it).
+            discard_known_applicability_context(sequencer.run_id)
             discard_active_read_continuation(session_id)
             # Latency-diagnosis pass: same "bind/store, try, finally:
             # clear" discipline -- guarantees no per-run model-call
@@ -1528,6 +1561,25 @@ class ChatService:
                 )
                 final_text = SAFE_COMPLETION_FAILURE_TEXT
                 selected_knowledge_evidence = []
+
+        if error is None and final_text is not None:
+            # A5 final corrective pass -- the HARD, deterministic one-
+            # command-at-a-time override: if incident_manager populated
+            # `troubleshooting_guidance` anywhere in this turn (captured
+            # by evidence.py's own after_agent_callback the instant its
+            # structured response was parsed, regardless of which of the
+            # call paths above produced it), the final answer the user
+            # sees is UNCONDITIONALLY replaced with the deterministic
+            # Python rendering of that typed field -- never team_
+            # manager's own free-form presentation of it, which live
+            # testing proved does not reliably stay bounded to one
+            # action on its own. A turn that never populated the field
+            # (every non-troubleshooting request) is completely
+            # unaffected: `pop_troubleshooting_guidance` returns `None`
+            # and `final_text` is left exactly as team_manager produced
+            # it.
+            if captured_troubleshooting_guidance is not None:
+                final_text = render_troubleshooting_guidance(captured_troubleshooting_guidance)
 
         if error is None and final_text is None:
             # A turn that produced no final text at all is itself an

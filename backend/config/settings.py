@@ -55,6 +55,16 @@ _CHAT_ATTACHMENTS_BUCKET_ENV_VAR = "SLOPANOC_CHAT_ATTACHMENTS_BUCKET"
 _CHAT_ATTACHMENT_MAX_BYTES_ENV_VAR = "SLOPANOC_CHAT_ATTACHMENT_MAX_BYTES"
 _CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN_ENV_VAR = "SLOPANOC_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN"
 _CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN_ENV_VAR = "SLOPANOC_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN"
+# A5: durable Knowledge-artifact binary storage. Deliberately a SEPARATE
+# bucket setting from _CHAT_ATTACHMENTS_BUCKET_ENV_VAR -- Knowledge
+# artifacts and chat attachments are different domains with different
+# lifecycle/ownership semantics (see backend/knowledge/ingestion/storage.py),
+# never sharing a bucket/prefix/lifecycle by convention.
+_KNOWLEDGE_ARTIFACTS_BUCKET_ENV_VAR = "SLOPANOC_KNOWLEDGE_ARTIFACTS_BUCKET"
+_KNOWLEDGE_INGESTION_MAX_RECURSION_DEPTH_ENV_VAR = "SLOPANOC_KNOWLEDGE_INGESTION_MAX_RECURSION_DEPTH"
+_KNOWLEDGE_INGESTION_MAX_ARTIFACTS_PER_ROOT_ENV_VAR = "SLOPANOC_KNOWLEDGE_INGESTION_MAX_ARTIFACTS_PER_ROOT"
+_KNOWLEDGE_INGESTION_MAX_ARTIFACT_BYTES_ENV_VAR = "SLOPANOC_KNOWLEDGE_INGESTION_MAX_ARTIFACT_BYTES"
+_KNOWLEDGE_INGESTION_MAX_TOTAL_EXPANDED_BYTES_ENV_VAR = "SLOPANOC_KNOWLEDGE_INGESTION_MAX_TOTAL_EXPANDED_BYTES"
 # POST-5.1 B4B: ADK's own `list_sessions` has no pagination primitive at
 # all (verified against the installed 1.33.0 source) -- this is a bounded
 # "recent saved-chat list" cap, not real pagination. Also bounds the
@@ -137,6 +147,19 @@ _DEFAULT_CHAT_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024  # 8 MiB
 _DEFAULT_CHAT_ATTACHMENT_MAX_IMAGES_PER_TURN = 4
 _DEFAULT_SAVED_CHAT_LIST_LIMIT = 50
 _DEFAULT_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN = 16 * 1024 * 1024  # 16 MiB
+
+# A5 defensive ingestion limits (section 28/29): bounded so a compound
+# document (OOXML zip package, nested embeddings) can never trigger
+# unbounded recursion/decompression -- see
+# backend/knowledge/ingestion/extraction.py's `ExtractionLimits`.
+# Defaults were chosen against this milestone's real validation corpus
+# (three real MOP .docx files up to ~2.3 MB each, containing embedded
+# screenshots/spreadsheets/documents) plus generous headroom, not tuned
+# to any one file.
+_DEFAULT_KNOWLEDGE_INGESTION_MAX_RECURSION_DEPTH = 6
+_DEFAULT_KNOWLEDGE_INGESTION_MAX_ARTIFACTS_PER_ROOT = 500
+_DEFAULT_KNOWLEDGE_INGESTION_MAX_ARTIFACT_BYTES = 25 * 1024 * 1024  # 25 MiB, one artifact
+_DEFAULT_KNOWLEDGE_INGESTION_MAX_TOTAL_EXPANDED_BYTES = 200 * 1024 * 1024  # 200 MiB, whole root document
 
 
 class ConfigurationError(RuntimeError):
@@ -319,6 +342,39 @@ class Settings:
         """
         raw = self._env.get(_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN_ENV_VAR)
         return int(raw) if raw else _DEFAULT_CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN
+
+    @property
+    def knowledge_artifacts_bucket(self) -> Optional[str]:
+        """A5: the private GCS bucket for durable Knowledge-artifact
+        binaries (embedded images/DOCX/PDF/XLSX/... extracted during
+        ingestion). Mirrors `chat_attachments_bucket` exactly (no
+        default, `None` when unset, storage unavailable only when
+        actually invoked) but is a DELIBERATELY SEPARATE setting --
+        Knowledge artifacts must never share a bucket/prefix/lifecycle
+        with chat attachments (see backend/knowledge/ingestion/storage.py).
+        """
+        raw = self._env.get(_KNOWLEDGE_ARTIFACTS_BUCKET_ENV_VAR)
+        return raw.strip() if raw and raw.strip() else None
+
+    @property
+    def knowledge_ingestion_max_recursion_depth(self) -> int:
+        raw = self._env.get(_KNOWLEDGE_INGESTION_MAX_RECURSION_DEPTH_ENV_VAR)
+        return int(raw) if raw else _DEFAULT_KNOWLEDGE_INGESTION_MAX_RECURSION_DEPTH
+
+    @property
+    def knowledge_ingestion_max_artifacts_per_root(self) -> int:
+        raw = self._env.get(_KNOWLEDGE_INGESTION_MAX_ARTIFACTS_PER_ROOT_ENV_VAR)
+        return int(raw) if raw else _DEFAULT_KNOWLEDGE_INGESTION_MAX_ARTIFACTS_PER_ROOT
+
+    @property
+    def knowledge_ingestion_max_artifact_bytes(self) -> int:
+        raw = self._env.get(_KNOWLEDGE_INGESTION_MAX_ARTIFACT_BYTES_ENV_VAR)
+        return int(raw) if raw else _DEFAULT_KNOWLEDGE_INGESTION_MAX_ARTIFACT_BYTES
+
+    @property
+    def knowledge_ingestion_max_total_expanded_bytes(self) -> int:
+        raw = self._env.get(_KNOWLEDGE_INGESTION_MAX_TOTAL_EXPANDED_BYTES_ENV_VAR)
+        return int(raw) if raw else _DEFAULT_KNOWLEDGE_INGESTION_MAX_TOTAL_EXPANDED_BYTES
 
     @property
     def saved_chat_list_limit(self) -> int:

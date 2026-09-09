@@ -72,6 +72,18 @@ class KnowledgeRetrievalItem(BaseModel):
         description="MATCH, PARTIAL_MATCH, or UNKNOWN -- NOT_APPLICABLE sections are excluded before an item is ever constructed. Uncertainty (PARTIAL_MATCH/UNKNOWN) is retained explicitly, never silently upgraded to MATCH."
     )
     relevance_score: float = Field(description="0.0-1.0, from the KnowledgeRelevanceScorer that produced this item. Zero-relevance sections are excluded before an item is ever constructed.")
+    is_derived: bool = Field(
+        default=False,
+        description=(
+            "A5 final corrective pass (Correction C): True when `section.artifact_id` resolves to a "
+            "KnowledgeArtifact with `derived=True` (a model interpretation, e.g. an image description) -- False "
+            "for root document text or a structural (non-derived) artifact extraction (native DOCX/XLSX/PDF/TXT "
+            "content). Resolved once, deterministically, by the retrieval service itself from the SAME governed "
+            "KnowledgeObject.artifacts the section belongs to -- never a model claim. Used only as a ranking "
+            "TIE-BREAK (service.py's own sort key) among sufficiently-similar-relevance candidates, never to "
+            "suppress derived evidence outright."
+        ),
+    )
 
     @field_validator("relevance_score")
     @classmethod

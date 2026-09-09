@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from google.adk.agents import Agent
 
-from backend.agents.incident_manager.evidence import enforce_incident_manager_response_integrity
+from backend.agents.incident_manager.evidence import capture_known_applicability_context, enforce_incident_manager_response_integrity
 from backend.agents.incident_manager.prompts import INCIDENT_MANAGER_INSTRUCTION
 from backend.agents.incident_manager.schemas import (
     IncidentManagerRequest,
@@ -98,6 +98,12 @@ incident_manager = Agent(
     output_schema=IncidentManagerResponse,
     disallow_transfer_to_parent=True,
     disallow_transfer_to_peers=True,
+    # A5 final corrective pass (Correction D): captures this turn's
+    # trusted `known_applicability_facts` (if any) BEFORE the agent's
+    # real turn runs, so its own first `knowledge_search` call already
+    # sees a seeded ApplicabilityContext -- see evidence.py's own
+    # docstring. ALWAYS returns None (never skips the real turn).
+    before_agent_callback=capture_known_applicability_context,
     after_agent_callback=enforce_incident_manager_response_integrity,
     # P4B AUDIT: safe, closed-vocabulary tool-name-only diagnostic (see
     # tool_call_diagnostics.py's own docstring) -- answers "what is each

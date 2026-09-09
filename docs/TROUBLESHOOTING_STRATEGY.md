@@ -583,6 +583,48 @@ It builds the governed Knowledge Context required by the future loop.
 
 ---
 
+# 12a. Skills — Behavioral Orchestration Layer (Future)
+
+A **Skill** is a FUTURE, not-yet-built reusable unit of behavior — "how
+should this kind of work be performed?" — distinct from an agent, a
+document, a tool, and memory (full definition: `docs/AGENT_CONTRACT.md`
+§3a; Knowledge-vs-Skill distinction: `docs/KNOWLEDGE_CONTRACT.md` §22.5).
+It is documented here only to state its strategic relationship to this
+document's existing troubleshooting loop — it does not change that loop.
+
+A Skill does not contain or duplicate the knowledge/context it needs. It
+**orchestrates retrieval** of what already exists elsewhere, then hands
+the result to the SAME reasoning/next-best-action loop §2–§8 already
+define:
+
+```text
+Skill (e.g. "Troubleshoot VSWR") — FUTURE
+        ↓ retrieves, does not own
+   ┌────┴──────────┬──────────────┬─────────────────┐
+   ▼                ▼              ▼                 ▼
+Knowledge/RAG    Experience     Case Context      live Tools
+(§12, CURRENT)   Memory         (CURRENT,          (Teams CURRENT;
+ applicable       (FUTURE)      backend/cases/)    ITSM/alarms/KPIs/
+ MOP/SOP                        current fault      topology FUTURE)
+   │                │              │                 │
+   └────────────────┴──────────────┴─────────────────┘
+                        ↓
+        the UNCHANGED loop this document already defines
+                 (§2 Primary Troubleshooting Experience,
+                  §4 Continuous Context Re-Evaluation,
+                  §6 Next-Best-Diagnostic-Action)
+```
+
+A future Troubleshooting Manager (§16's Phase 6/7 alignment) selecting
+and executing Skills is expected to give behavioral specialization
+without one agent per fault type — "Troubleshoot VSWR," "Troubleshoot
+Cell Down," and similar are examples of Skills, never of new agents (see
+`docs/AGENT_CONTRACT.md` §12's "avoid agent proliferation" principle).
+None of this is implemented today; §2–§11 above remain the authoritative
+description of the current and near-term troubleshooting experience.
+
+---
+
 # 13. Generic KM Architectural Invariants
 
 The Generic Knowledge Management Layer must remain:
@@ -759,6 +801,13 @@ New agents should correspond to real bounded operational responsibilities.
 
 Do not add agents merely to make the architecture appear more agentic.
 
+A reusable **Skills** layer (§12a) and **Experience Memory** (§9,
+`docs/BUILD_SEQUENCE.md` target architecture) are expected to belong to
+this phase's scope alongside a future Troubleshooting Manager — neither
+is a reason to add a new agent per fault type; a Skill is behavioral
+orchestration executed BY an agent, not an agent itself (§12a,
+`docs/AGENT_CONTRACT.md` §3a).
+
 ## Phase 7 — Advanced Troubleshooting / JOC
 
 This phase brings together:
@@ -770,7 +819,11 @@ Knowledge Context
 +
 Case Context
 +
+Experience Memory
++
 Troubleshooting State
++
+Skill selection/execution
 +
 Next-Best-Diagnostic-Action reasoning
 ```

@@ -71,9 +71,22 @@ flowchart TD
     HOO["Head of Automated Operations (FUTURE)<br/>supervision / efficiency / governance"] --> TM[team_manager - user-facing orchestrator]
     TM --> IM["incident_manager (CURRENT)"]
     TM --> TSM["Troubleshooting Manager (FUTURE)"]
+    TSM --> SK["Skills (FUTURE)<br/>reusable behavioral layer -- not agents"]
     IM --> CEL["Context Engineering Layer (FUTURE)"]
-    TSM --> CEL
+    SK --> CEL
+    CEL --> KC["Knowledge Context (CURRENT, via Generic KM/RAG)"]
+    CEL --> EM["Experience Memory (FUTURE)"]
+    CEL --> CC["Case Context (CURRENT)"]
+    CEL --> OC["Operational Context (evolving -- Teams CURRENT, others FUTURE)"]
 ```
+
+A `Skill` (§3a) is not a node in the AGENT topology above in the sense
+`incident_manager`/`Troubleshooting Manager` are — it is a reusable unit
+of behavior a specialist (here, the future Troubleshooting Manager)
+selects and executes, never a separate reasoning boundary/agent of its
+own. It is drawn here only to show where it would sit conceptually
+relative to Context Engineering, not to imply it is itself invoked like
+an `AgentTool`.
 
 This is target architecture only — nothing in this section exists in the
 codebase today. It is documented here so Phase 5.1A and later phases are
@@ -150,6 +163,62 @@ deterministic Python, not a separate agent. No future addition to this
 architecture should create a new named agent for a capability that can be
 expressed as a tool call or as reasoning already inside an existing agent's
 responsibility.
+
+---
+
+## 3a. Agent vs. Skill vs. Tool/Connector vs. MCP (target model)
+
+Four distinct concepts, not implemented as a hierarchy of agents. Only
+`Agent` and `Tool` exist in the codebase today; `Skill` and `MCP` are
+FUTURE, documented here so later phases build toward one consistent
+model rather than inventing competing vocabulary.
+
+```text
+Agent      = reasoning boundary
+             "Given my objective, available Skills, trusted context and
+             capabilities, what should I do next?"
+
+Skill      = FUTURE reusable behavior
+             "How should this kind of work be performed?"
+             Not an agent, not a document, not a tool, not memory.
+
+Tool /     = deterministic capability
+Connector    "What can SLOPANOC observe or do?"
+             (Teams tools today; ITSM/alarms/KPIs/topology/etc. FUTURE)
+
+MCP        = FUTURE, OPTIONAL capability-discovery/invocation mechanism
+             a tool/connector MAY be exposed through — not a
+             replacement requirement for every existing typed tool.
+```
+
+- **Agent ≠ Skill.** A specialist agent (`incident_manager`, or a future
+  `Troubleshooting Manager`) decides *what* to do; a Skill (once built)
+  would encode *how* a recurring kind of work is conducted — a reusable
+  behavioral procedure the agent selects and executes, not a nested
+  reasoning boundary. Do not create a new named agent (a "VSWR Agent," a
+  "Cell Down Agent") for work that can instead be represented as a Skill
+  executed by an existing specialist. See docs/BUILD_SEQUENCE.md and
+  docs/KNOWLEDGE_CONTRACT.md for how Skills are expected to relate to
+  Knowledge/Memory/Case/Operational Context once built.
+- **Tool/Connector ≠ Agent.** Unchanged from §3 above — a tool is
+  deterministic Python, never a reasoning boundary, regardless of
+  whether it is a direct typed client (today's Teams tools) or, later, a
+  connector exposed through MCP.
+- **MCP ≠ mandatory integration architecture.** MCP is one POSSIBLE
+  future transport for exposing a tool/connector to an agent runtime —
+  useful where standardized discovery across many external systems is
+  valuable. It does not replace today's typed Python Teams tools /
+  Power Automate client (§6, §12), is not itself an agent, is not RAG,
+  and is not memory. A future integration may use MCP, a typed
+  connector, or both, decided per-integration — not by a blanket
+  "everything becomes MCP" migration. **Do not relabel the current Teams
+  integration as MCP** — it remains
+  `incident_manager → typed Python Teams tools → Power Automate client →
+  Power Automate → Microsoft Teams`, unchanged by this section.
+- **No Knowledge Agent.** Generic Governed Knowledge (§12) is a Knowledge
+  Context provider consumed through tool contracts
+  (`knowledge_search`/`knowledge_select_evidence`, `backend/tools/
+  knowledge/`) — never its own agent, today or planned.
 
 ---
 

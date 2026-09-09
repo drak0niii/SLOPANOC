@@ -52,6 +52,13 @@ class StructuredKnowledgeSection(BaseModel):
     heading_level: Optional[int] = Field(default=None, description="The structural heading depth (e.g. 1 for '#', 2 for '##', ...), if heading is set.")
     content: str
     source_locator: Optional[str] = Field(default=None, description='"lines:<start>-<end>", 1-based inclusive, or None if not determinable.')
+    artifact_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "A5: the source_document.artifacts[].artifact_id this section's content was derived from, or None if "
+            "this section came from the root document's own primary content (pre-A5 behavior, unchanged)."
+        ),
+    )
 
     @field_validator("section_key", "content")
     @classmethod
@@ -94,6 +101,13 @@ class StructuredKnowledgeSection(BaseModel):
             raise ValueError("source_locator start must be >= 1 and end must be >= start")
         return value
 
+    @field_validator("artifact_id")
+    @classmethod
+    def _artifact_id_non_blank_if_present(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return require_non_blank(value, "artifact_id")
+
     @model_validator(mode="after")
     def _heading_and_level_are_both_set_or_both_unset(self) -> "StructuredKnowledgeSection":
         if (self.heading is None) != (self.heading_level is None):
@@ -118,6 +132,7 @@ class StructuredKnowledgeDocument(BaseModel):
 
     @model_validator(mode="after")
     def _validate_sections(self) -> "StructuredKnowledgeDocument":
+        artifact_ids = {artifact.artifact_id for artifact in self.source_document.artifacts}
         seen_keys: set[str] = set()
         seen_sequences: set[int] = set()
         for section in self.sections:
@@ -131,4 +146,9 @@ class StructuredKnowledgeDocument(BaseModel):
             if section.sequence in seen_sequences:
                 raise ValueError(f"duplicate section sequence {section.sequence!r}")
             seen_sequences.add(section.sequence)
+            if section.artifact_id is not None and section.artifact_id not in artifact_ids:
+                raise ValueError(
+                    f"section {section.section_key!r} has artifact_id {section.artifact_id!r}, "
+                    "which is not present in source_document.artifacts"
+                )
         return self

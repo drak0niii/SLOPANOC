@@ -50,7 +50,75 @@ from typing import AbstractSet, Any, Optional
 from google.genai import types
 
 from backend.agents.incident_manager.provenance_compliance import enforce_governed_knowledge_selection
+from backend.agents.incident_manager.schemas import TroubleshootingGuidance
+from backend.api.turn_context import current_run_id
 from backend.tools.teams.get_messages import KNOWN_MESSAGE_IDS_STATE_KEY
+
+_INCOMING_REQUEST_AUTHOR = "user"
+
+
+def _find_incoming_request_text(callback_context: Any) -> Optional[str]:
+    """A5 final corrective pass (Correction D): the JSON text of THIS
+    invocation's own incoming `IncidentManagerRequest` -- `ReadonlyContext
+    .user_content` (a public, documented ADK property `MultimodalAgentTool`
+    already relies on for the identical "this invocation's own top-level
+    Content" guarantee) is exactly the nested `Content` `AgentTool.run_
+    async` builds from `input_schema.model_validate(args).model_dump_
+    json()`, so its own text part(s) are the request's JSON serialization
+    -- never incident_manager's own reply, never a later turn.
+    """
+    user_content = getattr(callback_context, "user_content", None)
+    parts = getattr(user_content, "parts", None) if user_content else None
+    if not parts:
+        return None
+    text = "".join(part.text for part in parts if getattr(part, "text", None))
+    return text or None
+
+
+async def capture_known_applicability_context(callback_context: Any) -> Optional[types.Content]:
+    """ADK `before_agent_callback` for `incident_manager` (A5 final
+    corrective pass, Correction D) -- registers this turn's trusted
+    `known_applicability_facts` (if any) into the run-scoped store
+    (`backend.api.applicability_context_capture`) BEFORE any tool call
+    happens, so `knowledge_search`'s first call already sees it. ALWAYS
+    returns `None` -- per ADK's own contract, a non-`None` return here
+    would SKIP the agent's real turn entirely, which this callback must
+    never do; it exists purely for this one side effect.
+
+    Never raises: unparseable/malformed input, or a `known_applicability_
+    facts` value that fails `normalize_applicability_dimensions`'s own
+    structural validation (e.g. a blank key), is treated as "nothing to
+    register" -- the turn proceeds with an empty ApplicabilityContext,
+    exactly the pre-existing, safe behavior, never a hard failure over a
+    side channel.
+    """
+    from backend.api.applicability_context_capture import register_known_applicability_context
+    from backend.knowledge.domain.applicability import ApplicabilityContext
+
+    text = _find_incoming_request_text(callback_context)
+    if not text:
+        return None
+    try:
+        payload = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    raw_facts = payload.get("known_applicability_facts")
+    if not raw_facts or not isinstance(raw_facts, dict):
+        return None
+
+    try:
+        # ApplicabilityContext's own model_validator normalizes/validates
+        # `dimensions` (the exact same `normalize_applicability_dimensions`
+        # function `Applicability` itself uses) -- no separate call needed.
+        context = ApplicabilityContext(dimensions=raw_facts)
+    except Exception:
+        return None
+
+    register_known_applicability_context(current_run_id(), context)
+    return None
 
 _INCIDENT_MANAGER_AUTHOR = "incident_manager"
 
@@ -118,6 +186,51 @@ def _strip_evidence_from_text(text: str, known_ids: AbstractSet[str]) -> Optiona
     return json.dumps(payload)
 
 
+def _capture_and_render_troubleshooting_guidance(text: str) -> Optional[str]:
+    """A5 final corrective pass: parses `text` (incident_manager's own
+    final structured JSON reply) for a populated `troubleshooting_
+    guidance` field, registers it into the run-scoped store (`backend.
+    api.troubleshooting_guidance_context`) for `chat_service.py`'s later,
+    hard completion-boundary override, and -- defense in depth, so
+    incident_manager's OWN structured output already reflects the
+    bounded text even before that later override runs -- deterministically
+    overwrites `payload["summary"]` with the SAME rendered text.
+
+    Returns the corrected JSON text, or `None` when there is nothing to
+    parse or no `troubleshooting_guidance` was populated (the overwhelming
+    majority of turns -- every non-troubleshooting request is completely
+    unaffected). Never raises: a malformed/unparseable `troubleshooting_
+    guidance` value is treated as "not populated," never a hard failure
+    of the whole turn -- ordinary `summary`-based presentation still
+    applies in that case.
+    """
+    from backend.api.troubleshooting_guidance_context import register_troubleshooting_guidance, render_troubleshooting_guidance
+
+    try:
+        payload = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    raw_guidance = payload.get("troubleshooting_guidance")
+    if not raw_guidance:
+        return None
+
+    try:
+        guidance = TroubleshootingGuidance.model_validate(raw_guidance)
+    except Exception:
+        return None
+
+    register_troubleshooting_guidance(current_run_id(), guidance)
+
+    rendered = render_troubleshooting_guidance(guidance)
+    if payload.get("summary") == rendered:
+        return None
+    payload["summary"] = rendered
+    return json.dumps(payload)
+
+
 def strip_unverified_evidence(callback_context: Any) -> Optional[types.Content]:
     """ADK `after_agent_callback` for `incident_manager` -- see the module
     docstring. Returns `None` (no override) whenever there is nothing to
@@ -167,6 +280,16 @@ async def enforce_incident_manager_response_integrity(callback_context: Any) -> 
     )
     stripped_text = _strip_evidence_from_text(working_text, known_ids)
     final_text = stripped_text if stripped_text is not None else working_text
+
+    # A5 final corrective pass: runs LAST, on whatever text is final after
+    # the existing Teams/governed-knowledge checks above -- captures any
+    # troubleshooting_guidance for chat_service.py's completion-boundary
+    # override and, as defense in depth, deterministically rewrites
+    # `summary` from it right here too. A turn with no troubleshooting_
+    # guidance populated (the common case) is completely unaffected.
+    guidance_text = _capture_and_render_troubleshooting_guidance(final_text)
+    if guidance_text is not None:
+        final_text = guidance_text
 
     if final_text == original_text:
         return None

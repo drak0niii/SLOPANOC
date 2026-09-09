@@ -91,8 +91,13 @@ def test_evidence_item_rejects_reference_source_identity_not_matching_source() -
 
 
 def test_evidence_item_contains_no_hidden_reasoning_field() -> None:
+    """`artifact` (A5) is a deliberate, documented addition -- the
+    compound artifact this evidence's section was derived from, resolved
+    by service.py only from the same freshly-validated governed object --
+    not hidden reasoning.
+    """
     field_names = set(KnowledgeEvidenceItem.model_fields.keys())
-    assert field_names == {"reference", "title", "document_type", "lifecycle_status", "source", "section"}
+    assert field_names == {"reference", "title", "document_type", "lifecycle_status", "source", "section", "artifact"}
 
 
 # --- KnowledgeEvidenceSet: ordering, duplicates, serialization -----------------

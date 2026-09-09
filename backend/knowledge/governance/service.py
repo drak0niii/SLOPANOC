@@ -73,6 +73,7 @@ def materialize_candidate(
     document_type: KnowledgeDocumentType,
     version: KnowledgeVersion,
     governed_at: Optional[datetime] = None,
+    section_roles: Optional[dict[str, str]] = None,
 ) -> KnowledgeObject:
     """(A) GOVERNED MATERIALIZATION: the explicit boundary where a
     pre-governance `StructuredKnowledgeDocument` becomes a governed
@@ -97,24 +98,35 @@ def materialize_candidate(
     `title`/`source`/`metadata`/`applicability` are preserved from
     `structured_document.source_document` exactly, unmutated, unenriched,
     and never re-evaluated (applicability evaluation remains 5.1B's own
-    concern, never invoked here). Each `StructuredKnowledgeSection`
-    becomes one `KnowledgeSection`, preserving `sequence`/`heading`/
-    `content`/`source_locator` exactly; `section_type` is left unset
-    (`None`) -- 5.1E never fabricates a semantic type 5.1D itself never
-    determined. `created_at`/`updated_at` are set to `governed_at` only
-    if the caller supplies it -- this function never calls
+    concern, never invoked here). `artifacts` (A5) are carried through
+    from `source_document.artifacts` exactly, unmutated -- this function
+    never adds, removes, or reinterprets an artifact. Each
+    `StructuredKnowledgeSection` becomes one `KnowledgeSection`,
+    preserving `sequence`/`heading`/`content`/`source_locator`/
+    `artifact_id` exactly; `section_type` is left unset (`None`) UNLESS
+    the caller explicitly supplies `section_roles` (A5) -- a `section_key
+    -> section_type` mapping applied ONLY for the section_key(s) present
+    in it, exactly mirroring `knowledge_id`/`document_type`/`version`'s
+    own "required, explicit, never inferred" discipline: 5.1E still never
+    fabricates a semantic type on its own initiative; a caller
+    (ultimately a trusted/operator-controlled ingestion path, never the
+    model -- see A5 instruction section 40) may explicitly assert one.
+    `created_at`/`updated_at` are set to `governed_at` only if the caller
+    supplies it -- this function never calls
     `datetime.now()`/`datetime.utcnow()` itself.
     """
     source_document = structured_document.source_document
+    roles = section_roles or {}
     sections = [
         KnowledgeSection(
             section_id=final_section_id(knowledge_id, version.label, section.section_key),
             knowledge_id=knowledge_id,
             heading=section.heading,
-            section_type=None,
+            section_type=roles.get(section.section_key),
             sequence=section.sequence,
             content=section.content,
             source_locator=section.source_locator,
+            artifact_id=section.artifact_id,
         )
         for section in structured_document.sections
     ]
@@ -128,6 +140,7 @@ def materialize_candidate(
         metadata=source_document.metadata,
         applicability=source_document.applicability,
         sections=sections,
+        artifacts=source_document.artifacts,
         created_at=governed_at,
         updated_at=governed_at,
     )

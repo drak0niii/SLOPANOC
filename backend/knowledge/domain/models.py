@@ -25,13 +25,22 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from backend.knowledge.domain._shared import require_non_blank
+from backend.knowledge.domain.artifacts import KnowledgeArtifact, validate_artifact_lineage
 from backend.knowledge.domain.enums import KnowledgeDocumentType, LifecycleStatus
 
-
-def require_non_blank(value: str, field_name: str) -> str:
-    if not value or not value.strip():
-        raise ValueError(f"{field_name} must not be blank")
-    return value
+__all__ = [
+    "require_non_blank",
+    "normalize_dimension_key",
+    "normalize_dimension_value",
+    "normalize_applicability_dimensions",
+    "KnowledgeSource",
+    "KnowledgeVersion",
+    "KnowledgeMetadata",
+    "Applicability",
+    "KnowledgeSection",
+    "KnowledgeObject",
+]
 
 
 # --- Phase 5.1B: applicability dimension normalization ---------------------
@@ -275,6 +284,15 @@ class KnowledgeSection(BaseModel):
     sequence: int = Field(description="Deterministic, non-negative ordering position among a KnowledgeObject's sections.")
     content: str
     source_locator: Optional[str] = Field(default=None, description="Optional locator of this section within the original source content.")
+    artifact_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "The owning KnowledgeObject's own `artifacts[].artifact_id` this section's content was derived from, "
+            "or None if this section came from the root document's own primary text (the only case that existed "
+            "before A5's compound-artifact support). Completes hierarchical provenance (e.g. section -> embedded "
+            "spreadsheet -> sheet -> range) without a parallel citation system -- see backend/knowledge/domain/artifacts.py."
+        ),
+    )
 
     @field_validator("section_id", "knowledge_id", "content")
     @classmethod
@@ -287,6 +305,13 @@ class KnowledgeSection(BaseModel):
         if value < 0:
             raise ValueError("sequence must not be negative")
         return value
+
+    @field_validator("artifact_id")
+    @classmethod
+    def _artifact_id_non_blank_if_present(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return require_non_blank(value, "artifact_id")
 
 
 class KnowledgeObject(BaseModel):
@@ -308,6 +333,14 @@ class KnowledgeObject(BaseModel):
     metadata: KnowledgeMetadata = Field(default_factory=KnowledgeMetadata)
     applicability: Applicability = Field(default_factory=Applicability)
     sections: list[KnowledgeSection] = Field(default_factory=list)
+    artifacts: list[KnowledgeArtifact] = Field(
+        default_factory=list,
+        description=(
+            "The compound-artifact tree (A5) discovered inside this document's source: embedded images, "
+            "spreadsheets, nested documents, logs, etc. Empty for a plain-text document -- exactly the same as "
+            "before A5's compound-artifact support existed."
+        ),
+    )
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -318,6 +351,9 @@ class KnowledgeObject(BaseModel):
 
     @model_validator(mode="after")
     def _validate_sections(self) -> "KnowledgeObject":
+        validate_artifact_lineage(self.artifacts)
+        artifact_ids = {artifact.artifact_id for artifact in self.artifacts}
+
         seen_section_ids: set[str] = set()
         seen_sequences: set[int] = set()
         for section in self.sections:
@@ -340,4 +376,9 @@ class KnowledgeObject(BaseModel):
             if section.sequence in seen_sequences:
                 raise ValueError(f"duplicate section sequence {section.sequence!r}")
             seen_sequences.add(section.sequence)
+            if section.artifact_id is not None and section.artifact_id not in artifact_ids:
+                raise ValueError(
+                    f"section {section.section_id!r} has artifact_id {section.artifact_id!r}, "
+                    "which is not present in this KnowledgeObject's own artifacts"
+                )
         return self

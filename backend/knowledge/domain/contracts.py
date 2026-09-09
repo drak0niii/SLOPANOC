@@ -33,11 +33,22 @@ class KnowledgeEvidenceReference(BaseModel):
     source_system: str
     source_id: str
     source_locator: Optional[str] = None
+    artifact_id: Optional[str] = Field(
+        default=None,
+        description="Set when the referenced section's content was itself derived from a compound artifact (A5) -- the artifact_id within that KnowledgeObject's own artifacts.",
+    )
 
     @field_validator("knowledge_id", "version_label", "source_system", "source_id")
     @classmethod
     def _non_blank(cls, value: str, info: Any) -> str:
         return require_non_blank(value, info.field_name)
+
+    @field_validator("artifact_id")
+    @classmethod
+    def _artifact_id_non_blank_if_present(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return require_non_blank(value, "artifact_id")
 
 
 class KnowledgeContextItem(BaseModel):

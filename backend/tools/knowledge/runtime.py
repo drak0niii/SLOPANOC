@@ -73,15 +73,28 @@ def get_or_init_run_state(run_id: str, clock: Clock = _default_clock) -> Knowled
     every subsequent call within the run reuses the SAME state object,
     and cleanup is unconditional in chat_service.py's own `finally`
     block regardless of how many searches actually happened).
-    Applicability context starts empty (§11) -- never inferred from free
-    text, a title, or model reasoning.
+
+    Applicability context starts EMPTY by default (§11) -- never inferred
+    from free text, a title, or model reasoning -- UNLESS incident_
+    manager's own `before_agent_callback` (A5 final corrective pass,
+    Correction D: `evidence.capture_known_applicability_context`) already
+    registered a TRUSTED context for this run_id from `IncidentManager
+    Request.known_applicability_facts` (facts the user explicitly,
+    literally stated this turn -- never a model guess). Popped exactly
+    once here, so it applies for the whole run without a second
+    "did I already use it" flag.
     """
+    from backend.api.applicability_context_capture import pop_known_applicability_context
+
     with _lock:
         state = _run_states.get(run_id)
         if state is None:
+            known_context = pop_known_applicability_context(run_id)
             state = KnowledgeRunEvidenceState(
                 run_id=run_id,
-                execution_context=KnowledgeToolExecutionContext(as_of=clock(), applicability_context=ApplicabilityContext()),
+                execution_context=KnowledgeToolExecutionContext(
+                    as_of=clock(), applicability_context=known_context if known_context is not None else ApplicabilityContext()
+                ),
             )
             _run_states[run_id] = state
         return state

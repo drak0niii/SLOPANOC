@@ -47,8 +47,8 @@ not that the code is wrong.
 | POST-5.1 A — Cloud SQL PostgreSQL | ✅ COMPLETE |
 | POST-5.1 B — Multimodal Attachments (B0–B7) | ✅ COMPLETE |
 | POST-B7 UI/UX Refinement Milestone | ✅ COMPLETE |
-| A5 — Real TELCO/RAN MOP ingestion | **← NEXT** (not started) |
-| Phase 4H — Security Hardening | FUTURE (after A5) |
+| A5 — Knowledge Island Ingestion Foundation + Real TELCO/RAN Compound Knowledge Validation | ✅ COMPLETE |
+| Phase 4H — Security Hardening | **← NEXT** — not started |
 | 5.2–5.7 — Operational Integrations | FUTURE |
 | Phase 6 — Agent Expansion + Context Engineering | FUTURE |
 | Phase 7 — Advanced Troubleshooting / JOC | FUTURE (product target) |
@@ -80,7 +80,7 @@ PHASE 4 — Reliable Stateful Runtime
   4E ADK SSE Runtime
   4F React / Backend Integration
   4G Approval UX
-  4H Security Hardening — future, after A5
+  4H Security Hardening — ← NEXT, not started
 
 PHASE 5 — Context + Operational Integrations
 
@@ -107,9 +107,11 @@ PHASE 5 — Context + Operational Integrations
     regression, and real-stack live validation all passed; see §5a below;
     separate from B0–B7, no B7 architecture change)
 
-  A5 Real TELCO/RAN MOP Ingestion — ← NEXT (not started)
+  A5 Knowledge Island Ingestion Foundation + Real TELCO/RAN Compound
+    Knowledge Validation — COMPLETE, including real live-runtime
+    validation (see §8 below)
 
-  Phase 4H Security Hardening — after A5, not started
+  Phase 4H Security Hardening — ← NEXT, not started
 
   5.2 ITSM
   5.3 Alarm / Fault
@@ -265,10 +267,18 @@ agent.
 cleanly as more sources and more specialists are added?
 
 **Capability introduced (target, not built):** a Context Engineering
-Layer that assembles bounded Operational/Knowledge/Case context for a
-specialist from whatever sources exist at the time; a second specialist
-(Troubleshooting Manager) alongside Incident Manager; an optional
-supervisory Head of Automated Operations layer.
+Layer that assembles bounded Operational/Knowledge/Case/Experience-Memory
+context for a specialist from whatever sources exist at the time; a
+second specialist (Troubleshooting Manager) alongside Incident Manager;
+an optional supervisory Head of Automated Operations layer; a reusable
+**Skills** behavioral layer ("how should this kind of work be
+performed?" — see `docs/AGENT_CONTRACT.md` §3a and
+`docs/TROUBLESHOOTING_STRATEGY.md` §12a) the Troubleshooting Manager
+selects and executes instead of one new agent per fault type; and
+**Experience Memory** (prior operational experience/pattern information
+— see `docs/KNOWLEDGE_CONTRACT.md` §22.3–22.4), distinct from Approved
+Knowledge and never silently promoted to it without the same human-gated
+`CANDIDATE → APPROVED` governance §22.4 already defines.
 
 **Depends on:** Phase 5 having produced more than one real context source
 (Teams, Generic KM, and eventually 5.2–5.7) — there is nothing to
@@ -290,9 +300,10 @@ evidence, update hypotheses, and continue until resolution or escalation
 State (problem, symptoms, known facts, unknowns, hypotheses, eliminated
 hypotheses, actions performed, evidence, relevant knowledge, current
 MOP/SOP, current diagnostic step, expected/actual result, next action,
-resolution state), a next-best-diagnostic-action loop, and defined end
-states (RESOLVED / SUFFICIENTLY NARROWED / ESCALATE / DISPATCH /
-HANDOVER).
+resolution state), a next-best-diagnostic-action loop, Skill
+selection/execution (Phase 6's Skills layer put to use), Experience
+Memory informing (never overriding) reasoning, and defined end states
+(RESOLVED / SUFFICIENTLY NARROWED / ESCALATE / DISPATCH / HANDOVER).
 
 **Depends on:** Phase 6's context-engineering architecture and multiple
 real Operational Context sources — an iterative diagnostic loop is only
@@ -321,8 +332,10 @@ flowchart TD
 
 Phase 7 is the product strategy target defined in
 `docs/TROUBLESHOOTING_STRATEGY.md`. **It is not implemented today.**
-Phases 0–5 (through POST-5.1 B, B0–B7) are complete; A5 (real TELCO/RAN
-MOP ingestion) is the current next step within Phase 5.
+Phases 0–5 (through POST-5.1 B, B0–B7) are complete; A5 (Knowledge
+Island ingestion foundation + real TELCO/RAN compound knowledge
+validation) is COMPLETE, including real live-runtime validation, within
+Phase 5.
 
 ---
 
@@ -415,23 +428,32 @@ flowchart TD
     User --> TM[Team Manager]
     TM --> IM[Incident Manager]
     TM --> TSM["Troubleshooting Manager (FUTURE)"]
+    TSM --> SK["Skills (FUTURE)<br/>reusable behavior, not an agent"]
     IM --> CEL["Context Engineering (FUTURE)"]
     TSM --> CEL
+    SK --> CEL
     CEL --> OC[Operational Context]
     CEL --> KC[Knowledge Context]
     CEL --> CC[Case Context]
+    CEL --> EM["Experience Memory (FUTURE)"]
     HOO["Head of Automated Operations<br/>(OPTIONAL FUTURE SUPERVISORY LAYER — never a mandatory hop)"] -.-> TM
 ```
 
 Head of Automated Operations appears only as an optional future
 supervisory layer — it must never be shown, or built, as a mandatory hop
-in the user-facing runtime path.
+in the user-facing runtime path. Skills are drawn beneath Troubleshooting
+Manager to show they are SELECTED/EXECUTED by it, not a peer reasoning
+boundary of their own (`docs/AGENT_CONTRACT.md` §3a). Experience Memory
+is drawn as a peer input to Context Engineering, distinct from Knowledge
+Context, and never a source Context Engineering treats as Approved
+Knowledge (`docs/KNOWLEDGE_CONTRACT.md` §22.3–22.4).
 
 ### G. Phase 7 troubleshooting loop topology (target, not built)
 
 ```mermaid
 flowchart TD
-    START["Problem / current incident"] --> DISC[Context Discovery]
+    START["Problem / current incident"] --> SKILL["Skill selected (e.g. Troubleshoot VSWR) (FUTURE)"]
+    SKILL --> DISC[Context Discovery]
     DISC --> STATE[Update Troubleshooting State]
     STATE --> HYP[Update hypotheses]
     HYP --> NEXT["Choose Next-Best Diagnostic Action"]
@@ -443,6 +465,11 @@ flowchart TD
     MORE -->|yes| DISC
     MORE -->|no| END["RESOLVED / SUFFICIENTLY NARROWED / ESCALATE / DISPATCH / HANDOVER"]
 ```
+
+"Context Discovery" draws on Knowledge Context, Case Context, Operational
+Context, and Experience Memory (§F above) — the Skill orchestrates which
+of these to consult, it does not replace any of them
+(`docs/TROUBLESHOOTING_STRATEGY.md` §12a).
 
 ---
 
@@ -730,8 +757,9 @@ Gateway Group Test").
 **POST-5.1 B — Multimodal Attachments (B0–B7): ✅ COMPLETE.**
 **The POST-B7 UI/UX Refinement Milestone** (see §5a immediately
 below) is **✅ COMPLETE** — implementation, full regression, and
-real-stack live validation all passed. **NEXT: A5** — real TELCO/RAN MOP
-ingestion (not started). Phase 4H security hardening follows A5, per the
+real-stack live validation all passed. **A5** (see §8 below) is
+**✅ COMPLETE**, including real live-runtime validation.
+**Phase 4H security hardening is NEXT**, per the
 locked roadmap — not started.
 
 Do not invent B7 implementation details beyond what this document and
@@ -844,8 +872,8 @@ pre-existing prompt template this milestone never touched in any pass —
 not a POST-B7 regression, left untouched.
 
 **STATUS: ✅ DONE.** The POST-B7 UI/UX Refinement Milestone is COMPLETE —
-implemented, automated-tested, and live-validated. A5 is now the next
-milestone (not started).
+implemented, automated-tested, and live-validated. A5 (see §8 below) is
+**✅ COMPLETE**, including real live-runtime validation.
 
 ---
 
@@ -909,27 +937,246 @@ in `docs/KNOWLEDGE_CONTRACT.md`.
 
 ---
 
-## 8. A5 status (not started)
+## 8. A5 status (✅ COMPLETE — real live-runtime validation performed)
 
-A5 — **Real TELCO/RAN MOP ingestion** — has not started. It ingests the
-real TELCO/RAN MOPs through the existing, unchanged Generic KM pipeline:
+A5 — **Knowledge Island Ingestion Foundation + Real TELCO/RAN Compound
+Knowledge Validation** — proves the existing, unchanged Generic KM
+pipeline can safely ingest real COMPOUND operational knowledge (not
+just plain text):
 
 ```text
-MOP
-  → source/import boundary
-  → IngestedKnowledgeDocument
-  → structured processing
-  → governance
-  → KnowledgeRepository
-  → Cloud SQL PostgreSQL
-  → retrieval
-  → selected evidence
-  → specialist reasoning
+Knowledge Island source (local file, admin/dev adapter for this milestone)
+  → compound extraction (DOCX/XLSX/PDF/TXT, recursive embedded artifacts)
+  → hashing / deduplication / lineage
+  → durable artifact storage (GCS, content-hash-addressed)
+  → optional multimodal image interpretation
+  → IngestedKnowledgeDocument (source + content + artifacts[])
+  → structured processing (existing HeadingStructureProcessor, reused for
+    root text AND each artifact's own extracted text)
+  → governance (existing CANDIDATE/APPROVED/ARCHIVE, unchanged)
+  → KnowledgeRepository (existing payload-JSON schema, no migration needed)
+  → retrieval (existing, unchanged)
+  → provenance (existing, extended additively with artifact/lineage)
+  → Incident Manager (existing knowledge_search/knowledge_select_evidence,
+    one new prompt paragraph: default one-command-at-a-time troubleshooting)
 ```
 
-No MOP-specific architecture is introduced — A5 is a content-ingestion
-milestone against the same generic pipeline Phase 5.1 already built, not
-a new capability.
+**New, additive-only domain model:** `KnowledgeArtifact`
+(`backend/knowledge/domain/artifacts.py`) — open `kind` string (never a
+closed enum, mirrors `KnowledgeSection.section_type`), a genuinely
+bounded `ArtifactExtractionStatus` enum (COMPLETE/PARTIAL/FAILED/
+SKIPPED). `IngestedKnowledgeDocument`/`KnowledgeSection`/
+`StructuredKnowledgeSection`/`KnowledgeObject`/`KnowledgeEvidenceReference`/
+`KnowledgeEvidenceItem` each gained one optional, additive field
+(`artifacts`/`artifact_id`/`artifact`) — every pre-A5 plain-text
+document/section is byte-for-byte unaffected. **No Alembic migration**
+was added — empirically proven the existing `payload` JSON column
+already round-trips artifact data (including a `storage_ref`) through
+`SqlAlchemyKnowledgeRepository` unchanged, dialect-neutral for SQLite
+and Cloud SQL PostgreSQL alike.
+
+**Extraction** (`backend/knowledge/ingestion/{extraction.py,extractors/}`,
+inside the existing, unmodified `backend/knowledge/` dependency
+boundary — `python-docx`/`pypdf`/`openpyxl` are document-format
+parsers, not cloud/vendor SDKs): real DOCX paragraph/heading/table/
+hyperlink extraction in true document order with Word headings promoted
+to Markdown so the EXISTING `HeadingStructureProcessor` segments them
+with zero new processor; real XLSX Workbook→Sheet→header/row structure
+(formulas read as literal data, never evaluated); real PDF page text/
+provenance (no OCR, no embedded-action execution capability at all);
+recursive embedded-artifact discovery (bounded depth/count/size,
+defensive against zip/path traversal by construction — nothing is ever
+written to a filesystem path); real container-structure format sniffing
+(extension never trusted). **Durable artifact storage**
+(`backend/knowledge_ingestion/artifact_storage.py`, deliberately OUTSIDE
+`backend/knowledge/` — the same `google.cloud`-forbidden-in-`backend/
+knowledge/` rule that already governs `backend/tools/knowledge/`)
+content-hash-addressed (`knowledge-artifacts/<hash>`), a SEPARATE
+bucket setting from chat attachments, NO chat-attachment READY/LINKED/
+DELETED lifecycle. **Multimodal image interpretation** — a generic
+Protocol (`backend/knowledge/ingestion/image_interpretation.py`) plus a
+concrete Gemini implementation reusing the existing shared model client
+(no second Gemini/Vertex client architecture). **Admin/dev ingestion
+entry point** (`backend/knowledge_ingestion/local_file_adapter.py`,
+instruction section 52) — explicit file paths only, read-only, graceful
+degradation when storage/interpreter are unconfigured. **Incident
+Manager** gained one prompt-only addition establishing default
+one-diagnostic-action-at-a-time troubleshooting behavior with an
+explicit full-procedure override, per docs/TROUBLESHOOTING_STRATEGY.md
+— no new agent, no persistent Troubleshooting State.
+
+**Real-corpus validation (PASSED, live, in this environment):** all
+three real MOP files structurally validated directly from their real,
+external paths (never copied/committed) — both real Rogers MOPs
+correctly recognized as compound documents with real 2-level recursion,
+real cross-document deduplication of a shared embedded attachment, and
+`Document1.docx`'s critical VSWR-Over-Threshold "No restart" rule
+surviving extraction verbatim, distinct from the document's other
+restart-allowed cases.
+
+**Real GCS storage validated live** against the real, already-
+provisioned GCS project (Application Default Credentials): a real
+upload, a real content-hash dedup skip, a real byte-identical download,
+and a clean self-delete, using synthetic non-sensitive data. **Real
+Gemini/Vertex image interpretation was attempted but not available** in
+this implementation session (Google AI Studio mode, no API key
+configured — not this backend's real deployed Vertex AI path); the
+attempt failed closed correctly with no fabrication, which is itself
+useful proof of the failure path. **Real Cloud SQL PostgreSQL
+persistence was not attempted** (no Cloud SQL Auth Proxy running in
+this session) — SQLite persistence of the identical, dialect-neutral
+schema was proven instead.
+
+No MOP-specific architecture is introduced anywhere — A5 is a generic
+compound-content-ingestion capability against the same generic pipeline
+Phase 5.1 already built, not a new one, and not a one-off MOP reader.
+
+**A5 CORRECTIVE PASS (before real-runtime validation) — three targeted
+gaps closed:**
+
+1. **Real embedded OLE TXT/log support.** The original pass's "1
+   unsupported legacy OLE object" finding was itself incomplete — both
+   real Rogers MOPs' embedded OLE2 Compound-File-Binary object is a
+   classic "Insert Object > Create from File" Package embed whose real
+   payload is a genuine health-check log, `EnodeB_HC.txt` (byte-
+   identical in both files). New module
+   `backend/knowledge/ingestion/extractors/ole.py`, one new narrow
+   dependency (`olefile==0.47`, read-only, pure-Python, zero code-
+   execution capability — `oletools` was evaluated and rejected for
+   pulling in a broader GUI/VBA-decompiler dependency tree), wired into
+   the existing recursive dispatch so the payload flows through the
+   SAME generic image/docx/xlsx/pdf/txt_log pipeline as any other
+   embedded object. Now correctly discovered, typed, and lineage-linked
+   in both real Rogers MOPs; zero unsupported OLE objects remain.
+2. **Content dedup vs. artifact-occurrence lineage — audited and PROVEN
+   CORRECT, no bug found.** `deterministic_artifact_id` already keys on
+   `(parent, kind, position, content_hash)` together, never
+   `content_hash` alone, so content-addressed storage dedup and
+   distinct-occurrence lineage are structurally separate by
+   construction — proven for all three conceptual duplicate-content
+   cases (cross-root, same-root-different-parents, same-root-different-
+   depths) with synthetic tests.
+3. **Nesting-depth semantics — audited and confirmed valid.** Depth 0 =
+   embedded directly in the root (the root itself is never an artifact);
+   depth 1 = nested one level deeper. The invariant that matters — the
+   full parent chain is deterministically recoverable — was proven
+   directly against the real corpus (root MOP → embedded Word document
+   → nested image).
+
+**STATUS AT THAT POINT (superseded — see below): IMPLEMENTATION
+COMPLETE — REAL LIVE-RUNTIME VALIDATION PENDING** (Gemini/Vertex + Cloud
+SQL PostgreSQL, through the real React → FastAPI → Team Manager →
+Incident Manager path — the same kind of live pass every prior
+milestone in this project has required a human to perform in the real
+deployed environment); unchanged by this corrective pass, which closed
+implementation/evidence gaps only. Full regression (after the
+corrective pass): backend **2846 passed/1 skipped** (2822 original-pass
+baseline + 24 net new); KM-focused subset **829 passed**; `npm run
+build`/`npx tsc -b` clean.
+
+**A5 FIRST LIVE-RUNTIME VALIDATION PASS** (real Vertex Gemini, real
+Cloud SQL PostgreSQL, real GCS, the real FastAPI app — never direct
+Gemini calls for conversational acceptance tests): most gates passed,
+including the two most safety-critical ones (VSWR restart prohibition;
+mandatory conflict isolation, never blending two documents' differing
+timing values). One gate failed reproducibly, including after a
+legitimate prompt-strengthening attempt: the model did not reliably
+default to one diagnostic action/command at a time — it gave 3-4 step
+numbered procedures even for "what should I check?" Per this project's
+own explicit stop condition, A5 was NOT marked complete at that point.
+
+**A5 FINAL CORRECTIVE IMPLEMENTATION PASS** — closes the one-command
+defect with a deterministic runtime mechanism (never a third,
+stronger-worded prompt paragraph), plus three further live-testing
+findings, in four bounded, explicitly-authorized areas:
+
+- **Deterministic one-command-at-a-time enforcement.** A new typed
+  `TroubleshootingGuidance` field (`NEXT_STEP`/`FULL_PROCEDURE` mode) on
+  `IncidentManagerResponse`, populated via Gemini's own schema-guided
+  structured output. A pure Python renderer
+  (`render_troubleshooting_guidance`,
+  `backend/api/troubleshooting_guidance_context.py`) structurally never
+  reads `full_procedure_steps` in `NEXT_STEP` mode — a leaked later step
+  is not a possible code path, not merely an unlikely one. Applied via a
+  hard completion-boundary override in `chat_service.py`, mirroring the
+  already-proven `enforce_governed_knowledge_at_completion` pattern.
+  Default is `NEXT_STEP`; `FULL_PROCEDURE` requires the user to actually
+  ask for it (model semantic judgment, deterministically rendered —
+  never keyword/regex routing). Not Phase 7 — one typed field, one pure
+  render function, no Troubleshooting State/hypothesis engine.
+- **EMF/WMF image understanding.** 4 of 15 real embedded images had
+  failed Gemini interpretation outright (`400 INVALID_ARGUMENT`)
+  because they are EMF/WMF vector images. Pillow (already pinned, no
+  new dependency) rasterizes them via its own Windows-GDI-backed
+  `WmfImagePlugin`, confirmed against 3 real corpus files.
+  `rasterize_vector_image` falls back safely to the original bytes on
+  any failure — never a crash, never a regression versus prior
+  behavior; honestly documented as a Windows-GDI-specific mechanism
+  that may not carry over to a Linux/Cloud Run deployment.
+- **Native-source-evidence precedence.** `KnowledgeRetrievalItem`
+  gained `is_derived: bool`; ranking now buckets relevance score first
+  (width `0.15`, generic — not query-tuned), then tie-breaks within a
+  bucket by `is_derived` (native wins), then exact relevance — native
+  content wins only among "sufficiently similar" candidates, never
+  suppressing a genuinely more-relevant derived one.
+- **Live applicability-context propagation.** `IncidentManagerRequest`
+  gained `known_applicability_facts`, populated by team_manager's own
+  model ONLY from facts explicitly, literally stated in the current
+  message — never inferred. A new `before_agent_callback`
+  (`capture_known_applicability_context`) threads it into
+  `ApplicabilityContext` via a new run-scoped store, consumed by
+  `get_or_init_run_state` on first `knowledge_search` call. No
+  hardcoded vocabulary; missing facts leave `ApplicabilityContext` empty
+  exactly as before this correction.
+
+**Two genuine live defects found and fixed during this pass:**
+
+1. A completion-boundary discard-ordering bug: `chat_service.py`'s
+   turn-scoped cleanup `finally` block discarded the captured
+   `troubleshooting_guidance` BEFORE the later completion-boundary
+   override could pop it, silently falling back to team_manager's own
+   unreliable free-text paraphrase — the exact behavior this correction
+   exists to eliminate. Fixed by adopting the same snapshot-before-
+   discard shape already used for `selected_knowledge_evidence` in the
+   same `finally` block. Re-verified live: the rendered answer now
+   matches the deterministic renderer's output byte-for-byte.
+2. A Pydantic `default_factory=dict` field on `known_applicability_facts`
+   broke ADK's own production LLM-call tracing
+   (`PydanticSerializationError` inside `google.adk.telemetry.tracing`)
+   on every real turn through Incident Manager — found via the full
+   backend suite (24 failing tests), not live testing, but would have
+   broken real production conversational turns. Fixed by switching to
+   `Optional[dict[str, list[str]]] = Field(default=None, ...)`.
+
+**Full regression (final corrective pass):** backend **2904 passed, 1
+skipped** (2846 baseline + 58 net new); KM-focused subset **965
+passed**; Incident Manager-focused subset **76 passed**; `npm run
+build`/`npx tsc -b` both clean; `git diff --check` clean.
+
+**A5 FINAL LIVE-RUNTIME RETEST** (real Vertex Gemini, real Cloud SQL
+PostgreSQL, real GCS, the real FastAPI app): the real corpus was
+re-ingested (read-back confirmed **15/15 images interpreted, 0
+failed**, versus 11/15 before the EMF correction). All 8 mandatory
+retests passed: one-command default on the first turn and a same-
+session follow-up (deterministic rendering confirmed byte-for-byte);
+`FULL_PROCEDURE` override on explicit request (7 grounded steps);
+state-changing prerequisite correctly withheld until confirmed (a bare,
+non-question first turn gave a safe description with no executable
+command at all — a recorded wording-sensitivity, not a leaked command);
+native XLSX header text cited verbatim over the image-derived
+description; known-4G applicability context correctly captured and
+participated (both genuinely-applicable documents retained per the
+deterministic contract, with the differing timing values reported
+transparently rather than fabricated into one blended number — a
+recorded nuance for future refinement, not a contract violation);
+ambiguous (no-technology-stated) context committed cleanly to one
+source's value, never blending; and 3 previously-uninterpretable images
+(a Citrix Gateway login page, an RRU status CLI, a Microsoft
+verification-code prompt) now correctly described and cited.
+
+**STATUS: A5 — COMPLETE.** Real live-runtime validation performed end
+to end, including both safety-critical gates and all 8 retested gates.
+**NEXT: Phase 4H security hardening** (not started).
 
 ---
 

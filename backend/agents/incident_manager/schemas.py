@@ -81,6 +81,21 @@ class IncidentManagerRequest(BaseModel):
             "converting this into UTC from_datetime/to_datetime boundaries."
         ),
     )
+    known_applicability_facts: Optional[dict[str, list[str]]] = Field(
+        default=None,
+        description=(
+            "A5 final corrective pass (Correction D): trusted operational facts the CURRENT user message "
+            "EXPLICITLY, LITERALLY states -- e.g. the user wrote 'Ericsson 4G node' -> "
+            "{'vendor': ['ericsson'], 'technology': ['4g']}. Same open-keyed shape as "
+            "Applicability.dimensions/ApplicabilityContext.dimensions -- never a fixed TELCO vocabulary. Set "
+            "ONLY from a literal statement in THIS message, never inferred/assumed/guessed, never carried over "
+            "from earlier turns unless the user restates it this turn. Leave empty (the default) whenever "
+            "nothing was explicitly stated -- an empty/absent dimension means UNKNOWN applicability for that "
+            "dimension, never a guess. This is the ONLY trusted source of applicability facts for this turn; "
+            "incident_manager's own knowledge_search calls resolve applicability deterministically from this "
+            "field, never from its own free-text reasoning."
+        ),
+    )
     requires_governed_knowledge: bool = Field(
         default=False,
         description=(
@@ -99,6 +114,88 @@ class IncidentManagerRequest(BaseModel):
             "incident_manager turn can use both Teams and governed "
             "knowledge together."
         ),
+    )
+
+
+class TroubleshootingInteractionMode(str, Enum):
+    """A5 final corrective pass -- the closed, two-value decision that
+    replaces free-prose self-restraint for the one-command-at-a-time
+    product invariant with a TYPED field a deterministic Python renderer
+    (backend/api/troubleshooting_guidance_context.py) can act on, rather
+    than relying on the model's own prose staying short. `NEXT_STEP` is
+    the semantic default the model should reach for whenever uncertain --
+    `FULL_PROCEDURE` is the explicit exception, reached only when the
+    user actually asked for the complete procedure/all commands/every
+    step, or said not to wait for them.
+    """
+
+    NEXT_STEP = "next_step"
+    FULL_PROCEDURE = "full_procedure"
+
+
+class TroubleshootingStep(BaseModel):
+    """One grounded step, used only inside `full_procedure_steps` (never
+    for `NEXT_STEP` mode, which uses `next_action`/`command` directly).
+    `command`, when set, must be reproduced EXACTLY as the source states
+    it -- see `IncidentManagerResponse`'s own COMMAND TRUST discipline,
+    unchanged by this field's existence.
+    """
+
+    action: str
+    command: Optional[str] = None
+
+
+class TroubleshootingGuidance(BaseModel):
+    """A5 final corrective pass -- the bounded, TYPED troubleshooting-
+    response contract. Populated by incident_manager ONLY for a genuine
+    diagnostic/troubleshooting question grounded in Approved knowledge
+    describing a procedure -- left unset (`None`, the default, via
+    `IncidentManagerResponse.troubleshooting_guidance`) for every other
+    kind of request (a Teams summary, a decision/action/risk list, a
+    plain factual question, ...), which remain completely unaffected by
+    this mechanism.
+
+    THIS IS NOT TROUBLESHOOTING STATE: it is an OUTPUT-SHAPE decision for
+    THIS turn only, populated fresh every time from THIS turn's own
+    context/evidence -- nothing here is persisted as a hypothesis/
+    diagnostic-graph/next-best-action object, and conversation continuity
+    remains entirely the existing session-history mechanism (A5
+    instruction section 5: "Do NOT build Phase 7").
+
+    DETERMINISTIC ENFORCEMENT, not prompt-only self-restraint: a Python
+    renderer (`backend/api/troubleshooting_guidance_context.py`'s
+    `render_troubleshooting_guidance`) constructs the FINAL user-visible
+    text directly from these typed fields when `interaction_mode ==
+    NEXT_STEP` -- `full_procedure_steps` (even if the model populated it
+    anyway) is structurally never read by that renderer in `NEXT_STEP`
+    mode, so a later procedural step the model may have also generated
+    cannot leak into what the user actually sees.
+    """
+
+    interaction_mode: TroubleshootingInteractionMode
+    interpretation: Optional[str] = Field(
+        default=None,
+        description="A brief (1-2 sentence) grounded interpretation of the current context/evidence -- never a list of options.",
+    )
+    next_action: Optional[str] = Field(
+        default=None,
+        description="Required when interaction_mode is NEXT_STEP: the ONE next diagnostic action, in plain language.",
+    )
+    command: Optional[str] = Field(
+        default=None,
+        description=(
+            "At most ONE exact operational command for this step, reproduced verbatim from Approved, selected "
+            "governed knowledge -- never invented, paraphrased, or combined with another command. None if the next "
+            "action needs no command (e.g. a purely visual/manual check)."
+        ),
+    )
+    evidence_requested: Optional[str] = Field(
+        default=None,
+        description="Required when interaction_mode is NEXT_STEP: a plain request for the specific output/evidence the engineer should return next.",
+    )
+    full_procedure_steps: list[TroubleshootingStep] = Field(
+        default_factory=list,
+        description="Populated ONLY when interaction_mode is FULL_PROCEDURE -- every grounded step/command from the applicable Approved procedure, in source order.",
     )
 
 
@@ -274,3 +371,12 @@ class IncidentManagerResponse(BaseModel):
     write_action: Optional[TeamsWriteActionResult] = None
     candidate_titles: list[str] = Field(default_factory=list)
     detail: Optional[str] = None
+    troubleshooting_guidance: Optional[TroubleshootingGuidance] = Field(
+        default=None,
+        description=(
+            "A5 final corrective pass: set ONLY for a genuine diagnostic/troubleshooting question grounded in "
+            "Approved knowledge describing a procedure -- see TroubleshootingGuidance's own docstring. Left unset "
+            "for every other kind of request; `summary` remains the authoritative answer text in that case, "
+            "exactly as before this field existed."
+        ),
+    )

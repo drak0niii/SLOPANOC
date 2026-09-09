@@ -83,7 +83,10 @@ def test_ingested_document_has_no_knowledge_context_item_field() -> None:
 
 def test_ingested_document_requires_no_agent_or_retrieval_fields() -> None:
     """No agent-specific field, and no retrieval/ranking score field,
-    exists on the generic ingestion contract.
+    exists on the generic ingestion contract. `artifacts` (A5) is a
+    deliberate, documented addition -- the compound-artifact tree a
+    source adapter's own extraction discovered -- not an
+    agent/retrieval-specific field.
     """
     fields = set(IngestedKnowledgeDocument.model_fields)
     assert fields == {
@@ -96,6 +99,7 @@ def test_ingested_document_requires_no_agent_or_retrieval_fields() -> None:
         "metadata",
         "applicability",
         "media_type",
+        "artifacts",
         "source_revision",
         "observed_at",
     }

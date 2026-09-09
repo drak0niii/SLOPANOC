@@ -180,9 +180,12 @@ consistent target.
   attachments, B0–B7 — **COMPLETE**, including B7's own real-stack live
   validation).
 - POST-B7 UI/UX Refinement Milestone is **complete and live-validated**
-  (see [Roadmap](#roadmap)). **NEXT:** A5 (real TELCO/RAN MOP ingestion
-  through the existing, unchanged
-  Generic KM pipeline), then Phase 4H (security hardening).
+  (see [Roadmap](#roadmap)). **A5** (Knowledge Island ingestion
+  foundation + real TELCO/RAN compound knowledge validation, through
+  the existing, unchanged Generic KM pipeline) is **COMPLETE**,
+  including real live-runtime validation (real Vertex Gemini, real
+  Cloud SQL PostgreSQL, real GCS). **NEXT: Phase 4H** (security
+  hardening) — not started.
 - **FUTURE (target architecture, not yet designed in detail):** a Context
   Engineering Layer that assembles bounded context from Operational,
   Knowledge, and Case context for a specialist; a second specialist
@@ -198,23 +201,144 @@ flowchart TD
     HOO["Head of Automated Operations (FUTURE)"] --> TM[Team Manager]
     TM --> IM["Incident Manager (CURRENT)"]
     TM --> TSM["Troubleshooting Manager (FUTURE)"]
+    TSM --> SK["Skills (FUTURE)<br/>reusable behavior, not an agent"]
     IM --> CEL["Context Engineering Layer (FUTURE)"]
     TSM --> CEL
+    SK --> CEL
     CEL --> OC["Operational Context<br/>Teams (CURRENT)"]
     CEL --> KC["Knowledge Context<br/>Generic KM Layer (CURRENT)"]
     CEL --> CC["Case Context<br/>Cases (CURRENT)"]
+    CEL --> EM["Experience Memory (FUTURE)"]
     KC --> KM["MOP / SOP / RCA / KB<br/>(behind Generic KM — CURRENT platform, A5 adds real TELCO/RAN MOP content)"]
 ```
 
 Read this diagram as target architecture for the Context Engineering
-Layer/Troubleshooting Manager/Head of Automated Operations specifically —
-those three remain FUTURE, not yet built. Everything else marked CURRENT
-in the diagram is real and running today. The current, actually-running
-path remains exactly the [Architecture](#architecture) and
-[Agent topology](#agent-topology) sections above: the user talks to Team
-Manager, which delegates to Incident Manager, which uses Teams tools
-and/or governed-KM tools, through Power Automate and the Knowledge
-Repository respectively.
+Layer/Troubleshooting Manager/Head of Automated Operations/Skills/
+Experience Memory specifically — those remain FUTURE, not yet built.
+Everything else marked CURRENT in the diagram is real and running today.
+The current, actually-running path remains exactly the
+[Architecture](#architecture) and [Agent topology](#agent-topology)
+sections above: the user talks to Team Manager, which delegates to
+Incident Manager, which uses Teams tools and/or governed-KM tools,
+through Power Automate and the Knowledge Repository respectively.
+
+### Canonical mental model: Knowledge/RAG, Memory, Skills, Tools/MCP, Context Engineering, Agents
+
+SLOPANOC uses one consistent vocabulary across Knowledge/RAG, Memory,
+Skills, Tools/Connectors/MCP, Context Engineering, and Agents. Most of
+these concepts already exist in the current architecture in some form —
+this section names them precisely so future work doesn't invent
+competing terms. Full detail: `docs/AGENT_CONTRACT.md` §3a (Agent vs.
+Skill vs. Tool/MCP), `docs/KNOWLEDGE_CONTRACT.md` §22 (Knowledge vs. RAG
+vs. Memory), `docs/TROUBLESHOOTING_STRATEGY.md` §12a (Skills), and
+`CLAUDE.md`'s architecture-invariants section.
+
+```text
+                              USER
+                               │
+                               ▼
+                         TEAM MANAGER
+                    sole user-facing agent — CURRENT
+                               │
+                               ▼
+                       SPECIALIST AGENT
+      Incident Manager (CURRENT) / future specialists (FUTURE)
+                               │
+                    "What must I achieve?"
+                               │
+                               ▼
+                            SKILL — FUTURE
+                      "How do I do it?"
+                               │
+          ┌────────────────────┼────────────────────┐
+          │                    │                    │
+          ▼                    ▼                    ▼
+   KNOWLEDGE CONTEXT        MEMORY          TOOLS / CONNECTORS
+    "What do we know?"   "What have we       "What can I
+     CURRENT (RAG via      seen before?"      observe/do?"
+     Generic KM)          Session: CURRENT    Teams: CURRENT
+                          Case: CURRENT       Others: FUTURE
+                          Experience: FUTURE  (MCP optional, FUTURE)
+          │                    │                    │
+          ▼                    ▼                    ▼
+         RAG             experience/case       operational
+      CURRENT               context               context
+                          Case: CURRENT
+                       Experience: FUTURE
+          │                    │                    │
+          └────────────────────┼────────────────────┘
+                               ▼
+                     CONTEXT ENGINEERING
+                             FUTURE
+                               │
+                               ▼
+                           REASONING
+                               │
+                               ▼
+                     NEXT BEST ACTION
+                               │
+                               ▼
+                  ONE CHECK / ONE COMMAND
+                    CURRENT (A5's deterministic
+                     one-command response contract)
+                               │
+                               ▼
+                    ENGINEER RETURNS DATA
+                               │
+                               └──── repeat
+```
+
+This is a conceptual TARGET model — boxes are individually labeled
+CURRENT or FUTURE; the diagram as a whole is not implemented as a single
+runtime pipeline today. In particular: the SKILL layer, MEMORY's
+Experience Memory branch, TOOLS' non-Teams connectors and MCP, and
+CONTEXT ENGINEERING are all FUTURE. KNOWLEDGE CONTEXT/RAG (Generic KM),
+Session Memory, Case Context, Teams tools, and the ONE CHECK / ONE
+COMMAND deterministic response contract (A5) are CURRENT and running
+today.
+
+**Definitions:**
+
+- **Knowledge Context** answers *"what does our governed knowledge say?"*
+  — **RAG** is the retrieval mechanism Generic KM already uses to answer
+  it (`docs/KNOWLEDGE_CONTRACT.md` §16, §22.1). RAG is not a second
+  repository; it is how the one Knowledge Repository is queried.
+- **Memory** is three distinct things, never conflated: session/
+  conversation memory (CURRENT — prior turns, not organisational
+  knowledge), Case/Fault Context (CURRENT — durable structured
+  operational state, not Approved Knowledge), and Experience Memory
+  (FUTURE — prior operational experience/pattern information, e.g. "three
+  similar incidents ended in the same physical fault"). None of the three
+  is Approved Knowledge, and none can silently become it — only the
+  existing human-gated `CANDIDATE → APPROVED` governance can
+  (`docs/KNOWLEDGE_CONTRACT.md` §22.3–22.4).
+- **Skill** (FUTURE) answers *"how should this kind of work be
+  performed?"* — a reusable behavioral procedure a specialist selects and
+  executes. A Skill is not an agent, not a MOP/SOP/document, not a tool,
+  not memory; it orchestrates retrieval of Knowledge/Memory/Tools without
+  owning or duplicating them (`docs/AGENT_CONTRACT.md` §3a,
+  `docs/TROUBLESHOOTING_STRATEGY.md` §12a).
+- **Tools/Connectors** answer *"what can SLOPANOC observe or do?"* —
+  deterministic capabilities (Teams tools, CURRENT; ITSM/alarms/KPIs/
+  topology/etc., FUTURE). **MCP** is one FUTURE, OPTIONAL mechanism a
+  connector may later be exposed through — not mandatory, not an agent,
+  not RAG, not memory, and not a reason to rewrite today's typed Teams/
+  Power Automate integration (`docs/AGENT_CONTRACT.md` §3a).
+- **Context Engineering** (FUTURE) assembles the smallest trusted,
+  relevant, bounded context a specialist/Skill needs for one decision,
+  from Knowledge/Memory/Case/Operational Context. It is not itself a
+  source of truth and does not change lifecycle authority.
+- **Agent** answers *"given my objective, available Skills, trusted
+  context and capabilities, what should I do next?"* — a reasoning
+  boundary. New agents are added only for a genuinely different
+  reasoning responsibility, never merely because a job can be represented
+  as a Skill (`docs/AGENT_CONTRACT.md` §12).
+
+**Authority note:** Approved Knowledge (an explicit procedural
+prohibition, e.g. "do not restart for VSWR Over Threshold") always
+outranks Experience Memory (e.g. "three previous VSWR cases were
+restarted") — memory can inform reasoning, it can never override an
+Approved procedural prohibition.
 
 ## Troubleshooting Product Strategy
 
@@ -240,9 +364,10 @@ clearly escalated.
   context, generic governed Knowledge, and multisource (image + Teams +
   governed-KM) specialist reasoning for a single request — all a
   prerequisite for the loop below, not the loop itself.
-- **NEXT:** the POST-B7 UI/UX Refinement Milestone, then A5 (real
-  TELCO/RAN knowledge content), then Phase 4H security hardening.
-  (POST-5.1 B7 is complete — see [Roadmap](#roadmap).)
+- **CURRENT:** the POST-B7 UI/UX Refinement Milestone is complete; A5
+  (real TELCO/RAN compound knowledge ingestion) is **COMPLETE**,
+  including real live-runtime validation; **NEXT:** Phase 4H security
+  hardening. (POST-5.1 B7 is complete — see [Roadmap](#roadmap).)
 - **FUTURE:** a Troubleshooting Manager, the Context Engineering Layer, a
   persistent troubleshooting state, a next-best-diagnostic-action loop, and
   expanded operational integrations (5.2–5.7, see [Roadmap](#roadmap)).
@@ -534,10 +659,12 @@ SLOPANOC is not production-ready. Known gaps include at least:
 **Current:** Teams integration, core platform, Markdown rendering, Phase
 5.1 generic governed Knowledge, POST-5.1 A–B (Cloud SQL, multimodal
 attachments, B0–B7, all COMPLETE including B7's own real-stack live
-validation), and the POST-B7 UI/UX Refinement Milestone (COMPLETE,
-live-validated — see below) are all complete. **NEXT: A5** (real
-TELCO/RAN MOP ingestion), then Phase 4H (security hardening); full
-detail and phase-by-phase topology in
+validation), the POST-B7 UI/UX Refinement Milestone (COMPLETE,
+live-validated — see below), and **A5** (Knowledge Island ingestion
+foundation + real TELCO/RAN compound knowledge validation) are all
+**COMPLETE**, including A5's real live-runtime validation (real Vertex
+Gemini, real Cloud SQL PostgreSQL, real GCS). **NEXT:** Phase 4H
+(security hardening); full detail and phase-by-phase topology in
 [`docs/BUILD_SEQUENCE.md`](docs/BUILD_SEQUENCE.md).
 
 **Phase 5.1: Generic Knowledge Management Layer — COMPLETE.** A generic
@@ -1473,9 +1600,10 @@ accepted product decision — richer Teams visual formatting, including
 the rejected HTML attempt, is intentionally deferred, not an unresolved
 blocker); the hover-tooltip removal, sent-image thumbnail/preview
 modal, and composer attachment/text separation were each independently
-confirmed correct in the same live pass. **STATUS: DONE.** **NEXT: A5**
-(real TELCO/RAN MOP ingestion, not started), then Phase 4H (security
-hardening, not started).
+confirmed correct in the same live pass. **STATUS: DONE.** **A5**
+(Knowledge Island ingestion foundation + real TELCO/RAN compound
+knowledge validation) is **COMPLETE**, including real live-runtime
+validation. **NEXT: Phase 4H** (security hardening, not started).
 
 Locked Gemini/ADK multimodal construction rule (B0, proven against the
 installed `google-adk==1.33.0`/`google-genai==1.75.0` stack, both by
@@ -1569,20 +1697,106 @@ still B4/B5.
 (Teams message formatting, delayed sidebar
 hover-scroll, compact image thumbnails + preview modal, composer
 attachment/text separation) — not part of Attachments/POST-5.1 B, no
-architecture change. A5 remains not started until this milestone closes.
+architecture change.
 
-**THEN — A5: real TELCO/RAN MOP ingestion** (Attachments/POST-5.1 B is
-now complete in full, B0–B7 — A5 has not started). A5 ingests the 3 real
-TELCO/RAN MOPs through the
-existing, unchanged Generic KM pipeline (MOP → source adapter/import
-boundary → `IngestedKnowledgeDocument` → processing → governance →
-`KnowledgeRepository` → Cloud SQL PostgreSQL) — a separate milestone from
-Attachments, not part of it. If a MOP contains images, its text/metadata/
-governed content still goes to Cloud SQL PostgreSQL and any governed
-knowledge image goes to Cloud Storage, but the actual image extraction/
-storage mechanics belong to A5's own future implementation pass.
+**THEN — A5: Knowledge Island Ingestion Foundation + real TELCO/RAN
+compound knowledge validation** — **COMPLETE, including real live-
+runtime validation** (see the final corrective pass and live-retest
+summary below). A5 proves the existing, unchanged Generic
+KM pipeline (`IngestedKnowledgeDocument` → processing → governance →
+`KnowledgeRepository`) can safely ingest real COMPOUND operational
+knowledge — DOCX/XLSX/PDF/TXT, recursively nested embedded artifacts
+(images, spreadsheets, other documents), never a one-off MOP-specific
+pipeline. New, additive-only compound-artifact domain model
+(`KnowledgeArtifact`, `backend/knowledge/domain/artifacts.py`) — every
+plain-text document/section is byte-for-byte unaffected; no Alembic
+migration was needed (the existing `payload` JSON column already
+absorbs the new artifact/lineage data, empirically proven). Real DOCX/
+XLSX/PDF/TXT extraction with recursive embedded-artifact discovery
+(`backend/knowledge/ingestion/extractors/`), SHA-256 content-hash
+deduplication, and defensive recursion/size/count limits. A new,
+separate durable-artifact GCS storage boundary
+(`backend/knowledge_ingestion/artifact_storage.py`) — live-validated
+against the real, already-provisioned GCS project (real upload, real
+dedup, real download round-trip, self-cleaning) using synthetic,
+non-sensitive data; a generic multimodal image-interpretation Protocol
+plus a concrete Gemini implementation (reusing the existing shared
+model client, no second Gemini/Vertex client architecture) — a real
+call was attempted but this session's environment resolves to Google AI
+Studio mode with no API key configured, so it failed closed correctly
+(proving the failure path, not live multimodal interpretation itself).
+The three real MOP validation files structurally passed every required
+real-corpus check (compound structure recognized, nested artifacts,
+real cross-document deduplication, the critical VSWR "no restart"
+prohibition surviving extraction intact). One prompt-only change
+(`backend/agents/incident_manager/prompts.py`) establishes the default
+one-diagnostic-command-at-a-time troubleshooting posture, with an
+explicit full-procedure override on request.
 
-**Then** — Phase 4H security hardening proceeds per the locked roadmap.
+**A5 corrective pass** (before real-runtime validation): a real embedded
+OLE2 Compound-File-Binary object in both real Rogers MOPs — originally
+only reported as "unsupported" — is now safely, structurally identified
+and its real embedded payload (a health-check log, `EnodeB_HC.txt`,
+byte-identical in both files) is extracted through the existing generic
+pipeline, using a new narrow dependency (`olefile==0.47`, a read-only,
+pure-Python OLE2 reader with no code-execution capability); content-
+identity-vs-artifact-occurrence dedup/lineage semantics were audited
+and proven correct for all three conceptual duplicate-content cases
+with no correction needed; nesting-depth semantics were audited,
+confirmed self-consistent, and proven against the real corpus via a
+direct root→embedded-document→nested-image parent-chain walk. Full
+backend regression (after the corrective pass): **2846 passed, 1
+skipped** (2822 original A5 pass + 24 net new); `npm run build`/
+`npx tsc -b` clean (no frontend file changed).
+
+**A5 first live-runtime validation pass** (real Vertex Gemini, real
+Cloud SQL PostgreSQL, real GCS, the real React → FastAPI → Team Manager
+→ Incident Manager path): most gates passed, including the two most
+safety-critical ones (VSWR restart prohibition; mandatory conflict
+isolation between differing document values). One gate — the model
+staying to one diagnostic action/command at a time by default — failed
+reproducibly, including after a prompt-strengthening attempt, so A5 was
+correctly NOT marked complete at that point.
+
+**A5 final corrective pass**: replaced prompt-only one-command
+self-restraint with a deterministic mechanism — a typed
+`troubleshooting_guidance` field on Incident Manager's structured
+response, populated via Gemini's own schema-guided output, rendered by
+a pure Python function that in `NEXT_STEP` mode structurally never reads
+the `full_procedure_steps` list at all, applied via a hard
+completion-boundary override in `chat_service.py` (mirroring the
+already-proven `enforce_governed_knowledge_at_completion` pattern). Also
+added: EMF/WMF image rasterization via Pillow's own Windows-GDI-backed
+WMF plugin (no new dependency) so previously Gemini-rejected embedded
+vector images can be interpreted; a bucketed relevance tie-break so
+native document evidence wins over image-derived evidence only at
+genuinely similar relevance; and live propagation of explicitly-
+user-stated operational facts into `ApplicabilityContext` via a new
+`before_agent_callback`, never model-inferred. Two genuine defects were
+found and fixed live during this pass: a completion-boundary
+discard-ordering bug that silently wiped the captured guidance before
+it could be rendered (fixed by adopting the same snapshot-before-
+discard pattern already used for `selected_knowledge_evidence`), and a
+Pydantic `default_factory=dict` field that broke ADK's own production
+LLM-call tracing on every real turn (fixed by switching to a plain
+`Optional[...] = None` default). Full regression after this pass:
+**2904 passed, 1 skipped**; KM-focused subset **965 passed**; Incident
+Manager-focused subset **76 passed**; `npm run build`/`npx tsc -b` both
+clean.
+
+**A5 final live-runtime retest**, after re-ingesting the real corpus
+(read-back confirmed 15/15 images now interpreted, 0 failed, versus
+11/15 before the EMF correction): all 8 mandatory gates passed,
+including the two previously-failing behaviors (one-command default on
+the first and second turn; correctly withholding a state-changing reset
+command until its diagnostic prerequisite was confirmed), native-XLSX
+evidence preference, applicability context genuinely participating
+without fabricating a blended value, and the three previously-
+uninterpretable images now correctly described and cited. See
+CLAUDE.md's own A5 entry for the full gate-by-gate detail.
+
+**Then** — Phase 4H security hardening is the current next phase per
+the locked roadmap (not started).
 
 ```mermaid
 flowchart TD

@@ -18,8 +18,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
+from backend.knowledge.domain.artifacts import KnowledgeArtifact, validate_artifact_lineage
 from backend.knowledge.domain.enums import KnowledgeDocumentType
 from backend.knowledge.domain.models import Applicability, KnowledgeMetadata, KnowledgeSource, KnowledgeVersion, require_non_blank
 
@@ -86,6 +87,14 @@ class IngestedKnowledgeDocument(BaseModel):
     )
 
     media_type: Optional[str] = Field(default=None, description='Free-form content-type label if useful (e.g. a MIME type) -- never a fixed enum, never branched on in this generic boundary.')
+    artifacts: list[KnowledgeArtifact] = Field(
+        default_factory=list,
+        description=(
+            "A5: the compound-artifact tree discovered by a source adapter's own extraction (embedded images, "
+            "spreadsheets, nested documents, logs). Empty for a plain-text document -- exactly the same as before "
+            "A5's compound-artifact support existed. See backend/knowledge/domain/artifacts.py."
+        ),
+    )
     source_revision: Optional[str] = Field(
         default=None,
         description="An opaque revision token/ETag/modification marker from the source, if exposed -- carried through uninterpreted, never compared or used for version resolution here.",
@@ -103,3 +112,8 @@ class IngestedKnowledgeDocument(BaseModel):
         if value is None:
             return value
         return require_non_blank(value, info.field_name)
+
+    @model_validator(mode="after")
+    def _validate_artifacts(self) -> "IngestedKnowledgeDocument":
+        validate_artifact_lineage(self.artifacts)
+        return self

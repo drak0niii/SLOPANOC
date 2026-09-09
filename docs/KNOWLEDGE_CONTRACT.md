@@ -1956,3 +1956,252 @@ or Teams provenance (all untouched); Phase 4H security hardening; and a
 production (non-SQLite) knowledge database — the local repository remains
 the correct choice for this first reference consumer, exactly as 5.1F's
 own contract anticipated.
+
+## 20. A5 — Compound-artifact extension (additive only)
+
+A5 (Knowledge Island Ingestion Foundation + Real TELCO/RAN Compound
+Knowledge Validation) proves the 5.1A–5.1J contract above can represent
+real COMPOUND operational knowledge — DOCX/XLSX/PDF/TXT with embedded/
+nested artifacts (images, spreadsheets, other documents) — without
+changing any of it. Every A5 addition is a new, optional field or a new
+sibling module; nothing described in §1–§19 was rewritten, and every
+plain-text document/section built before A5 remains byte-for-byte valid
+and behaviorally identical.
+
+### 20.1 `KnowledgeArtifact` (new domain type)
+
+`backend/knowledge/domain/artifacts.py`. One generic node type
+representing any embedded object discovered inside a compound source
+document — never a per-format subclass (`EmbeddedDocx`/`EmbeddedXlsx`/
+...). Key fields: `artifact_id` (deterministic, content-derived —
+never a random UUID, so re-ingesting identical content reproduces the
+identical id), `parent_artifact_id` (`None` for an artifact embedded
+directly in the root document), `kind` (open string, e.g.
+`"embedded_docx"`, `"image"`, `"xlsx_sheet"`, `"pdf_page"`, `"txt_log"`,
+`"ole_package"` (a legacy OLE2 Compound-File-Binary "Insert Object >
+Create from File" embed — its own extracted payload becomes a CHILD
+artifact, dispatched through this same generic pipeline; corrective
+pass, `backend/knowledge/ingestion/extractors/ole.py`),
+`"unsupported_artifact"` — never a closed enum, exactly like
+`KnowledgeSection.section_type`), `depth`, `content_hash` (SHA-256,
+deduplication basis), `extracted_text` (`None` until/unless extraction
+or model interpretation produced one), `derived` (SOURCE vs DERIVED —
+`False` for a structural extraction of real content, `True` for a model
+interpretation such as an image description; source truth is never
+overwritten by derived text), `locator_detail` (opaque, kind-specific
+addressing, e.g. `"sheet=Q3"`/`"page=4"` — never parsed generically,
+mirroring why `source_locator` elsewhere in this contract stays a plain
+line-range string), `storage_ref` (a durable `gs://` reference, set
+only once the durable-artifact-storage boundary has run),
+`extraction_status`/`extraction_error` (a genuinely bounded state
+machine — COMPLETE/PARTIAL/FAILED/SKIPPED — unlike `kind`, which is an
+open content-taxonomy string). `validate_artifact_lineage` enforces a
+closed graph: unique `artifact_id`, every `parent_artifact_id` resolves
+within the same list.
+
+### 20.2 Additive fields on existing contracts
+
+- `IngestedKnowledgeDocument.artifacts: list[KnowledgeArtifact] = []` —
+  the compound tree a source adapter's own extraction discovered.
+  Default empty; `content` remains the root document's own unsegmented
+  text exactly as §12.3 already described.
+- `KnowledgeSection.artifact_id` / `StructuredKnowledgeSection
+  .artifact_id: Optional[str] = None` — which artifact (if any) this
+  section's content was derived from. `KnowledgeObject`/
+  `StructuredKnowledgeDocument` cross-check that a non-`None` value
+  resolves to a real artifact in the same object's own `artifacts`.
+- `KnowledgeObject.artifacts: list[KnowledgeArtifact] = []` — carried
+  through unchanged by `governance/service.py`'s `materialize_candidate`
+  (§14 is otherwise completely unmodified: knowledge_id/document_type/
+  version remain required, explicit, never-inferred kwargs;
+  `section_type` remains unset UNLESS the caller explicitly supplies the
+  new, optional `section_roles: dict[section_key, section_type]`
+  kwarg — a trusted-caller-only assertion, mirroring the
+  knowledge_id/document_type/version discipline exactly; 5.1E still
+  never fabricates a semantic type on its own initiative).
+- `KnowledgeEvidenceReference.artifact_id` / `KnowledgeEvidenceItem
+  .artifact: Optional[KnowledgeArtifact] = None` — §16's provenance
+  revalidation (`build_evidence_set`) now also resolves the matching
+  artifact from the SAME freshly-refetched governed object the section
+  itself is checked against — never from the retrieval result, never
+  from a caller/model claim. Completes hierarchical provenance
+  (section → artifact → parent artifact → ... → root) through the
+  EXISTING evidence architecture (§16.1's "REPOSITORY REVALIDATION,
+  NOT TRUST" principle applies identically to the artifact reference).
+
+### 20.3 No schema/migration change
+
+`slopanoc_knowledge_objects`' existing `payload` `Text` column (the
+whole `KnowledgeObject` serialized as one JSON document, §15) absorbs
+every field above transparently — empirically proven: an artifact-
+bearing `KnowledgeObject`, including a populated `storage_ref`, round-
+trips through `SqlAlchemyKnowledgeRepository` unchanged, for both
+SQLite and (by the same dialect-neutral construction) Cloud SQL
+PostgreSQL. No Alembic migration exists or was needed for A5.
+
+### 20.4 Extraction, durable storage, and image interpretation (new sibling modules, not part of the §1–§19 contract itself)
+
+- `backend/knowledge/ingestion/{extraction.py,extractors/}` — real
+  DOCX/XLSX/PDF/TXT extraction and recursive embedded-artifact
+  discovery, still inside the existing `backend/knowledge/` dependency
+  boundary (§3's "no ADK/Gemini/cloud-vendor-SDK import" rule; document-
+  format parsers are not cloud SDKs).
+- `backend/knowledge_ingestion/{artifact_storage.py,gemini_image_interpreter.py,local_file_adapter.py}`
+  — concrete, cloud-SDK-dependent modules living OUTSIDE
+  `backend/knowledge/` entirely, mirroring the existing `backend/knowledge/tools/`
+  (generic) vs `backend/tools/knowledge/` (concrete, ADK-facing) split
+  this contract already established for the agent-facing tool boundary
+  (§18). `backend/knowledge/ingestion/image_interpretation.py` itself
+  stays generic (an `ImageInterpreter` Protocol, no ADK/Gemini import) —
+  only the concrete Gemini implementation lives in the sibling package.
+
+### 20.5 Preserved invariant
+
+The same question §1's own governing invariant asks — "can the
+Knowledge layer still work without knowing Incident Manager exists?" —
+holds identically for A5's compound-artifact support: nothing in
+§20.1–20.4 references Incident Manager, Teams, or any specific
+document/vendor vocabulary. MOP/SOP/RCA/KB remain document TYPES, never
+a separate architecture; DOCX/XLSX/PDF/TXT remain FORMATS an adapter's
+own extraction handles, never a reason to fork the Generic KM contract
+itself.
+
+## 21. A5 final corrective pass — native-vs-derived retrieval tie-break (additive only)
+
+A real live-validation defect (a query for native XLSX report fields
+sometimes citing an image-derived screenshot description instead of the
+native XLSX header text) surfaced a generic retrieval-ranking gap, not
+an Incident-Manager-specific one — the fix belongs in Generic KM's own
+retrieval contract, unchanged by which agent later consumes it.
+
+- `KnowledgeRetrievalItem` (`backend/knowledge/retrieval/contracts.py`)
+  gained one new field: `is_derived: bool` (default `False`), resolved
+  from the retrieved section's owning `KnowledgeArtifact.derived` flag
+  (§20's own `derived: bool` — no new concept, just surfaced onto the
+  retrieval result). A plain-text section with no owning artifact is
+  always `is_derived=False`.
+- `KnowledgeRetrievalService`'s ranking (`retrieval/service.py`) buckets
+  `relevance_score` first (`_relevance_bucket`, bucket width `0.15` —
+  a fixed, generic constant, never tuned to any one query/document
+  vocabulary), THEN tie-breaks within a bucket by `is_derived` (native,
+  `False`, sorts first), THEN falls through to the existing exact-
+  relevance/applicability/identity tie-breakers unchanged. A candidate
+  outside another candidate's relevance bucket is never reordered by
+  this tie-break — a genuinely more relevant derived item still outranks
+  a genuinely less relevant native one.
+- Preserved invariant: this tie-break is a pure ranking-layer addition
+  over the SAME retrieval/applicability/lifecycle pipeline §1–§19
+  already define — it does not change what counts as MATCH/UNKNOWN/
+  NOT_APPLICABLE, does not change provenance validation, and carries no
+  document-type/vendor-specific logic (no "XLSX" or "screenshot" string
+  anywhere in the ranking code).
+
+## 22. Knowledge Context vs. RAG vs. Memory (target mental model)
+
+Documentation-only clarification (no contract/behavior change) of terms
+this document and CLAUDE.md use elsewhere, written down once here as the
+canonical definitions so they are not redefined inconsistently later.
+
+### 22.1 Knowledge Context vs. RAG
+
+**Knowledge Context** is the architectural context domain: "what does our
+governed organisational/technical knowledge say?" — one of the (future)
+Context Engineering Layer's three context domains alongside Operational
+Context and Case Context (CLAUDE.md's "TARGET FUTURE ARCHITECTURE").
+
+**RAG** (retrieval-augmented generation) is the *mechanism* this
+document's §16/§18 already implement to obtain Knowledge Context for a
+turn: `list_all` → `resolve_current_version` → `evaluate_applicability`
+→ lexical ranking → provenance revalidation → a trusted
+`KnowledgeEvidenceSet`. RAG is not a second repository or a competing
+source of truth — it is how the ONE `KnowledgeRepository` (§15) gets
+queried. **Do not describe RAG as a repository/database in its own
+right**, and do not build a second retrieval path that bypasses §16–§18's
+existing lifecycle/applicability/provenance boundary.
+
+### 22.2 Knowledge Islands
+
+"Knowledge Islands" is descriptive shorthand for the set of external
+sources §12's generic ingestion boundary may draw from — MOP, SOP, RCA,
+KB articles, vendor documentation, troubleshooting guides, engineering
+standards, SharePoint-originated governed content, and other approved
+technical repositories. It names a category of SOURCE, not a new
+architectural layer: every Knowledge Island still flows through the SAME
+generic path this document defines — source adapter/ingestion (§12) →
+`IngestedKnowledgeDocument` → processing (§13) → governance (§14) →
+`KnowledgeRepository` (§15) → retrieval/RAG (§16, §22.1) → Knowledge
+Context. A5 (§20) is the first real-corpus proof of this for compound
+DOCX/XLSX/PDF/TXT content; it added no per-source-type architecture.
+
+### 22.3 Knowledge vs. Memory
+
+**Knowledge** (this document, §1–§21) is governed, versioned, lifecycle-
+managed, approved-or-not organisational content — a `KnowledgeObject`
+with a real `LifecycleStatus`.
+
+**Memory** is a distinct, NOT-YET-BUILT concept documented in CLAUDE.md's
+architecture-invariants section and in `docs/BUILD_SEQUENCE.md`'s Phase
+6/7 target architecture — session/conversation memory (CURRENT, ADK
+session state, not organisational knowledge), Case/Fault Context
+(CURRENT, `backend/cases/`, durable structured operational state — not
+Approved Knowledge), and Experience Memory (FUTURE — prior operational
+experience/pattern information). None of the three is a
+`KnowledgeObject`, and none of the three carries `LifecycleStatus`.
+
+Worked example: an RCA document describing a past outage, once ingested
+and Approved, is **Knowledge** (queryable via RAG, §22.1). The system
+independently noticing that three similar incidents previously ended in
+the same physical fault is **Experience Memory** — pattern information
+about what was *observed*, not a governed instruction. It does not
+become Knowledge merely by being observed or repeated.
+
+### 22.4 Experience → Candidate Knowledge → Approved Knowledge
+
+Target governance flow (FUTURE — Experience Memory does not exist yet;
+recorded here so a future implementation lands on this document's
+existing lifecycle model rather than inventing a parallel one):
+
+```text
+operational experience
+        ↓
+Experience Memory (FUTURE)
+        ↓
+repeated / valuable learning
+        ↓
+CANDIDATE knowledge  ──┐
+        ↓              │  same three lifecycle states
+trusted / human review │  §5/§14 already define —
+        ↓              │  no new lifecycle state is
+APPROVED knowledge   ──┘  introduced for this flow
+        ↓
+RAG / Knowledge Context (§22.1)
+```
+
+This is the SAME `CANDIDATE → APPROVED → ARCHIVE` lifecycle §5/§14
+already govern, not a second governance model. A future Experience
+Memory implementation would materialize a `CANDIDATE` `KnowledgeObject`
+exactly the way `governance/service.py`'s `materialize_candidate` does
+today for an ingested document (§14) — never a shortcut that mints an
+`APPROVED` object directly from repeated observation.
+
+**NON-NEGOTIABLE, restated from CLAUDE.md's architecture invariants:**
+Memory must never silently become Approved Knowledge. An agent (or a
+future Experience Memory mechanism) observing something repeatedly does
+not make it organisational truth — only the existing human-gated
+`CANDIDATE → APPROVED` transition (§14) does.
+
+### 22.5 MOP/SOP/RCA/KB remain Knowledge, not Skills
+
+`KnowledgeDocumentType` (§3) — MOP, SOP, RCA, KB Article, Troubleshooting
+Guide, Operational Procedure, Technical Instruction — are content TYPES
+inside Generic KM, describing *what a document is*. A (FUTURE, not built)
+**Skill** answers a different question — *how a specialist should
+conduct a recurring kind of work* — and is behavioral orchestration, not
+a document and not a `KnowledgeDocumentType`. A Skill may RETRIEVE
+Knowledge (e.g. an applicable MOP) as part of executing itself, but a
+Skill never IS a MOP/SOP/RCA/KB, and ingesting a document never creates
+a Skill. See `docs/AGENT_CONTRACT.md` §3a and `docs/BUILD_SEQUENCE.md`'s
+Phase 6/7 target architecture for the Skill definition and how it is
+expected to consume Knowledge Context (this document), Experience
+Memory, Case Context, and Operational Context without owning or
+duplicating any of them.

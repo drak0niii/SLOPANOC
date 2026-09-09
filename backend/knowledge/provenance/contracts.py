@@ -7,10 +7,11 @@ itself (service.py).
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from backend.knowledge.domain.artifacts import KnowledgeArtifact
 from backend.knowledge.domain.contracts import KnowledgeEvidenceReference
 from backend.knowledge.domain.enums import KnowledgeDocumentType, LifecycleStatus
 from backend.knowledge.domain.models import KnowledgeSection, KnowledgeSource, require_non_blank
@@ -69,6 +70,16 @@ class KnowledgeEvidenceItem(BaseModel):
     lifecycle_status: LifecycleStatus
     source: KnowledgeSource
     section: KnowledgeSection
+    artifact: Optional[KnowledgeArtifact] = Field(
+        default=None,
+        description=(
+            "A5: the compound artifact this evidence's section was derived from, when `section.artifact_id` is "
+            "set -- resolved by service.py ONLY from the same freshly-fetched governed KnowledgeObject.artifacts "
+            "the section itself was validated against, never from a caller/model claim. Completes hierarchical "
+            "provenance (e.g. 'this evidence came from Sheet Q3 of an embedded workbook') through the existing "
+            "evidence architecture rather than a parallel citation system."
+        ),
+    )
 
     @field_validator("title")
     @classmethod
@@ -93,6 +104,13 @@ class KnowledgeEvidenceItem(BaseModel):
                 f"({self.reference.source_system!r}/{self.reference.source_id!r} vs. "
                 f"{self.source.source_system!r}/{self.source.source_id!r})"
             )
+        if self.section.artifact_id is not None:
+            if self.artifact is None or self.artifact.artifact_id != self.section.artifact_id:
+                raise ValueError(
+                    f"section.artifact_id {self.section.artifact_id!r} is set but `artifact` does not match it"
+                )
+        elif self.artifact is not None:
+            raise ValueError("`artifact` must be None when section.artifact_id is None")
         return self
 
 

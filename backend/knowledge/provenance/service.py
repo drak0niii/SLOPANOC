@@ -72,6 +72,13 @@ def _find_section(governed: KnowledgeObject, section_id: str) -> "KnowledgeSecti
     return None
 
 
+def _find_artifact(governed: KnowledgeObject, artifact_id: str):
+    for artifact in governed.artifacts:
+        if artifact.artifact_id == artifact_id:
+            return artifact
+    return None
+
+
 class KnowledgeProvenanceService:
     """Depends only on the `KnowledgeRepository` Protocol (never
     `SQLiteKnowledgeRepository` or any storage detail). Read-only: never
@@ -110,6 +117,20 @@ class KnowledgeProvenanceService:
             _require_document_metadata_match(retrieval_item, governed)
             _require_source_match(retrieval_item.source, governed.source)
 
+            governed_artifact = None
+            if governed_section.artifact_id is not None:
+                governed_artifact = _find_artifact(governed, governed_section.artifact_id)
+                if governed_artifact is None:
+                    # Structurally should never happen -- KnowledgeObject's own
+                    # validator already enforces every section.artifact_id
+                    # resolves within the same object's artifacts -- but this
+                    # path fails closed rather than silently building evidence
+                    # with a dangling artifact reference.
+                    raise KnowledgeEvidenceNotFoundError(
+                        f"section {governed_section.section_id!r} references artifact_id "
+                        f"{governed_section.artifact_id!r}, which is not present in the governed object's artifacts"
+                    )
+
             reference = KnowledgeEvidenceReference(
                 knowledge_id=governed.knowledge_id,
                 version_label=governed.version.label,
@@ -117,6 +138,7 @@ class KnowledgeProvenanceService:
                 source_system=governed.source.source_system,
                 source_id=governed.source.source_id,
                 source_locator=governed_section.source_locator,
+                artifact_id=governed_section.artifact_id,
             )
             items.append(
                 KnowledgeEvidenceItem(
@@ -126,6 +148,7 @@ class KnowledgeProvenanceService:
                     lifecycle_status=governed.lifecycle_status,
                     source=governed.source,
                     section=governed_section,
+                    artifact=governed_artifact,
                 )
             )
 

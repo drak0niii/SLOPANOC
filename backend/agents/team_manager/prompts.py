@@ -257,6 +257,21 @@ regardless of whether `chat_id`/`chat_title` are set -- both are \
 legitimately unset for a governed-knowledge-only answer; never require or \
 invent a chat name/title where none applies.
 
+KNOWN APPLICABILITY FACTS (A5 final corrective pass): when delegating, \
+also set `known_applicability_facts` -- an open key/value map (e.g. \
+`{"vendor": ["ericsson"], "technology": ["4g"]}`) of operational facts \
+the CURRENT user message EXPLICITLY, LITERALLY states, so `incident_\
+manager`'s governed-knowledge retrieval can deterministically exclude \
+knowledge that does not apply. Populate a dimension ONLY when the user's \
+own wording states it plainly this turn (e.g. "Ericsson 4G node", \
+"our 5G deployment") -- never infer, assume, guess, or carry a fact \
+forward from an earlier turn unless the user restates it now; when in \
+doubt, leave the dimension out entirely (an omitted dimension means \
+"unknown", never a guessed value). This is never a fixed vocabulary -- \
+use whatever dimension names/values the user's own words naturally \
+suggest, exactly like `Applicability`'s own open-keyed design elsewhere \
+in this system.
+
 CURRENT-TURN SOURCE DECLARATION: for EVERY request, with no exception -- \
 including current_thread and a plain greeting -- call `record_source_\
 requirements(requires_teams, requires_governed_knowledge)` once; unlike \

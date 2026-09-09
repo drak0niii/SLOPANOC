@@ -65,3 +65,27 @@ requests==2.33.1
 # boundary input (webp decode vulnerabilities fixed after 10.0.1 are
 # directly relevant given image/webp is an accepted type here).
 Pillow==12.3.0
+
+# --- Knowledge ingestion / compound-document extraction (A5) --------------
+# Mature, focused, single-purpose parsers only -- deliberately not a
+# broad document-processing framework. None of these execute macros,
+# VBA, spreadsheet formulas, or embedded scripts; all read structured
+# data only (backend/knowledge/ingestion/extractors/).
+#
+# DOCX text/headings/tables/relationships (used to also discover embedded
+# media/objects via the OOXML package the library already parses).
+python-docx==1.2.0
+# PDF page text/page count -- a mature, bounded parser; never used for
+# OCR and never executes embedded PDF actions/scripts (it doesn't have
+# that capability at all).
+pypdf==6.15.0
+# XLSX workbook/sheet/cell structure -- formulas are read as their
+# literal string form (data_only=False) and NEVER evaluated.
+openpyxl==3.1.2
+# Legacy OLE2 Compound-File-Binary embedded-object reading (A5
+# corrective pass) -- e.g. a Word "Insert Object > Create from File"
+# embed, distinct from a native OOXML word/embeddings/*.docx package.
+# A narrow, mature, pure-Python container reader with NO code-execution
+# capability of any kind (no VBA/macro interpreter, no COM/automation) --
+# deliberately not a broader office-automation/forensics framework.
+olefile==0.47

@@ -86,12 +86,24 @@ def test_generic_incident_manager_instruction_is_byte_for_byte_unchanged() -> No
     "NO TEAMS CONVERSATION NEEDED" branch making `chat_topic` genuinely
     optional, and a second pre-4H correction pass extended it once more
     with `requires_governed_knowledge` and combined Teams+KM guidance
-    (docs/KNOWLEDGE_CONTRACT.md's Phase 5.1J section), and POST-5.1 B6
+    (docs/KNOWLEDGE_CONTRACT.md's Phase 5.1J section), POST-5.1 B6
     extended it once more with one concise "IMAGE EVIDENCE" paragraph
-    (multimodal input handling) -- this is that legitimate, intentional
-    length, not P4B.2-era drift.
+    (multimodal input handling), A5 extended it once more with the
+    "ITERATIVE TROUBLESHOOTING -- ONE CHECK/COMMAND AT A TIME" and
+    "COMMAND TRUST AND PRESERVATION" paragraphs (docs/TROUBLESHOOTING_
+    STRATEGY.md's default one-step interaction policy), the A5 live-
+    validation corrective pass strengthened both paragraphs (an explicit
+    "a numbered/bulleted list of more than one action is always a
+    violation" rule, extended to every follow-up turn, and an explicit
+    "a captured terminal/log session is always EXAMPLE/REFERENCE
+    evidence, never normative procedure" rule), and the A5 FINAL
+    corrective pass rewrote "ITERATIVE TROUBLESHOOTING" to redirect the
+    output mechanism from free-prose self-restraint (proven unreliable
+    by real live testing) to the new typed `troubleshooting_guidance`
+    structured field -- this is that legitimate, intentional length, not
+    P4B.2-era drift.
     """
-    assert len(INCIDENT_MANAGER_INSTRUCTION) == 45707
+    assert len(INCIDENT_MANAGER_INSTRUCTION) == 50365
 
 
 def test_synthesis_only_agent_no_longer_uses_the_generic_instruction() -> None:
@@ -198,8 +210,16 @@ def test_synthesis_instruction_never_weakens_semantic_classification_definitions
 def test_response_schema_is_materially_smaller_but_keeps_every_field() -> None:
     schema = IncidentManagerResponse.model_json_schema()
     serialized = json.dumps(schema)
-    # Measured before this pass's trim: 12,131 chars (~3,032 tokens).
-    assert len(serialized) < 12131 * 0.8
+    # Measured before this pass's trim: 12,131 chars (~3,032 tokens). The
+    # A5 final corrective pass legitimately grew this again, to 13,679
+    # chars, by adding the typed `troubleshooting_guidance` field (and
+    # its own `TroubleshootingGuidance`/`TroubleshootingStep`/
+    # `TroubleshootingInteractionMode` sub-schemas) -- the deterministic,
+    # schema-guided replacement for prompt-only one-command-at-a-time
+    # self-restraint, which real live testing proved unreliable. This
+    # bound still guards against unrelated bloat creeping back in, with
+    # headroom above the new, legitimate baseline.
+    assert len(serialized) < 13679 * 1.1
 
     expected_fields = {
         "outcome",
@@ -215,6 +235,7 @@ def test_response_schema_is_materially_smaller_but_keeps_every_field() -> None:
         "write_action",
         "candidate_titles",
         "detail",
+        "troubleshooting_guidance",
     }
     assert set(schema["properties"].keys()) == expected_fields
 
