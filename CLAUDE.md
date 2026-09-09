@@ -127,7 +127,7 @@ phases pointed at a consistent destination, not to describe anything
 currently running. Nothing in this section may be treated as implemented,
 and nothing in it changes the frozen architecture above.
 
-    Head of Automated Operations        [FUTURE]
+    Head of Automated Operations        [FUTURE, optional]
     Supervision / Efficiency / Governance
                 |
                 v
@@ -136,26 +136,30 @@ and nothing in it changes the frozen architecture above.
        +--------+--------+
        v                 v
     Incident Manager   Troubleshooting Manager
-     [CURRENT]            [FUTURE]
+     [CURRENT]            [FUTURE / Phase 6A]
+       |                   |
+       |             Skills [FUTURE / Phase 6A]
        |                   |
        +--------+----------+
                 v
-      Context Engineering Layer         [FUTURE]
-                |
-       +--------+--------+--------+
-       v                 v                 v
-    Operational       Knowledge          Case
-     Context            Context          Context
+      Context Engineering Layer         [FUTURE / Phase 6A foundation,
+                |                        Phase 6B expansion]
+       +--------+--------+--------+--------+
+       v                 v                 v        v
+    Operational       Knowledge          Case   Experience Memory
+     Context            Context          Context   [FUTURE / Phase 6A]
        |                 |                 |
      Teams          Generic KM Layer     Cases
-    [CURRENT]           [NEXT]          [CURRENT]
-                         |
+    [CURRENT --      [CURRENT]          [CURRENT]
+   text; media
+   is 5.X/NEXT]           |
                 +--------+--------+--------+
                 v        v        v        v
                MOP      SOP      RCA      KB
-                    (all behind Generic KM — [NEXT])
+                 (all behind Generic KM — [CURRENT];
+                  real TELCO/RAN content via A5 — [COMPLETE])
 
-Key architectural statement (governs Phase 5.1 design):
+Key architectural statement (governs Phase 5.1 design, still binding):
 
 "The Generic Knowledge Management Layer is one provider of Knowledge
 Context within the broader Context Engineering architecture. It must
@@ -168,20 +172,31 @@ includes" or "the system does" — those phrasings are reserved for what
 
 - MOP/SOP/RCA/KB are never peer raw sources alongside Teams and Cases —
   they sit behind the Generic KM Layer, which itself sits behind Knowledge
-  Context, which is one of three context domains the future Context
-  Engineering Layer would assemble (Operational, Knowledge, Case).
-- The Context Engineering Layer is a future conceptual abstraction, not a
-  concrete implemented runtime service — do not build one, or a stub of
-  one, during Phase 5.1A.
-- Troubleshooting Manager and Head of Automated Operations are FUTURE only.
-  Do not add either during Phase 5.1A, do not change the current agent
-  topology to anticipate them, and do not make either a mandatory hop in
-  the current runtime. The current user-facing path remains Team Manager,
-  unchanged.
+  Context, which is one of three (now four, with Experience Memory) future
+  context domains the future Context Engineering Layer would assemble
+  (Operational, Knowledge, Case, Experience Memory).
+- Generic KM Layer is now CURRENT (Phase 5.1 complete) and A5 has proven
+  it against real compound TELCO/RAN content — this diagram previously
+  showed it as [NEXT]; that label is now stale and corrected here. Do not
+  reintroduce a "[NEXT]" label for Generic KM anywhere else in this file.
+- The Context Engineering Layer remains a future conceptual abstraction —
+  its FOUNDATION is Phase 6A scope (bounded to context sources that exist
+  by then: Knowledge Context, Case Context, Teams text + 5.X media,
+  session state), its EXPANSION against the full Operational Context
+  surface is Phase 6B scope (after 5.2–5.7). Do not build either during
+  5.X, and do not conflate 6A's bounded foundation with 6B's fuller
+  expansion.
+- Troubleshooting Manager, Skills, and Experience Memory belong to Phase
+  6A (docs/BUILD_SEQUENCE.md §2a). Head of Automated Operations remains
+  FUTURE and OPTIONAL — it is not automatically part of 6A merely because
+  6A exists, and must never be a mandatory hop in the current or 6A-era
+  runtime. The current user-facing path remains Team Manager, unchanged.
 - Operational Context's future sources (ITSM, Alarms, Topology, KPIs,
-  Change, Handover) are Phase 5.2–5.7 roadmap items, listed here only to
+  Change, Handover) are Phase 5.2–5.7 roadmap items, now scheduled after
+  Phase 6A and Phase 4H (not directly after A5) — listed here only to
   show where Operational Context is headed — do not build any of them
-  early.
+  early. Teams-originated rich media (images first) is 5.X, the
+  immediate next milestone — see docs/BUILD_SEQUENCE.md §2b.
 
 ===================================================================
 ARCHITECTURE INVARIANTS — KNOWLEDGE / MEMORY / SKILLS / TOOLS / MCP /
@@ -486,16 +501,25 @@ CURRENT: Teams integration, core platform, and Markdown rendering are
 complete.
 
 CURRENT (out-of-band milestone, inserted between the LOCAL GIT CHECKPOINT
-below and Phase 4H — does not reorder anything in this locked list):
-POST-5.1 A — CLOUD SQL POSTGRESQL (A1–A4) is COMPLETE. POST-5.1 B —
-MULTIMODAL ATTACHMENTS is COMPLETE (B0–B7, all done — see B7's own entry
-below for its full implementation, corrective-pass, and real-stack
-live-validation history). **POST-5.1 B7 (Lifecycle + Real UI + Full
-Regression) is DONE.** The POST-B7 UI/UX Refinement Milestone (see its
-own entry below) is COMPLETE and live-validated. **A5 — Knowledge Island
-Ingestion Foundation + Real TELCO/RAN Compound Knowledge Validation
-(see its own entry below) is COMPLETE and live-validated.** Phase 4H
-security hardening is NEXT — not started.
+below and the (now-realigned) Phase 4H — does not reorder anything else
+in this locked list): POST-5.1 A — CLOUD SQL POSTGRESQL (A1–A4) is
+COMPLETE. POST-5.1 B — MULTIMODAL ATTACHMENTS is COMPLETE (B0–B7, all
+done — see B7's own entry below for its full implementation,
+corrective-pass, and real-stack live-validation history). **POST-5.1 B7
+(Lifecycle + Real UI + Full Regression) is DONE.** The POST-B7 UI/UX
+Refinement Milestone (see its own entry below) is COMPLETE and
+live-validated. **A5 — Knowledge Island Ingestion Foundation + Real
+TELCO/RAN Compound Knowledge Validation (see its own entry below) is
+COMPLETE and live-validated.**
+
+**ROADMAP REALIGNMENT (locked, replaces the previous A5 → Phase 4H →
+5.2–5.7 → Phase 6 order — see docs/BUILD_SEQUENCE.md §2a for the full
+rationale):** the execution order after A5 is now **5.X (Teams Rich
+Content / Media Retrieval) → Phase 6A (Intelligence Architecture
+Foundation) → Phase 4H (Security Hardening) → 5.2–5.7 → Phase 6B
+(Context Engineering Expansion) → Phase 7**. **5.X is NEXT — NOT
+STARTED.** Phase 4H no longer immediately follows A5; it now follows
+Phase 6A.
 
 POST-5.1 B execution sequence (locked, do not reorder):
   B0 [DONE] Durable chat attachment architecture + ADK persistence audit
@@ -1749,8 +1773,11 @@ POST-5.1 B execution sequence (locked, do not reorder):
       entry immediately below) is COMPLETE and live-validated. A5
       (Knowledge Island ingestion foundation + real TELCO/RAN compound
       knowledge validation) is COMPLETE and live-validated (see its own
-      entry further below). Phase 4H security hardening is NEXT -- not
-      started.
+      entry further below). **5.X -- Teams Rich Content / Media
+      Retrieval is NEXT -- NOT STARTED**, followed by Phase 6A
+      (Intelligence Architecture Foundation), then Phase 4H security
+      hardening, then 5.2-5.7, then Phase 6B -- see
+      docs/BUILD_SEQUENCE.md Sec 2a for the locked roadmap realignment.
 
 ===================================================================
 POST-B7 UI/UX REFINEMENT MILESTONE -- COMPLETE
@@ -2029,8 +2056,12 @@ preview modal; composer attachment/text separation) are implemented,
 automated-tested, and live-validated. NEXT (at the time this milestone
 closed): A5 -- Knowledge Island Ingestion Foundation + Real TELCO/RAN
 Compound Knowledge Validation (see its own entry below) -- since
-COMPLETE and live-validated. Phase 4H security hardening is NEXT --
-NOT STARTED.
+COMPLETE and live-validated. (HISTORICAL, as of this milestone's own
+closure: "Phase 4H security hardening is NEXT" was true at that point,
+before the post-A5 roadmap realignment -- see the "ROADMAP REALIGNMENT"
+note near the top of this LOCKED ROADMAP section and
+docs/BUILD_SEQUENCE.md Sec 2a for the current order: 5.X is now NEXT,
+followed by Phase 6A, then Phase 4H, then 5.2-5.7, then Phase 6B.)
 
 ===================================================================
 
@@ -2681,8 +2712,11 @@ undiscovered defects were found and fixed during this pass (the
 completion-boundary discard-ordering bug; the Pydantic
 `default_factory` serialization bug) — both confirmed via full backend
 regression and, for the first, via direct live re-verification. NEXT:
-Phase 4H security hardening (not started in this pass, per explicit
-instruction).
+**5.X — Teams Rich Content / Media Retrieval** (NOT STARTED), per the
+post-A5 roadmap realignment (docs/BUILD_SEQUENCE.md §2a) — followed by
+Phase 6A, then Phase 4H security hardening, then 5.2–5.7, then Phase 6B.
+Phase 4H is not cancelled; it is scheduled after Phase 6A instead of
+directly after A5.
 
 COMPLETE (this section is preserved as it was originally written, when
 Phase 5.1 was still the next phase in this locked list — do not read the
@@ -2740,21 +2774,67 @@ backend/knowledge/repository/, backend/knowledge/retrieval/,
 backend/knowledge/provenance/, backend/knowledge/tools/, or
 backend/tools/knowledge/. Phase 5.1 is now complete; no concrete source
 adapter (SharePoint/GCS/Drive/...) exists, and none is planned as part
-of 5.1 -- the next phase is the locked-roadmap LOCAL GIT CHECKPOINT
-followed by Phase 4H security hardening.
+of 5.1 -- the next phase after the locked-roadmap LOCAL GIT CHECKPOINT
+is 5.X (Teams Rich Content / Media Retrieval), per the post-A5 roadmap
+realignment below -- not Phase 4H directly.
 
 Then: LOCAL GIT CHECKPOINT [DONE — see the "CURRENT (out-of-band
 milestone...)" note near the top of this LOCKED ROADMAP section: POST-5.1
 A (Cloud SQL) and POST-5.1 B (multimodal attachments, B0–B7, all DONE
 including B7's own real-stack live validation) were inserted here,
-between this checkpoint and Phase 4H, without reordering this list. The
-POST-B7 UI/UX Refinement Milestone (also inserted here, also DONE) and
-A5 (Knowledge Island ingestion foundation + real TELCO/RAN compound
-knowledge validation — DONE, including real live-runtime validation)
-were inserted here, before Phase 4H; Phase 4H below is the current next
-phase and remains not started.]
+without reordering this list. The POST-B7 UI/UX Refinement Milestone
+(also inserted here, also DONE) and A5 (Knowledge Island ingestion
+foundation + real TELCO/RAN compound knowledge validation — DONE,
+including real live-runtime validation) were also inserted here.]
 
-Then: PHASE 4H SECURITY HARDENING
+===================================================================
+ROADMAP REALIGNMENT (locked, replaces everything below this point —
+see docs/BUILD_SEQUENCE.md §2a for the full rationale)
+===================================================================
+
+The execution order after A5 is now:
+
+Then: 5.X TEAMS RICH CONTENT / MEDIA RETRIEVAL — ← NEXT, NOT STARTED
+
+  Reasons from Teams-originated rich visual evidence (starting with
+  images), not just Teams message text. Distinct from the CURRENT
+  capability where a user uploads an image directly into a SLOPANOC
+  chat (B5/B6) — 5.X adds retrieving an image actually posted inside a
+  real Teams chat and passing it into the same multimodal reasoning
+  path. See docs/BUILD_SEQUENCE.md §2b for the full target definition
+  and design constraints (deterministic chat→message→media binding, no
+  arbitrary-URL fetch, provenance preservation, documents remaining a
+  distinct governed-ingestion concern, reuse of the existing B5/B6
+  architecture rather than a second vision pipeline).
+
+Then: PHASE 6A — INTELLIGENCE ARCHITECTURE FOUNDATION — FUTURE, after 5.X
+
+  Builds a BOUNDED intelligence/orchestration foundation against the
+  context sources that already exist after A5 and 5.X (Knowledge
+  Context/RAG, Case Context, Teams text + media, session state) — not
+  the full future Operational Context surface (5.2–5.7 do not exist
+  yet). Contains: a Context Engineering foundation; a second specialist,
+  Troubleshooting Manager, attached via AgentTool alongside Incident
+  Manager (Team Manager remains the sole user-facing agent); a Skills
+  behavioral framework/registry ("how should this kind of work be
+  performed?" — never an agent, never a MOP/SOP, never a tool, never
+  memory — see docs/AGENT_CONTRACT.md §3a); an Experience Memory
+  foundation/boundary ("what have we seen before?" — never Approved
+  Knowledge, never silently promoted to it — see
+  docs/KNOWLEDGE_CONTRACT.md §22.3–22.4). Does NOT implement Phase 7's
+  mature troubleshooting loop (persistent Troubleshooting State,
+  hypothesis lifecycle, next-best-diagnostic-action loop, end states) —
+  6A is a foundation, not the finished troubleshooting experience. Does
+  not create one agent per fault type (Skills provide behavioral
+  specialization instead). Does not create a Knowledge Agent.
+
+Then: PHASE 4H SECURITY HARDENING — FUTURE, after Phase 6A
+
+  Not cancelled, not reduced in importance — rescheduled to evaluate the
+  richer, more stable architecture Phase 6A produces (Troubleshooting
+  Manager boundary, Skills framework boundary, Context Engineering
+  foundation boundary, Teams rich media) rather than a boundary that is
+  still being architecturally established.
 
 4H.1 Trust boundaries + threat model
 4H.2 Prompt-injection / untrusted external content isolation
@@ -2768,7 +2848,7 @@ Then: FULL REGRESSION + LIVE VALIDATION
 
 Then: GITHUB CHECKPOINT
 
-Then:
+Then, FUTURE — after Phase 4H:
 
 5.2 ITSM
 5.3 Alarm / fault
@@ -2777,11 +2857,35 @@ Then:
 5.6 Change Management
 5.7 Handover / operational context
 
-Then:
+Then: PHASE 6B — CONTEXT ENGINEERING EXPANSION — FUTURE, after 5.2–5.7
 
-Phase 6 Agent expansion
-Phase 7 JOC / advanced troubleshooting
-Phase 8 Controlled autonomy
+  Expands and refines the SAME Phase 6A foundation (never a second,
+  competing Context Engineering architecture) against the complete
+  Operational Context surface (Teams text + media, Knowledge/RAG, Case
+  Context, Experience Memory, ITSM, Alarms, Topology, KPIs, Change,
+  Handover): multisource context assembly, relevance/authority/
+  freshness ranking, context budgeting, conflict handling, cross-source
+  correlation, Experience Memory refinement, specialist context policy
+  refinement.
+
+Then: PHASE 7 — JOC / ADVANCED TROUBLESHOOTING (product target)
+
+This is the end of the current locked execution roadmap
+(5.X → 6A → 4H → 5.2–5.7 → 6B → 7).
+
+===================================================================
+BEYOND THE CURRENT LOCKED ROADMAP — CONTROLLED AUTONOMY (Phase 8,
+long-term concept only, NOT scheduled, NOT part of the locked sequence
+above)
+===================================================================
+
+Phase 8 — Controlled autonomy — is preserved here as a pre-existing
+long-term product concept, not as a next implementation step. It is
+explicitly beyond the current locked roadmap: it has no scheduled
+position after Phase 7, no dependency ordering has been assigned to it,
+and it must not be read as "Then: Phase 8" following Phase 7. Any future
+decision to schedule it into the locked roadmap requires its own
+explicit roadmap decision, not implied by its presence here.
 
 ===================================================================
 DEVELOPMENT RULES FOR PHASE 5.1

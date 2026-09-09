@@ -48,9 +48,11 @@ not that the code is wrong.
 | POST-5.1 B — Multimodal Attachments (B0–B7) | ✅ COMPLETE |
 | POST-B7 UI/UX Refinement Milestone | ✅ COMPLETE |
 | A5 — Knowledge Island Ingestion Foundation + Real TELCO/RAN Compound Knowledge Validation | ✅ COMPLETE |
-| Phase 4H — Security Hardening | **← NEXT** — not started |
-| 5.2–5.7 — Operational Integrations | FUTURE |
-| Phase 6 — Agent Expansion + Context Engineering | FUTURE |
+| 5.X — Teams Rich Content / Media Retrieval | **← NEXT** — not started |
+| Phase 6A — Intelligence Architecture Foundation | FUTURE — after 5.X |
+| Phase 4H — Security Hardening | FUTURE — after 6A |
+| 5.2–5.7 — Operational Integrations | FUTURE — after 4H |
+| Phase 6B — Context Engineering Expansion | FUTURE — after 5.2–5.7 |
 | Phase 7 — Advanced Troubleshooting / JOC | FUTURE (product target) |
 
 B6 checkpoint commit: `2b0e88f` — "feat: complete B6 multimodal specialist
@@ -80,7 +82,8 @@ PHASE 4 — Reliable Stateful Runtime
   4E ADK SSE Runtime
   4F React / Backend Integration
   4G Approval UX
-  4H Security Hardening — ← NEXT, not started
+  4H Security Hardening — scheduled later (after 6A, see below) — not
+    part of the 4A–4G build-order group; see §2's Phase 4 entry
 
 PHASE 5 — Context + Operational Integrations
 
@@ -111,8 +114,16 @@ PHASE 5 — Context + Operational Integrations
     Knowledge Validation — COMPLETE, including real live-runtime
     validation (see §8 below)
 
-  Phase 4H Security Hardening — ← NEXT, not started
+  5.X Teams Rich Content / Media Retrieval — ← NEXT, NOT STARTED (see §2a)
 
+PHASE 6A — Intelligence Architecture Foundation — FUTURE, after 5.X
+  (Context Engineering foundation, Troubleshooting Manager, Skills
+  framework foundation, Experience Memory foundation — see §2a)
+
+PHASE 4H — Security Hardening — FUTURE, after 6A (see §2a for why 4H now
+  follows 6A instead of directly following A5)
+
+PHASE 5 (continued) — remaining Operational Integrations, after 4H
   5.2 ITSM
   5.3 Alarm / Fault
   5.4 Topology / Inventory
@@ -120,16 +131,19 @@ PHASE 5 — Context + Operational Integrations
   5.6 Change Management
   5.7 Handover / Operational Context
 
-PHASE 6 — Agent Expansion + Context Engineering
+PHASE 6B — Context Engineering Expansion — FUTURE, after 5.2–5.7
+  (expands the 6A foundation against the full Operational Context surface)
 
 PHASE 7 — Advanced Troubleshooting / JOC
 ```
 
-This sequence is locked — do not reorder it. `CLAUDE.md`'s own "LOCKED
-ROADMAP" section is the authoritative line-item version of the POST-5.1 B
-execution sequence specifically; this document summarizes the same order
-at the strategic phase level and extends it backward (Phase 0–4) and
-forward (Phase 6–7).
+**This sequence is locked** — do not reorder it. It replaces the
+previous locked order (which ran A5 → Phase 4H → 5.2–5.7 → Phase 6
+undivided); see §2a for the realignment rationale. `CLAUDE.md`'s own
+"LOCKED ROADMAP" section is the authoritative line-item version of the
+POST-5.1 B execution sequence specifically; this document summarizes the
+same order at the strategic phase level and extends it backward
+(Phase 0–4) and forward (5.X, 6A, 4H, 5.2–5.7, 6B, 7).
 
 ---
 
@@ -229,9 +243,11 @@ persist.
 
 **Deliberately does not introduce:** any context source beyond Teams, and
 — critically — **4H is NOT bundled into 4A–4G**. Security hardening is
-scheduled deliberately late (after A5, before 5.2), once the full context
-surface (Teams + Generic KM + multimodal) that 4H must actually harden
-already exists, rather than hardening a boundary that keeps moving.
+scheduled deliberately late — after 5.X and Phase 6A (see §2a for the
+current rationale), once the richer, more stable architecture it must
+harden (including the Troubleshooting Manager/Skills/Context Engineering
+foundation boundaries) already exists, rather than hardening a boundary
+that keeps moving.
 
 ### Phase 5 — Context + Operational Integrations
 
@@ -243,51 +259,117 @@ source-agnostic KM platform capability, independent of Incident Manager,
 with Incident Manager as its first reference consumer), a Cloud SQL
 PostgreSQL production-grade persistence option (POST-5.1 A), multimodal
 image attachments culminating in trusted specialist-level image + Teams +
-governed-KM combined reasoning (POST-5.1 B0–B6), and — later in this same
-phase — real TELCO/RAN knowledge content (A5), security hardening (4H,
-scheduled here because this is where the full context surface it must
-protect is finally in place), and the remaining Operational Context
-sources (5.2–5.7: ITSM, Alarms, Topology, KPIs, Change, Handover).
+governed-KM combined reasoning (POST-5.1 B0–B6), real TELCO/RAN knowledge
+content (A5, COMPLETE), and — NEXT within this same phase — Teams-
+originated rich media retrieval (5.X, see §2a). The remaining Operational
+Context sources (5.2–5.7: ITSM, Alarms, Topology, KPIs, Change, Handover)
+are also part of Phase 5, but no longer immediately follow A5/5.X — they
+now follow Phase 6A and Phase 4H (§2a).
 
 **Depends on:** Phase 4's durable, trustworthy runtime — governed
 knowledge and multimodal evidence are only safe to introduce once
 session/case/approval state and the trust boundary are both solid.
 
 **Deliberately does not introduce:** a Troubleshooting Manager, a
-Context Engineering Layer, or any persistent troubleshooting state —
-Phase 5 builds the context *sources* multisource reasoning needs; it
-does not build the iterative troubleshooting *loop* itself (that is
-Phase 7). It also deliberately does not build a Knowledge Agent — Generic
-KM is a tool surface behind the existing Incident Manager, never a new
-agent.
+Context Engineering Layer, Skills, Experience Memory, or any persistent
+troubleshooting state — Phase 5 builds the context *sources* multisource
+reasoning needs; it does not build the intelligence/orchestration
+foundation (that is Phase 6A) or the iterative troubleshooting *loop*
+itself (that is Phase 7). It also deliberately does not build a
+Knowledge Agent — Generic KM is a tool surface behind the existing
+Incident Manager, never a new agent.
 
-### Phase 6 — Agent Expansion + Context Engineering
+### Phase 6A — Intelligence Architecture Foundation
 
-**Objective:** can context assembly and specialist responsibilities scale
-cleanly as more sources and more specialists are added?
+**Objective:** can a bounded intelligence/orchestration foundation be
+built and validated against the context sources that already exist,
+before every future Operational Context source exists?
 
 **Capability introduced (target, not built):** a Context Engineering
-Layer that assembles bounded Operational/Knowledge/Case/Experience-Memory
-context for a specialist from whatever sources exist at the time; a
-second specialist (Troubleshooting Manager) alongside Incident Manager;
-an optional supervisory Head of Automated Operations layer; a reusable
-**Skills** behavioral layer ("how should this kind of work be
-performed?" — see `docs/AGENT_CONTRACT.md` §3a and
+foundation that assembles bounded context for a specialist from whatever
+CURRENTLY exists by the time 6A starts — Knowledge Context/RAG, Case
+Context, Teams text, Teams rich media (5.X), and conversation/session
+context; a second specialist (Troubleshooting Manager) alongside Incident
+Manager, attached via `AgentTool` the same way Incident Manager is (never
+native `sub_agents` transfer); a reusable **Skills** behavioral
+framework/registry/controlled-selection concept ("how should this kind of
+work be performed?" — see `docs/AGENT_CONTRACT.md` §3a and
 `docs/TROUBLESHOOTING_STRATEGY.md` §12a) the Troubleshooting Manager
-selects and executes instead of one new agent per fault type; and
-**Experience Memory** (prior operational experience/pattern information
-— see `docs/KNOWLEDGE_CONTRACT.md` §22.3–22.4), distinct from Approved
-Knowledge and never silently promoted to it without the same human-gated
-`CANDIDATE → APPROVED` governance §22.4 already defines.
+selects and executes instead of one new agent per fault type; and an
+**Experience Memory** foundation/boundary (prior operational experience/
+pattern information — see `docs/KNOWLEDGE_CONTRACT.md` §22.3–22.4),
+distinct from Approved Knowledge and never silently promoted to it
+without the same human-gated `CANDIDATE → APPROVED` governance §22.4
+already defines. An optional supervisory Head of Automated Operations
+layer remains documented future architecture only — not automatically
+pulled into 6A's scope.
 
-**Depends on:** Phase 5 having produced more than one real context source
-(Teams, Generic KM, and eventually 5.2–5.7) — there is nothing to
-"engineer" the assembly of until multiple real sources exist.
+**Depends on:** A5 (real Knowledge Island ingestion) and 5.X (Teams rich
+media) having produced enough real context diversity — Teams text,
+governed Knowledge/RAG, real compound TELCO/RAN content, Case Context,
+session state, current-turn multimodal reasoning, and (after 5.X)
+Teams-originated media — to build and validate a bounded architecture
+against, without needing to wait for 5.2–5.7 first (§2a).
+
+**Deliberately does not introduce:** Phase 6B's full Operational Context
+surface (5.2–5.7 do not exist yet when 6A is built), Phase 4H's security
+hardening scope (6A precedes 4H, not the reverse), and — critically —
+Phase 7's mature troubleshooting loop: persistent Troubleshooting State,
+hypothesis lifecycle, the iterative next-best-diagnostic-action loop, and
+the RESOLVED/SUFFICIENTLY NARROWED/ESCALATE/DISPATCH/HANDOVER end states
+all remain Phase 7's responsibility, not 6A's. 6A is a foundation, not
+the finished troubleshooting experience.
+
+### Phase 4H — Security Hardening
+
+**Objective:** can the trust boundaries of the now-richer, more stable
+architecture be evaluated and hardened, once that architecture actually
+exists?
+
+**Capability introduced (target, not started):** trust-boundary/threat
+modeling, prompt-injection/untrusted-external-content isolation, tool
+authorization + output validation, sensitive-data/secret-handling
+hardening, security audit events + safe failure, and an adversarial
+regression suite — evaluated against, as applicable: Team Manager,
+Incident Manager, the Troubleshooting Manager boundary, the Skills
+framework boundary, the Context Engineering foundation boundary, Teams
+text, Teams rich media, Knowledge/RAG, Case/session state, attachments,
+Cloud SQL, GCS, and the existing approval/trust boundaries.
+
+**Depends on:** Phase 6A existing — hardening a boundary that is still
+being architecturally established is less valuable than hardening the
+richer, more stable surface 6A produces. This is a scheduling change
+only: 4H is not cancelled, reduced in importance, or weakened — it is
+sequenced after 6A instead of directly after A5/5.X (§2a).
+
+**Deliberately does not introduce:** any new reasoning capability — this
+phase hardens what already exists; it does not add Skills, Experience
+Memory, or Context Engineering behavior of its own. This document does
+not specify a detailed 4H implementation plan — that remains 4H's own
+future scope.
+
+### Phase 6B — Context Engineering Expansion
+
+**Objective:** can the Phase 6A foundation be expanded and refined once
+the full Operational Context surface (5.2–5.7) exists?
+
+**Capability introduced (target, not built):** multisource context
+assembly across the complete Operational Context surface (Teams text,
+Teams media, Knowledge/RAG, Case Context, Experience Memory, ITSM,
+Alarms, Topology, KPIs, Change, Handover); relevance/authority/freshness
+ranking; context budgeting; conflict handling; cross-source correlation;
+Experience Memory refinement; specialist context policy refinement. This
+is 6A's foundation being expanded and refined, never a second, competing
+Context Engineering architecture.
+
+**Depends on:** Phase 6A's foundation and Phase 5.2–5.7's Operational
+Context sources both existing — there is nothing to "expand" 6A's context
+assembly against until the fuller source surface is in place.
 
 **Deliberately does not introduce:** the troubleshooting loop itself
-(Phase 7) — Phase 6 is about *architecture* (how context and specialists
-scale), not about the diagnostic reasoning loop that consumes that
-architecture.
+(Phase 7) — 6B remains about *architecture* (how the fuller context
+surface is assembled/ranked/budgeted), not about the diagnostic reasoning
+loop that consumes that architecture.
 
 ### Phase 7 — Advanced Troubleshooting / JOC
 
@@ -301,19 +383,153 @@ State (problem, symptoms, known facts, unknowns, hypotheses, eliminated
 hypotheses, actions performed, evidence, relevant knowledge, current
 MOP/SOP, current diagnostic step, expected/actual result, next action,
 resolution state), a next-best-diagnostic-action loop, Skill
-selection/execution (Phase 6's Skills layer put to use), Experience
-Memory informing (never overriding) reasoning, and defined end states
-(RESOLVED / SUFFICIENTLY NARROWED / ESCALATE / DISPATCH / HANDOVER).
+selection/execution (6A's Skills framework, matured and put to use),
+Experience Memory informing (never overriding) reasoning, and defined end
+states (RESOLVED / SUFFICIENTLY NARROWED / ESCALATE / DISPATCH /
+HANDOVER).
 
-**Depends on:** Phase 6's context-engineering architecture and multiple
-real Operational Context sources — an iterative diagnostic loop is only
-useful once there is enough real, governed, multisource context to
-iterate over.
+**Depends on:** Phase 6A's intelligence-architecture foundation and Phase
+6B's expanded, multisource-ready context-engineering architecture — an
+iterative diagnostic loop is only useful once there is enough real,
+governed, multisource context to iterate over.
 
 **Deliberately does not introduce:** controlled autonomy (a possible
 later phase beyond this document's current scope) — Phase 7 is
 conversational and user-in-the-loop throughout; it does not execute
 remediation on its own.
+
+---
+
+## 2a. Roadmap realignment — why 5.X and Phase 6A now precede Phase 4H and 5.2–5.7
+
+**Locked, replaces the previous order.** The execution order after A5 is
+now:
+
+```text
+A5 (COMPLETE)
+  → 5.X Teams Rich Content / Media Retrieval (← NEXT, NOT STARTED)
+  → Phase 6A Intelligence Architecture Foundation (FUTURE)
+  → Phase 4H Security Hardening (FUTURE)
+  → 5.2 ITSM
+  → 5.3 Alarm / Fault
+  → 5.4 Topology / Inventory
+  → 5.5 KPI / Observability
+  → 5.6 Change Management
+  → 5.7 Handover / Operational Context
+  → Phase 6B Context Engineering Expansion (FUTURE)
+  → Phase 7 Advanced Troubleshooting / JOC (FUTURE, product target)
+```
+
+This replaces the previous locked order, which ran A5 → Phase 4H →
+5.2–5.7 → Phase 6 (undivided). Do not read any other statement in this
+document, `CLAUDE.md`, or `README.md` that still describes the old order
+as current — this section and the "Current checkpoint" table above are
+authoritative.
+
+**Why it changed:** the previous order delayed all of Phase 6 until after
+5.2–5.7 because Context Engineering originally lacked enough real context
+diversity to be meaningful — there was nothing to "engineer" the
+assembly of. That premise has changed. SLOPANOC now has CURRENT, real
+foundations including Microsoft Teams text context, Generic Governed
+Knowledge/RAG, real TELCO/RAN Knowledge Island ingestion (A5), Case/Fault
+Context, persistent session/conversation state, current-turn multimodal
+image reasoning, Cloud SQL persistence, and governed provenance/
+applicability/trust boundaries. 5.X adds Teams-originated rich visual
+evidence on top of that. That is enough context diversity to build and
+validate a *bounded* Phase 6A architecture before every later Operational
+Context integration exists.
+
+**Phase 6 is therefore intentionally split — this is a split, not a wholesale
+move-earlier:**
+
+- **Phase 6A** builds the intelligence/orchestration foundation
+  (Context Engineering foundation, Troubleshooting Manager, Skills
+  framework, Experience Memory foundation) against the context sources
+  that already exist after A5 and 5.X.
+- **Phase 6B** — unchanged in dependency terms — expands and refines that
+  foundation against the complete Operational Context surface once
+  5.2–5.7 land.
+
+**Phase 4H is not cancelled or reduced in importance.** It moves to occur
+after 6A instead of directly after A5/5.X, so the security-hardening pass
+evaluates the richer, more stable architecture 6A produces (Troubleshooting
+Manager boundary, Skills framework boundary, Context Engineering
+foundation boundary, Teams rich media) rather than a boundary that is
+still being architecturally established. This document does not turn
+this realignment into a detailed 4H implementation specification, and
+does not claim security hardening is complete.
+
+**5.2–5.7 keep their existing internal order** (ITSM → Alarm/Fault →
+Topology → KPI → Change → Handover) — only their position relative to 6A
+and 4H moved; nothing about their own sequence changed.
+
+---
+
+## 2b. 5.X — Teams Rich Content / Media Retrieval (target definition, roadmap only)
+
+**Canonical name:** 5.X — Teams Rich Content / Media Retrieval
+**Status:** ← NEXT — NOT STARTED
+
+**Purpose:** allow SLOPANOC to reason from rich visual evidence that
+exists inside a real Microsoft Teams conversation, rather than only from
+Teams message text.
+
+**Current distinction (must remain explicit — do not blur these):**
+
+- **CURRENT:** the user uploads an image directly into a SLOPANOC chat;
+  the existing B5/B6 multimodal runtime reasons over it.
+- **NOT CURRENT:** retrieving the actual image posted inside a Teams
+  chat, and passing that Teams-originated image into multimodal
+  reasoning. This is exactly what 5.X adds.
+
+**Target concept (roadmap only — not implemented):**
+
+```text
+Teams chat
+    ↓
+real message
+    ↓
+trusted media reference
+    ↓
+deterministic media retrieval
+    ↓
+existing multimodal reasoning path
+    ↓
+Teams text + image + Knowledge + Case Context
+    ↓
+grounded specialist reasoning
+```
+
+**Design constraints (roadmap invariants for 5.X, not implemented
+behavior — an implementation audit still decides the concrete mechanism):**
+
+1. Reuse the existing B5/B6 multimodal architecture (`MultimodalAgentTool`,
+   `Part.from_uri`, the current-turn trusted-image propagation path)
+   where appropriate. Do not document, or build, a second competing
+   vision pipeline.
+2. Media retrieval must remain bound to real, retrieved Teams evidence —
+   `chat → message → media`, the same deterministic-binding discipline
+   already governing Teams text (`docs/TEAMS_TOOL_CONTRACT.md`). The
+   model must never receive an unrestricted, arbitrary-URL fetch ability.
+3. Preserve provenance for the originating Teams chat/message and media —
+   the same `SourceReference` discipline already enforced for Teams text
+   evidence, never relaxed for media.
+4. Images are the first required rich-content target.
+5. Teams documents / SharePoint / OneDrive files are a related but
+   distinct concern. 5.X may discover/identify document references where
+   useful, but arbitrary Teams documents do NOT automatically become
+   Approved Knowledge merely by being referenced in a Teams message.
+6. Any future enterprise-document ingestion continues through the
+   governed Knowledge Island lifecycle unchanged: source → ingestion →
+   CANDIDATE → trusted/human governance → APPROVED
+   (`docs/KNOWLEDGE_CONTRACT.md` §5/§14/§22.4). Ingestion ≠ approval
+   remains unchanged.
+7. The current Microsoft 365 architecture remains: typed Teams tools →
+   Power Automate gateway → Teams/M365. Do not document direct Microsoft
+   Graph as a current capability. Do not claim the 5.X implementation
+   mechanism has already been decided before its own implementation
+   audit — the design constraints above bound the solution space, they do
+   not select a specific mechanism.
 
 ---
 
@@ -325,17 +541,23 @@ flowchart TD
     P1 --> P2["Phase 2<br/>Observable Runtime"]
     P2 --> P3["Phase 3<br/>Trusted Runtime"]
     P3 --> P4["Phase 4<br/>Durable Stateful Runtime"]
-    P4 --> P5["Phase 5<br/>Multisource Context"]
-    P5 --> P6["Phase 6<br/>Specialist + Context Engineering (FUTURE)"]
-    P6 --> P7["Phase 7<br/>Iterative Troubleshooting / JOC (FUTURE)"]
+    P4 --> P5["Phase 5<br/>Multisource Context (A5 COMPLETE)"]
+    P5 --> PX["5.X<br/>Teams Rich Content / Media Retrieval (← NEXT)"]
+    PX --> P6A["Phase 6A<br/>Intelligence Architecture Foundation (FUTURE)"]
+    P6A --> P4H["Phase 4H<br/>Security Hardening (FUTURE)"]
+    P4H --> P5B["5.2–5.7<br/>Operational Integrations (FUTURE)"]
+    P5B --> P6B["Phase 6B<br/>Context Engineering Expansion (FUTURE)"]
+    P6B --> P7["Phase 7<br/>Iterative Troubleshooting / JOC (FUTURE)"]
 ```
 
 Phase 7 is the product strategy target defined in
 `docs/TROUBLESHOOTING_STRATEGY.md`. **It is not implemented today.**
-Phases 0–5 (through POST-5.1 B, B0–B7) are complete; A5 (Knowledge
-Island ingestion foundation + real TELCO/RAN compound knowledge
-validation) is COMPLETE, including real live-runtime validation, within
-Phase 5.
+Phases 0–5 (through POST-5.1 B, B0–B7, and A5 — Knowledge Island
+ingestion foundation + real TELCO/RAN compound knowledge validation) are
+complete. **5.X (Teams Rich Content / Media Retrieval) is the next
+implementation milestone — NOT STARTED.** Phase 6A, Phase 4H, 5.2–5.7,
+Phase 6B, and Phase 7 all remain FUTURE, in that order — see §2a for the
+realignment rationale.
 
 ---
 
@@ -404,12 +626,60 @@ remains the sole user-facing agent; Incident Manager receives the same
 trusted current-turn image evidence Team Manager sees, propagated by a
 narrow `MultimodalAgentTool` adapter, never model-controlled.
 
-### E. End-of-Phase-5 topology (once 5.2–5.7 land)
+### D2. 5.X target topology (Teams Rich Content / Media Retrieval — FUTURE, not built)
 
 ```mermaid
 flowchart TD
-    IM["Incident Manager / future specialists"] --> OC[Operational Context]
-    OC --> TEAMS[Teams]
+    TCHAT["Teams chat"] --> TMSG["real message"]
+    TMSG --> TREF["trusted media reference (FUTURE)"]
+    TREF --> TRET["deterministic media retrieval (FUTURE)"]
+    TRET --> MM["existing B5/B6 multimodal reasoning path"]
+    MM --> COMBINED["Teams text + image + Knowledge + Case Context"]
+    COMBINED --> IM[Incident Manager]
+```
+
+This reuses the CURRENT B5/B6 multimodal path (§D above) rather than a
+second vision pipeline — see §2b for the full 5.X design constraints
+(deterministic `chat → message → media` binding, no arbitrary-URL fetch,
+provenance preservation, documents remaining a distinct governed-
+ingestion concern). Nothing in this diagram is built yet.
+
+### E. Phase 6A target topology (FUTURE, after 5.X, before Phase 4H)
+
+```mermaid
+flowchart TD
+    User --> TM[Team Manager]
+    TM --> IM[Incident Manager]
+    TM --> TSM["Troubleshooting Manager (FUTURE / 6A)"]
+    TSM --> SK["Skills (FUTURE / 6A)<br/>reusable behavior, not an agent"]
+    IM --> CEL["Context Engineering foundation (FUTURE / 6A)"]
+    TSM --> CEL
+    SK --> CEL
+    CEL --> OC["Operational Context<br/>(Teams text + 5.X media only — 5.2–5.7 not yet built)"]
+    CEL --> KC[Knowledge Context]
+    CEL --> CC[Case Context]
+    CEL --> EM["Experience Memory foundation (FUTURE / 6A)"]
+    HOO["Head of Automated Operations<br/>(OPTIONAL FUTURE SUPERVISORY LAYER — never a mandatory hop, not automatically part of 6A)"] -.-> TM
+```
+
+Head of Automated Operations appears only as an optional future
+supervisory layer — it must never be shown, or built, as a mandatory hop
+in the user-facing runtime path, and is not automatically pulled into 6A
+merely because 6A exists. Skills are drawn beneath Troubleshooting
+Manager to show they are SELECTED/EXECUTED by it, not a peer reasoning
+boundary of their own (`docs/AGENT_CONTRACT.md` §3a). Experience Memory
+is drawn as a peer input to Context Engineering, distinct from Knowledge
+Context, and never a source Context Engineering treats as Approved
+Knowledge (`docs/KNOWLEDGE_CONTRACT.md` §22.3–22.4). Operational Context
+in 6A is intentionally bounded to what already exists (Teams text + 5.X
+media) — 6A does not pretend 5.2–5.7 exist yet.
+
+### F. Operational Context full-surface topology (once 5.2–5.7 land, after Phase 6A + Phase 4H)
+
+```mermaid
+flowchart TD
+    IM["Incident Manager / Troubleshooting Manager"] --> OC[Operational Context]
+    OC --> TEAMS[Teams text + media]
     OC --> ITSM[ITSM]
     OC --> ALARM["Alarms/Fault"]
     OC --> TOPO[Topology]
@@ -419,36 +689,28 @@ flowchart TD
     IM --> KC[Knowledge Context]
     KC --> GKM[Generic KM]
     IM --> CC[Case Context]
+    IM --> EM[Experience Memory]
 ```
 
-### F. Phase 6 target topology
+### G. Phase 6B target topology (FUTURE, after 5.2–5.7)
 
 ```mermaid
 flowchart TD
-    User --> TM[Team Manager]
-    TM --> IM[Incident Manager]
-    TM --> TSM["Troubleshooting Manager (FUTURE)"]
-    TSM --> SK["Skills (FUTURE)<br/>reusable behavior, not an agent"]
-    IM --> CEL["Context Engineering (FUTURE)"]
-    TSM --> CEL
-    SK --> CEL
-    CEL --> OC[Operational Context]
-    CEL --> KC[Knowledge Context]
-    CEL --> CC[Case Context]
-    CEL --> EM["Experience Memory (FUTURE)"]
-    HOO["Head of Automated Operations<br/>(OPTIONAL FUTURE SUPERVISORY LAYER — never a mandatory hop)"] -.-> TM
+    F6A["Phase 6A foundation<br/>(Context Engineering, Troubleshooting Manager, Skills, Experience Memory)"] --> EXPAND["Phase 6B expansion (FUTURE)"]
+    EXPAND --> RANK["relevance / authority / freshness ranking"]
+    EXPAND --> BUDGET["context budgeting"]
+    EXPAND --> CONFLICT["conflict handling / cross-source correlation"]
+    EXPAND --> EMREFINE["Experience Memory refinement"]
+    EXPAND --> POLICY["specialist context policy refinement"]
+    RANK --> FULLOC["full Operational Context surface (§F above)"]
+    BUDGET --> FULLOC
+    CONFLICT --> FULLOC
 ```
 
-Head of Automated Operations appears only as an optional future
-supervisory layer — it must never be shown, or built, as a mandatory hop
-in the user-facing runtime path. Skills are drawn beneath Troubleshooting
-Manager to show they are SELECTED/EXECUTED by it, not a peer reasoning
-boundary of their own (`docs/AGENT_CONTRACT.md` §3a). Experience Memory
-is drawn as a peer input to Context Engineering, distinct from Knowledge
-Context, and never a source Context Engineering treats as Approved
-Knowledge (`docs/KNOWLEDGE_CONTRACT.md` §22.3–22.4).
+6B expands the SAME 6A foundation against the richer source surface §F
+shows — it is not a second, competing Context Engineering architecture.
 
-### G. Phase 7 troubleshooting loop topology (target, not built)
+### H. Phase 7 troubleshooting loop topology (target, not built)
 
 ```mermaid
 flowchart TD
@@ -759,8 +1021,9 @@ Gateway Group Test").
 below) is **✅ COMPLETE** — implementation, full regression, and
 real-stack live validation all passed. **A5** (see §8 below) is
 **✅ COMPLETE**, including real live-runtime validation.
-**Phase 4H security hardening is NEXT**, per the
-locked roadmap — not started.
+**5.X — Teams Rich Content / Media Retrieval is NEXT** (← NEXT — NOT
+STARTED), per the locked roadmap realignment (§2a); Phase 6A, Phase 4H,
+5.2–5.7, and Phase 6B all follow in that order, before Phase 7.
 
 Do not invent B7 implementation details beyond what this document and
 `CLAUDE.md`'s own roadmap already establish.
@@ -1176,7 +1439,11 @@ verification-code prompt) now correctly described and cited.
 
 **STATUS: A5 — COMPLETE.** Real live-runtime validation performed end
 to end, including both safety-critical gates and all 8 retested gates.
-**NEXT: Phase 4H security hardening** (not started).
+**NEXT: 5.X — Teams Rich Content / Media Retrieval** (NOT STARTED),
+followed by Phase 6A, Phase 4H, 5.2–5.7, and Phase 6B in that order —
+see §2a for the locked roadmap realignment. (Phase 4H no longer
+immediately follows A5 — that scheduling changed after this A5 closure;
+this section's own A5 content above is otherwise unchanged.)
 
 ---
 

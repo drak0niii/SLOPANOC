@@ -406,42 +406,70 @@ Current implementation status must remain clearly separated from future architec
 See `docs/BUILD_SEQUENCE.md` for the full, detailed phase-by-phase build
 sequence and topology evolution behind this summary.
 
+**Locked execution order (replaces the previous A5 → Phase 4H → 5.2–5.7 →
+Phase 6 order — see `docs/BUILD_SEQUENCE.md` §2a for the full
+rationale):** CURRENT → 5.X (← NEXT) → Phase 6A → Phase 4H → 5.2–5.7 →
+Phase 6B → Phase 7 (product target).
+
 ### Current
 
 ```text
 Team Manager
 Incident Manager
-Teams
+Teams text
 Cases
-Generic KM Layer → Knowledge Context (Phase 5.1, complete)
-Current-turn multimodal image evidence, combined with Teams and/or
+Generic KM / RAG (Phase 5.1, complete)
+A5 — real TELCO/RAN Knowledge Island capability (complete, including real
+  live-runtime validation)
+Current-turn SLOPANOC image multimodality, combined with Teams and/or
   Knowledge Context in one specialist turn (POST-5.1 B, B0-B7, complete)
 ```
 
 ### Next
 
 ```text
-A5 — real TELCO/RAN MOP ingestion (real knowledge content, same pipeline)
-Phase 4H — security hardening
+5.X — Teams Rich Content / Media Retrieval (← NEXT, NOT STARTED)
+  Teams-originated rich visual evidence (images first) added to the
+  existing multimodal path -- distinct from the CURRENT direct-upload
+  capability above.
+```
+
+### Then
+
+```text
+Phase 6A — Intelligence Architecture Foundation (FUTURE, after 5.X)
+  Bounded Context Engineering foundation, Troubleshooting Manager,
+  Skills framework, Experience Memory foundation -- built against the
+  context sources that exist after A5/5.X, not the full future
+  Operational Context surface.
+```
+
+### Then
+
+```text
+Phase 4H — Security Hardening (FUTURE, after Phase 6A)
+  Not cancelled -- rescheduled to evaluate the richer, more stable
+  architecture Phase 6A produces.
 ```
 
 ### Later
 
 ```text
 5.2-5.7 — Operational Context integrations (ITSM, Alarms, Topology, KPIs,
-  Change, Handover)
-Phase 6 — Agent expansion + Context Engineering
+  Change, Handover) (FUTURE, after Phase 4H)
+Phase 6B — Context Engineering Expansion (FUTURE, after 5.2-5.7)
+  Expands the SAME Phase 6A foundation against the complete Operational
+  Context surface.
 ```
 
-### Future
+### Product target
 
 ```text
-Troubleshooting Manager
-Context Engineering Layer
+Phase 7 — persistent Troubleshooting State + next-best-diagnostic-action
+  loop (the product target this document defines), consuming the
+  architecture Phase 6A establishes and Phase 6B expands
 Head of Automated Operations (optional future supervisory layer, never a
-  mandatory hop)
-Persistent Troubleshooting State + next-best-diagnostic-action loop
-  (Phase 7 — the product target this document defines)
+  mandatory hop -- not automatically part of Phase 6A)
 ```
 
 ---
@@ -615,7 +643,7 @@ Knowledge/RAG    Experience     Case Context      live Tools
                   §6 Next-Best-Diagnostic-Action)
 ```
 
-A future Troubleshooting Manager (§16's Phase 6/7 alignment) selecting
+A future Troubleshooting Manager (§16's Phase 6A/7 alignment) selecting
 and executing Skills is expected to give behavioral specialization
 without one agent per fault type — "Troubleshoot VSWR," "Troubleshoot
 Cell Down," and similar are examples of Skills, never of new agents (see
@@ -748,7 +776,15 @@ If not, the capability may be useful elsewhere, but it must not distort the core
 
 # 16. Phase Alignment Rules
 
-## Phase 5.1 — Generic Knowledge Management
+**Locked execution order (see `docs/BUILD_SEQUENCE.md` §2a for the full
+realignment rationale — this replaces the previous 5.1 → 4H → 5.2+ → 6
+order):** 5.1 (COMPLETE, includes A5) → **5.X (← NEXT, NOT STARTED)** →
+**Phase 6A** → Phase 4H → 5.2+ → **Phase 6B** → Phase 7. The locked
+roadmap ends at Phase 7 — Phase 8 (below) is pre-existing content
+describing what lies beyond the current roadmap, not part of this
+locked order.
+
+## Phase 5.1 — Generic Knowledge Management (COMPLETE)
 
 Must support the future troubleshooting experience by delivering:
 
@@ -763,9 +799,38 @@ Must support the future troubleshooting experience by delivering:
 - provenance,
 - generic agent-facing knowledge contracts.
 
-It must not attempt to build the full troubleshooting loop.
+It must not attempt to build the full troubleshooting loop. Complete,
+including A5's real TELCO/RAN compound Knowledge Island validation.
 
-## Phase 4H — Security
+## 5.X — Teams Rich Content / Media Retrieval (← NEXT, NOT STARTED)
+
+Adds Teams-originated rich visual evidence (images first) to the
+troubleshooting experience's evidence sources, on top of Teams message
+text. Distinct from the CURRENT capability of a user uploading an image
+directly into a SLOPANOC chat. Must preserve the same
+`chat → message → media` deterministic-binding and provenance discipline
+already governing Teams text evidence — see `docs/BUILD_SEQUENCE.md` §2b
+for the full target definition and design constraints.
+
+## Phase 6A — Intelligence Architecture Foundation (FUTURE, after 5.X)
+
+Builds a BOUNDED intelligence/orchestration foundation against the
+context sources that already exist after 5.1/A5/5.X — not the full
+future Operational Context surface (5.2+ do not exist yet). New agents
+should correspond to real bounded operational responsibilities. Do not
+add agents merely to make the architecture appear more agentic.
+
+A reusable **Skills** layer (§12a) and an **Experience Memory**
+foundation (§9, `docs/BUILD_SEQUENCE.md` §2a target architecture) belong
+to this phase's scope alongside a future Troubleshooting Manager —
+neither is a reason to add a new agent per fault type; a Skill is
+behavioral orchestration executed BY an agent, not an agent itself
+(§12a, `docs/AGENT_CONTRACT.md` §3a). Does not implement Phase 7's
+mature troubleshooting loop (persistent Troubleshooting State, hypothesis
+lifecycle, next-best-diagnostic-action loop, end states) — 6A is a
+foundation, not the finished troubleshooting experience.
+
+## Phase 4H — Security (FUTURE, after Phase 6A)
 
 Must protect the troubleshooting experience against:
 
@@ -778,9 +843,14 @@ Must protect the troubleshooting experience against:
 - secret leakage,
 - cross-user leakage.
 
-Security controls must preserve the iterative UX rather than turning it into an unusable approval sequence for normal diagnostic reads.
+Security controls must preserve the iterative UX rather than turning it
+into an unusable approval sequence for normal diagnostic reads. Not
+cancelled or reduced in importance — rescheduled after Phase 6A so it
+evaluates the richer, more stable architecture 6A produces (including the
+Troubleshooting Manager boundary, Skills framework boundary, and Context
+Engineering foundation boundary), including Teams rich media from 5.X.
 
-## Phase 5.2+ — Operational Integrations
+## Phase 5.2+ — Operational Integrations (FUTURE, after Phase 4H)
 
 Each new integration should increase the system's ability to gather evidence automatically.
 
@@ -795,18 +865,13 @@ Change    → deployment/change evidence
 Handover  → operational continuity evidence
 ```
 
-## Phase 6 — Agent Expansion
+## Phase 6B — Context Engineering Expansion (FUTURE, after 5.2+)
 
-New agents should correspond to real bounded operational responsibilities.
-
-Do not add agents merely to make the architecture appear more agentic.
-
-A reusable **Skills** layer (§12a) and **Experience Memory** (§9,
-`docs/BUILD_SEQUENCE.md` target architecture) are expected to belong to
-this phase's scope alongside a future Troubleshooting Manager — neither
-is a reason to add a new agent per fault type; a Skill is behavioral
-orchestration executed BY an agent, not an agent itself (§12a,
-`docs/AGENT_CONTRACT.md` §3a).
+Expands the SAME Phase 6A foundation (never a second, competing
+architecture) against the complete Operational Context surface once
+5.2+ exist: multisource context assembly, relevance/authority/freshness
+ranking, context budgeting, conflict handling, cross-source correlation,
+Experience Memory refinement, specialist context policy refinement.
 
 ## Phase 7 — Advanced Troubleshooting / JOC
 
@@ -828,9 +893,16 @@ Skill selection/execution
 Next-Best-Diagnostic-Action reasoning
 ```
 
-This is where the full troubleshooting experience defined in this document becomes a first-class runtime capability.
+This is where the full troubleshooting experience defined in this document becomes a first-class runtime capability. This is the end of the current locked execution roadmap (5.X → 6A → 4H → 5.2–5.7 → 6B → 7) — see §16.
 
-## Phase 8 — Controlled Autonomy
+## Beyond the current locked roadmap — Phase 8, Controlled Autonomy
+
+Phase 8 is preserved here as a pre-existing long-term product-strategy
+concept, not as a scheduled next implementation step. It is explicitly
+**beyond the current locked execution roadmap**: it has no assigned
+dependency position after Phase 7 and is **not currently scheduled for
+implementation**. It is retained only as long-term direction the product
+may eventually pursue, contingent on its own future roadmap decision.
 
 The progression remains:
 

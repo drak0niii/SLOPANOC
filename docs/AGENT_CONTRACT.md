@@ -27,9 +27,13 @@ architecture those passes produced.
 | `team_manager` | Orchestrator, sole user-facing author | Yes | No — never calls a Teams tool directly | No — presents proposals and outcomes; a deterministic policy gate owns actual authorization |
 | `incident_manager` | Teams specialist | No — never produces text the user sees directly | Yes — sole caller of the Teams tools (`docs/TEAMS_TOOL_CONTRACT.md`) | No — prepares/executes writes only when told to, and execution is independently re-authorized by the tool implementation itself |
 
-No other agent exists today. A future specialist (e.g. a Knowledge agent —
-see the README's roadmap) would attach to `team_manager` the same way
-`incident_manager` does.
+No other agent exists today. The future second specialist is
+**Troubleshooting Manager** (Phase 6A — see `docs/BUILD_SEQUENCE.md`
+§2a and §2's "Future agent topology" below), which would attach to
+`team_manager` the same way `incident_manager` does. There is no
+Knowledge Agent, planned or built — Generic Governed Knowledge is a
+Knowledge Context provider/tool surface (§3a, §12), never a specialist
+of its own.
 
 ---
 
@@ -68,16 +72,16 @@ in control of the turn instead, which is why it is used.
 
 ```mermaid
 flowchart TD
-    HOO["Head of Automated Operations (FUTURE)<br/>supervision / efficiency / governance"] --> TM[team_manager - user-facing orchestrator]
+    HOO["Head of Automated Operations (FUTURE, optional)<br/>supervision / efficiency / governance"] --> TM[team_manager - user-facing orchestrator]
     TM --> IM["incident_manager (CURRENT)"]
-    TM --> TSM["Troubleshooting Manager (FUTURE)"]
-    TSM --> SK["Skills (FUTURE)<br/>reusable behavioral layer -- not agents"]
-    IM --> CEL["Context Engineering Layer (FUTURE)"]
+    TM --> TSM["Troubleshooting Manager (FUTURE / Phase 6A)"]
+    TSM --> SK["Skills (FUTURE / Phase 6A)<br/>reusable behavioral layer -- not agents"]
+    IM --> CEL["Context Engineering Layer<br/>(FUTURE -- 6A foundation, 6B expansion)"]
     SK --> CEL
     CEL --> KC["Knowledge Context (CURRENT, via Generic KM/RAG)"]
-    CEL --> EM["Experience Memory (FUTURE)"]
+    CEL --> EM["Experience Memory (FUTURE / Phase 6A)"]
     CEL --> CC["Case Context (CURRENT)"]
-    CEL --> OC["Operational Context (evolving -- Teams CURRENT, others FUTURE)"]
+    CEL --> OC["Operational Context (evolving -- Teams text CURRENT,<br/>Teams media 5.X/NEXT, others 5.2-5.7/FUTURE)"]
 ```
 
 A `Skill` (§3a) is not a node in the AGENT topology above in the sense
@@ -89,9 +93,11 @@ relative to Context Engineering, not to imply it is itself invoked like
 an `AgentTool`.
 
 This is target architecture only — nothing in this section exists in the
-codebase today. It is documented here so Phase 5.1A and later phases are
-designed toward a consistent destination, not so it can be mistaken for a
-current capability.
+codebase today. It is documented here so 5.X, Phase 6A, and later phases
+are designed toward a consistent destination, not so it can be mistaken
+for a current capability. Execution order (locked, see
+`docs/BUILD_SEQUENCE.md` §2a): A5 (COMPLETE) → 5.X (← NEXT) → Phase 6A →
+Phase 4H → 5.2–5.7 → Phase 6B → Phase 7.
 
 - **`team_manager` remains the only user-facing agent today**, and remains
   so until a "Head of Automated Operations" agent is actually designed and
@@ -100,18 +106,32 @@ current capability.
   directly.
 - **Troubleshooting Manager** is a planned second specialist, alongside
   `incident_manager`, for future contextual-troubleshooting/next-step
-  reasoning work (see the README's roadmap, Phase 7). It would attach to
-  `team_manager` via `AgentTool`, the same way `incident_manager` does
-  (§12) — never built as part of Phase 5.1A.
+  reasoning work, introduced as part of **Phase 6A — Intelligence
+  Architecture Foundation** (`docs/BUILD_SEQUENCE.md` §2a), maturing into
+  Phase 7's full iterative loop. It would attach to `team_manager` via
+  `AgentTool`, the same way `incident_manager` does (§12) — never built
+  before 5.X (Teams Rich Content / Media Retrieval, the current
+  prerequisite milestone) is complete.
+- **Skills** (§3a) belong to Phase 6A — a reusable behavioral
+  framework/registry the Troubleshooting Manager selects from, avoiding
+  one new agent per fault type.
+- **Experience Memory** belongs to Phase 6A as a foundation/boundary
+  (`docs/KNOWLEDGE_CONTRACT.md` §22.3–22.4) — never Approved Knowledge,
+  never silently promoted to it.
 - **Head of Automated Operations** is a planned future supervisory agent
   (oversight/efficiency/governance across specialists), not a mandatory hop
-  in any current or near-term turn. It is not designed in detail here and
-  is out of scope for Phase 5.1A.
+  in any current or near-term turn. It is not designed in detail here, is
+  optional future architecture, and is **not automatically part of Phase
+  6A's scope** merely because 6A exists — nothing in the current
+  documentation requires it to be built alongside 6A.
 - **Context Engineering Layer** is a future conceptual abstraction — the
   layer that would assemble the bounded, validated context (operational,
-  knowledge, case) a specialist needs — not a concrete implemented runtime
-  service today. See §12 for how Phase 5.1's Generic Knowledge Management
-  Layer relates to it.
+  knowledge, case, experience) a specialist needs. Its FOUNDATION (bounded
+  to context sources that exist after A5 and 5.X) is Phase 6A scope; its
+  EXPANSION against the full Operational Context surface (5.2–5.7) is
+  Phase 6B scope. Not a concrete implemented runtime service today. See
+  §12 for how Phase 5.1's Generic Knowledge Management Layer relates to
+  it.
 
 **Normative reference:** any future Troubleshooting Manager implementation
 must comply with `docs/TROUBLESHOOTING_STRATEGY.md` (a NON-NEGOTIABLE
@@ -197,9 +217,11 @@ MCP        = FUTURE, OPTIONAL capability-discovery/invocation mechanism
   behavioral procedure the agent selects and executes, not a nested
   reasoning boundary. Do not create a new named agent (a "VSWR Agent," a
   "Cell Down Agent") for work that can instead be represented as a Skill
-  executed by an existing specialist. See docs/BUILD_SEQUENCE.md and
-  docs/KNOWLEDGE_CONTRACT.md for how Skills are expected to relate to
-  Knowledge/Memory/Case/Operational Context once built.
+  executed by an existing specialist. The Skills framework/registry
+  foundation belongs to **Phase 6A** (`docs/BUILD_SEQUENCE.md` §2a); see
+  that document and docs/KNOWLEDGE_CONTRACT.md for how Skills are
+  expected to relate to Knowledge/Memory/Case/Operational Context once
+  built.
 - **Tool/Connector ≠ Agent.** Unchanged from §3 above — a tool is
   deterministic Python, never a reasoning boundary, regardless of
   whether it is a direct typed client (today's Teams tools) or, later, a
@@ -507,17 +529,17 @@ generic, safe response — it never falls back to a normal, tool-enabled
   equivalent deterministic approval/policy-gate boundary — approval
   enforcement is never something a new agent's prompt is trusted for on
   its own.
-- See the README's roadmap for the currently planned next specialist
-  (Phase 5.1's Generic Knowledge Management Layer) — not yet designed in
-  this document; 5.1A will cover that separately.
-- The Generic Knowledge Management Layer (Phase 5.1) is not itself a new
-  agent — it is a **Knowledge Context provider** within the future Context
-  Engineering architecture (see §2's "Future agent topology"), consumed by
-  specialists through generic contracts. It must remain independent of
-  `incident_manager` and of any future specialist (e.g. the future
-  Troubleshooting Manager) — it must not become one-off MOP/SOP reading
-  logic owned by a single agent.
-- Troubleshooting Manager and Head of Automated Operations (§2's future
-  topology) are not part of Phase 5.1A and must not be introduced while
-  building it — 5.1A is scoped to Knowledge Context's foundation
-  (architecture + contracts) only.
+- The Generic Knowledge Management Layer (Phase 5.1, COMPLETE) is not
+  itself a new agent — it is a **Knowledge Context provider** within the
+  future Context Engineering architecture (see §2's "Future agent
+  topology"), consumed by specialists through generic contracts. It must
+  remain independent of `incident_manager` and of any future specialist
+  (e.g. the future Troubleshooting Manager) — it must not become one-off
+  MOP/SOP reading logic owned by a single agent.
+- The currently planned next specialist is **Troubleshooting Manager**,
+  introduced as part of **Phase 6A — Intelligence Architecture
+  Foundation** (`docs/BUILD_SEQUENCE.md` §2a) — not before **5.X (Teams
+  Rich Content / Media Retrieval)**, the current next implementation
+  milestone, is complete. Troubleshooting Manager and Head of Automated
+  Operations (§2's future topology) must not be introduced during 5.X —
+  5.X is scoped to Teams media retrieval only.
