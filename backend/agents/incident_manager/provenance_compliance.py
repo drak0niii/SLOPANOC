@@ -160,6 +160,37 @@ def _requires_governed_knowledge(callback_context: Any) -> bool:
     return bool(payload.get("requires_governed_knowledge", False))
 
 
+def _incoming_question(callback_context: Any) -> Optional[str]:
+    """Reads `IncidentManagerRequest.question` back from `callback_context
+    .user_content` -- the SAME parse `_requires_governed_knowledge` above
+    already performs on the identical source, deliberately re-parsed here
+    rather than threaded through as a shared return value, to keep each
+    accessor a simple, independently-correct, single-purpose read (mirrors
+    this module's own existing duplication-over-cross-module-coupling
+    precedent). Used ONLY to give the compliance retry (below) the
+    ORIGINAL request's own question text -- never invented, never a later
+    turn's -- so a reassessment retry can judge relevance against what was
+    actually asked, not merely against its own possibly-mistaken prior
+    answer. Returns `None` (never a fabricated placeholder) when absent/
+    unparseable -- the retry instruction handles that case explicitly.
+    """
+    user_content = getattr(callback_context, "user_content", None)
+    parts = getattr(user_content, "parts", None) if user_content else None
+    if not parts:
+        return None
+    text = "".join(p.text for p in parts if getattr(p, "text", None))
+    if not text:
+        return None
+    try:
+        payload = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    question = payload.get("question")
+    return question if isinstance(question, str) and question.strip() else None
+
+
 class _RetryEvidenceOption(BaseModel):
     """Model-facing projection of one AVAILABLE evidence item for the
     compliance retry's own reminder message -- mirrors `KnowledgeTool
@@ -185,8 +216,19 @@ class _ProvenanceComplianceRetryRequest(BaseModel):
     deliberately its own shape, never `IncidentManagerRequest` (this is
     not a new user request, only a continuation of the SAME run's own
     already-completed reasoning that is missing one structural step).
+
+    A5 live UI governed-knowledge reliability corrective pass: gained
+    `question` -- the ORIGINAL request's own question text (never
+    invented, never re-derived) -- so the retry can reassess
+    `available_evidence` against what was actually asked, not merely
+    self-check whether `prior_answer_text` happened to cite it. Both
+    fields are retained: `question` grounds a genuine reassessment;
+    `prior_answer_text` lets the model recognize when its own prior
+    reasoning was already correct and simply needs the missing selection
+    call, without re-deriving an answer it already got right.
     """
 
+    question: Optional[str] = None
     prior_answer_text: str
     available_evidence: list[_RetryEvidenceOption]
 
@@ -205,11 +247,15 @@ def _to_retry_option(item: KnowledgeEvidenceItem) -> _RetryEvidenceOption:
     )
 
 
-_RETRY_INSTRUCTION = """You already completed an answer for this request, reproduced below as `prior_answer_text`. Governed knowledge evidence was retrieved for this request (`available_evidence`, below) but you did not declare which of it, if any, you actually relied on.
+_RETRY_INSTRUCTION = """Governed knowledge evidence was retrieved for this request (`available_evidence`, below) but nothing was declared as relied-upon before your prior answer (`prior_answer_text`, below) completed.
 
-Call `knowledge_select_evidence` now with the exact `selection_key` of every item in `available_evidence` your prior answer actually relied on -- copy each `selection_key` verbatim, never invent one. If your prior answer did not actually rely on any item in `available_evidence`, call `knowledge_select_evidence` with an empty list instead.
+Do NOT simply re-confirm your prior answer's own earlier judgment. RE-EXAMINE `available_evidence` directly against `question` (the ORIGINAL request, below) -- read each item's own `title`/`section_heading`/`content` and judge for yourself whether it materially helps answer `question`, independent of whether your prior answer happened to use it. A prior answer that concluded "no relevant knowledge exists" can itself have been the mistake this reassessment exists to catch.
 
-After that one call, respond again with the SAME structured response your prior answer already gave -- do not change its content, only complete this one missing step. Do not call any other tool."""
+If, on this fresh reading, one or more items in `available_evidence` materially help answer `question`: call `knowledge_select_evidence` with the exact `selection_key` of each -- copy verbatim, never invent one -- and then give a corrected, complete structured response that actually uses that evidence to answer `question`. This corrected response may differ from `prior_answer_text` in wording and substance; it must not differ in never inventing a command/fact/procedure step the selected evidence does not itself state.
+
+If, after this fresh reading, no item in `available_evidence` actually helps answer `question`: call `knowledge_select_evidence` with an empty list, then give an honest response stating that no applicable governed knowledge was found -- do not fabricate one to fill the gap.
+
+Call `knowledge_select_evidence` exactly once, then respond with your structured answer. Do not call any other tool."""
 
 _compliance_retry_agent_cache: list[Any] = []
 
@@ -270,7 +316,7 @@ def _merged_final_text(content: Optional[types.Content]) -> Optional[str]:
 
 
 async def _run_compliance_retry(
-    *, run_id: str, prior_answer_text: str, available_items: list[KnowledgeEvidenceItem]
+    *, run_id: str, question: Optional[str], prior_answer_text: str, available_items: list[KnowledgeEvidenceItem]
 ) -> Optional[str]:
     """Runs the ONE bounded compliance retry -- a fresh, throwaway
     `InMemorySessionService`/`Runner` turn (see this module's own
@@ -279,6 +325,7 @@ async def _run_compliance_retry(
     usable (its caller treats that identically to "still non-compliant").
     """
     request = _ProvenanceComplianceRetryRequest(
+        question=question,
         prior_answer_text=prior_answer_text,
         available_evidence=[_to_retry_option(item) for item in available_items],
     )
@@ -350,7 +397,10 @@ async def enforce_governed_knowledge_selection(callback_context: Any, original_t
     _perf_logger.info("perf stage=provenance_compliance_retry_start run_id=%s", run_id)
     try:
         retry_text = await _run_compliance_retry(
-            run_id=run_id, prior_answer_text=original_text or "", available_items=list(available.items)
+            run_id=run_id,
+            question=_incoming_question(callback_context),
+            prior_answer_text=original_text or "",
+            available_items=list(available.items),
         )
     except Exception:
         _logger.warning("provenance_compliance: compliance retry raised -- failing closed run_id=%s", run_id)

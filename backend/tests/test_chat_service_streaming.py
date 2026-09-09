@@ -67,6 +67,19 @@ async def test_incremental_partials_become_message_delta_events() -> None:
     service = ApiSessionService()
     session_id = await service.create_session()
     events = [
+        # A5 live UI FINAL trust-gate closure: a governed-knowledge
+        # declaration is now required before ANY delta streams live (see
+        # test_p5_1j_governed_completion_gate.py's own Part 21 tests for
+        # the full UNKNOWN-state rationale) -- an explicit, upfront
+        # both-false declaration here is this test's own intentional
+        # opt-in to the ordinary, non-gated path, restoring its original
+        # focus on pure delta-chunking mechanics.
+        FakeEvent(
+            final=False,
+            function_responses=[
+                FakeFunctionResponse("record_source_requirements", {"requires_teams": False, "requires_governed_knowledge": False})
+            ],
+        ),
         FakeEvent(text="The likely", final=False, partial=True),
         FakeEvent(text=" cause", final=False, partial=True),
         FakeEvent(text=" is X.", final=False, partial=True),
@@ -85,6 +98,14 @@ async def test_delta_order_is_preserved() -> None:
     service = ApiSessionService()
     session_id = await service.create_session()
     events = [
+        # A5 live UI FINAL trust-gate closure -- see the comment on
+        # test_incremental_partials_become_message_delta_events above.
+        FakeEvent(
+            final=False,
+            function_responses=[
+                FakeFunctionResponse("record_source_requirements", {"requires_teams": False, "requires_governed_knowledge": False})
+            ],
+        ),
         FakeEvent(text="1", final=False, partial=True),
         FakeEvent(text="2", final=False, partial=True),
         FakeEvent(text="3", final=False, partial=True),
@@ -104,6 +125,14 @@ async def test_delta_contains_only_new_text_never_cumulative() -> None:
     service = ApiSessionService()
     session_id = await service.create_session()
     events = [
+        # A5 live UI FINAL trust-gate closure -- see the comment on
+        # test_incremental_partials_become_message_delta_events above.
+        FakeEvent(
+            final=False,
+            function_responses=[
+                FakeFunctionResponse("record_source_requirements", {"requires_teams": False, "requires_governed_knowledge": False})
+            ],
+        ),
         FakeEvent(text="Hello", final=False, partial=True),
         FakeEvent(text=" world", final=False, partial=True),
         FakeEvent(text="Hello world", final=True, partial=False),
@@ -123,6 +152,14 @@ async def test_status_cleared_before_first_delta() -> None:
     service = ApiSessionService()
     session_id = await service.create_session()
     events = [
+        # A5 live UI FINAL trust-gate closure -- see the comment on
+        # test_incremental_partials_become_message_delta_events above.
+        FakeEvent(
+            final=False,
+            function_responses=[
+                FakeFunctionResponse("record_source_requirements", {"requires_teams": False, "requires_governed_knowledge": False})
+            ],
+        ),
         FakeEvent(text="chunk", final=False, partial=True),
         FakeEvent(text="chunk", final=True, partial=False),
     ]
@@ -183,6 +220,14 @@ async def test_thought_parts_never_become_deltas() -> None:
     service = ApiSessionService()
     session_id = await service.create_session()
     events = [
+        # A5 live UI FINAL trust-gate closure -- see the comment on
+        # test_incremental_partials_become_message_delta_events above.
+        FakeEvent(
+            final=False,
+            function_responses=[
+                FakeFunctionResponse("record_source_requirements", {"requires_teams": False, "requires_governed_knowledge": False})
+            ],
+        ),
         FakeEvent(text="private reasoning", final=False, partial=True, thought=True),
         FakeEvent(text="the answer", final=False, partial=True),
         FakeEvent(text="the answer", final=True, partial=False),

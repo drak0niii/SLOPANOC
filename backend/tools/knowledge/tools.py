@@ -8,6 +8,7 @@ composes.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
 
 from google.adk.tools import ToolContext
@@ -25,6 +26,20 @@ from backend.tools.knowledge.runtime import (
     record_search_result,
     select_evidence,
 )
+
+_perf_logger = logging.getLogger("backend.perf")
+"""A5 live UI corrective pass -- observability gap closed after a real,
+multi-pass diagnostic effort proved the existing logs could not
+distinguish "knowledge_search genuinely found nothing" from "knowledge_
+search silently ran against the wrong database" (both looked identical:
+no `provenance_compliance: available governed evidence...` warning ever
+fires when `item_count == 0`, indistinguishable from a completely
+different-but-also-zero-result cause without this line). Identity/count
+only -- never document bodies, never credentials, never a raw connection
+string (this module never even sees one; `get_knowledge_tool_service()`'s
+own repository owns that, and never logs it either -- see settings.py's
+own `resolve_knowledge_database_url` docstring, "Never log the result").
+"""
 
 _UNBOUND_RUN_KEY = "knowledge-tools::unbound-run"
 """Fallback key used only OUTSIDE a `chat_service.py`-driven turn (e.g. a
@@ -110,10 +125,17 @@ async def knowledge_search(
         execution = await service.search(request, run_state.execution_context)
         record_search_result(run_id, execution)
     except KnowledgeRepositoryCorruptionError:
+        _perf_logger.info("perf stage=knowledge_search_complete run_id=%s status=error error=repository_corruption", run_id)
         return _internal_error_result("Governed knowledge could not be read right now. Please try again.")
     except KnowledgeRuntimeError:
+        _perf_logger.info("perf stage=knowledge_search_complete run_id=%s status=error error=runtime_error", run_id)
         return _internal_error_result("Governed knowledge could not be reconciled for this request. Please try again.")
 
+    _perf_logger.info(
+        "perf stage=knowledge_search_complete run_id=%s status=success item_count=%d",
+        run_id,
+        len(execution.agent_payload.items),
+    )
     return execution.agent_payload.model_dump(mode="json")
 
 

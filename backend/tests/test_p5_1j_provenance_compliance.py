@@ -349,6 +349,148 @@ def test_i_no_regex_import_in_provenance_compliance_module() -> None:
             assert node.module != "re", "provenance_compliance.py must not import re"
 
 
+# --- J-M: A5 live UI governed-knowledge reliability corrective pass --------
+#
+# LIVE-REPORTED DEFECT: a real browser turn ("I have a VSWR Over Threshold
+# alarm on an Ericsson 4G site. What should I do?") produced "I was unable
+# to find any governed knowledge..." despite A5-VALIDATION-DOCUMENT1
+# genuinely existing, being returned by knowledge_search with
+# ApplicabilityOutcome.MATCH, and being cited in the authoritative log as
+# available at every stage. Code audit of the ORIGINAL `_RETRY_INSTRUCTION`
+# proved the retry could only ask "did your prior answer rely on this,"
+# never "does this actually answer the question" -- a prior answer that
+# itself concluded "nothing relevant" could never be corrected by that
+# retry, only faithfully re-confirmed via `knowledge_select_evidence([])`.
+# 21 live reproduction attempts (through the real stack, both before and
+# after this fix) never forced the exact failure -- it is genuinely
+# non-deterministic (model-sampling-dependent) -- so the tests below prove
+# the STRUCTURAL correction deterministically, via a scripted LLM, rather
+# than relying on forcing a rare live sample.
+
+
+@pytest.mark.asyncio
+async def test_j_retry_request_carries_the_original_question(run_id: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The retry must be able to reassess `available_evidence` against
+    what was ACTUALLY asked, not only against its own (possibly mistaken)
+    prior answer -- this requires the original request's own `question`
+    text to reach the retry request payload, which it did not before this
+    pass (`_ProvenanceComplianceRetryRequest` had no `question` field at
+    all).
+    """
+    item = _evidence_item()
+    rt.get_or_init_run_state(run_id)
+    rt.record_search_result(run_id, _execution(item))
+
+    captured_requests: list[Any] = []
+
+    async def _capture(*, run_id: str, question: Optional[str], prior_answer_text: str, available_items: Any) -> str:
+        captured_requests.append(question)
+        return json.dumps({"outcome": "ok", "summary": "corrected"})
+
+    monkeypatch.setattr(pc, "_run_compliance_retry", _capture)
+
+    request = IncidentManagerRequest(
+        question="I have a VSWR Over Threshold alarm on an Ericsson 4G site. What should I do?",
+        requires_governed_knowledge=True,
+    )
+    ctx = type(
+        "Ctx", (), {"user_content": types.Content(role="user", parts=[types.Part.from_text(text=request.model_dump_json(exclude_none=True))])}
+    )()
+
+    await pc.enforce_governed_knowledge_selection(ctx, "I was unable to find any governed knowledge...")
+
+    assert captured_requests == ["I have a VSWR Over Threshold alarm on an Ericsson 4G site. What should I do?"]
+
+
+@pytest.mark.asyncio
+async def test_k_retry_can_reassess_and_correct_a_false_negative_prior_answer(
+    run_id: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The exact live-reported shape: the prior answer wrongly concluded
+    no governed knowledge applied. The retry, given the SAME available
+    evidence plus the original question, reassesses, selects the relevant
+    item, and produces a materially DIFFERENT, corrected, grounded answer
+    -- this must be accepted as the real result, not discarded merely
+    because it differs from `prior_answer_text` (the old instruction's own
+    "do not change its content" constraint no longer applies).
+    """
+    item = _evidence_item()
+    rt.get_or_init_run_state(run_id)
+    rt.record_search_result(run_id, _execution(item))
+
+    corrected_text = json.dumps(
+        {"outcome": "ok", "summary": "For a VSWR Over Threshold alarm, no restart is allowed -- diagnosis only."}
+    )
+    fake_llm = _ScriptedLlm(
+        model="fake-compliance-retry-reassess",
+        parts_by_call=[
+            _function_call_parts("knowledge_select_evidence", {"selections": [_key(item)]}, "call-1"),
+            _text_parts(corrected_text),
+        ],
+    )
+    _install_retry_fake(monkeypatch, fake_llm)
+
+    prior_false_negative = json.dumps(
+        {"outcome": "no_result", "detail": "I was unable to find any governed knowledge for this alarm."}
+    )
+    result = await pc.enforce_governed_knowledge_selection(_ctx(True), prior_false_negative)
+
+    assert result == corrected_text
+    parsed = json.loads(result)
+    assert parsed["outcome"] == "ok"
+    assert "no restart is allowed" in parsed["summary"]
+    selected = rt.snapshot_selected_knowledge_evidence(run_id)
+    assert len(selected) == 1
+    assert selected[0].reference.knowledge_id == item.reference.knowledge_id
+
+
+@pytest.mark.asyncio
+async def test_l_genuinely_irrelevant_evidence_still_fails_closed_after_reassessment(
+    run_id: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Required case B/F: the retry may STILL legitimately conclude, after
+    a genuine reassessment, that nothing in `available_evidence` answers
+    the question -- an empty selection remains semantically valid and
+    must not be forced into a fabricated selection. NO_RESULT-shaped safe
+    failure is the correct outcome, exactly as before this pass.
+    """
+    item = _evidence_item(knowledge_id="unrelated-topic", section_id="unrelated-topic:v1:s0", content="unrelated content")
+    rt.get_or_init_run_state(run_id)
+    rt.record_search_result(run_id, _execution(item))
+
+    fake_llm = _ScriptedLlm(
+        model="fake-compliance-retry-genuinely-empty",
+        parts_by_call=[
+            _function_call_parts("knowledge_select_evidence", {"selections": []}, "call-1"),
+            _text_parts(json.dumps({"outcome": "no_result", "detail": "No applicable governed knowledge was found."})),
+        ],
+    )
+    _install_retry_fake(monkeypatch, fake_llm)
+
+    result = await pc.enforce_governed_knowledge_selection(_ctx(True), "prior answer text")
+
+    # An explicit, reassessed empty selection is NOT the same as "the
+    # retry never selected anything" -- `enforce_governed_knowledge_
+    # selection` still checks the TRUSTED run state (never the retry's own
+    # text) to decide compliance, so a genuine empty selection after
+    # reassessment still correctly falls through to the deterministic
+    # safe-failure text -- backend code, not the model, owns this decision.
+    assert result == pc._SAFE_FAILURE_TEXT
+    assert rt.snapshot_selected_knowledge_evidence(run_id) == []
+
+
+def test_m_retry_instruction_no_longer_forces_verbatim_repetition() -> None:
+    """Structural proof the old self-consistency-only framing ("respond
+    again with the SAME structured response... do not change its
+    content") is gone -- the retry is now explicitly permitted (and
+    instructed) to produce a genuinely corrected answer when its
+    reassessment finds relevant evidence the prior answer missed.
+    """
+    assert "do not change its content" not in pc._RETRY_INSTRUCTION
+    assert "question" in pc._RETRY_INSTRUCTION.lower()
+    assert "re-examine" in pc._RETRY_INSTRUCTION.lower() or "reassess" in pc._RETRY_INSTRUCTION.lower()
+
+
 def test_i_enforcement_decision_never_inspects_answer_content() -> None:
     """Structural proof: `enforce_governed_knowledge_selection`'s own
     source never branches on `original_text`/`retry_text` content -- both

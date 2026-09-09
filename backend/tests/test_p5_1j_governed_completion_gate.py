@@ -401,6 +401,525 @@ async def test_part10d_already_selected_current_run_evidence_is_accepted_unchang
     assert completed.data.get("knowledge_sources")
 
 
+# --- Part 21: A5 live UI corrective pass -- SSE trust-gating -----------------
+#
+# LIVE-REPRODUCED DEFECT: a real VSWR follow-up turn ("VSWR reading is 1.82
+# on sector 2.") showed team_manager stream "...within the acceptable
+# range... Do you have any further questions..." via `message.delta`, while
+# the SAME turn's `message.completed` -- built AFTER the deterministic
+# governed-knowledge completion remediation below ran and replaced
+# `final_text` -- carried a materially different, correctly governed-
+# knowledge-grounded answer. The two texts reaching the browser in sequence
+# is exactly the violation these tests lock in as fixed: a turn that
+# declares `requires_governed_knowledge=true` must never expose team_
+# manager's own live prose via `message.delta` at all -- only the SAME
+# trusted text `message.completed` carries may ever reach the user for such
+# a turn. An ordinary turn (no governed-knowledge declaration, or declared
+# false) must stream completely unaffected -- this is a targeted gate, not
+# a global streaming change.
+
+
+@pytest.mark.asyncio
+async def test_part21a_governed_knowledge_turn_never_streams_untrusted_delta(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Live-reproduced shape: team_manager declares `requires_governed_
+    knowledge=true`, then (BEFORE any tool delegation ever happens) starts
+    streaming its own untrusted prose as `partial=True` chunks, followed by
+    a `final=True` event carrying that SAME untrusted text. Because no
+    evidence was ever selected this run, the completion gate replaces
+    `final_text` with the remediation's trusted result. No `message.delta`
+    event may ever be observed for this turn -- not even the chunks that
+    streamed before the gate ran -- and `message.completed` must carry
+    ONLY the trusted, remediated text.
+    """
+    from backend.api.chat_service import ChatService
+    from backend.api.session_service import ApiSessionService
+
+    async def fake_remediation(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = ()):
+        return (
+            "Based on the available governed knowledge, a VSWR reading of 1.82 is below the "
+            "specified threshold of 2.2 -- no restart is indicated, diagnosis only.",
+            [],
+        )
+
+    monkeypatch.setattr("backend.api.chat_service.enforce_governed_knowledge_at_completion", fake_remediation)
+
+    service = ApiSessionService()
+    session_id = await service.create_session()
+    untrusted_text = "The VSWR reading of 1.82 on sector 2 is within the acceptable range (below 2.2)."
+    events = [
+        _tool_response_event("record_source_requirements", {"requires_teams": False, "requires_governed_knowledge": True}),
+        FakeEvent(text=untrusted_text, final=False, partial=True),
+        FakeEvent(text=untrusted_text, final=True),
+    ]
+    chat_service = ChatService(service, runner=FakeRunner(service, events=events))
+
+    delta_events = []
+    completed = None
+    async for event in chat_service.execute_turn_events(session_id, "VSWR reading is 1.82 on sector 2.", "api-user"):
+        if event.type.value == "message.delta":
+            delta_events.append(event.data.get("text"))
+        elif event.type.value == "message.completed":
+            completed = event
+
+    assert delta_events == [], f"a governed-knowledge turn must never stream a delta, got {delta_events!r}"
+    assert completed is not None
+    assert completed.data["content"] == (
+        "Based on the available governed knowledge, a VSWR reading of 1.82 is below the "
+        "specified threshold of 2.2 -- no restart is indicated, diagnosis only."
+    )
+    assert untrusted_text not in completed.data["content"]
+
+
+@pytest.mark.asyncio
+async def test_part21b_ordinary_turn_still_streams_deltas_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Non-regression: a turn that declares BOTH requirements false (no
+    governed-knowledge gate applies at all) must stream its deltas exactly
+    as before this pass -- the fix must not become a global streaming
+    change.
+    """
+    from backend.api.chat_service import ChatService
+    from backend.api.session_service import ApiSessionService
+
+    def _must_not_run(*_a: Any, **_kw: Any) -> None:
+        raise AssertionError("governed-knowledge remediation must not run for an ordinary, non-governed turn")
+
+    monkeypatch.setattr("backend.api.chat_service.enforce_governed_knowledge_at_completion", _must_not_run)
+
+    service = ApiSessionService()
+    session_id = await service.create_session()
+    events = [
+        _tool_response_event("record_source_requirements", {"requires_teams": False, "requires_governed_knowledge": False}),
+        FakeEvent(text="Hello", final=False, partial=True),
+        FakeEvent(text=" there!", final=False, partial=True),
+        FakeEvent(text="Hello there!", final=True),
+    ]
+    chat_service = ChatService(service, runner=FakeRunner(service, events=events))
+
+    delta_events = []
+    completed = None
+    async for event in chat_service.execute_turn_events(session_id, "Hi", "api-user"):
+        if event.type.value == "message.delta":
+            delta_events.append(event.data.get("text"))
+        elif event.type.value == "message.completed":
+            completed = event
+
+    assert delta_events == ["Hello", " there!"], "an ordinary turn's deltas must stream live, unchanged"
+    assert completed is not None
+    assert completed.data["content"] == "Hello there!"
+
+
+# --- Part 21, continued: FINAL trust-gate closure -- the UNKNOWN state -------
+#
+# `SourceRequirementsCapture` has THREE semantic states even though it is
+# stored as two booleans: UNKNOWN (`declared is False`), EXPLICIT NON-
+# GOVERNED (`declared True, requires_governed_knowledge False`), EXPLICIT
+# GOVERNED (`declared True, requires_governed_knowledge True`). Tests
+# 21a/21b above only ever declared BEFORE any delta arrived -- they never
+# exercised the UNKNOWN state itself. Every turn starts UNKNOWN; the tests
+# below prove text arriving DURING that window is buffered turn-locally
+# (never session state/Case context/a source reference) and resolved
+# correctly however classification later turns out.
+
+
+@pytest.mark.asyncio
+async def test_part21c_unknown_state_buffers_until_classified_governed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Required case A: provisional partial text arrives BEFORE
+    `record_source_requirements`. Declaration then says governed=True.
+    Zero provisional delta may reach the client; only the trusted,
+    remediated answer may.
+    """
+    from backend.api.chat_service import ChatService
+    from backend.api.session_service import ApiSessionService
+
+    async def fake_remediation(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = ()):
+        return "Trusted governed answer: checksum 7319, status GREEN.", []
+
+    monkeypatch.setattr("backend.api.chat_service.enforce_governed_knowledge_at_completion", fake_remediation)
+
+    service = ApiSessionService()
+    session_id = await service.create_session()
+    untrusted_text = "Checksum is probably 7318, status likely GREEN (from memory)."
+    events = [
+        FakeEvent(text=untrusted_text, final=False, partial=True),  # arrives while still UNKNOWN
+        _tool_response_event("record_source_requirements", {"requires_teams": False, "requires_governed_knowledge": True}),
+        FakeEvent(text=untrusted_text, final=True),
+    ]
+    chat_service = ChatService(service, runner=FakeRunner(service, events=events))
+
+    delta_events = []
+    completed = None
+    async for event in chat_service.execute_turn_events(session_id, "What does governed knowledge say about Aurora Relay?", "api-user"):
+        if event.type.value == "message.delta":
+            delta_events.append(event.data.get("text"))
+        elif event.type.value == "message.completed":
+            completed = event
+
+    assert delta_events == [], f"UNKNOWN-state text must never leak, even after later resolving to governed, got {delta_events!r}"
+    assert completed is not None
+    assert completed.data["content"] == "Trusted governed answer: checksum 7319, status GREEN."
+    assert untrusted_text not in completed.data["content"]
+
+
+@pytest.mark.asyncio
+async def test_part21d_unknown_state_releases_buffer_when_classified_non_governed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Required case B: provisional partial text arrives BEFORE `record_
+    source_requirements`. Declaration then says governed=False. The
+    buffered text must be released, in original order, the instant
+    classification resolves, and subsequent deltas must stream normally
+    afterward -- the completed text must match the concatenated deltas
+    exactly (never more, never less, never reordered).
+    """
+    from backend.api.chat_service import ChatService
+    from backend.api.session_service import ApiSessionService
+
+    def _must_not_run(*_a: Any, **_kw: Any) -> None:
+        raise AssertionError("governed-knowledge remediation must not run for a non-governed turn")
+
+    monkeypatch.setattr("backend.api.chat_service.enforce_governed_knowledge_at_completion", _must_not_run)
+
+    service = ApiSessionService()
+    session_id = await service.create_session()
+    events = [
+        FakeEvent(text="Hello", final=False, partial=True),  # arrives while still UNKNOWN -- buffered
+        _tool_response_event("record_source_requirements", {"requires_teams": False, "requires_governed_knowledge": False}),
+        FakeEvent(text=" there!", final=False, partial=True),  # arrives once explicitly non-governed
+        FakeEvent(text="Hello there!", final=True),
+    ]
+    chat_service = ChatService(service, runner=FakeRunner(service, events=events))
+
+    delta_events = []
+    completed = None
+    async for event in chat_service.execute_turn_events(session_id, "hello", "api-user"):
+        if event.type.value == "message.delta":
+            delta_events.append(event.data.get("text"))
+        elif event.type.value == "message.completed":
+            completed = event
+
+    assert delta_events == ["Hello", " there!"], (
+        "the buffered chunk must be released first, in order, followed by live streaming -- "
+        f"got {delta_events!r}"
+    )
+    assert completed is not None
+    assert completed.data["content"] == "Hello there!"
+    assert "".join(delta_events) == completed.data["content"]
+
+
+@pytest.mark.asyncio
+async def test_part21e_no_declaration_at_all_remediation_governed_never_leaks_provisional(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Required case C: the main Runner produces prose but never calls
+    `record_source_requirements` at all this turn (stays UNKNOWN for the
+    ENTIRE main loop). The EXISTING post-loop declaration-remediation
+    resolves it to governed=True, and the EXISTING governed-knowledge
+    completion gate then takes over -- zero provisional delta exposure at
+    any point, only the trusted final answer.
+    """
+    from backend.api.chat_service import ChatService
+    from backend.api.session_service import ApiSessionService
+
+    async def fake_declare(*, question: str, run_id: str):
+        return False, True  # requires_teams=False, requires_governed_knowledge=True
+
+    async def fake_governed(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = ()):
+        return "Governed knowledge (freshly verified): checksum 7319, status GREEN.", []
+
+    monkeypatch.setattr("backend.api.chat_service.request_source_requirements_declaration", fake_declare)
+    monkeypatch.setattr("backend.api.chat_service.enforce_governed_knowledge_at_completion", fake_governed)
+
+    service = ApiSessionService()
+    session_id = await service.create_session()
+    untrusted_text = "Earlier I found the Aurora Relay checksum is 7318 and status GREEN."
+    events = [
+        FakeEvent(text=untrusted_text, final=False, partial=True),  # never classified this turn
+        FakeEvent(text=untrusted_text, final=True),
+    ]
+    chat_service = ChatService(service, runner=FakeRunner(service, events=events))
+
+    delta_events = []
+    completed = None
+    async for event in chat_service.execute_turn_events(
+        session_id, "What does governed knowledge currently say about Aurora Relay?", "api-user"
+    ):
+        if event.type.value == "message.delta":
+            delta_events.append(event.data.get("text"))
+        elif event.type.value == "message.completed":
+            completed = event
+
+    assert delta_events == [], f"a never-declared turn must never leak provisional text, got {delta_events!r}"
+    assert completed is not None
+    assert completed.data["content"] == "Governed knowledge (freshly verified): checksum 7319, status GREEN."
+    assert untrusted_text not in completed.data["content"]
+
+
+@pytest.mark.asyncio
+async def test_part21f_no_declaration_at_all_remediation_non_governed_keeps_original_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Required case D: never declared this turn; the post-loop
+    declaration-remediation resolves it to both-false (a legitimately
+    ungated turn that simply forgot to declare). No provisional delta may
+    be exposed DURING the main loop (classification was UNKNOWN the whole
+    time), but the ORIGINAL answer -- already known complete via `final_
+    text`, independent of the delta buffer -- correctly reaches `message.
+    completed` once classification resolves.
+    """
+    from backend.api.chat_service import ChatService
+    from backend.api.session_service import ApiSessionService
+
+    async def fake_declare(*, question: str, run_id: str):
+        return False, False
+
+    def _must_not_run(*_a: Any, **_kw: Any) -> None:
+        raise AssertionError("governed completion must not run when the remediated declaration is both-false")
+
+    monkeypatch.setattr("backend.api.chat_service.request_source_requirements_declaration", fake_declare)
+    monkeypatch.setattr("backend.api.chat_service.enforce_governed_knowledge_at_completion", _must_not_run)
+
+    service = ApiSessionService()
+    session_id = await service.create_session()
+    events = [
+        FakeEvent(text="Hi there! How can I help you today?", final=False, partial=True),
+        FakeEvent(text="Hi there! How can I help you today?", final=True),
+    ]
+    chat_service = ChatService(service, runner=FakeRunner(service, events=events))
+
+    delta_events = []
+    completed = None
+    async for event in chat_service.execute_turn_events(session_id, "hello", "api-user"):
+        if event.type.value == "message.delta":
+            delta_events.append(event.data.get("text"))
+        elif event.type.value == "message.completed":
+            completed = event
+
+    assert delta_events == [], "provisional text must not be exposed before classification is known"
+    assert completed is not None
+    assert completed.data["content"] == "Hi there! How can I help you today?"
+
+
+@pytest.mark.asyncio
+async def test_part21g_no_declaration_at_all_remediation_fails_closed_never_leaks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Required case E: never declared this turn; the declaration-
+    remediation itself also fails to obtain a declaration. Existing fail-
+    closed behavior (a generic safe answer, never the model's own unproven
+    text) must hold, AND zero provisional delta may ever have reached the
+    client.
+    """
+    from backend.api.chat_service import ChatService
+    from backend.api.session_service import ApiSessionService
+
+    async def fake_declare(*, question: str, run_id: str):
+        return None  # remediation also failed to declare
+
+    def _must_not_run(*_a: Any, **_kw: Any) -> None:
+        raise AssertionError("governed completion must not run when no declaration was ever obtained")
+
+    monkeypatch.setattr("backend.api.chat_service.request_source_requirements_declaration", fake_declare)
+    monkeypatch.setattr("backend.api.chat_service.enforce_governed_knowledge_at_completion", _must_not_run)
+
+    service = ApiSessionService()
+    session_id = await service.create_session()
+    untrusted_text = "Checksum is 7319, status GREEN (from memory)."
+    events = [
+        FakeEvent(text=untrusted_text, final=False, partial=True),
+        FakeEvent(text=untrusted_text, final=True),
+    ]
+    chat_service = ChatService(service, runner=FakeRunner(service, events=events))
+
+    delta_events = []
+    completed = None
+    async for event in chat_service.execute_turn_events(
+        session_id, "What does governed knowledge say about Aurora Relay?", "api-user"
+    ):
+        if event.type.value == "message.delta":
+            delta_events.append(event.data.get("text"))
+        elif event.type.value == "message.completed":
+            completed = event
+
+    assert delta_events == [], f"fail-closed must never have leaked provisional text first, got {delta_events!r}"
+    assert completed is not None
+    assert completed.data["content"] != untrusted_text
+    assert "7319" not in completed.data["content"]
+    assert "GREEN" not in completed.data["content"]
+
+
+@pytest.mark.asyncio
+async def test_part21h_buffered_provisional_text_never_leaks_across_turns_on_failure() -> None:
+    """Required case H: cancellation/cleanup must not retain a provisional
+    buffer. `buffered_delta_texts` is a plain local variable inside `_run_
+    turn_events` -- never a class/module attribute, never session state --
+    so it structurally cannot survive past the one generator invocation
+    that created it. Proven functionally: a first turn buffers real text
+    (still UNKNOWN) and then the underlying Runner raises mid-stream
+    (simulating an aborted/cancelled turn); a SECOND, independent turn run
+    immediately afterward must show no trace of the first turn's buffered
+    text anywhere in its own output.
+    """
+    from backend.api.chat_service import ChatService
+    from backend.api.session_service import ApiSessionService
+
+    class _RaisesAfterOnePartialEvent:
+        def __init__(self, session_service: Any) -> None:
+            self._session_service = session_service
+
+        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+            session = await self._session_service.get_session(session_id, user_id)
+            await self._session_service.persist_state_delta(session, {})
+            yield FakeEvent(text="Secret first-turn provisional text 12345", final=False, partial=True)
+            raise RuntimeError("simulated mid-stream failure/cancellation")
+
+    service = ApiSessionService()
+    session_id_1 = await service.create_session()
+    chat_service_1 = ChatService(service, runner=_RaisesAfterOnePartialEvent(service))
+
+    delta_events_1 = []
+    saw_error = False
+    async for event in chat_service_1.execute_turn_events(session_id_1, "trigger a failure", "api-user"):
+        if event.type.value == "message.delta":
+            delta_events_1.append(event.data.get("text"))
+        elif event.type.value == "error":
+            saw_error = True
+    assert delta_events_1 == [], "the buffered chunk must not leak even on the SAME failed turn"
+    assert saw_error
+
+    # A second, completely independent turn (own session, own ChatService,
+    # own FakeRunner) must show no trace of the first turn's buffered text.
+    session_id_2 = await service.create_session()
+    events_2 = [
+        _tool_response_event("record_source_requirements", {"requires_teams": False, "requires_governed_knowledge": False}),
+        FakeEvent(text="Second turn's own real answer.", final=True),
+    ]
+    chat_service_2 = ChatService(service, runner=FakeRunner(service, events=events_2))
+
+    delta_events_2 = []
+    completed_2 = None
+    async for event in chat_service_2.execute_turn_events(session_id_2, "second turn", "api-user"):
+        if event.type.value == "message.delta":
+            delta_events_2.append(event.data.get("text"))
+        elif event.type.value == "message.completed":
+            completed_2 = event
+
+    assert "Secret first-turn provisional text 12345" not in delta_events_2
+    assert completed_2 is not None
+    assert "Secret first-turn provisional text 12345" not in completed_2.data["content"]
+    assert completed_2.data["content"] == "Second turn's own real answer."
+
+
+# --- Part 22: A5 live UI governed-knowledge reliability corrective pass -----
+#
+# Required case H: the OUTER governed-knowledge completion remediation
+# (`enforce_governed_knowledge_at_completion`) runs the REAL, unmodified
+# `incident_manager` -- which means its own nested run goes through the
+# SAME `enforce_governed_knowledge_selection`/compliance-retry mechanism
+# just corrected above. This test proves that propagation directly: the
+# outer remediation's own nested incident_manager run first concludes
+# NO_RESULT with nothing selected, despite genuinely relevant evidence
+# being available -- the fixed retry reassesses and corrects it BEFORE
+# the outer remediation ever has to decide anything, so the outer
+# boundary never accepts the false NO_RESULT.
+
+
+@pytest.mark.asyncio
+async def test_part22_outer_remediation_never_accepts_a_false_no_result_when_the_retry_corrects_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datetime import datetime, timezone
+
+    from backend.agents.team_manager.governed_knowledge_completion import enforce_governed_knowledge_at_completion
+    from backend.knowledge.domain.enums import KnowledgeDocumentType, LifecycleStatus
+    from backend.knowledge.domain.models import KnowledgeObject, KnowledgeSection, KnowledgeSource, KnowledgeVersion
+    from backend.tools.knowledge import runtime as rt
+
+    monkeypatch.setenv("SLOPANOC_KNOWLEDGE_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+    rt.get_knowledge_repository.cache_clear()
+    rt.get_knowledge_tool_service.cache_clear()
+    repo = rt.get_knowledge_repository()
+    governed = KnowledgeObject(
+        knowledge_id="a5-vswr-fixture",
+        document_type=KnowledgeDocumentType.TECHNICAL_INSTRUCTION,
+        title="VSWR Over Threshold Procedure",
+        version=KnowledgeVersion(label="v1", effective_from=datetime(2020, 1, 1, tzinfo=timezone.utc)),
+        lifecycle_status=LifecycleStatus.APPROVED,
+        source=KnowledgeSource(source_system="test", source_id="doc-vswr", display_name="VSWR Procedure"),
+        sections=[
+            KnowledgeSection(
+                section_id="a5-vswr-fixture:v1:s0", knowledge_id="a5-vswr-fixture",
+                heading="VSWR Over Threshold", sequence=0,
+                content="For a VSWR Over Threshold alarm, no restart is allowed. Perform diagnosis only.",
+                source_locator="test-fixture:vswr",
+            )
+        ],
+    )
+    await repo.add(governed)
+
+    # incident_manager's own nested run: searches, then (the false
+    # negative this whole pass exists to correct) declares NO_RESULT
+    # WITHOUT ever selecting the genuinely relevant item it just saw.
+    incident_manager_llm = _ScriptedLlm(
+        model="fake-incident-manager-false-negative",
+        parts_by_call=[
+            _function_call_parts("knowledge_search", {"query_text": "VSWR Over Threshold alarm"}, "c1"),
+            _text_parts(
+                json.dumps(
+                    {"outcome": "no_result", "detail": "I was unable to find any governed knowledge for this alarm."}
+                )
+            ),
+        ],
+    )
+    from backend.agents.incident_manager.agent import incident_manager as real_incident_manager
+
+    fake_incident_manager = real_incident_manager.model_copy(update={"model": incident_manager_llm})
+    # `enforce_governed_knowledge_at_completion` imports `incident_manager`
+    # LOCALLY, inside the function body (to avoid a module-load-time
+    # import cycle -- see that module's own docstring), so the patch
+    # target is the real defining module's own attribute, not a module-
+    # level name inside governed_knowledge_completion.py itself.
+    monkeypatch.setattr("backend.agents.incident_manager.agent.incident_manager", fake_incident_manager)
+
+    # The compliance retry's own fake LLM: reassesses against the
+    # ORIGINAL question, recognizes the evidence DOES answer it, selects
+    # it, and gives a corrected grounded answer.
+    retry_llm = _ScriptedLlm(
+        model="fake-compliance-retry-outer",
+        parts_by_call=[
+            _function_call_parts(
+                "knowledge_select_evidence",
+                {"selections": [{"knowledge_id": "a5-vswr-fixture", "version_label": "v1", "section_id": "a5-vswr-fixture:v1:s0"}]},
+                "r1",
+            ),
+            _text_parts(
+                json.dumps(
+                    {"outcome": "ok", "summary": "For a VSWR Over Threshold alarm, no restart is allowed. Perform diagnosis only."}
+                )
+            ),
+        ],
+    )
+    import backend.agents.incident_manager.provenance_compliance as pc
+
+    base_retry_agent = pc._compliance_retry_incident_manager()
+    monkeypatch.setattr(pc, "_compliance_retry_agent_cache", [base_retry_agent.model_copy(update={"model": retry_llm})])
+
+    try:
+        final_text, selected_evidence = await enforce_governed_knowledge_at_completion(
+            question="I have a VSWR Over Threshold alarm on an Ericsson 4G site. What should I do?",
+            chat_topic=None,
+            run_id="run-part22-test",
+        )
+    finally:
+        await repo.close()
+        rt.get_knowledge_repository.cache_clear()
+        rt.get_knowledge_tool_service.cache_clear()
+
+    # The false NO_RESULT must never be what the outer boundary accepted.
+    assert final_text != "Governed knowledge could not be validated for this request. Please try again."
+    assert "no restart is allowed" in final_text
+    assert "unable to find" not in final_text
+    assert len(selected_evidence) == 1
+    assert selected_evidence[0].reference.knowledge_id == "a5-vswr-fixture"
+    assert incident_manager_llm.calls == 2  # search, then its own (false-negative) first answer
+    assert retry_llm.calls == 2  # select, then the corrected answer -- exactly one bounded retry
+
+
 # --- Part 8: current-turn isolation (structural, not merely behavioral) -----
 
 

@@ -873,6 +873,18 @@ class ChatService:
         final_text: Optional[str] = None
         status_cleared = False
         first_event_seen = False
+        # A5 live UI corrective pass -- FINAL trust-gate closure: turn-
+        # local only (never session state, never Case context, never a
+        # source reference -- see the delta-emission block below for the
+        # full three-state rationale). Holds team_manager's own text
+        # chunks for exactly as long as this turn's source-requirements
+        # classification (`source_requirements_capture`) is UNKNOWN
+        # (`declared is False`) -- released verbatim, in order, the
+        # instant classification resolves to explicitly non-governed;
+        # discarded, never emitted, the instant it resolves to explicitly
+        # governed. Goes out of scope (and is never inspected again) the
+        # moment this generator returns, on every exit path.
+        buffered_delta_texts: list[str] = []
         # POST-5.1 B4B DEFECT FIX -- captured (in-memory only, no session
         # I/O) the moment the first event of a real turn is observed; the
         # ACTUAL saved-chat bookkeeping write is deferred until this
@@ -1213,6 +1225,67 @@ class ChatService:
                         conversation_target_capture.observe(event)
                         source_requirements_capture.observe(event)
 
+                        # A5 live UI corrective pass -- FINAL trust-gate
+                        # closure. `SourceRequirementsCapture` has THREE
+                        # semantic states, not two, even though it is stored
+                        # as two booleans:
+                        #   UNKNOWN               -- declared is False
+                        #   EXPLICIT NON-GOVERNED -- declared True, requires_governed_knowledge False
+                        #   EXPLICIT GOVERNED     -- declared True, requires_governed_knowledge True
+                        # The prior pass's fix only gated the THIRD state --
+                        # `declared is False` (UNKNOWN, the state every turn
+                        # starts in, before team_manager's own `record_
+                        # source_requirements` call is observed) was
+                        # silently treated the same as explicit-False, so a
+                        # turn that never declares at all during the main
+                        # loop (caught only by the EXISTING post-loop
+                        # declaration-remediation further below) could still
+                        # stream team_manager's own untrusted prose live
+                        # during the loop, before that remediation ever ran.
+                        #
+                        # This check runs on EVERY event (not only ones that
+                        # themselves carry text) and reacts the INSTANT
+                        # classification resolves -- required because the
+                        # declaration itself arrives as a text-less function-
+                        # response event; if classification resolved to
+                        # non-governed with no FURTHER delta event ever
+                        # following in the same turn, gating only inside the
+                        # delta-handling block below would leave the
+                        # buffered text released nowhere, corrupting
+                        # `message.delta`'s own promise to carry the full
+                        # answer for a turn with no other exposure path.
+                        if buffered_delta_texts and source_requirements_capture.declared:
+                            if source_requirements_capture.requires_governed_knowledge:
+                                # EXPLICIT GOVERNED -- permanently discard
+                                # everything buffered while still UNKNOWN.
+                                # `final_text` for this turn is decided later
+                                # in this method (troubleshooting_guidance
+                                # override / governed-knowledge completion
+                                # remediation) from TRUSTED state, never from
+                                # team_manager's own live prose -- live-
+                                # reproduced proof (VSWR follow-up turn):
+                                # team_manager streamed "...within the
+                                # acceptable range..." while the trusted,
+                                # remediated `message.completed` carried a
+                                # materially different, correctly-grounded
+                                # answer. Never emitted, never held onto past
+                                # this point.
+                                buffered_delta_texts = []
+                            else:
+                                # EXPLICIT NON-GOVERNED -- release everything
+                                # buffered while UNKNOWN, in original order,
+                                # immediately -- a single coherent reveal,
+                                # regardless of whether THIS event itself
+                                # carries any further text.
+                                pending_texts = buffered_delta_texts
+                                buffered_delta_texts = []
+                                for pending_text in pending_texts:
+                                    if not status_cleared:
+                                        yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
+                                        status_cleared = True
+                                        perf.mark("first_message_delta")
+                                    yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": pending_text})
+
                         # Contributor-accuracy fix + performance pass: start
                         # (or restart, for a superseded chat_id) the
                         # membership fetch the MOMENT a chat_id becomes known,
@@ -1235,11 +1308,38 @@ class ChatService:
 
                         delta_text = _extract_delta_text(event)
                         if delta_text is not None:
-                            if not status_cleared:
-                                yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
-                                status_cleared = True
-                                perf.mark("first_message_delta")
-                            yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": delta_text})
+                            # By this point in the loop iteration, the
+                            # buffer-reconciliation check above has already
+                            # resolved any classification THIS event itself
+                            # carried, so only three cases remain for this
+                            # event's OWN delta text specifically:
+                            if not source_requirements_capture.declared:
+                                # Still UNKNOWN -- buffer verbatim, turn-
+                                # local only (never session state/Case
+                                # context/a source reference -- goes out of
+                                # scope with this generator on every exit
+                                # path). See the buffer-reconciliation
+                                # check above for the full three-state
+                                # rationale and what happens once
+                                # classification resolves.
+                                buffered_delta_texts.append(delta_text)
+                            elif source_requirements_capture.requires_governed_knowledge:
+                                # EXPLICIT GOVERNED -- discard; never
+                                # emitted, never held onto past this point.
+                                pass
+                            else:
+                                # EXPLICIT NON-GOVERNED -- the buffer is
+                                # already empty (flushed above the instant
+                                # classification resolved), so this is
+                                # simply live streaming, byte-identical to
+                                # before this pass for a turn whose
+                                # declaration arrives before its first delta
+                                # (the common case).
+                                if not status_cleared:
+                                    yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
+                                    status_cleared = True
+                                    perf.mark("first_message_delta")
+                                yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": delta_text})
 
                         text = _extract_final_text(event)
                         if text is not None:
