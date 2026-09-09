@@ -12,6 +12,7 @@ import type {
   ActionCardRecord,
   ActionProposal,
   ActionProposalStatus,
+  ActivityTrailEntry,
   Attachment,
   Chat,
   Connector,
@@ -25,6 +26,7 @@ import type {
   ProjectFile,
   ProjectSettingsSection,
   RunTraceRecord,
+  RunTraceStep,
   ScheduledTask,
   SelectionCardRecord,
   SettingsSection,
@@ -153,6 +155,75 @@ function dispatchMockResponse(
 }
 
 const DEFAULT_THINKING_EFFORT: ThinkingEffort = "instant";
+/** Phase 2 (Runtime Activity Truthfulness) — the activity trail is a
+ * compact live-progress affordance, not a verbose debug trace (instruction
+ * section 19). Chosen after weighing readability (a long list stops being
+ * scannable) against not truncating a genuinely long, factual sequence too
+ * aggressively for a complex combined Teams+Knowledge+Case turn. */
+const ACTIVITY_TRAIL_MAX_ENTRIES = 10;
+
+/** UI PRESENTATION CORRECTION (post-Phase-2) — the category tag used for
+ * every `RunTraceStep` synthesized from a run's own `activityTrail` at
+ * completion time (see `mergeActivityTrailIntoRunTraceSteps` below). A
+ * plain, honest internal classification value, never rendered to the
+ * user (RunTrace.tsx's step rows only ever read `label`/`status`) — kept
+ * distinct from any backend-assigned `TraceCategory` value so an
+ * activity-derived row is never confused with a genuine backend
+ * `trace.step` category. */
+const ACTIVITY_DERIVED_TRACE_STEP_CATEGORY = "activity";
+
+/** UI PRESENTATION CORRECTION (post-Phase-2) — folds a completed run's
+ * own truthful, already-accumulated `activityTrail` (Phase 2's ephemeral,
+ * live-only progress line — never shown as a disclosure while live, see
+ * RunTrace.tsx/CurrentActivity.tsx) into that same message's permanent
+ * `RunTraceRecord.steps`, exactly once, at the moment the run reaches a
+ * terminal outcome (`BACKEND_RUN_COMPLETED`/`RUN_STOPPED` below — the
+ * SAME moment `finalDurationSeconds`/`outcome` are frozen).
+ *
+ * This is the "safe, deterministic model" instruction section 7 asks
+ * for: every entry is a verbatim label the backend already sent and the
+ * user already saw live — nothing invented, nothing re-derived from
+ * anything else. `RunTraceRecord`/`RunTraceStep` are themselves already
+ * frontend-only, current-session-only state (never rehydrated from saved
+ * chat history — see session_history_service's own DTOs, which carry no
+ * run-trace field), the exact same durability class the ephemeral
+ * `activityTrail` already has — so this merge does not "persist ephemeral
+ * activity" in any deeper sense than the pre-existing RunTraceStep
+ * mechanism already does; it simply moves already-true, already-received
+ * data from one frontend-only field to another, once, at completion.
+ *
+ * Ordering: the trail's own entries (chronologically first — they cover
+ * the tool activity that happens WHILE a run is executing) are placed
+ * ahead of whatever genuine `trace.step` milestones already exist for
+ * this message (which are largely response-level summaries — e.g.
+ * "Generated the response" — that are only known once the run is
+ * finishing). This reproduces the accepted example exactly: Processing
+ * your request / Searching governed knowledge / Reviewing retrieved
+ * knowledge / Validating supporting evidence (from the trail), followed
+ * by Generated the response (a genuine, pre-existing trace step).
+ *
+ * Dedup: an activity-trail label that exactly matches an already-existing
+ * trace-step label is dropped (instruction section 8 — "no duplicates"),
+ * on top of the dedup the trail and the trace-step recorder already each
+ * do independently. Never deduplicates two DIFFERENT labels merely
+ * because they look similar. */
+function mergeActivityTrailIntoRunTraceSteps(
+  activityTrail: ActivityTrailEntry[],
+  existingSteps: RunTraceStep[],
+): RunTraceStep[] {
+  if (activityTrail.length === 0) return existingSteps;
+  const existingLabels = new Set(existingSteps.map((step) => step.label));
+  const activitySteps: RunTraceStep[] = activityTrail
+    .filter((entry) => !existingLabels.has(entry.label))
+    .map((entry, index) => ({
+      stepId: `activity-${index}`,
+      category: ACTIVITY_DERIVED_TRACE_STEP_CATEGORY,
+      label: entry.label,
+      status: "completed",
+    }));
+  if (activitySteps.length === 0) return existingSteps;
+  return [...activitySteps, ...existingSteps];
+}
 
 interface DraftState {
   text: string;
@@ -501,7 +572,7 @@ export type Action =
   | { type: "BACKEND_RUN_STARTED"; payload: { chatId: string; runToken: string; serverRunId: string } }
   | {
       type: "BACKEND_STATUS_UPDATE";
-      payload: { chatId: string; runToken: string; stage: string; label: string };
+      payload: { chatId: string; runToken: string; stage: string; label: string; activityKind: string | null };
     }
   | { type: "BACKEND_STATUS_CLEAR"; payload: { chatId: string; runToken: string } }
   | {
@@ -796,7 +867,7 @@ export function reducer(state: AppState, action: Action): AppState {
         // state until a newer action.pending event authoritatively
         // replaces it (or Phase 4G's approval flow resolves it) — a new
         // run starting is not itself a resolution.
-        ...(runToken ? { run: { runToken, assistantMessageId, currentActivity: null, runStartedAt: timestamp } } : null),
+        ...(runToken ? { run: { runToken, assistantMessageId, currentActivity: null, activityTrail: [], runStartedAt: timestamp } } : null),
         // Phase 4G hardening pass: a new user message auto-collapses
         // every existing action card to its compact one-line status row
         // (never a timer) — but never moves, edits, or removes any of
@@ -959,11 +1030,28 @@ export function reducer(state: AppState, action: Action): AppState {
     }
 
     case "BACKEND_STATUS_UPDATE": {
-      const { chatId, runToken, stage, label } = action.payload;
-      return withActiveRun(state, chatId, runToken, (chat) => ({
-        ...chat,
-        run: chat.run ? { ...chat.run, currentActivity: { stage, label } } : chat.run,
-      }));
+      const { chatId, runToken, stage, label, activityKind } = action.payload;
+      return withActiveRun(state, chatId, runToken, (chat) => {
+        if (!chat.run) return chat;
+        const currentActivity = { stage, label, activityKind };
+        // Phase 2 (Runtime Activity Truthfulness): the trail records only
+        // DISTINCT, backend-emitted transitions -- the backend's own
+        // StatusTranslator already never re-sends a signature-identical
+        // status back-to-back, but this guard also protects against a
+        // literal duplicate SSE delivery. Bounded to
+        // ACTIVITY_TRAIL_MAX_ENTRIES (oldest dropped first) so this can
+        // never grow unbounded across a long-running turn.
+        const previous = chat.run.activityTrail;
+        const isDuplicateOfLast =
+          previous.length > 0 &&
+          previous[previous.length - 1].stage === stage &&
+          previous[previous.length - 1].label === label &&
+          previous[previous.length - 1].activityKind === activityKind;
+        const activityTrail = isDuplicateOfLast
+          ? previous
+          : [...previous, currentActivity].slice(-ACTIVITY_TRAIL_MAX_ENTRIES);
+        return { ...chat, run: { ...chat.run, currentActivity, activityTrail } };
+      });
     }
 
     case "BACKEND_STATUS_CLEAR": {
@@ -1173,7 +1261,7 @@ export function reducer(state: AppState, action: Action): AppState {
           [chatId]: {
             ...chat,
             messageIds: [...chat.messageIds, assistantMessageId],
-            run: { runToken, assistantMessageId, currentActivity: null, runStartedAt: timestamp },
+            run: { runToken, assistantMessageId, currentActivity: null, activityTrail: [], runStartedAt: timestamp },
             ...(chat.actionCards ? { actionCards: collapseAllActionCards(chat.actionCards) } : null),
             ...(chat.selectionCards ? { selectionCards: collapseAllSelectionCards(chat.selectionCards) } : null),
             runTraces: { ...chat.runTraces, [assistantMessageId]: { steps: [], expanded: false } },
@@ -1227,6 +1315,11 @@ export function reducer(state: AppState, action: Action): AppState {
             ...chat.runTraces,
             [assistantMessageId]: {
               ...existingTrace,
+              // UI PRESENTATION CORRECTION (post-Phase-2) — fold the run's
+              // own truthful, live-only activity trail into the permanent
+              // step history exactly once, at the same moment the trace
+              // freezes (see mergeActivityTrailIntoRunTraceSteps above).
+              steps: mergeActivityTrailIntoRunTraceSteps(chat.run.activityTrail, existingTrace.steps),
               finalDurationSeconds: elapsedSecondsSince(chat.run.runStartedAt),
               outcome,
             },
@@ -1270,7 +1363,7 @@ export function reducer(state: AppState, action: Action): AppState {
       const chat = state.chats[chatId];
       if (!chat || !chat.run || chat.run.runToken !== runToken) return state;
 
-      const { assistantMessageId, runStartedAt } = chat.run;
+      const { assistantMessageId, runStartedAt, activityTrail } = chat.run;
       // Same freeze mechanism as BACKEND_RUN_COMPLETED — one elapsed-time
       // source of truth, reused rather than a second timer — but a
       // distinct `outcome` ("stopped", never "error"): this was not a
@@ -1281,6 +1374,10 @@ export function reducer(state: AppState, action: Action): AppState {
             ...chat.runTraces,
             [assistantMessageId]: {
               ...existingTrace,
+              // UI PRESENTATION CORRECTION (post-Phase-2) — same merge as
+              // BACKEND_RUN_COMPLETED; a user-initiated stop still shows
+              // whatever real activity genuinely happened before it.
+              steps: mergeActivityTrailIntoRunTraceSteps(activityTrail, existingTrace.steps),
               finalDurationSeconds: elapsedSecondsSince(runStartedAt),
               outcome: "stopped" as const,
             },
@@ -1645,7 +1742,7 @@ export function reducer(state: AppState, action: Action): AppState {
             // the new assistant placeholder as in-flight.
             ...(runToken
               ? {
-                  run: { runToken, assistantMessageId, currentActivity: null, runStartedAt: Date.now() },
+                  run: { runToken, assistantMessageId, currentActivity: null, activityTrail: [], runStartedAt: Date.now() },
                   runTraces: { ...nextRunTraces, [assistantMessageId]: { steps: [], expanded: false } },
                 }
               : null),
@@ -3120,8 +3217,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           {
             onRunStarted: (serverRunId) =>
               dispatch({ type: "BACKEND_RUN_STARTED", payload: { chatId, runToken, serverRunId } }),
-            onStatus: (stage, label) =>
-              dispatch({ type: "BACKEND_STATUS_UPDATE", payload: { chatId, runToken, stage, label } }),
+            onStatus: (stage, label, activityKind) =>
+              dispatch({ type: "BACKEND_STATUS_UPDATE", payload: { chatId, runToken, stage, label, activityKind } }),
             onStatusClear: () => dispatch({ type: "BACKEND_STATUS_CLEAR", payload: { chatId, runToken } }),
             onDelta: (textDelta) =>
               dispatch({

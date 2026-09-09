@@ -127,6 +127,9 @@ def test_stage_taxonomy_matches_the_documented_set() -> None:
         "recommendation",
         "action_preparation",
         "response_generation",
+        # Phase 2 (Runtime Activity Truthfulness): governed-knowledge
+        # activity had no Stage of its own before this milestone.
+        "knowledge_retrieval",
     }
     assert {s.value for s in Stage} == expected
 

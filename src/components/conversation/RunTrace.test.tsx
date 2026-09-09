@@ -21,6 +21,13 @@ function steps(overrides: Partial<RunTraceStep>[] = []): RunTraceStep[] {
   return overrides.map((o, i) => ({ ...defaults[i % defaults.length], ...o }));
 }
 
+/** UI PRESENTATION CORRECTION (post-Phase-2, "Runtime Activity
+ * Truthfulness — UI Presentation Correction"): while a run is live,
+ * RunTrace is deliberately a SINGLE LINE — no chevron, no expandable
+ * history, no semantic icon, regardless of how much activity/trace-step
+ * history exists behind the scenes (that history is still accumulated
+ * internally — see AppState.tsx — just never exposed here while live).
+ * Only `mode: "completed"` ever shows a disclosure. */
 describe("RunTrace — live mode", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -30,46 +37,63 @@ describe("RunTrace — live mode", () => {
     vi.useRealTimers();
   });
 
-  it("renders the current activity label and ticking timer, unchanged from CurrentActivity", () => {
+  it("renders exactly one activity line: the current backend label verbatim, plus the ticking timer", () => {
     render(
       <RunTrace mode="live" label="Reviewing the selected Teams conversation" startedAt={NOW} steps={[]} expanded={false} onToggle={() => {}} />,
     );
     expect(screen.getByText("Reviewing the selected Teams conversation")).toBeInTheDocument();
     expect(screen.getByText("· 0s")).toBeInTheDocument();
+    expect(screen.getAllByRole("status")).toHaveLength(1);
   });
 
-  it("has no expand affordance and is not a button while zero steps have arrived yet", () => {
-    render(<RunTrace mode="live" label="Processing your request" startedAt={NOW} steps={[]} expanded={false} onToggle={() => {}} />);
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
-  });
-
-  it("becomes an expandable, keyboard-accessible disclosure once steps exist", () => {
-    const onToggle = vi.fn();
+  it("never shows a disclosure chevron, even with a rich permanent trace-step history behind the scenes", () => {
     render(
-      <RunTrace mode="live" label="Reviewing evidence" startedAt={NOW} steps={steps()} expanded={false} onToggle={onToggle} />,
+      <RunTrace mode="live" label="Reviewing evidence" startedAt={NOW} steps={steps()} expanded={false} onToggle={() => {}} />,
     );
-    const button = screen.getByRole("button");
-    expect(button).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(button);
-    expect(onToggle).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
   });
 
-  it("shows completed-so-far steps when expanded while still running", () => {
+  it("never shows a disclosure chevron even when the record's own `expanded` flag is true", () => {
     render(
       <RunTrace mode="live" label="Reviewing evidence" startedAt={NOW} steps={steps()} expanded={true} onToggle={() => {}} />,
     );
-    expect(screen.getByText("Used the selected Teams conversation")).toBeInTheDocument();
-    expect(screen.getByText("Reviewed 42 retrieved messages")).toBeInTheDocument();
-    expect(screen.getByText("Generated the response")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
   });
 
-  it("hides steps when collapsed", () => {
-    render(<RunTrace mode="live" label="x" startedAt={NOW} steps={steps()} expanded={false} onToggle={() => {}} />);
+  it("never renders a semantic activity icon (no svg beside the label)", () => {
+    render(<RunTrace mode="live" label="Searching governed knowledge" startedAt={NOW} steps={[]} expanded={false} onToggle={() => {}} />);
+    const region = screen.getByRole("status");
+    expect(region.querySelector("svg")).not.toBeInTheDocument();
+  });
+
+  it("never renders any prior/permanent activity underneath the current line", () => {
+    render(<RunTrace mode="live" label="Validating supporting evidence" startedAt={NOW} steps={steps()} expanded={false} onToggle={() => {}} />);
     expect(screen.queryByText("Used the selected Teams conversation")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reviewed 42 retrieved messages")).not.toBeInTheDocument();
+    expect(screen.queryByText("Generated the response")).not.toBeInTheDocument();
   });
 
-  it("keeps ticking while expanded — expansion never resets or stops the timer", () => {
-    render(<RunTrace mode="live" label="x" startedAt={NOW} steps={steps()} expanded={true} onToggle={() => {}} />);
+  it("replaces the visible line (never appends) when the label changes — still exactly one line", () => {
+    const { rerender } = render(
+      <RunTrace mode="live" label="Searching governed knowledge" startedAt={NOW} steps={[]} expanded={false} onToggle={() => {}} />,
+    );
+    expect(screen.getByText("Searching governed knowledge")).toBeInTheDocument();
+
+    rerender(<RunTrace mode="live" label="Reviewing retrieved knowledge" startedAt={NOW} steps={[]} expanded={false} onToggle={() => {}} />);
+    expect(screen.queryByText("Searching governed knowledge")).not.toBeInTheDocument();
+    expect(screen.getByText("Reviewing retrieved knowledge")).toBeInTheDocument();
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+
+    rerender(<RunTrace mode="live" label="Validating supporting evidence" startedAt={NOW} steps={[]} expanded={false} onToggle={() => {}} />);
+    expect(screen.queryByText("Reviewing retrieved knowledge")).not.toBeInTheDocument();
+    expect(screen.getByText("Validating supporting evidence")).toBeInTheDocument();
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+  });
+
+  it("keeps ticking regardless of the record's own expanded flag — expansion state is irrelevant to live mode now", () => {
+    render(<RunTrace mode="live" label="x" startedAt={NOW} steps={[]} expanded={true} onToggle={() => {}} />);
     act(() => {
       vi.advanceTimersByTime(5000);
     });
@@ -211,11 +235,16 @@ describe("RunTrace — expandable-trace visibility threshold (>2 meaningful step
     expect(screen.getByRole("button")).toBeInTheDocument();
   });
 
-  it("applies the same >2 threshold in live mode", () => {
-    const twoSteps = steps().slice(0, 2);
-    render(<RunTrace mode="live" label="Working" startedAt={NOW} steps={twoSteps} expanded={false} onToggle={() => {}} />);
+  it("live mode never shows the expand affordance, regardless of step count — the >2 threshold applies to completed mode only", () => {
+    render(<RunTrace mode="live" label="Working" startedAt={NOW} steps={steps()} expanded={false} onToggle={() => {}} />);
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.getByText("Working")).toBeInTheDocument();
+
+    const expandedFlagSet = render(
+      <RunTrace mode="live" label="Working" startedAt={NOW} steps={steps()} expanded={true} onToggle={() => {}} />,
+    );
+    expect(expandedFlagSet.queryByRole("button")).not.toBeInTheDocument();
+    expect(expandedFlagSet.queryByRole("list")).not.toBeInTheDocument();
   });
 });
 

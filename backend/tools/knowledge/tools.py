@@ -14,6 +14,7 @@ from typing import Any, Optional
 from google.adk.tools import ToolContext
 from pydantic import ValidationError
 
+from backend.api.activity_queue import ActivityKind, report_activity
 from backend.api.turn_context import current_run_id
 from backend.gateway.safe_error import internal_error, validation_error
 from backend.knowledge.provenance.contracts import KnowledgeEvidenceSelectionError, KnowledgeEvidenceSelectionKey
@@ -121,21 +122,41 @@ async def knowledge_search(
     run_state = get_or_init_run_state(run_id)
     service = get_knowledge_tool_service()
 
+    # Phase 2 (Runtime Activity Truthfulness): reported unconditionally --
+    # this call genuinely begins retrieval work regardless of what it
+    # returns. `report_activity` itself derives the run identity from
+    # `current_run_id()` (never this function's own `_run_key()` fallback,
+    # which may legitimately point at the unbound-run sentinel for a
+    # standalone/test invocation -- `report_activity` safely no-ops in
+    # that case, exactly as intended).
+    report_activity(ActivityKind.KNOWLEDGE_SEARCH_STARTED)
+
     try:
         execution = await service.search(request, run_state.execution_context)
         record_search_result(run_id, execution)
     except KnowledgeRepositoryCorruptionError:
         _perf_logger.info("perf stage=knowledge_search_complete run_id=%s status=error error=repository_corruption", run_id)
+        report_activity(ActivityKind.KNOWLEDGE_SEARCH_FAILED)
         return _internal_error_result("Governed knowledge could not be read right now. Please try again.")
     except KnowledgeRuntimeError:
         _perf_logger.info("perf stage=knowledge_search_complete run_id=%s status=error error=runtime_error", run_id)
+        report_activity(ActivityKind.KNOWLEDGE_SEARCH_FAILED)
         return _internal_error_result("Governed knowledge could not be reconciled for this request. Please try again.")
 
+    item_count = len(execution.agent_payload.items)
     _perf_logger.info(
         "perf stage=knowledge_search_complete run_id=%s status=success item_count=%d",
         run_id,
-        len(execution.agent_payload.items),
+        item_count,
     )
+    # `document_count` -- the SAME allowlisted metadata key `run_trace.py`
+    # already reserves for this exact concept -- a safe, bounded count,
+    # never the items themselves. Reported even when 0: a zero-result
+    # search is still a genuine, successful completion of the search
+    # operation (instruction section 12) -- the STATUS TRANSLATOR, not
+    # this call site, is responsible for never phrasing a 0-count success
+    # as "reviewing" anything.
+    report_activity(ActivityKind.KNOWLEDGE_SEARCH_SUCCEEDED, {"document_count": item_count})
     return execution.agent_payload.model_dump(mode="json")
 
 
@@ -174,6 +195,7 @@ async def knowledge_select_evidence(
       completely unchanged.
     """
     run_id = _run_key()
+    report_activity(ActivityKind.KNOWLEDGE_EVIDENCE_SELECTION_STARTED)
 
     # Verified against a real live ADK+Gemini tool call (5.1J smoke test):
     # `google.adk.tools.function_tool.FunctionTool._preprocess_args` only
@@ -194,15 +216,18 @@ async def knowledge_select_evidence(
             for item in selections
         ]
     except ValidationError as exc:
+        report_activity(ActivityKind.KNOWLEDGE_EVIDENCE_SELECTION_FAILED)
         return _validation_error_result(str(exc.errors()[0]["msg"]) if exc.errors() else "Invalid selection entry.")
 
     try:
         validated = select_evidence(run_id, selection_keys)
     except KnowledgeEvidenceSelectionError:
+        report_activity(ActivityKind.KNOWLEDGE_EVIDENCE_SELECTION_FAILED)
         return _validation_error_result(
             "One or more selected evidence identities were not part of this run's own knowledge_search results."
         )
 
+    report_activity(ActivityKind.KNOWLEDGE_EVIDENCE_SELECTION_SUCCEEDED, {"evidence_count": len(validated)})
     return {
         "status": "accepted",
         "selected": [

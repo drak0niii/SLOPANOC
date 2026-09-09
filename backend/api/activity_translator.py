@@ -38,20 +38,72 @@ from __future__ import annotations
 
 from typing import Any, Optional, TypedDict
 
+from backend.api.activity_queue import ActivityEvent, ActivityKind
 from backend.api.streaming_events import Stage, TraceCategory, TraceStepStatus
 
 _INCIDENT_MANAGER_TOOL_NAME = "incident_manager"
 _RECORD_CASE_ANALYSIS_TOOL_NAME = "record_case_analysis"
 
+# Phase 2 (Runtime Activity Truthfulness) correction: `incident_manager`
+# is DELIBERATELY ABSENT from this mapping. Agent delegation alone proves
+# only WHO was invoked, never WHAT capability is executing (Incident
+# Manager may search governed Knowledge, use Teams, work with Case
+# context, or some combination -- see docs/AGENT_CONTRACT.md and the
+# Phase 1 audit). The prior mapping (`incident_manager` CALL ->
+# `Stage.TEAMS_CONTEXT` / "Reviewing the selected Teams conversation")
+# was FALSE for any Knowledge-only or Case-only delegation (e.g. every
+# Aurora/VSWR request) and has been removed outright -- not replaced with
+# a `chat_topic`-gated version, since a supplied `chat_topic` still only
+# proves INTENT, never that a Teams tool actually executed (instruction
+# section 2's explicit "do not replace with intent inference" rule). A
+# bare `incident_manager` call now produces NO stage/label change at all
+# -- the turn simply stays on whatever generic status was already showing
+# ("Processing your request") until a REAL capability-specific
+# `ActivityEvent` (see `translate_activity_event` below) or the eventual
+# structured response justifies a more specific one.
 _TOOL_CALL_STAGES: dict[str, Stage] = {
-    _INCIDENT_MANAGER_TOOL_NAME: Stage.TEAMS_CONTEXT,
     _RECORD_CASE_ANALYSIS_TOOL_NAME: Stage.RECOMMENDATION,
 }
 
 _TOOL_CALL_LABELS: dict[str, str] = {
-    _INCIDENT_MANAGER_TOOL_NAME: "Reviewing the selected Teams conversation",
     _RECORD_CASE_ANALYSIS_TOOL_NAME: "Preparing case analysis",
 }
+
+# --- ActivityEvent -> (Stage, label) (Phase 2) --------------------------
+#
+# The ONE centralized place `ActivityKind` becomes user-facing wording --
+# tools/runtime code (backend/tools/knowledge/, backend/tools/teams/)
+# never constructs a label string itself (instruction section 5). A kind
+# absent from this mapping (including every `_FAILED` kind, deliberately)
+# produces NO status -- failure must never produce a success-like label,
+# and this codebase's existing precedent (`_refine_incident_manager_
+# response`'s own non-"ok"/"proposed"/"executed" outcomes) is to stay
+# silent on a mid-run failure and let the run's own final error handling
+# communicate it, never a "translation is missing" special case (Rule 6:
+# unknown/no activity is silent or generic, never guessed).
+_ACTIVITY_STAGE_FOR_KIND: dict[ActivityKind, Stage] = {
+    ActivityKind.KNOWLEDGE_SEARCH_STARTED: Stage.KNOWLEDGE_RETRIEVAL,
+    ActivityKind.KNOWLEDGE_SEARCH_SUCCEEDED: Stage.EVIDENCE_PROCESSING,
+    ActivityKind.KNOWLEDGE_EVIDENCE_SELECTION_STARTED: Stage.KNOWLEDGE_RETRIEVAL,
+    ActivityKind.TEAMS_CHAT_DISCOVERY_STARTED: Stage.TEAMS_CONTEXT,
+    ActivityKind.TEAMS_MESSAGES_RETRIEVAL_STARTED: Stage.TEAMS_CONTEXT,
+    ActivityKind.TEAMS_MESSAGES_RETRIEVAL_SUCCEEDED: Stage.EVIDENCE_PROCESSING,
+    ActivityKind.TEAMS_MEMBERS_RETRIEVAL_STARTED: Stage.TEAMS_CONTEXT,
+}
+
+_ACTIVITY_LABEL_FOR_KIND: dict[ActivityKind, str] = {
+    ActivityKind.KNOWLEDGE_SEARCH_STARTED: "Searching governed knowledge",
+    ActivityKind.KNOWLEDGE_EVIDENCE_SELECTION_STARTED: "Validating supporting evidence",
+    ActivityKind.TEAMS_CHAT_DISCOVERY_STARTED: "Finding the Teams conversation",
+    ActivityKind.TEAMS_MESSAGES_RETRIEVAL_STARTED: "Retrieving Teams messages",
+    ActivityKind.TEAMS_MEMBERS_RETRIEVAL_STARTED: "Reviewing conversation participants",
+}
+# `..._SUCCEEDED` kinds whose label depends on a safe count -- handled by
+# `translate_activity_event` directly (never fires when the count is 0 --
+# instruction section 6/24 test cases 5/11: a zero-result search/
+# retrieval must never claim "reviewing" anything).
+_KNOWLEDGE_SEARCH_SUCCESS_METADATA_KEY = "document_count"
+_TEAMS_MESSAGES_SUCCESS_METADATA_KEY = "message_count"
 
 # `kind` is a closed, already-validated vocabulary (see
 # backend/cases/schemas.py's AGENT_ANALYSIS_KINDS) -- safe to use verbatim
@@ -92,24 +144,43 @@ def translate_case_context_status(case_title: Optional[str]) -> dict[str, Any]:
 
 
 class StatusTranslator:
+    """Dedup identity (Phase 2 correction): `(stage, discriminator)`, never
+    bare `stage` -- a single `Stage` (e.g. `KNOWLEDGE_RETRIEVAL`) now
+    legitimately carries several DISTINCT, sequential, non-duplicate
+    labels (e.g. "Searching governed knowledge" then "Validating
+    supporting evidence"); deduping by `stage` alone would silently
+    suppress the second one merely because it shares a stage with the
+    first (instruction section 7's own explicit warning). `discriminator`
+    is `None` for every EXISTING (non-`ActivityEvent`-driven) status path
+    -- byte-identical dedup behavior to before this pass for those -- and
+    the `ActivityKind` itself for anything from `translate_activity_event`.
+    """
+
     def __init__(self) -> None:
-        self._last_stage: Optional[Stage] = None
+        self._last_signature: Optional[tuple[Stage, Optional[ActivityKind]]] = None
         self._pending_tool_name: Optional[str] = None
 
-    def _maybe_emit(self, stage: Stage, label: str) -> Optional[dict[str, Any]]:
+    def _maybe_emit(
+        self, stage: Stage, label: str, discriminator: Optional[ActivityKind] = None
+    ) -> Optional[dict[str, Any]]:
         from backend.api.streaming_events import status_data
 
-        if stage == self._last_stage:
+        signature = (stage, discriminator)
+        if signature == self._last_signature:
             return None
-        self._last_stage = stage
-        return status_data(stage, label)
+        self._last_signature = signature
+        return status_data(stage, label, activity_kind=discriminator.value if discriminator is not None else None)
+
+    @property
+    def _last_stage(self) -> Optional[Stage]:
+        return self._last_signature[0] if self._last_signature is not None else None
 
     def note_external_status(self, stage: Stage) -> None:
         """Lets the caller inform the translator that a status was
         emitted OUTSIDE this class (e.g. the pre-turn Case-context status)
         so deduplication still works correctly against it.
         """
-        self._last_stage = stage
+        self._last_signature = (stage, None)
 
     def translate_event(self, event: Any) -> Optional[dict[str, Any]]:
         """Returns a `status_data(...)` dict to emit, or `None` if this
@@ -127,6 +198,40 @@ class StatusTranslator:
             return self._translate_function_responses(function_responses)
 
         return None
+
+    def translate_activity_event(self, activity: ActivityEvent) -> Optional[dict[str, Any]]:
+        """Phase 2: the ONE place an `ActivityEvent` (a real, observed
+        inner Knowledge/Teams tool boundary -- see activity_queue.py)
+        becomes a user-facing status. A kind absent from
+        `_ACTIVITY_STAGE_FOR_KIND` (every `_FAILED` kind, and every
+        `_SUCCEEDED` kind not explicitly handled below) produces no
+        status change -- silence, never a guess (Rule 6).
+        """
+        kind = activity["kind"]
+        metadata = activity.get("safe_metadata") or {}
+
+        if kind == ActivityKind.KNOWLEDGE_SEARCH_SUCCEEDED:
+            count = metadata.get(_KNOWLEDGE_SEARCH_SUCCESS_METADATA_KEY, 0)
+            if not isinstance(count, int) or count <= 0:
+                # Instruction section 6/24 test 5: a zero-result search
+                # must never claim "reviewing retrieved knowledge".
+                return None
+            return self._maybe_emit(Stage.EVIDENCE_PROCESSING, "Reviewing retrieved knowledge", kind)
+
+        if kind == ActivityKind.TEAMS_MESSAGES_RETRIEVAL_SUCCEEDED:
+            count = metadata.get(_TEAMS_MESSAGES_SUCCESS_METADATA_KEY, 0)
+            if not isinstance(count, int) or count <= 0:
+                # Instruction section 13/24 test 11: a zero-message
+                # retrieval must never claim "reviewing retrieved
+                # messages".
+                return None
+            return self._maybe_emit(Stage.EVIDENCE_PROCESSING, "Reviewing retrieved messages", kind)
+
+        stage = _ACTIVITY_STAGE_FOR_KIND.get(kind)
+        label = _ACTIVITY_LABEL_FOR_KIND.get(kind)
+        if stage is None or label is None:
+            return None
+        return self._maybe_emit(stage, label, kind)
 
     def _translate_function_calls(self, function_calls: list[Any]) -> Optional[dict[str, Any]]:
         for call in function_calls:
@@ -158,6 +263,23 @@ class StatusTranslator:
     def _refine_incident_manager_response(self, result: dict[str, Any]) -> Optional[dict[str, Any]]:
         outcome = result.get("outcome")
         if outcome == "ok":
+            # Phase 2 correction (instruction section 14): a real,
+            # deeper, earlier-arriving activity-driven status
+            # ("Reviewing retrieved messages", from `teams_get_messages`
+            # itself succeeding) already covers this exact moment for
+            # any turn whose Incident Manager delegation went through the
+            # live activity-queue merge loop -- `self._last_stage ==
+            # Stage.EVIDENCE_PROCESSING` proves that already happened
+            # this run, so repeating it here from the coarser, later
+            # IncidentManagerResponse.evidence count would be a visible
+            # duplicate. This response-level fallback remains the sole
+            # source of truth ONLY for a run that never drained the
+            # activity queue at all (the SelectionCard read-continuation
+            # resume path, `chat_service.py`'s `synthetic_incident_
+            # manager_response_event` call site, which does not iterate
+            # the merged outer/activity stream).
+            if self._last_stage == Stage.EVIDENCE_PROCESSING:
+                return None
             evidence = result.get("evidence")
             count = len(evidence) if isinstance(evidence, list) else 0
             if count > 0:

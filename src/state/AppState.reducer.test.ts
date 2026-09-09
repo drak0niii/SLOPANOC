@@ -60,6 +60,7 @@ describe("reducer — SEND_MESSAGE (Phase 4F seeding)", () => {
       runToken: RUN_TOKEN,
       assistantMessageId: ASSISTANT_MSG_ID,
       currentActivity: null,
+      activityTrail: [],
       runStartedAt: 1000,
     });
   });
@@ -87,22 +88,24 @@ describe("reducer — BACKEND_STATUS_UPDATE / BACKEND_STATUS_CLEAR (replace, not
     let state = seedRunningChat();
     state = reducer(state, {
       type: "BACKEND_STATUS_UPDATE",
-      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, stage: "teams_context", label: "Retrieving recent messages" },
+      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, stage: "teams_context", label: "Retrieving recent messages", activityKind: null },
     });
     expect(state.chats[CHAT_ID].run?.currentActivity).toEqual({
       stage: "teams_context",
       label: "Retrieving recent messages",
+      activityKind: null,
     });
 
     state = reducer(state, {
       type: "BACKEND_STATUS_UPDATE",
-      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, stage: "evidence_processing", label: "Reviewing 84 messages" },
+      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, stage: "evidence_processing", label: "Reviewing 84 messages", activityKind: null },
     });
     // The SAME slot, not a second entry — there is nowhere in the state
     // shape a second activity could even be appended to.
     expect(state.chats[CHAT_ID].run?.currentActivity).toEqual({
       stage: "evidence_processing",
       label: "Reviewing 84 messages",
+      activityKind: null,
     });
   });
 
@@ -112,7 +115,7 @@ describe("reducer — BACKEND_STATUS_UPDATE / BACKEND_STATUS_CLEAR (replace, not
     let state = seedRunningChat();
     state = reducer(state, {
       type: "BACKEND_STATUS_UPDATE",
-      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, stage: "a_future_stage_value", label: "Checking the current fault evidence" },
+      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, stage: "a_future_stage_value", label: "Checking the current fault evidence", activityKind: null },
     });
     expect(state.chats[CHAT_ID].run?.currentActivity?.label).toBe("Checking the current fault evidence");
   });
@@ -121,10 +124,283 @@ describe("reducer — BACKEND_STATUS_UPDATE / BACKEND_STATUS_CLEAR (replace, not
     let state = seedRunningChat();
     state = reducer(state, {
       type: "BACKEND_STATUS_UPDATE",
-      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, stage: "processing", label: "Processing your request" },
+      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, stage: "processing", label: "Processing your request", activityKind: null },
     });
     state = reducer(state, { type: "BACKEND_STATUS_CLEAR", payload: { chatId: CHAT_ID, runToken: RUN_TOKEN } });
     expect(state.chats[CHAT_ID].run?.currentActivity).toBeNull();
+  });
+});
+
+describe("reducer — activity trail (Phase 2, Runtime Activity Truthfulness)", () => {
+  function status(stage: string, label: string, activityKind: string | null = null) {
+    return { type: "BACKEND_STATUS_UPDATE" as const, payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, stage, label, activityKind } };
+  }
+
+  it("(F) accumulates DISTINCT statuses chronologically", () => {
+    let state = seedRunningChat();
+    state = reducer(state, status("knowledge_retrieval", "Searching governed knowledge", "knowledge_search_started"));
+    state = reducer(state, status("evidence_processing", "Reviewing retrieved knowledge", "knowledge_search_succeeded"));
+    state = reducer(
+      state,
+      status("knowledge_retrieval", "Validating supporting evidence", "knowledge_evidence_selection_started"),
+    );
+    expect(state.chats[CHAT_ID].run?.activityTrail.map((e) => e.label)).toEqual([
+      "Searching governed knowledge",
+      "Reviewing retrieved knowledge",
+      "Validating supporting evidence",
+    ]);
+  });
+
+  it("(G) a repeated, IDENTICAL status is collapsed, never appended as a duplicate trail entry", () => {
+    let state = seedRunningChat();
+    state = reducer(state, status("knowledge_retrieval", "Searching governed knowledge", "knowledge_search_started"));
+    state = reducer(state, status("knowledge_retrieval", "Searching governed knowledge", "knowledge_search_started"));
+    state = reducer(state, status("knowledge_retrieval", "Searching governed knowledge", "knowledge_search_started"));
+    expect(state.chats[CHAT_ID].run?.activityTrail).toHaveLength(1);
+  });
+
+  it("(H) the trail is bounded — oldest entries drop once the cap is exceeded", () => {
+    let state = seedRunningChat();
+    for (let i = 0; i < 20; i++) {
+      state = reducer(state, status(`stage-${i}`, `Activity ${i}`, null));
+    }
+    const trail = state.chats[CHAT_ID].run?.activityTrail ?? [];
+    expect(trail.length).toBeLessThanOrEqual(10);
+    // The MOST RECENT entry always survives -- oldest are dropped first.
+    expect(trail[trail.length - 1].label).toBe("Activity 19");
+  });
+
+  it("(I) a new run (SEND_MESSAGE) resets the trail — no stale entries from a prior run leak forward", () => {
+    let state = seedRunningChat();
+    state = reducer(state, status("knowledge_retrieval", "Searching governed knowledge", "knowledge_search_started"));
+    expect(state.chats[CHAT_ID].run?.activityTrail).toHaveLength(1);
+
+    state = reducer(state, {
+      type: "SEND_MESSAGE",
+      payload: {
+        chatId: CHAT_ID,
+        isNewChat: false,
+        userMessageId: "msg-user-2",
+        assistantMessageId: "msg-assistant-2",
+        text: "next turn",
+        attachments: [],
+        sources: [],
+        timestamp: 2000,
+        runToken: "run-2",
+      },
+    });
+    expect(state.chats[CHAT_ID].run?.activityTrail).toEqual([]);
+  });
+
+  it("(J) cancelling a run (RUN_STOPPED) clears the current activity and the run itself — no stale 'working' state lingers", () => {
+    let state = seedRunningChat();
+    state = reducer(state, status("knowledge_retrieval", "Searching governed knowledge", "knowledge_search_started"));
+    state = reducer(state, { type: "RUN_STOPPED", payload: { chatId: CHAT_ID, runToken: RUN_TOKEN } });
+    expect(state.chats[CHAT_ID].run).toBeUndefined();
+  });
+
+  it("(K) a run ending in error clears the current activity and the run itself", () => {
+    let state = seedRunningChat();
+    state = reducer(state, status("teams_context", "Retrieving Teams messages", "teams_messages_retrieval_started"));
+    state = reducer(state, {
+      type: "BACKEND_RUN_COMPLETED",
+      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, outcome: "error" },
+    });
+    expect(state.chats[CHAT_ID].run).toBeUndefined();
+  });
+
+  it("(L/M) two different chats' activity trails never cross-contaminate", () => {
+    const OTHER_CHAT_ID = "chat-2";
+    let state = seedRunningChat();
+    // Seed a second chat with its own independent run.
+    state = reducer(state, {
+      type: "SEND_MESSAGE",
+      payload: {
+        chatId: OTHER_CHAT_ID,
+        isNewChat: true,
+        userMessageId: "msg-user-other",
+        assistantMessageId: "msg-assistant-other",
+        text: "second chat",
+        attachments: [],
+        sources: [],
+        timestamp: 3000,
+        runToken: "run-other",
+      },
+    });
+
+    state = reducer(state, status("teams_context", "Finding the Teams conversation", "teams_chat_discovery_started"));
+    state = reducer(state, {
+      type: "BACKEND_STATUS_UPDATE",
+      payload: {
+        chatId: OTHER_CHAT_ID,
+        runToken: "run-other",
+        stage: "knowledge_retrieval",
+        label: "Searching governed knowledge",
+        activityKind: "knowledge_search_started",
+      },
+    });
+
+    const teamsTrail = state.chats[CHAT_ID].run?.activityTrail.map((e) => e.label) ?? [];
+    const knowledgeTrail = state.chats[OTHER_CHAT_ID].run?.activityTrail.map((e) => e.label) ?? [];
+    expect(teamsTrail).toEqual(["Finding the Teams conversation"]);
+    expect(knowledgeTrail).toEqual(["Searching governed knowledge"]);
+    expect(teamsTrail).not.toContain("Searching governed knowledge");
+    expect(knowledgeTrail).not.toContain("Finding the Teams conversation");
+  });
+
+  it("(N) a generic turn ('hello') that only ever sends the initial processing status never accumulates any capability-specific trail entry", () => {
+    let state = seedRunningChat();
+    state = reducer(state, status("processing", "Processing your request", null));
+    const trail = state.chats[CHAT_ID].run?.activityTrail.map((e) => e.label) ?? [];
+    expect(trail).toEqual(["Processing your request"]);
+    expect(trail.some((l) => /teams|knowledge|case/i.test(l))).toBe(false);
+  });
+});
+
+describe("reducer — UI PRESENTATION CORRECTION: activityTrail merges into completed RunTraceRecord.steps", () => {
+  function status(stage: string, label: string, activityKind: string | null = null) {
+    return { type: "BACKEND_STATUS_UPDATE" as const, payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, stage, label, activityKind } };
+  }
+
+  it("BACKEND_RUN_COMPLETED folds the run's own trail ahead of any genuine trace.step milestones, in order, exactly once", () => {
+    let state = seedRunningChat();
+    state = reducer(state, status("processing", "Processing your request", null));
+    state = reducer(state, status("knowledge_retrieval", "Searching governed knowledge", "knowledge_search_started"));
+    state = reducer(state, status("evidence_processing", "Reviewing retrieved knowledge", "knowledge_search_succeeded"));
+    state = reducer(
+      state,
+      status("knowledge_retrieval", "Validating supporting evidence", "knowledge_evidence_selection_started"),
+    );
+    state = reducer(state, {
+      type: "BACKEND_TRACE_STEP",
+      payload: {
+        chatId: CHAT_ID,
+        runToken: RUN_TOKEN,
+        messageId: ASSISTANT_MSG_ID,
+        step: traceStep({ label: "Generated the response" }),
+      },
+    });
+    const next = reducer(state, {
+      type: "BACKEND_RUN_COMPLETED",
+      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, outcome: "ok" },
+    });
+    const mergedLabels = next.chats[CHAT_ID].runTraces?.[ASSISTANT_MSG_ID].steps.map((s) => s.label);
+    // Reproduces the accepted example exactly: the live trail's own
+    // entries, chronologically first, followed by the genuine
+    // (pre-existing, backend-recorded) trace-step milestone.
+    expect(mergedLabels).toEqual([
+      "Processing your request",
+      "Searching governed knowledge",
+      "Reviewing retrieved knowledge",
+      "Validating supporting evidence",
+      "Generated the response",
+    ]);
+  });
+
+  it("every activity-derived step is marked 'completed' — never fabricates a warning/failed status", () => {
+    let state = seedRunningChat();
+    state = reducer(state, status("knowledge_retrieval", "Searching governed knowledge", "knowledge_search_started"));
+    const next = reducer(state, {
+      type: "BACKEND_RUN_COMPLETED",
+      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, outcome: "ok" },
+    });
+    const steps = next.chats[CHAT_ID].runTraces?.[ASSISTANT_MSG_ID].steps ?? [];
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toMatchObject({ label: "Searching governed knowledge", status: "completed" });
+  });
+
+  it("RUN_STOPPED performs the same merge for a user-initiated stop", () => {
+    let state = seedRunningChat();
+    state = reducer(state, status("teams_context", "Finding the Teams conversation", "teams_chat_discovery_started"));
+    const next = reducer(state, { type: "RUN_STOPPED", payload: { chatId: CHAT_ID, runToken: RUN_TOKEN } });
+    const steps = next.chats[CHAT_ID].runTraces?.[ASSISTANT_MSG_ID].steps ?? [];
+    expect(steps.map((s) => s.label)).toEqual(["Finding the Teams conversation"]);
+    expect(next.chats[CHAT_ID].runTraces?.[ASSISTANT_MSG_ID].outcome).toBe("stopped");
+  });
+
+  it("an empty trail (e.g. an instantly-completed run) leaves the existing trace steps completely untouched", () => {
+    let state = seedRunningChat();
+    state = reducer(state, {
+      type: "BACKEND_TRACE_STEP",
+      payload: {
+        chatId: CHAT_ID,
+        runToken: RUN_TOKEN,
+        messageId: ASSISTANT_MSG_ID,
+        step: traceStep({ label: "Generated the response" }),
+      },
+    });
+    const next = reducer(state, {
+      type: "BACKEND_RUN_COMPLETED",
+      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, outcome: "ok" },
+    });
+    expect(next.chats[CHAT_ID].runTraces?.[ASSISTANT_MSG_ID].steps.map((s) => s.label)).toEqual([
+      "Generated the response",
+    ]);
+  });
+
+  it("no duplicates: an activity-trail label identical to an already-recorded trace-step label is not repeated", () => {
+    let state = seedRunningChat();
+    state = reducer(state, status("response", "Generated the response", null));
+    state = reducer(state, {
+      type: "BACKEND_TRACE_STEP",
+      payload: {
+        chatId: CHAT_ID,
+        runToken: RUN_TOKEN,
+        messageId: ASSISTANT_MSG_ID,
+        step: traceStep({ label: "Generated the response" }),
+      },
+    });
+    const next = reducer(state, {
+      type: "BACKEND_RUN_COMPLETED",
+      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, outcome: "ok" },
+    });
+    const labels = next.chats[CHAT_ID].runTraces?.[ASSISTANT_MSG_ID].steps.map((s) => s.label) ?? [];
+    expect(labels.filter((l) => l === "Generated the response")).toHaveLength(1);
+  });
+
+  it("never deduplicates two genuinely DIFFERENT labels merely because they look similar", () => {
+    let state = seedRunningChat();
+    state = reducer(state, status("knowledge_retrieval", "Searching governed knowledge", "knowledge_search_started"));
+    state = reducer(state, status("evidence_processing", "Reviewing retrieved knowledge", "knowledge_search_succeeded"));
+    const next = reducer(state, {
+      type: "BACKEND_RUN_COMPLETED",
+      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, outcome: "ok" },
+    });
+    const labels = next.chats[CHAT_ID].runTraces?.[ASSISTANT_MSG_ID].steps.map((s) => s.label) ?? [];
+    expect(labels).toEqual(["Searching governed knowledge", "Reviewing retrieved knowledge"]);
+  });
+
+  it("a new run's freshly-reset (empty) trail never re-merges a PRIOR run's already-frozen steps a second time", () => {
+    let state = seedRunningChat();
+    state = reducer(state, status("knowledge_retrieval", "Searching governed knowledge", "knowledge_search_started"));
+    state = reducer(state, {
+      type: "BACKEND_RUN_COMPLETED",
+      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, outcome: "ok" },
+    });
+    // A second, unrelated run targeting a DIFFERENT message must not
+    // touch the first run's already-frozen trace record.
+    state = reducer(state, {
+      type: "SEND_MESSAGE",
+      payload: {
+        chatId: CHAT_ID,
+        isNewChat: false,
+        userMessageId: "msg-user-2",
+        assistantMessageId: "msg-assistant-2",
+        text: "next turn",
+        attachments: [],
+        sources: [],
+        timestamp: 2000,
+        runToken: "run-2",
+      },
+    });
+    const next = reducer(state, {
+      type: "BACKEND_RUN_COMPLETED",
+      payload: { chatId: CHAT_ID, runToken: "run-2", outcome: "ok" },
+    });
+    expect(next.chats[CHAT_ID].runTraces?.[ASSISTANT_MSG_ID].steps.map((s) => s.label)).toEqual([
+      "Searching governed knowledge",
+    ]);
+    expect(next.chats[CHAT_ID].runTraces?.["msg-assistant-2"].steps).toEqual([]);
   });
 });
 
@@ -153,7 +429,7 @@ describe("reducer — BACKEND_MESSAGE_DELTA", () => {
     let state = seedRunningChat();
     state = reducer(state, {
       type: "BACKEND_STATUS_UPDATE",
-      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, stage: "processing", label: "Processing your request" },
+      payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, stage: "processing", label: "Processing your request", activityKind: null },
     });
     state = reducer(state, {
       type: "BACKEND_MESSAGE_DELTA",
@@ -535,7 +811,7 @@ describe("reducer — stale runToken is a no-op", () => {
     const state = seedRunningChat();
     const next = reducer(state, {
       type: "BACKEND_STATUS_UPDATE",
-      payload: { chatId: CHAT_ID, runToken: "some-other-run", stage: "processing", label: "stale" },
+      payload: { chatId: CHAT_ID, runToken: "some-other-run", stage: "processing", label: "stale", activityKind: null },
     });
     expect(next).toBe(state); // unchanged reference — a true no-op
   });
@@ -1201,6 +1477,7 @@ describe("reducer — EDIT_MESSAGE restores backend-chat editing and preserves s
       runToken: editRunToken,
       assistantMessageId: "msg-assistant-edited",
       currentActivity: null,
+      activityTrail: [],
       runStartedAt: expect.any(Number),
     });
   });
@@ -1450,6 +1727,7 @@ describe("reducer — BEGIN_READ_RESUME (hardening pass: no synthetic user messa
       runToken: "resume-run-1",
       assistantMessageId: "msg-resume",
       currentActivity: null,
+      activityTrail: [],
       runStartedAt: 5000,
     });
   });
@@ -2070,7 +2348,7 @@ describe("reducer — elapsed timer is continuous across status.clear/message.de
       vi.setSystemTime(5000);
       state = reducer(state, {
         type: "BACKEND_STATUS_UPDATE",
-        payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, stage: "teams_context", label: "Reviewing the selected Teams conversation" },
+        payload: { chatId: CHAT_ID, runToken: RUN_TOKEN, stage: "teams_context", label: "Reviewing the selected Teams conversation", activityKind: null },
       });
 
       // First token arrives at t=10s -- status.clear, then a delta, then a
@@ -2110,7 +2388,12 @@ describe("reducer — elapsed timer is continuous across status.clear/message.de
 
       expect(state.chats[CHAT_ID].runTraces?.[ASSISTANT_MSG_ID].finalDurationSeconds).toBe(20);
       expect(state.chats[CHAT_ID].runTraces?.[ASSISTANT_MSG_ID].outcome).toBe("ok");
+      // UI PRESENTATION CORRECTION (post-Phase-2): the run's own live
+      // activity trail ("Reviewing the selected Teams conversation") is
+      // now folded in ahead of the genuine trace.step milestone at
+      // completion — see mergeActivityTrailIntoRunTraceSteps.
       expect(state.chats[CHAT_ID].runTraces?.[ASSISTANT_MSG_ID].steps.map((s) => s.label)).toEqual([
+        "Reviewing the selected Teams conversation",
         "Used the selected Teams conversation",
       ]);
     } finally {
@@ -2226,6 +2509,7 @@ describe("reducer — RUN_STOPPED (pre-4H refinement Stop control)", () => {
       runToken: "run-2",
       assistantMessageId: secondAssistantId,
       currentActivity: null,
+      activityTrail: [],
       runStartedAt: 5000,
     });
     // The stopped run's own trace is untouched — a new, independent one

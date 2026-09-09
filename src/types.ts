@@ -475,6 +475,18 @@ export interface ApprovalCardState {
   executedAction?: { chatId: string | null; title: string | null; webUrl: string | null } | null;
 }
 
+/** Phase 2 (Runtime Activity Truthfulness) — one entry in a run's bounded,
+ * chronological activity trail. Mirrors `ChatRunState.currentActivity`'s
+ * own shape exactly (same `stage`/`label`/`activityKind` fields) — every
+ * trail entry is a verbatim, backend-provided status that was actually
+ * shown as `currentActivity` at some point during this run, never a
+ * frontend-invented step. */
+export interface ActivityTrailEntry {
+  stage: string;
+  label: string;
+  activityKind: string | null;
+}
+
 /** Phase 4F — ephemeral per-chat state for one in-flight real backend
  * run. See Chat.run. */
 export interface ChatRunState {
@@ -490,8 +502,18 @@ export interface ChatRunState {
   assistantMessageId: string;
   /** The single "current activity" line — replaced (never appended) on
    * each status event, cleared on status.clear or the first
-   * message.delta. null before the first status event arrives. */
-  currentActivity: { stage: string; label: string } | null;
+   * message.delta. null before the first status event arrives.
+   * `activityKind` (Phase 2) is present only when the backend attached
+   * one (an `ActivityEvent`-derived status) — the ONLY field the
+   * frontend may use to pick an icon, never `label` text. */
+  currentActivity: { stage: string; label: string; activityKind: string | null } | null;
+  /** Phase 2 (Runtime Activity Truthfulness) — bounded (see
+   * `ACTIVITY_TRAIL_MAX_ENTRIES` in AppState.tsx), chronological record
+   * of every DISTINCT `currentActivity` this run has shown so far —
+   * consecutive duplicates collapsed (mirrors the backend's own
+   * `StatusTranslator` dedup), never a frontend-authored progression.
+   * Reset to `[]` on every new run; never persisted to chat history. */
+  activityTrail: ActivityTrailEntry[];
   /** Client `Date.now()` at the moment this run began (SEND_MESSAGE/
    * EDIT_MESSAGE dispatch, before any network call) — the sole source
    * for the elapsed-time counter (Phase 4G interaction-capability

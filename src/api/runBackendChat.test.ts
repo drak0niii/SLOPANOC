@@ -50,12 +50,34 @@ describe("runBackendChat", () => {
     await runBackendChat("s1", "hello", handlers, new AbortController().signal);
 
     expect(handlers.onRunStarted).toHaveBeenCalledWith("r1");
-    expect(handlers.onStatus).toHaveBeenCalledWith("processing", "Processing your request");
+    expect(handlers.onStatus).toHaveBeenCalledWith("processing", "Processing your request", null);
     expect(handlers.onStatusClear).toHaveBeenCalledOnce();
     expect(handlers.onDelta).toHaveBeenCalledWith("Hi");
     expect(handlers.onCompleted).toHaveBeenCalledWith("Hi", undefined, undefined);
     expect(handlers.onRunCompleted).toHaveBeenCalledWith("ok");
     expect(handlers.onError).not.toHaveBeenCalled();
+  });
+
+  it("passes activity_kind through to onStatus when present (Phase 2)", async () => {
+    streamChatMessage.mockImplementation(async ({ onEvent }: { onEvent: (e: SSEEvent) => void }) => {
+      onEvent(
+        envelope("status", {
+          stage: "knowledge_retrieval",
+          label: "Searching governed knowledge",
+          activity_kind: "knowledge_search_started",
+        }),
+      );
+      onEvent(envelope("run.completed", { outcome: "ok" }));
+    });
+
+    const handlers = makeHandlers();
+    await runBackendChat("s1", "hello", handlers, new AbortController().signal);
+
+    expect(handlers.onStatus).toHaveBeenCalledWith(
+      "knowledge_retrieval",
+      "Searching governed knowledge",
+      "knowledge_search_started",
+    );
   });
 
   it("passes a structured source through to onCompleted when present (pre-4H UX/provenance milestone)", async () => {

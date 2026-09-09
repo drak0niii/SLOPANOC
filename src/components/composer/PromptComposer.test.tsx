@@ -120,7 +120,7 @@ describe("PromptComposer — duplicate-submit / active-run guard", () => {
   it("replaces Send with a Stop control while a real backend run is active (chat.run present)", () => {
     mockAppState.state.draft.text = "hello";
     mockAppState.activeChat = makeChat({
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: Date.now() },
+      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, activityTrail: [], runStartedAt: Date.now() },
     });
     render(<PromptComposer />);
 
@@ -133,7 +133,7 @@ describe("PromptComposer — duplicate-submit / active-run guard", () => {
   it("blocks Enter from submitting while a run is active", () => {
     mockAppState.state.draft.text = "hello";
     mockAppState.activeChat = makeChat({
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: Date.now() },
+      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, activityTrail: [], runStartedAt: Date.now() },
     });
     render(<PromptComposer />);
 
@@ -178,7 +178,7 @@ describe("PromptComposer — Stop control (pre-4H refinement)", () => {
 
   it("shows Stop instead of Send once a real backend run is active", () => {
     mockAppState.activeChat = makeChat({
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: Date.now() },
+      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, activityTrail: [], runStartedAt: Date.now() },
     });
     render(<PromptComposer />);
 
@@ -188,7 +188,7 @@ describe("PromptComposer — Stop control (pre-4H refinement)", () => {
 
   it("clicking Stop calls stopActiveRun with the active chat's id", () => {
     mockAppState.activeChat = makeChat({
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: Date.now() },
+      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, activityTrail: [], runStartedAt: Date.now() },
     });
     render(<PromptComposer />);
 
@@ -198,7 +198,7 @@ describe("PromptComposer — Stop control (pre-4H refinement)", () => {
 
   it("Stop is a real, keyboard-accessible <button> with an appropriate accessible label", () => {
     mockAppState.activeChat = makeChat({
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: Date.now() },
+      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, activityTrail: [], runStartedAt: Date.now() },
     });
     render(<PromptComposer />);
 
@@ -218,7 +218,7 @@ describe("PromptComposer — Stop control (pre-4H refinement)", () => {
 
   it("Stop never sends a message — sendMessage is not invoked", () => {
     mockAppState.activeChat = makeChat({
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: Date.now() },
+      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, activityTrail: [], runStartedAt: Date.now() },
     });
     render(<PromptComposer />);
 
@@ -230,7 +230,7 @@ describe("PromptComposer — Stop control (pre-4H refinement)", () => {
 describe("PromptComposer — resting vs. focus glow (Phase 4G hardening pass)", () => {
   it("never applies the streaming/generating pulse glow, even while a run is active", () => {
     mockAppState.activeChat = makeChat({
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: Date.now() },
+      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, activityTrail: [], runStartedAt: Date.now() },
     });
     render(<PromptComposer />);
 
@@ -243,7 +243,7 @@ describe("PromptComposer — resting vs. focus glow (Phase 4G hardening pass)", 
     unmount();
 
     mockAppState.activeChat = makeChat({
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: Date.now() },
+      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, activityTrail: [], runStartedAt: Date.now() },
     });
     render(<PromptComposer />);
     const streamingClassName = screen.getByTestId("composer-frame").className;
@@ -308,7 +308,7 @@ describe("PromptComposer — resting vs. focus glow (Phase 4G hardening pass)", 
     unmount();
 
     mockAppState.activeChat = makeChat({
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: Date.now() },
+      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, activityTrail: [], runStartedAt: Date.now() },
     });
     render(<PromptComposer />);
     expect(screen.getByTestId("composer-frame").className).not.toMatch(/\bscale-/);

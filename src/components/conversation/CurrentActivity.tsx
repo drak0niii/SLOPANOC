@@ -20,7 +20,15 @@ import { elapsedSecondsSince, formatElapsedTime } from "../../lib/elapsedTime";
  * One atomic `role="status"` live region around the label only — not a
  * growing log, and the ticking elapsed suffix is `aria-hidden` so a
  * screen reader is not re-announced every second; only genuine label
- * changes are announced, exactly as before this counter was added.
+ * changes are announced.
+ *
+ * UI PRESENTATION CORRECTION (post-Phase-2): this line is deliberately
+ * ONE LINE ONLY — dots, the current truthful label, elapsed time. No
+ * per-activity semantic icon (removed — see lib/activityIcons.ts's own
+ * removal), no disclosure/chevron of any kind while a run is live (see
+ * RunTrace.tsx: the live mode never shows a chevron). The label is never
+ * parsed to derive anything — it is rendered exactly as the backend sent
+ * it, exactly as before.
  */
 export function CurrentActivity({ label, startedAt }: { label: string; startedAt: number }) {
   const [elapsedSeconds, setElapsedSeconds] = useState(() => elapsedSecondsSince(startedAt));

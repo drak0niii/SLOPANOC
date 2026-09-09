@@ -1043,12 +1043,17 @@ describe("AppState integration — expandable, sanitized run trace", () => {
     const assistantMessage = latest.activeMessages.find((m) => m.role === "assistant")!;
     const traceRecord = latest.state.chats[chatId].runTraces?.[assistantMessage.id];
 
+    // UI PRESENTATION CORRECTION (post-Phase-2): the run's own live
+    // status ("Reviewing the selected Teams conversation") is folded in
+    // ahead of the genuine trace.step milestones at completion — see
+    // AppState.tsx's mergeActivityTrailIntoRunTraceSteps.
     expect(traceRecord?.steps.map((s) => s.label)).toEqual([
+      "Reviewing the selected Teams conversation",
       "Used the selected Teams conversation",
       "Reviewed 4 retrieved messages",
       "Generated the response",
     ]);
-    expect(traceRecord?.steps[1].safeMetadata).toEqual({ message_count: 4 });
+    expect(traceRecord?.steps[2].safeMetadata).toEqual({ message_count: 4 });
   });
 
   it("an error run freezes outcome 'error' and never a false 'ok' — the failure step is preserved", async () => {

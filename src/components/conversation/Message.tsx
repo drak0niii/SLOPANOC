@@ -743,7 +743,18 @@ export function Message({ message }: { message: MessageType }) {
             isBackendMessage &&
             (activeChat?.sources?.[message.id] ||
               (activeChat?.knowledgeSources?.[message.id]?.length ?? 0) > 0) && (
-              <div className="anim-fade mt-4 flex flex-wrap gap-1.5">
+              // SOURCE CHIP ALIGNMENT CORRECTION: a clean, left-aligned
+              // vertical stack — never a wrapping horizontal chip row. A
+              // long knowledge-group label (e.g. "Source · Rogers
+              // ERICSSON_4G_... · v1") needs its own full row to wrap
+              // cleanly; a flex-wrap row let a long chip's wrapped second
+              // line render ambiguously alongside whatever chip happened
+              // to sit next to it. `items-start` keeps each chip only as
+              // wide as its own content (never arbitrarily full-width —
+              // see SourceChip.tsx's trigger classes for the matching
+              // per-chip wrap/alignment fix). Presentation only — grouping
+              // identity/ordering/drawer content are untouched.
+              <div className="anim-fade mt-4 flex flex-col items-start gap-1.5">
                 {activeChat?.sources?.[message.id] && (
                   <SourceChip kind="teams" source={activeChat.sources[message.id]} />
                 )}

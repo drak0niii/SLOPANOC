@@ -96,7 +96,7 @@ describe("reducer — HYDRATE_SAVED_SESSIONS", () => {
           selectedModelId: "gemini",
           thinkingEffort: "instant",
           backendSessionId: "s1",
-          run: { runToken: "r1", assistantMessageId: "m2", currentActivity: null, runStartedAt: 100 },
+          run: { runToken: "r1", assistantMessageId: "m2", currentActivity: null, activityTrail: [], runStartedAt: 100 },
         },
       },
       chatOrder: ["local1"],
@@ -104,7 +104,7 @@ describe("reducer — HYDRATE_SAVED_SESSIONS", () => {
 
     state = reducer(state, { type: "HYDRATE_SAVED_SESSIONS", payload: { sessions: [summary({ session_id: "s1" })] } });
 
-    expect(state.chats.local1.run).toEqual({ runToken: "r1", assistantMessageId: "m2", currentActivity: null, runStartedAt: 100 });
+    expect(state.chats.local1.run).toEqual({ runToken: "r1", assistantMessageId: "m2", currentActivity: null, activityTrail: [], runStartedAt: 100 });
     expect(state.chats.local1.messageIds).toEqual(["m1", "m2"]);
     expect(state.chats.local1.activeSkillId).toBe("skill-x");
   });

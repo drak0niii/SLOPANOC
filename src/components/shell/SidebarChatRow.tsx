@@ -87,7 +87,14 @@ export function SidebarChatRow({
   return (
     <div
       className={cn(
-        "group relative flex w-full items-center rounded-lg py-2 pl-2.5 pr-1 text-base transition-colors duration-150",
+        // SIDEBAR CHAT ROW CORRECTION: `text-base` (16px) made a saved
+        // chat's own title render LARGER than its own "Chats" section
+        // header (`text-sm`, 14px) — a hierarchy inversion, and the
+        // reported "slightly too large/heavy" feel. `text-sm` is an
+        // EXISTING design-system step (matches the section header
+        // exactly), not an invented value — weight/color still
+        // distinguish the header from a row.
+        "group relative flex w-full items-center rounded-lg py-2 pl-2.5 pr-1 text-sm transition-colors duration-150",
         active || menuOpen
           ? "bg-surface-hover/50 text-primary"
           : "text-secondary hover:bg-surface-hover hover:text-primary",
@@ -97,14 +104,44 @@ export function SidebarChatRow({
         type="button"
         onClick={onSelect}
         aria-current={active ? "true" : undefined}
-        className="flex min-w-0 flex-1 items-center gap-1.5 text-left focus-visible:outline-none"
+        // SIDEBAR CHAT ROW CORRECTION: `gap-1.5` (6px) read as too tight
+        // between the leading dot and the title ("○chat title") — bumped
+        // to `gap-2` (8px), then (UI MICRO-POLISH follow-up) one more
+        // existing gap step to `gap-2.5` (10px) — still a "consistent
+        // flex gap" per the row's own existing pattern, not a manual
+        // space/margin. Dot size, row height, and font size untouched.
+        className="flex min-w-0 flex-1 items-center gap-2.5 text-left focus-visible:outline-none"
       >
-        {showChatIcon && <Circle className="h-2 w-2 shrink-0 text-tertiary" aria-hidden="true" />}
+        {/* UI MICRO-POLISH: one step smaller than before (h-2 -> h-1.5) —
+            still the same hollow-circle glyph, muted color, and
+            alignment; only the diameter changed. */}
+        {showChatIcon && <Circle className="h-1.5 w-1.5 shrink-0 text-tertiary" aria-hidden="true" />}
         {showPinIndicator && chat.pinned && (
           <Pin className="h-3 w-3 shrink-0 text-tertiary" />
         )}
         {chat.unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" />}
-        <ScrollingText className={cn("flex-1", chat.unread && "font-medium text-primary")}>
+        {/* SIDEBAR CHAT ROW CORRECTION: the currently-selected row keeps a
+            stable, clean truncation — it never starts the delayed
+            hover-scroll animation, so its highlighted background never
+            has its own title sliding out from under it. Every other
+            (non-selected) row's existing delayed-scroll behavior is
+            completely unaffected.
+
+            UI MICRO-POLISH: deliberately NOT `flex-1` — that used to
+            stretch ScrollingText's own hover-listening element to fill
+            all remaining row width, so hovering empty space to the
+            right of a short title (before the menu button) could also
+            arm the hover timer. Without `flex-1`, the element sizes to
+            its own content (shrink-to-fit) and only shrinks down to the
+            available width when the title genuinely overflows — i.e.
+            its hit-region is now exactly the rendered title text, never
+            wider. `min-w-0` (inside ScrollingText itself) still permits
+            that shrink; nothing about title-start alignment, row
+            height, or available width for the text itself changes. */}
+        <ScrollingText
+          className={cn(chat.unread && "font-medium text-primary")}
+          disableHoverScroll={active}
+        >
           {chat.title}
         </ScrollingText>
       </button>

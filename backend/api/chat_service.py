@@ -93,7 +93,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from functools import lru_cache
-from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Protocol, Sequence
+from typing import Any, AsyncIterator, Awaitable, Callable, NamedTuple, Optional, Protocol, Sequence
 
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.utils.context_utils import Aclosing
@@ -136,6 +136,7 @@ from backend.api.activity_translator import (
     selection_prepared_trace_step,
     translate_case_context_status,
 )
+from backend.api.activity_queue import discard_activity_channel, get_activity_channel, register_activity_channel
 from backend.api.attachment_service import PreparedAttachment, prepare_attachments_for_turn
 from backend.api.case_service import ACTIVE_CASE_ID_STATE_KEY, get_active_case_for_session
 from backend.api.conversation_target_capture import ConversationTargetCapture
@@ -397,6 +398,99 @@ def _extract_delta_text(event: _EventStream) -> Optional[str]:
     texts = [t for t in (_non_thought_text(p) for p in event.content.parts) if t]
     text = "".join(texts)
     return text or None
+
+
+class _MergedEvent(NamedTuple):
+    """Tagged union yielded by `_merge_adk_and_activity_events` -- `"adk"`
+    carries a real ADK `Event` (exactly what `async for event in agen`
+    would have yielded on its own); `"activity"` carries an `ActivityEvent`
+    from this turn's own activity channel (`activity_queue.py`). Never
+    conflated: an ADK event has `.get_function_calls()`/`.content`/etc.,
+    an `ActivityEvent` is a plain, closed `{"kind", "safe_metadata"}` dict
+    -- the two shapes are never treated interchangeably downstream.
+    """
+
+    source: str
+    item: Any
+
+
+async def _merge_adk_and_activity_events(
+    agen: AsyncIterator[Any], activity_channel: "Optional[asyncio.Queue[Any]]"
+) -> AsyncIterator[_MergedEvent]:
+    """Phase 2 (Runtime Activity Truthfulness): the smallest correct merge
+    of (A) the outer Team Manager Runner's own real ADK event stream and
+    (B) this turn's activity channel -- proven necessary by the Phase 1
+    audit's own source-level finding that Incident Manager's internal
+    tool calls (`knowledge_search`, `teams_get_messages`, ...) are
+    entirely invisible to (A) on their own (`google.adk.tools.agent_tool
+    .AgentTool.run_async` consumes its nested Runner's events internally
+    and never yields them outward -- see activity_queue.py's own module
+    docstring). Concurrently races `agen.__anext__()` against
+    `activity_channel.get()` so an activity event reported WHILE the
+    outer Runner is still blocked awaiting a nested `incident_manager`
+    call (the common case) is not stuck behind it.
+
+    `activity_channel` may be `None` (no channel was registered, e.g. a
+    caller that constructs `_run_turn_events` directly in a test without
+    going through the normal `register_activity_channel` call site) --
+    in that case this degrades to a plain passthrough of `agen`, byte-
+    identical to the pre-Phase-2 `async for event in agen` loop.
+
+    Never duplicates or re-invokes the Runner -- `agen` is iterated
+    exactly as before, one `__anext__()` at a time. Every pending task
+    (whichever of the two is still in flight when the other completes,
+    or both at generator-exhaustion/exception time) is cancelled and
+    awaited in `finally`, so no orphaned asyncio task or generator
+    reference survives this function -- satisfies the same "no leak on
+    any exit path" discipline this module already enforces for its other
+    per-run resources.
+    """
+    if activity_channel is None:
+        async for event in agen:
+            yield _MergedEvent("adk", event)
+        return
+
+    agen_task: "asyncio.Task[Any]" = asyncio.ensure_future(agen.__anext__())
+    queue_task: "asyncio.Task[Any]" = asyncio.ensure_future(activity_channel.get())
+    try:
+        while True:
+            done, _pending = await asyncio.wait({agen_task, queue_task}, return_when=asyncio.FIRST_COMPLETED)
+
+            if queue_task in done:
+                activity_event = queue_task.result()
+                yield _MergedEvent("activity", activity_event)
+                queue_task = asyncio.ensure_future(activity_channel.get())
+
+            if agen_task in done:
+                try:
+                    event = agen_task.result()
+                except StopAsyncIteration:
+                    # The outer Runner has genuinely finished. A tool
+                    # called deep inside the LAST nested `incident_
+                    # manager` call may have reported activity with no
+                    # `await` between that call and the Runner's own
+                    # final yield -- a real race against `queue_task`'s
+                    # own "done" propagation (asyncio schedules a
+                    # `put_nowait` waiter's wakeup on the next loop
+                    # tick, which is not guaranteed to land in the SAME
+                    # `asyncio.wait()` call as `agen_task`'s own
+                    # resolution). One final non-blocking drain here
+                    # means a genuinely-reported activity event is never
+                    # silently lost merely because it arrived on the
+                    # very last iteration.
+                    while not activity_channel.empty():
+                        yield _MergedEvent("activity", activity_channel.get_nowait())
+                    return
+                yield _MergedEvent("adk", event)
+                agen_task = asyncio.ensure_future(agen.__anext__())
+    finally:
+        for task in (agen_task, queue_task):
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, StopAsyncIteration, Exception):
+                    pass
 
 
 def _active_events(events: list[Any]) -> list[Any]:
@@ -927,6 +1021,15 @@ class ChatService:
         # re-popped from the (by then already-cleared) store later.
         captured_troubleshooting_guidance: Optional[TroubleshootingGuidance] = None
         run_id_token = bind_run_id(sequencer.run_id)
+        # Phase 2 (Runtime Activity Truthfulness): registered in the SAME
+        # place, for the SAME reason, as `bind_run_id` above -- this
+        # turn's own bounded activity channel must exist before the
+        # Runner (or a governed-completion/read-continuation remediation
+        # call that reuses this same run_id, see activity_queue.py's own
+        # docstring) can report into it. Discarded, unconditionally, in
+        # this method's existing `finally` block below, alongside
+        # `discard_knowledge_run_evidence_state`.
+        register_activity_channel(sequencer.run_id)
         # Production hardening pass #3: tracks whether `PENDING_
         # SPECIALIST_RESULT_STATE_KEY` was actually written this turn, so
         # the `finally` block below only issues a clearing write when
@@ -1088,7 +1191,26 @@ class ChatService:
                         user_id=user_id, session_id=session_id, new_message=content, run_config=run_config
                     )
                 ) as agen:
-                    async for event in agen:
+                    async for _merged in _merge_adk_and_activity_events(
+                        agen, get_activity_channel(sequencer.run_id)
+                    ):
+                        if _merged.source == "activity":
+                            # Phase 2 (Runtime Activity Truthfulness): a
+                            # real, observed inner Knowledge/Teams tool
+                            # boundary -- never an ADK `Event`, so none of
+                            # the below (SSE trust-gate classification,
+                            # source/delegation/conversation-target
+                            # capture, trace translation, attachment
+                            # linkage, ...) applies; it can ONLY ever
+                            # produce an ephemeral status, never influence
+                            # message-text trust or provenance (instruction
+                            # section 11's absolute non-regression
+                            # requirement).
+                            activity_status = translator.translate_activity_event(_merged.item)
+                            if activity_status is not None:
+                                yield sequencer.build(StreamEventType.STATUS, activity_status)
+                            continue
+                        event = _merged.item
                         if not first_event_seen:
                             first_event_seen = True
                             perf.mark("first_model_event")
@@ -1453,6 +1575,12 @@ class ChatService:
             # exit path, exactly like every other piece of this turn's
             # own per-run bookkeeping cleaned up in this same block.
             discard_knowledge_run_evidence_state(sequencer.run_id)
+            # Phase 2 (Runtime Activity Truthfulness): same unconditional
+            # discard discipline as every other run-scoped store cleaned
+            # up in this block -- success, exception, and
+            # `asyncio.CancelledError` all reach it identically. Safe to
+            # call even if nothing was ever registered (a no-op).
+            discard_activity_channel(sequencer.run_id)
             # P4B.3 CORRECTION PASS: same discipline for direct_read_fast_
             # path.py's own run-id-keyed pending-trusted-result registry --
             # normally already self-cleaned by `_present_fast_path_result_

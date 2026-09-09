@@ -68,6 +68,7 @@ import logging
 import uuid
 from typing import Any, Optional
 
+from backend.api.activity_queue import ActivityKind, report_activity
 from backend.api.schemas import SourceEvidenceItem, SourceReferenceDTO
 from backend.tools.teams.get_members import teams_get_members
 
@@ -234,17 +235,28 @@ async def resolve_authoritative_contributors(chat_id: Optional[str]) -> list[str
         _logger.info("resolve_authoritative_contributors: no chat_id available, skipping membership lookup")
         return []
 
+    # Phase 2 (Runtime Activity Truthfulness): reported from THIS
+    # (event-loop-thread) side, never from inside `teams_get_members`
+    # itself -- that call runs on a SEPARATE worker thread via
+    # `asyncio.to_thread` below, and `asyncio.Queue` (activity_queue.py's
+    # transport) is only safe to use from the thread that owns the
+    # running event loop. `current_run_id()` (read here, before the
+    # thread hop) is unaffected either way -- this coroutine itself still
+    # runs on the event loop.
+    report_activity(ActivityKind.TEAMS_MEMBERS_RETRIEVAL_STARTED)
     result = await asyncio.to_thread(teams_get_members, chat_id)
     if "error" in result:
         # teams_get_members already logged the underlying gateway failure
         # detail (safely) -- this line just marks where in the pipeline
         # that failure surfaced as "Contributors omitted."
         _logger.info("resolve_authoritative_contributors: teams_get_members reported an error, omitting Contributors")
+        report_activity(ActivityKind.TEAMS_MEMBERS_RETRIEVAL_FAILED)
         return []
 
     members = result.get("members")
     if not isinstance(members, list):
         _logger.warning("resolve_authoritative_contributors: teams_get_members returned a malformed response shape")
+        report_activity(ActivityKind.TEAMS_MEMBERS_RETRIEVAL_FAILED)
         return []
 
     names: list[str] = []
@@ -253,7 +265,9 @@ async def resolve_authoritative_contributors(chat_id: Optional[str]) -> list[str
             name = member.get("display_name")
             if isinstance(name, str) and name:
                 names.append(name)
-    return list(dict.fromkeys(names))
+    deduplicated = list(dict.fromkeys(names))
+    report_activity(ActivityKind.TEAMS_MEMBERS_RETRIEVAL_SUCCEEDED, {"member_count": len(deduplicated)})
+    return deduplicated
 
 
 class TeamsSourceCapture:

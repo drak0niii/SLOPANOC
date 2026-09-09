@@ -115,6 +115,7 @@ from typing import Any, Optional
 
 from google.adk.tools import ToolContext
 
+from backend.api.activity_queue import ActivityKind, report_activity
 from backend.api.turn_context import current_run_id, record_message_texts
 from backend.gateway.power_automate_client import (
     GatewayPayload,
@@ -372,6 +373,11 @@ def teams_get_messages(
                 "explicit UTC offset."
             )
 
+    # Phase 2 (Runtime Activity Truthfulness): reported once, right before
+    # the first real, network-bound gateway page fetch below -- never per
+    # page (this tool may page several times internally; that pagination
+    # detail is never a user-visible activity boundary of its own).
+    report_activity(ActivityKind.TEAMS_MESSAGES_RETRIEVAL_STARTED)
     client = PowerAutomateClient()
     messages_by_id: dict[str, TeamsMessage] = {}
     # Rule 1: seed the first request's cursor at to_datetime when given,
@@ -386,6 +392,7 @@ def teams_get_messages(
             raw = client.get_messages(chat_id, before=cursor)
             page = _parse_messages(raw)
         except SafeErrorException as exc:
+            report_activity(ActivityKind.TEAMS_MESSAGES_RETRIEVAL_FAILED)
             return {"error": exc.safe_error.to_dict()}
 
         oldest_in_page: Optional[str] = None
@@ -495,4 +502,10 @@ def teams_get_messages(
         newest_retrieved_at=newest_retrieved_at,
         coverage=coverage,
     )
+    # `message_count` -- the SAME allowlisted metadata key `run_trace.py`
+    # already reserves for this concept. Reported even when 0 (a valid,
+    # non-error, empty-range result per this function's own docstring) --
+    # the STATUS TRANSLATOR, not this call site, decides never to phrase
+    # a 0-count success as "reviewing" anything.
+    report_activity(ActivityKind.TEAMS_MESSAGES_RETRIEVAL_SUCCEEDED, {"message_count": len(ordered)})
     return result.model_dump(mode="json")

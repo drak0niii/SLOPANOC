@@ -83,6 +83,15 @@ class Stage(str, Enum):
     RECOMMENDATION = "recommendation"
     ACTION_PREPARATION = "action_preparation"
     RESPONSE_GENERATION = "response_generation"
+    # Phase 2 (Runtime Activity Truthfulness): governed-knowledge activity
+    # has no prior Stage of its own -- `KNOWLEDGE_RETRIEVAL` covers both
+    # "Searching governed knowledge" and "Validating supporting evidence"
+    # (distinct `ActivityKind`s, see activity_queue.py); a knowledge
+    # search's own SUCCESS-with-results moment reuses the existing
+    # `EVIDENCE_PROCESSING` stage below, exactly like the Teams evidence-
+    # review moment already does -- "reviewing what came back" is one
+    # concept regardless of source.
+    KNOWLEDGE_RETRIEVAL = "knowledge_retrieval"
 
 
 class TraceCategory(str, Enum):
@@ -186,14 +195,31 @@ class EventSequencer:
         return event
 
 
-def status_data(stage: Stage, label: str) -> dict[str, Any]:
+def status_data(stage: Stage, label: str, activity_kind: Optional[str] = None) -> dict[str, Any]:
     """`presentation: "replace"` (instruction section 9) is the only
     value this milestone ever produces -- every `status` event replaces
     whatever was previously visible; there is no "append" mode. The field
     still exists explicitly (rather than being implied) so a future
     presentation mode does not require a breaking contract change.
+
+    `activity_kind` (Phase 2, Runtime Activity Truthfulness): the plain
+    `.value` string of the `ActivityKind` (activity_queue.py) that
+    produced this status, when there is one -- omitted entirely (never
+    `null`) for every pre-existing, non-activity-driven status (Case
+    context, Recommendation, Action preparation, generic Processing).
+    Exists ONLY so the frontend can pick a semantic icon deterministically
+    (several distinct `ActivityKind`s intentionally share one `Stage` --
+    see activity_translator.py's own dedup-signature docstring -- so
+    `stage` alone is not always precise enough for icon selection); the
+    frontend already keys all BEHAVIOR off `stage`, never off `label` or
+    `activity_kind` text content, and this field is exactly as safe as
+    `stage` itself (a closed, non-sensitive enum value, never raw tool
+    data).
     """
-    return {"stage": stage.value, "label": label, "presentation": "replace"}
+    data: dict[str, Any] = {"stage": stage.value, "label": label, "presentation": "replace"}
+    if activity_kind is not None:
+        data["activity_kind"] = activity_kind
+    return data
 
 
 def format_sse(event: StreamEvent) -> str:

@@ -5,6 +5,7 @@ Deterministic fixtures throughout (`FakeEvent`/`FakeFunctionCall`/
 """
 from __future__ import annotations
 
+from backend.api.activity_queue import ActivityKind
 from backend.api.activity_translator import (
     RunTraceTranslator,
     StatusTranslator,
@@ -17,21 +18,34 @@ from backend.api.activity_translator import (
 from backend.api.streaming_events import Stage, TraceCategory, TraceStepStatus
 from backend.tests._api_fakes import FakeEvent, FakeFunctionCall, FakeFunctionResponse
 
+# The exact obsolete phrase a real live user session observed on-screen,
+# traced to a STALE (pre-Phase-1-fix) backend process still running old
+# in-memory bytecode -- NOT a defect in this file's current source (see
+# the corrective-pass audit that added this section). This constant exists
+# so the regression guard below reads as one clear intent, not a scattered
+# literal.
+_OBSOLETE_UNCONDITIONAL_TEAMS_STATUS_LABEL = "Reviewing the selected Teams conversation"
+
 
 # --- One-line status model (instruction section 44) -----------------------
 
 
 def test_status_has_a_stable_stage() -> None:
+    """Phase 2 correction: a bare `record_case_analysis` call (not
+    `incident_manager` -- see `test_incident_manager_call_alone_never_
+    emits_a_teams_status` below) still produces a stable, machine-
+    readable `stage`.
+    """
     translator = StatusTranslator()
-    event = FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")])
+    event = FakeEvent(final=False, function_calls=[FakeFunctionCall("record_case_analysis")])
     status = translator.translate_event(event)
-    assert status["stage"] == "teams_context"
+    assert status["stage"] == "recommendation"
 
 
 def test_new_status_supersedes_previous_by_replace_presentation() -> None:
     translator = StatusTranslator()
     call_status = translator.translate_event(
-        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")])
+        FakeEvent(final=False, function_calls=[FakeFunctionCall("record_case_analysis")])
     )
     assert call_status["presentation"] == "replace"
 
@@ -192,13 +206,45 @@ def test_case_context_status_never_exposes_more_than_the_title() -> None:
 
 def test_repeated_events_mapping_to_the_same_stage_emit_only_once() -> None:
     translator = StatusTranslator()
-    first = translator.translate_event(FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]))
-    second = translator.translate_event(FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]))
-    third = translator.translate_event(FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]))
+    first = translator.translate_event(FakeEvent(final=False, function_calls=[FakeFunctionCall("record_case_analysis")]))
+    second = translator.translate_event(FakeEvent(final=False, function_calls=[FakeFunctionCall("record_case_analysis")]))
+    third = translator.translate_event(FakeEvent(final=False, function_calls=[FakeFunctionCall("record_case_analysis")]))
 
     assert first is not None
     assert second is None
     assert third is None
+
+
+def test_incident_manager_call_alone_never_emits_a_teams_status() -> None:
+    """Phase 2 correction (the confirmed FALSE status from the Phase 1
+    audit): agent delegation alone proves only WHO was invoked, never
+    WHAT capability executes -- a bare `incident_manager` call must never
+    produce `Stage.TEAMS_CONTEXT`/"Reviewing the selected Teams
+    conversation" or any other capability-specific status.
+    """
+    translator = StatusTranslator()
+    status = translator.translate_event(FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]))
+    assert status is None
+
+
+def test_incident_manager_call_with_chat_topic_still_never_emits_a_teams_status() -> None:
+    """A supplied `chat_topic` proves only INTENT, never that a Teams
+    tool actually executed -- must not be used as a substitute inference
+    (instruction section 2's explicit rejection of that alternative).
+    """
+    translator = StatusTranslator()
+    status = translator.translate_event(
+        FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager", {"chat_topic": "Ops Bridge"})])
+    )
+    assert status is None
+
+
+def test_repeated_incident_manager_calls_never_emit_anything() -> None:
+    translator = StatusTranslator()
+    first = translator.translate_event(FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]))
+    second = translator.translate_event(FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]))
+    assert first is None
+    assert second is None
 
 
 def test_stage_change_after_dedup_emits_again() -> None:
@@ -642,3 +688,95 @@ def test_more_specific_labels_never_leak_a_payload_hash_or_chat_id() -> None:
     )
     assert "19:abcdef@thread.v2" not in str(step)
     assert "deadbeef" not in str(step)
+
+
+# =============================================================================
+# CORRECTIVE PASS (Runtime Activity Truthfulness + Source Chip Alignment):
+# a real live user session still observed the exact obsolete phrase on
+# screen. Traced by direct source audit + an empirical live probe against
+# the actually-running backend process to a STALE (pre-Phase-1-fix)
+# process still executing old in-memory bytecode -- the current on-disk
+# source (proven by this whole test file passing, since pytest always
+# imports fresh) never produces it. These tests exist as a durable,
+# behavioral regression guard at the actual translator/runtime boundary --
+# never a brittle comment/string grep -- so this exact defect can never
+# silently return.
+# =============================================================================
+
+
+def test_A_obsolete_teams_status_label_is_never_produced_by_a_bare_incident_manager_call() -> None:
+    translator = StatusTranslator()
+    status = translator.translate_event(FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")]))
+    assert status is None
+
+
+def test_A_obsolete_teams_status_label_is_never_produced_across_every_known_ActivityKind() -> None:
+    """(A/F) Exhaustive, closed-vocabulary sweep -- `ActivityKind` is a
+    closed enum (activity_queue.py), so iterating every member is a
+    complete, non-brittle proof that no activity-driven status this
+    translator can ever emit carries the obsolete phrase, regardless of
+    which real Knowledge/Teams tool boundary produced it. Generously
+    populated safe_metadata so every count-gated `_SUCCEEDED` kind that
+    CAN produce a label actually does, rather than trivially returning
+    None.
+    """
+    for kind in ActivityKind:
+        translator = StatusTranslator()
+        status = translator.translate_activity_event(
+            {"kind": kind, "safe_metadata": {"document_count": 5, "message_count": 5, "member_count": 5}}
+        )
+        if status is not None:
+            assert status["label"] != _OBSOLETE_UNCONDITIONAL_TEAMS_STATUS_LABEL
+
+
+def test_A_obsolete_teams_status_label_is_never_produced_by_any_known_tool_call() -> None:
+    """(F) The CALL-time label vocabulary (`_TOOL_CALL_STAGES`/
+    `_TOOL_CALL_LABELS`) is exercised through the public `translate_event`
+    boundary for every tool name Team Manager can actually call, plus an
+    unknown one -- proving the obsolete phrase cannot originate from this
+    path either, without reaching into the private dicts directly.
+    """
+    for tool_name in ("incident_manager", "record_case_analysis", "some_future_tool"):
+        translator = StatusTranslator()
+        status = translator.translate_event(FakeEvent(final=False, function_calls=[FakeFunctionCall(tool_name)]))
+        if status is not None:
+            assert status["label"] != _OBSOLETE_UNCONDITIONAL_TEAMS_STATUS_LABEL
+
+
+def test_D_a_full_knowledge_only_activity_sequence_never_contains_a_teams_status() -> None:
+    """(D) The realistic Aurora/VSWR sequence (search started -> succeeded
+    -> evidence selection started) end to end through the SAME translator
+    instance a real run would use -- asserts no status in the sequence
+    ever has `stage == "teams_context"` or the obsolete label, not just
+    that any single event in isolation is safe.
+    """
+    translator = StatusTranslator()
+    sequence = [
+        translator.translate_activity_event({"kind": ActivityKind.KNOWLEDGE_SEARCH_STARTED, "safe_metadata": None}),
+        translator.translate_activity_event(
+            {"kind": ActivityKind.KNOWLEDGE_SEARCH_SUCCEEDED, "safe_metadata": {"document_count": 2}}
+        ),
+        translator.translate_activity_event(
+            {"kind": ActivityKind.KNOWLEDGE_EVIDENCE_SELECTION_STARTED, "safe_metadata": None}
+        ),
+    ]
+    statuses = [s for s in sequence if s is not None]
+    assert len(statuses) == 3
+    assert all(s["stage"] != "teams_context" for s in statuses)
+    assert all(s["label"] != _OBSOLETE_UNCONDITIONAL_TEAMS_STATUS_LABEL for s in statuses)
+
+
+def test_E_actual_teams_discovery_produces_a_factual_structured_teams_status() -> None:
+    """(E) A REAL Teams runtime operation (chat discovery actually
+    starting) DOES correctly produce a Teams-scoped status -- proving this
+    corrective pass has not swung to "Teams can never show a status,"
+    only "Teams must never show one without a real Teams operation."
+    """
+    translator = StatusTranslator()
+    status = translator.translate_activity_event(
+        {"kind": ActivityKind.TEAMS_CHAT_DISCOVERY_STARTED, "safe_metadata": None}
+    )
+    assert status is not None
+    assert status["stage"] == "teams_context"
+    assert status["label"] == "Finding the Teams conversation"
+    assert status["label"] != _OBSOLETE_UNCONDITIONAL_TEAMS_STATUS_LABEL

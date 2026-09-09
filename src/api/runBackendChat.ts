@@ -21,7 +21,10 @@ const GENERIC_CONNECTION_ERROR =
  */
 export interface BackendChatHandlers {
   onRunStarted: (serverRunId: string) => void;
-  onStatus: (stage: string, label: string) => void;
+  /** `activityKind` (Phase 2, Runtime Activity Truthfulness) — present
+   * only for a status backed by a real, observed `ActivityEvent`; `null`
+   * for every pre-existing, non-activity-driven status. */
+  onStatus: (stage: string, label: string, activityKind: string | null) => void;
   onStatusClear: () => void;
   onDelta: (textDelta: string) => void;
   /** Pre-4H UX/provenance milestone — `source`, when present, is the
@@ -86,7 +89,7 @@ export async function runBackendChat(
             handlers.onRunStarted(event.run_id);
             break;
           case "status":
-            handlers.onStatus(event.data.stage, event.data.label);
+            handlers.onStatus(event.data.stage, event.data.label, event.data.activity_kind ?? null);
             break;
           case "status.clear":
             handlers.onStatusClear();

@@ -39,6 +39,7 @@ from typing import Any, Optional
 
 from google.adk.tools import ToolContext
 
+from backend.api.activity_queue import ActivityKind, report_activity
 from backend.api.multimodal_turn_context import current_run_image_attachment_ids
 from backend.gateway.power_automate_client import (
     GatewayPayload,
@@ -284,12 +285,19 @@ def teams_list_chats(
             ).safe_error.to_dict()
         }
 
+    # Phase 2 (Runtime Activity Truthfulness): reported right before the
+    # real, network-bound gateway call -- this is the actual "discovery
+    # genuinely begins" boundary, not merely "the tool was called" (a
+    # blank/invalid `topic` above never reaches this line at all).
+    report_activity(ActivityKind.TEAMS_CHAT_DISCOVERY_STARTED)
     client = PowerAutomateClient()
     try:
         raw = client.list_chats()
         chats = _parse_chats(raw)
     except SafeErrorException as exc:
+        report_activity(ActivityKind.TEAMS_CHAT_DISCOVERY_FAILED)
         return {"error": exc.safe_error.to_dict()}
+    report_activity(ActivityKind.TEAMS_CHAT_DISCOVERY_SUCCEEDED, {"candidate_count": len(chats)})
 
     result = _match(
         chats, topic, tool_context, pending_write_message, pending_question, pending_time_range, pending_operation

@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
 import type { Chat, Message as MessageType } from "../../types";
-import type { SourceReferenceDTO } from "../../api/types";
+import type { KnowledgeSourceReferenceDTO, SourceReferenceDTO } from "../../api/types";
 
 // Message.tsx (and the assistant-actions subtree it renders once a message
 // is "complete") reads several things off useAppState() — mocked at the
@@ -159,7 +159,9 @@ describe("Message — real backend streaming never triggers the word reveal", ()
         currentActivity: {
           stage: "teams_context",
           label: "Retrieving recent messages from the selected Teams conversation",
+          activityKind: null,
         },
+        activityTrail: [],
         runStartedAt: Date.now(),
       },
     });
@@ -174,7 +176,7 @@ describe("Message — real backend streaming never triggers the word reveal", ()
   it("shows a neutral 'Thinking…' label with an elapsed counter once a run has started but before any backend status arrives", () => {
     mockAppState.activeChat = makeChat({
       backendSessionId: "s1",
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: Date.now() },
+      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, activityTrail: [], runStartedAt: Date.now() },
     });
     const pending = makeMessage({ id: "msg-1", status: "pending", text: "" });
     render(withProvider(<Message message={pending} />));
@@ -185,7 +187,7 @@ describe("Message — real backend streaming never triggers the word reveal", ()
   it("removes the elapsed/activity indicator once the run errors — status flips away from pending", () => {
     mockAppState.activeChat = makeChat({
       backendSessionId: "s1",
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: Date.now() },
+      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, activityTrail: [], runStartedAt: Date.now() },
     });
     // BACKEND_RUN_ERROR flips the message's own status to "error" — the
     // activity/elapsed indicator is gated on status === "pending", so it
@@ -203,7 +205,7 @@ describe("Message — real backend streaming never triggers the word reveal", ()
   it("never persists the elapsed indicator into a completed message", () => {
     mockAppState.activeChat = makeChat({
       backendSessionId: "s1",
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: Date.now() },
+      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, activityTrail: [], runStartedAt: Date.now() },
     });
     const completed = makeMessage({ id: "msg-1", status: "complete", text: "Done." });
     render(withProvider(<Message message={completed} />));
@@ -217,7 +219,8 @@ describe("Message — real backend streaming never triggers the word reveal", ()
       run: {
         runToken: "r1",
         assistantMessageId: "msg-1",
-        currentActivity: { stage: "teams_context", label: "Reviewing the selected Teams conversation" },
+        currentActivity: { stage: "teams_context", label: "Reviewing the selected Teams conversation", activityKind: null },
+        activityTrail: [],
         runStartedAt: Date.now(),
       },
     });
@@ -653,13 +656,17 @@ describe("Message — B4D correction pass: image-bearing user turns are not edit
 });
 
 describe("Message — expandable, sanitized run trace (pre-4H milestone)", () => {
-  it("renders the live trace (with expand affordance) once steps have arrived for the run-target message", () => {
+  it("UI PRESENTATION CORRECTION: renders exactly one live activity line, with NO expand affordance, regardless of activity-trail/permanent-step history", () => {
     mockAppState.activeChat = makeChat({
       backendSessionId: "s1",
       run: {
         runToken: "r1",
         assistantMessageId: "msg-1",
-        currentActivity: { stage: "teams_context", label: "Reviewing the selected Teams conversation" },
+        currentActivity: { stage: "teams_context", label: "Reviewing the selected Teams conversation", activityKind: null },
+        activityTrail: [
+          { stage: "teams_context", label: "Finding the Teams conversation", activityKind: "teams_chat_discovery_started" },
+          { stage: "teams_context", label: "Reviewing the selected Teams conversation", activityKind: null },
+        ],
         runStartedAt: Date.now(),
       },
       runTraces: {
@@ -677,13 +684,24 @@ describe("Message — expandable, sanitized run trace (pre-4H milestone)", () =>
     render(withProvider(<Message message={pending} />));
 
     expect(screen.getByRole("status")).toHaveTextContent("Reviewing the selected Teams conversation");
-    expect(screen.getByRole("button")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByText("Finding the Teams conversation")).not.toBeInTheDocument();
+    expect(screen.queryByText("Used the selected Teams conversation")).not.toBeInTheDocument();
   });
 
-  it("expands the live trace to show steps-so-far on click, without resetting the elapsed timer", () => {
+  it("UI PRESENTATION CORRECTION: still no expand affordance even when the record's own `expanded` flag is true — live mode ignores it", () => {
     mockAppState.activeChat = makeChat({
       backendSessionId: "s1",
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: Date.now() },
+      run: {
+        runToken: "r1",
+        assistantMessageId: "msg-1",
+        currentActivity: { stage: "evidence_processing", label: "Reviewing 4 retrieved messages", activityKind: null },
+        activityTrail: [
+          { stage: "teams_context", label: "Used the selected Teams conversation", activityKind: null },
+          { stage: "evidence_processing", label: "Reviewing 4 retrieved messages", activityKind: null },
+        ],
+        runStartedAt: Date.now(),
+      },
       runTraces: {
         "msg-1": {
           steps: [
@@ -698,9 +716,9 @@ describe("Message — expandable, sanitized run trace (pre-4H milestone)", () =>
     const pending = makeMessage({ id: "msg-1", status: "pending", text: "" });
     render(withProvider(<Message message={pending} />));
 
-    expect(screen.getByText("Used the selected Teams conversation")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button"));
-    expect(mockAppState.toggleRunTraceExpanded).toHaveBeenCalledExactlyOnceWith("chat-1", "msg-1");
+    expect(screen.getByRole("status")).toHaveTextContent("Reviewing 4 retrieved messages");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByText("Used the selected Teams conversation")).not.toBeInTheDocument();
   });
 
   it("renders 'Worked for Xs' above the response once the run has completed successfully", () => {
@@ -794,7 +812,7 @@ describe("Message — expandable, sanitized run trace (pre-4H milestone)", () =>
   it("does not render a completed trace while the run's message is still mid-stream (finalDurationSeconds not yet set)", () => {
     mockAppState.activeChat = makeChat({
       backendSessionId: "s1",
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: Date.now() },
+      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, activityTrail: [], runStartedAt: Date.now() },
       runTraces: { "msg-1": { steps: [], expanded: false } },
     });
     const streaming = makeMessage({ id: "msg-1", status: "streaming", text: "The evi" });
@@ -819,7 +837,7 @@ describe("Message — RunTrace remains mounted for the run's entire lifetime (st
   function chatWithRun(overrides: Partial<Chat> = {}) {
     return makeChat({
       backendSessionId: "s1",
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: NOW },
+      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, activityTrail: [], runStartedAt: NOW },
       runTraces: { "msg-1": { steps: [], expanded: false } },
       ...overrides,
     });
@@ -830,7 +848,8 @@ describe("Message — RunTrace remains mounted for the run's entire lifetime (st
       run: {
         runToken: "r1",
         assistantMessageId: "msg-1",
-        currentActivity: { stage: "teams_context", label: "Reviewing the selected Teams conversation" },
+        currentActivity: { stage: "teams_context", label: "Reviewing the selected Teams conversation", activityKind: null },
+        activityTrail: [],
         runStartedAt: NOW,
       },
     });
@@ -842,7 +861,7 @@ describe("Message — RunTrace remains mounted for the run's entire lifetime (st
     // message.delta flips status to "streaming" -- the trace must still
     // be there, not vanish.
     mockAppState.activeChat = chatWithRun({
-      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, runStartedAt: NOW },
+      run: { runToken: "r1", assistantMessageId: "msg-1", currentActivity: null, activityTrail: [], runStartedAt: NOW },
     });
     const streaming = makeMessage({ id: "msg-1", status: "streaming", text: "The" });
     rerender(withProvider(<Message message={streaming} />));
@@ -912,8 +931,18 @@ describe("Message — RunTrace remains mounted for the run's entire lifetime (st
     expect(screen.getByText("· 15s")).toBeInTheDocument();
   });
 
-  it("expansion state survives the pending -> streaming transition without being reset/remounted", () => {
+  it("UI PRESENTATION CORRECTION: no expand affordance appears across the pending -> streaming transition, even with a rich activity trail/step history and expanded:true behind the scenes", () => {
     mockAppState.activeChat = chatWithRun({
+      run: {
+        runToken: "r1",
+        assistantMessageId: "msg-1",
+        currentActivity: { stage: "evidence_processing", label: "Reviewing 2 retrieved messages", activityKind: null },
+        activityTrail: [
+          { stage: "teams_context", label: "Used the selected Teams conversation", activityKind: null },
+          { stage: "evidence_processing", label: "Reviewing 2 retrieved messages", activityKind: null },
+        ],
+        runStartedAt: NOW,
+      },
       runTraces: {
         "msg-1": {
           steps: [
@@ -927,9 +956,20 @@ describe("Message — RunTrace remains mounted for the run's entire lifetime (st
     });
     const pending = makeMessage({ id: "msg-1", status: "pending", text: "" });
     const { rerender } = render(withProvider(<Message message={pending} />));
-    expect(screen.getByRole("button")).toHaveAttribute("aria-expanded", "true");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Reviewing 2 retrieved messages");
 
     mockAppState.activeChat = chatWithRun({
+      run: {
+        runToken: "r1",
+        assistantMessageId: "msg-1",
+        currentActivity: { stage: "evidence_processing", label: "Reviewing 2 retrieved messages", activityKind: null },
+        activityTrail: [
+          { stage: "teams_context", label: "Used the selected Teams conversation", activityKind: null },
+          { stage: "evidence_processing", label: "Reviewing 2 retrieved messages", activityKind: null },
+        ],
+        runStartedAt: NOW,
+      },
       runTraces: {
         "msg-1": {
           steps: [
@@ -944,12 +984,22 @@ describe("Message — RunTrace remains mounted for the run's entire lifetime (st
     const streaming = makeMessage({ id: "msg-1", status: "streaming", text: "Hi" });
     rerender(withProvider(<Message message={streaming} />));
 
-    expect(screen.getByRole("button")).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("Used the selected Teams conversation")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByText("Used the selected Teams conversation")).not.toBeInTheDocument();
   });
 
-  it("newly arriving trace.step-derived steps append and remain visible while expanded during streaming (no duplication)", () => {
+  it("UI PRESENTATION CORRECTION: the live line replaces (never appends) as new activity arrives during streaming — still exactly one status region, no history leakage", () => {
     mockAppState.activeChat = chatWithRun({
+      run: {
+        runToken: "r1",
+        assistantMessageId: "msg-1",
+        currentActivity: { stage: "evidence_processing", label: "Reviewing 4 retrieved messages", activityKind: null },
+        activityTrail: [
+          { stage: "teams_context", label: "Used the selected Teams conversation", activityKind: null },
+          { stage: "evidence_processing", label: "Reviewing 4 retrieved messages", activityKind: null },
+        ],
+        runStartedAt: NOW,
+      },
       runTraces: {
         "msg-1": {
           steps: [
@@ -963,10 +1013,22 @@ describe("Message — RunTrace remains mounted for the run's entire lifetime (st
     });
     const streaming = makeMessage({ id: "msg-1", status: "streaming", text: "Hi" });
     const { rerender } = render(withProvider(<Message message={streaming} />));
-    expect(screen.getAllByText("Used the selected Teams conversation")).toHaveLength(1);
-    expect(screen.queryByText("Generated the response")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.getByRole("status")).toHaveTextContent("Reviewing 4 retrieved messages");
+    expect(screen.queryByText("Preparing an action for your approval")).not.toBeInTheDocument();
 
     mockAppState.activeChat = chatWithRun({
+      run: {
+        runToken: "r1",
+        assistantMessageId: "msg-1",
+        currentActivity: { stage: "action_preparation", label: "Preparing an action for your approval", activityKind: null },
+        activityTrail: [
+          { stage: "teams_context", label: "Used the selected Teams conversation", activityKind: null },
+          { stage: "evidence_processing", label: "Reviewing 4 retrieved messages", activityKind: null },
+          { stage: "action_preparation", label: "Preparing an action for your approval", activityKind: null },
+        ],
+        runStartedAt: NOW,
+      },
       runTraces: {
         "msg-1": {
           steps: [
@@ -981,8 +1043,9 @@ describe("Message — RunTrace remains mounted for the run's entire lifetime (st
     });
     rerender(withProvider(<Message message={streaming} />));
 
-    expect(screen.getAllByText("Used the selected Teams conversation")).toHaveLength(1);
-    expect(screen.getAllByText("Generated the response")).toHaveLength(1);
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.getByRole("status")).toHaveTextContent("Preparing an action for your approval");
+    expect(screen.queryByText("Used the selected Teams conversation")).not.toBeInTheDocument();
   });
 
   it("exactly one trace disclosure element exists at any point in the lifecycle (no duplicate pre/post-stream instances)", () => {
@@ -1139,6 +1202,160 @@ describe("Message — structured Teams source/provenance (pre-4H UX/provenance m
 
     expect(screen.getByRole("button", { name: /MOP-042/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Source · Teams conversation/ })).toBeInTheDocument();
+  });
+});
+
+describe("Message — source chip layout alignment (Runtime Activity Truthfulness + Source Chip Alignment corrective pass)", () => {
+  function makeSource(overrides: Partial<SourceReferenceDTO> = {}): SourceReferenceDTO {
+    return {
+      source_id: "src1",
+      source_type: "teams",
+      label: "Teams conversation",
+      title: "Ops Bridge",
+      message_count: 29,
+      period_start: "2026-08-26T09:00:00Z",
+      period_end: "2026-09-01T09:00:00Z",
+      contributors: ["Alex", "Priya"],
+      evidence: [{ author: "Alex", sent_at: "2026-08-26T09:00:00Z", snippet: "We should escalate this now." }],
+      ...overrides,
+    };
+  }
+
+  function kmSource(overrides: Partial<KnowledgeSourceReferenceDTO> = {}): KnowledgeSourceReferenceDTO {
+    return {
+      source_id: "ks1",
+      source_type: "knowledge",
+      label: "Governed knowledge",
+      knowledge_id: "rogers-ericsson-4g",
+      version_label: "v1",
+      section_id: "rogers-ericsson-4g:v1:s0",
+      title: "Rogers ERICSSON_4G_Radio_Site_Commissioning_and_Verification_Procedure",
+      document_type: "technical_instruction",
+      source_system: "manual_admin_ingestion",
+      evidence_source_id: "doc-1",
+      source_display_name: null,
+      section_heading: "Verification",
+      source_locator: "p1",
+      content: "Confirm the checksum and status indicator.",
+      ...overrides,
+    };
+  }
+
+  it("(A/F) multiple source/group rows render as a vertical stack — never a wrapping horizontal row — container uses flex-col, never flex-wrap", () => {
+    mockAppState.activeChat = makeChat({
+      backendSessionId: "s1",
+      sources: { "msg-1": makeSource() },
+      knowledgeSources: {
+        "msg-1": [
+          kmSource({ section_id: "rogers-4g:v1:s0", knowledge_id: "rogers-4g", title: "Rogers ERICSSON_4G_..." }),
+          kmSource({
+            section_id: "rogers-4g5g:v1:s0",
+            knowledge_id: "rogers-4g5g",
+            title: "MOP_Rogers ERICSSON_4G5G_...",
+            evidence_source_id: "doc-2",
+          }),
+        ],
+      },
+    });
+    const completed = makeMessage({ id: "msg-1", status: "complete", text: "Here is the summary." });
+    const { container } = render(withProvider(<Message message={completed} />));
+
+    const buttons = screen.getAllByRole("button", { name: /^Source ·/ });
+    expect(buttons).toHaveLength(3); // 1 Teams + 2 distinct knowledge groups
+    const sourceContainer = buttons[0].parentElement!;
+    expect(sourceContainer.className).toMatch(/\bflex-col\b/);
+    expect(sourceContainer.className).not.toMatch(/\bflex-wrap\b/);
+    expect(sourceContainer.className).toMatch(/\bitems-start\b/);
+    expect(container).toBeInTheDocument();
+  });
+
+  it("(B) each source row remains individually clickable, opening its own drawer with its own distinct content", () => {
+    mockAppState.activeChat = makeChat({
+      backendSessionId: "s1",
+      knowledgeSources: {
+        "msg-1": [
+          kmSource({ section_id: "a:v1:s0", knowledge_id: "doc-a", title: "Document A", content: "Content A only." }),
+          kmSource({
+            section_id: "b:v1:s0",
+            knowledge_id: "doc-b",
+            title: "Document B",
+            evidence_source_id: "doc-2",
+            content: "Content B only.",
+          }),
+        ],
+      },
+    });
+    const completed = makeMessage({ id: "msg-1", status: "complete", text: "Summary." });
+    render(withProvider(<Message message={completed} />));
+
+    const buttons = screen.getAllByRole("button", { name: /^Source ·/ });
+    expect(buttons).toHaveLength(2);
+
+    fireEvent.click(buttons[0]);
+    expect(screen.getByText('"Content A only."')).toBeInTheDocument();
+    expect(screen.queryByText('"Content B only."')).not.toBeInTheDocument();
+  });
+
+  it("(C) render order matches insertion order: Teams first, then knowledge groups in their given order", () => {
+    mockAppState.activeChat = makeChat({
+      backendSessionId: "s1",
+      sources: { "msg-1": makeSource() },
+      knowledgeSources: {
+        "msg-1": [
+          kmSource({ section_id: "a:v1:s0", knowledge_id: "doc-a", title: "Document A" }),
+          kmSource({ section_id: "b:v1:s0", knowledge_id: "doc-b", title: "Document B", evidence_source_id: "doc-2" }),
+        ],
+      },
+    });
+    const completed = makeMessage({ id: "msg-1", status: "complete", text: "Summary." });
+    render(withProvider(<Message message={completed} />));
+
+    const buttons = screen.getAllByRole("button", { name: /^Source ·/ });
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      expect.stringContaining("Teams conversation"),
+      expect.stringContaining("Document A"),
+      expect.stringContaining("Document B"),
+    ]);
+  });
+
+  it("(D/E) a long source title is not truncated and the trigger is styled for left-aligned wrapping (no truncate/ellipsis, no centered text)", () => {
+    const longTitle =
+      "Rogers ERICSSON_4G_Radio_Site_Commissioning_and_Verification_Procedure_For_Multi_Operator_Deployments";
+    mockAppState.activeChat = makeChat({
+      backendSessionId: "s1",
+      knowledgeSources: { "msg-1": [kmSource({ title: longTitle })] },
+    });
+    const completed = makeMessage({ id: "msg-1", status: "complete", text: "Summary." });
+    render(withProvider(<Message message={completed} />));
+
+    const button = screen.getByRole("button", { name: new RegExp(`Source · ${longTitle}`) });
+    expect(button).toHaveTextContent(longTitle); // full title present, never shortened
+    expect(button.className).not.toMatch(/\btruncate\b/);
+    expect(button.className).not.toMatch(/\boverflow-hidden\b/);
+    expect(button.className).not.toMatch(/\btext-ellipsis\b/);
+    expect(button.className).toMatch(/\btext-left\b/);
+    expect(button.className).toMatch(/\bitems-start\b/);
+    expect(button.className).toMatch(/\bmax-w-full\b/);
+  });
+
+  it("(G) a single source still renders as one clean, compact chip inside the same vertical-stack container", () => {
+    mockAppState.activeChat = makeChat({ backendSessionId: "s1", sources: { "msg-1": makeSource() } });
+    const completed = makeMessage({ id: "msg-1", status: "complete", text: "Summary." });
+    render(withProvider(<Message message={completed} />));
+
+    const button = screen.getByRole("button", { name: /Source · Teams conversation/ });
+    expect(button).toBeInTheDocument();
+    expect(button.parentElement!.className).toMatch(/\bflex-col\b/);
+  });
+
+  it("(H) Teams source chip click/drawer behavior is unaffected by the layout correction", () => {
+    mockAppState.activeChat = makeChat({ backendSessionId: "s1", sources: { "msg-1": makeSource() } });
+    const completed = makeMessage({ id: "msg-1", status: "complete", text: "Summary." });
+    render(withProvider(<Message message={completed} />));
+
+    fireEvent.click(screen.getByRole("button", { name: /Source/ }));
+    expect(screen.getByText("Microsoft Teams")).toBeInTheDocument();
+    expect(screen.getByText("Ops Bridge")).toBeInTheDocument();
   });
 });
 

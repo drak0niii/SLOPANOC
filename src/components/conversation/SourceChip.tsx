@@ -41,8 +41,17 @@ const MOP_TRIGGER_CLASSES =
 // Teams source affordance specifically (more horizontal/vertical padding,
 // a touch more breathing room and background) — MOP's own trigger above is
 // deliberately left untouched.
+//
+// SOURCE CHIP ALIGNMENT CORRECTION: `items-center` → `items-start` +
+// `text-left` so a wrapped long label's second line stays left-aligned
+// under the first line instead of the whole (icon + two-line text) block
+// centering as one unit. `max-w-full` bounds the chip to its parent
+// column (Message.tsx's own `max-w-[720px]`) so a long label wraps
+// instead of overflowing/causing horizontal scroll — `inline-flex` still
+// means the chip is never forced wider than its own content (no
+// full-width chips for a short label).
 const TEAMS_TRIGGER_CLASSES =
-  "inline-flex items-center gap-1.5 rounded-lg bg-surface-hover/70 px-2.5 py-1.5 text-xs font-medium text-tertiary transition-colors duration-150 hover:bg-surface-hover hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50";
+  "inline-flex max-w-full items-start gap-1.5 rounded-lg bg-surface-hover/70 px-2.5 py-1.5 text-left text-xs font-medium text-tertiary transition-colors duration-150 hover:bg-surface-hover hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50";
 
 export function SourceChip(props: SourceChipProps) {
   return (
@@ -57,19 +66,22 @@ export function SourceChip(props: SourceChipProps) {
           )}
           {props.kind === "teams" && (
             <>
-              <MessagesSquare className="h-3 w-3" />
+              {/* SOURCE CHIP ALIGNMENT CORRECTION: `mt-0.5` nudges the
+                  icon down to the first line's text, `shrink-0` keeps it
+                  from being squeezed when the label wraps. */}
+              <MessagesSquare className="mt-0.5 h-3 w-3 shrink-0" />
               Source · {props.source.label}
             </>
           )}
           {props.kind === "knowledge" && (
             <>
-              <NotebookText className="h-3 w-3" />
+              <NotebookText className="mt-0.5 h-3 w-3 shrink-0" />
               Source · {formatKnowledgeSourceLabel(props.source)}
             </>
           )}
           {props.kind === "knowledge-group" && (
             <>
-              <NotebookText className="h-3 w-3" />
+              <NotebookText className="mt-0.5 h-3 w-3 shrink-0" />
               Source · {formatKnowledgeSourceGroupLabel(props.group)}
             </>
           )}

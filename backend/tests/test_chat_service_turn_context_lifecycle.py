@@ -88,6 +88,25 @@ class _GatedRecordingRunner:
 
 
 async def _start_gated_run(chat_service: ChatService, session_id: str, message: str = "hi", user_id: str = "api-user"):
+    """Phase 2 (Runtime Activity Truthfulness) note: the background turn's
+    OWN SSE-visible event count is no longer a reliable proxy for "has
+    `_GatedRecordingRunner.run_async` reached its own `record_message_
+    texts` call yet" -- removing the false, unconditional `incident_
+    manager`-CALL status (activity_translator.py) means that call event
+    (and the still-buffered "partial" delta that follows it, since this
+    fixture's runner never declares source requirements) now produce NO
+    visible SSE event at all, so the background task can genuinely
+    progress past `record_message_texts` while the SSE consumer still
+    sees only 2 events. The `asyncio.sleep(0)` spins below let the
+    background task run forward to its OWN next real suspension point
+    (`_GatedRecordingRunner`'s `await self._resume.wait()`) -- which is
+    unconditionally AFTER `record_message_texts` in that fixture's own
+    sequential generator body -- before this helper returns, so every
+    caller (not just the ones that immediately inspect `pop_message_
+    texts`) observes the same "retrieval has already happened, the run
+    is now blocked on `resume`" state the pre-Phase-2 SSE-event-count
+    check used to guarantee implicitly.
+    """
     agen = chat_service.execute_turn_events(session_id, message, user_id)
     run_id = None
     seen = 0
@@ -99,6 +118,8 @@ async def _start_gated_run(chat_service: ChatService, session_id: str, message: 
             break
     assert run_id is not None
     task = next(iter(chat_service._background_turns))
+    for _ in range(10):
+        await asyncio.sleep(0)
     return agen, run_id, task
 
 

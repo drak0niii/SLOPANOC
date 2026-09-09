@@ -353,9 +353,20 @@ export function Sidebar() {
 
       {/* Everything below scrolls as one region, so a long Projects list can
           never crowd the chats out of view. Both groups collapse, so a long
-          list of either can be folded away rather than scrolled past. */}
+          list of either can be folded away rather than scrolled past.
+          SIDEBAR SCROLLBAR-GUTTER CORRECTION: `[scrollbar-gutter:stable]`
+          permanently reserves the scrollbar's own width in this
+          container's layout — whether or not a scrollbar is actually
+          rendered right now (e.g. expanding Chats pushes total content
+          past the viewport). Without this, expanding Chats could make the
+          scrollbar appear, silently shrinking every row's available width
+          in this SAME shared scroll region (Projects/Scheduler headers
+          included, since all three sections live in one scroll container)
+          and visibly shifting every chevron left. One CSS property on the
+          one real scroll container — no per-row compensation, no JS
+          measurement, no state-dependent margin. */}
       {!collapsed && (
-        <div className="anim-label-in min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+        <div className="anim-label-in min-h-0 flex-1 overflow-y-auto px-3 pb-3 [scrollbar-gutter:stable]">
           {/* Each section owns equal padding above and below its own content
               (py-1), so the rule sits the same distance from the row on both
               sides. Putting the lower gap on the *next* section instead made

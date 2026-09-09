@@ -16,13 +16,12 @@ const MIN_STEPS_FOR_EXPANDABLE_TRACE = 2;
 /**
  * The expandable, sanitized run trace (pre-4H milestone). Renders EITHER:
  *
- *   - `mode: "live"` — the existing single transient activity line
- *     (composes CurrentActivity unchanged, so its ticking-timer/dedup
- *     behavior is reused exactly, not reimplemented) with a disclosure
- *     affordance added on top; or
+ *   - `mode: "live"` — the single transient activity line (composes
+ *     CurrentActivity unchanged) with NO disclosure affordance at all; or
  *   - `mode: "completed"` — the frozen "Worked for Xs"/"Stopped after Xs"
  *     header (instruction section 4 — never a chain-of-thought-flavored
- *     label like "Thought for"/"Reasoned for").
+ *     label like "Thought for"/"Reasoned for"), expandable into the
+ *     chronological step history.
  *
  * `steps` is a flat, already-safe, already-ordered list of deterministic
  * runtime milestones — this component only ever renders `step.label`
@@ -36,6 +35,21 @@ const MIN_STEPS_FOR_EXPANDABLE_TRACE = 2;
  * Expansion is local, presentation-only state owned by the caller (see
  * AppState.tsx's `toggleRunTraceExpanded` / `RunTraceRecord.expanded`) —
  * clicking the header never calls the backend, never reruns anything.
+ *
+ * UI PRESENTATION CORRECTION (post-Phase-2, "Runtime Activity
+ * Truthfulness — UI Presentation Correction"): while a run is live, this
+ * component is deliberately a SINGLE LINE — no chevron, no expandable
+ * history, no semantic icon (see CurrentActivity.tsx). The truthful,
+ * backend-driven activity history (`ChatRunState.activityTrail`)
+ * continues to accumulate internally (see AppState.tsx) and is never
+ * discarded — it simply isn't exposed while the answer is still running.
+ * Once the run reaches `mode: "completed"`, AppState.tsx's own
+ * `BACKEND_RUN_COMPLETED`/`RUN_STOPPED` reducers fold that same trail
+ * into this message's permanent `RunTraceRecord.steps` (ahead of any
+ * genuine `trace.step` milestones already recorded there) — so the one
+ * chevron this component owns, in completed mode only, shows the real
+ * chronological history the user actually saw live, with no separate
+ * live-mode disclosure ever existing to keep in sync.
  */
 type RunTraceBaseProps = {
   steps: RunTraceStep[];
@@ -52,17 +66,17 @@ export type RunTraceProps = RunTraceBaseProps &
 export function RunTrace(props: RunTraceProps) {
   const stepsId = useId();
   const { steps, expanded, onToggle } = props;
-  // Only more than MIN_STEPS_FOR_EXPANDABLE_TRACE meaningful steps earns
-  // a disclosure — the header itself (live activity line / completed
-  // "Worked for Xs") always renders regardless of step count.
-  const showExpandable = steps.length > MIN_STEPS_FOR_EXPANDABLE_TRACE;
+  // Live mode never has a disclosure of its own (see module docstring
+  // above) — only a completed trace with a genuinely multi-step story is
+  // ever expandable.
+  const showExpandable = props.mode === "completed" && steps.length > MIN_STEPS_FOR_EXPANDABLE_TRACE;
   // Whether the `<ul>` of steps is actually being rendered right now —
   // when it is, ITS OWN last row supplies the trailing gap (see
   // RunTraceStepRow's `pb-2.5`, no longer zeroed on the last row); when
-  // it isn't (collapsed, or <= MIN_STEPS_FOR_EXPANDABLE_TRACE), the root
-  // element's own `mb-2.5` supplies an equivalent gap instead. Exactly
-  // one of the two is ever active, so they never stack into a doubled,
-  // arbitrarily-large margin.
+  // it isn't (collapsed, or <= MIN_STEPS_FOR_EXPANDABLE_TRACE, or live),
+  // the root element's own `mb-2.5` supplies an equivalent gap instead.
+  // Exactly one of the two is ever active, so they never stack into a
+  // doubled, arbitrarily-large margin.
   const showStepsList = expanded && showExpandable;
 
   const headerContent: ReactNode =

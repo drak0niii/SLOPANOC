@@ -49,7 +49,13 @@ export interface RunStartedEvent extends SSEEventBase {
 
 export interface StatusEvent extends SSEEventBase {
   type: "status";
-  data: { stage: string; label: string; presentation: "replace" };
+  /** `activity_kind` (Phase 2, Runtime Activity Truthfulness) — present
+   * only for a status derived from a real, observed `ActivityEvent`
+   * (backend/api/activity_queue.py); absent for every pre-existing,
+   * non-activity-driven status. The ONLY field the frontend may use to
+   * pick a semantic icon — never `label` text (several distinct
+   * `activity_kind`s can share one `stage`). */
+  data: { stage: string; label: string; presentation: "replace"; activity_kind?: string };
 }
 
 export interface StatusClearEvent extends SSEEventBase {
