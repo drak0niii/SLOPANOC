@@ -1,5 +1,6 @@
 import { Check, ChevronDown, CircleX, Loader2, TriangleAlert, X } from "../ui/icons";
 import { useAppState } from "../../state/AppState";
+import type { PendingActionDTO } from "../../api/types";
 import { deriveApprovalCardView, type ApprovalCardView } from "../../lib/approvalCard";
 import { getActionOperationPresentation } from "../../lib/actionOperationLabels";
 import { cn } from "../../lib/cn";
@@ -13,6 +14,18 @@ const GENERIC_UNCONFIRMED_MESSAGE =
  * operations the frozen backend contract supports. */
 function isCreateChat(operation: string): boolean {
   return operation !== "teams.sendMessage";
+}
+
+/** One canonical "where did/will this happen" summary — the chat title
+ * being created, or the sendMessage destination's authoritative display
+ * name — with the exact same fallback text the expanded Destination/Chat
+ * title rows have always used. Shared by that expanded row and (UX-1) the
+ * compact historical collapsed-state summary line, so the two can never
+ * drift apart. */
+function destinationSummary(pendingAction: PendingActionDTO, createChat: boolean): string {
+  return createChat
+    ? pendingAction.title || "—"
+    : pendingAction.target_display_name || "Selected Teams conversation";
 }
 
 /**
@@ -38,6 +51,17 @@ function isCreateChat(operation: string): boolean {
  * `pendingAction.target_display_name` (an authoritative, backend-sourced
  * presentation field — never inferred/parsed on the frontend), falling
  * back to a neutral placeholder only when it is absent.
+ *
+ * UX-1 — historical completed-action presentation: a completed card whose
+ * owning message is no longer the chat's latest message renders, WHILE
+ * COLLAPSED ONLY, "Earlier action completed" plus a compact destination
+ * line instead of the ambiguous plain "Action completed" — so a user
+ * cannot mistake an older, already-executed write for something the
+ * current (possibly read-only) turn just did. Expanding it reverts to the
+ * ordinary "Action completed" headline plus full detail, exactly as
+ * before — the historical distinction only matters for the compact,
+ * one-line summary. Presentation only: ownership, collapse/expand state,
+ * approval, and execution semantics are entirely unchanged.
  */
 export function ApprovalCard({ chatId, messageId }: { chatId: string; messageId: string }) {
   const { state, approvePendingAction, rejectPendingAction, toggleActionCardCollapsed } = useAppState();
@@ -61,6 +85,27 @@ export function ApprovalCard({ chatId, messageId }: { chatId: string; messageId:
 
   const expanded = !record.collapsed;
 
+  // UX-1: a completed action whose owning message is no longer the chat's
+  // latest message (i.e. at least one later turn already exists) is
+  // TRUTHFULLY historical relative to the current conversation position —
+  // determined ONLY from stable message-id/array-position state (never a
+  // timer, timestamp, DOM query, or prompt/destination text), mirroring
+  // exactly the same `chat.messageIds` ordering `EDIT_MESSAGE`'s own
+  // ownership cleanup already relies on. Deliberately independent of
+  // `record.collapsed` (a separate, user-toggleable presentation flag) —
+  // a historical card the user manually re-expands must NOT keep showing
+  // "Earlier" wording once its full detail (destination/message/"Message
+  // sent") already makes its historical nature explicit; only its
+  // collapsed one-line summary needs the disambiguating wording. This is
+  // presentation-only: ownership (`chat.actionCards`), `pendingAction`/
+  // `pendingActionMessageId`, and approval/execution semantics are
+  // completely untouched.
+  const chatMessageIds = chat?.messageIds ?? [];
+  const isFromEarlierTurn =
+    chatMessageIds.length > 0 && chatMessageIds[chatMessageIds.length - 1] !== messageId;
+  const showEarlierCompletedWording = view.kind === "completed" && isFromEarlierTurn && !expanded;
+  const headlineText = showEarlierCompletedWording ? "Earlier action completed" : headline(view.kind, createChat);
+
   return (
     <div
       role="group"
@@ -78,7 +123,12 @@ export function ApprovalCard({ chatId, messageId }: { chatId: string; messageId:
         className="flex w-full items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-md"
       >
         <StatusIcon kind={view.kind} />
-        <span className="flex-1 text-sm font-medium text-primary">{headline(view.kind, createChat)}</span>
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+          <span className="text-sm font-medium text-primary">{headlineText}</span>
+          {showEarlierCompletedWording && (
+            <span className="truncate text-xs text-tertiary">{destinationSummary(pendingAction, createChat)}</span>
+          )}
+        </span>
         <ChevronDown
           className={cn("h-4 w-4 shrink-0 text-tertiary action-card-chevron", expanded && "is-expanded")}
           aria-hidden="true"
@@ -95,10 +145,7 @@ export function ApprovalCard({ chatId, messageId }: { chatId: string; messageId:
               </>
             ) : (
               <>
-                <DetailRow
-                  label="Destination"
-                  value={pendingAction.target_display_name || "Selected Teams conversation"}
-                />
+                <DetailRow label="Destination" value={destinationSummary(pendingAction, false)} />
                 <MessageDetailRow message={pendingAction.message} />
               </>
             )}

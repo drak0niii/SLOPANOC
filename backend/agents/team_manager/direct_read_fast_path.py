@@ -354,7 +354,7 @@ from backend.api.turn_context import current_run_id
 from backend.attachments.service import get_attachment_service
 from backend.attachments.storage import get_attachment_storage
 from backend.selection.schemas import ReadOperation, ResolvedReadContinuation
-from backend.tools.teams.get_messages import KNOWN_MESSAGE_IDS_STATE_KEY
+from backend.tools.teams.get_messages import KNOWN_MESSAGE_IDS_STATE_KEY, read_known_message_ids
 from backend.tools.teams.list_chats import _safe_pending_question, _safe_read_operation
 
 _logger = logging.getLogger(__name__)
@@ -736,7 +736,7 @@ async def _fast_path_before_model_callback(callback_context: Any, llm_request: A
     # ids that are already part of the validated, trusted result.
     evidence = result.get("evidence")
     if isinstance(evidence, list) and evidence:
-        already_known = set(callback_context.state.get(KNOWN_MESSAGE_IDS_STATE_KEY, []))
+        already_known = read_known_message_ids(callback_context.state)
         already_known.update(
             item["message_id"] for item in evidence if isinstance(item, dict) and item.get("message_id")
         )

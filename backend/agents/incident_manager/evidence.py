@@ -52,7 +52,7 @@ from google.genai import types
 from backend.agents.incident_manager.provenance_compliance import enforce_governed_knowledge_selection
 from backend.agents.incident_manager.schemas import TroubleshootingGuidance
 from backend.api.turn_context import current_run_id
-from backend.tools.teams.get_messages import KNOWN_MESSAGE_IDS_STATE_KEY
+from backend.tools.teams.get_messages import read_known_message_ids
 
 _INCOMING_REQUEST_AUTHOR = "user"
 
@@ -242,9 +242,7 @@ def strip_unverified_evidence(callback_context: Any) -> Optional[types.Content]:
     if not text:
         return None
 
-    known_ids: AbstractSet[str] = set(
-        callback_context.state.get(KNOWN_MESSAGE_IDS_STATE_KEY, [])
-    )
+    known_ids: AbstractSet[str] = read_known_message_ids(callback_context.state)
     corrected_text = _strip_evidence_from_text(text, known_ids)
     if corrected_text is None:
         return None
@@ -275,9 +273,7 @@ async def enforce_incident_manager_response_integrity(callback_context: Any) -> 
     if not working_text:
         return None
 
-    known_ids: AbstractSet[str] = set(
-        callback_context.state.get(KNOWN_MESSAGE_IDS_STATE_KEY, [])
-    )
+    known_ids: AbstractSet[str] = read_known_message_ids(callback_context.state)
     stripped_text = _strip_evidence_from_text(working_text, known_ids)
     final_text = stripped_text if stripped_text is not None else working_text
 

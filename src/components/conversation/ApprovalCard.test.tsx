@@ -88,16 +88,24 @@ function sendMessageAction(overrides: Partial<PendingActionDTO> = {}): PendingAc
  * active, actionable proposal — or has been superseded by some other
  * proposal elsewhere, exactly as happens once a later message creates
  * its own new card.
+ *
+ * `laterMessageIds` (UX-1, default `[]`) — additional message ids placed
+ * AFTER `MESSAGE_ID` in `chat.messageIds`, simulating a later turn already
+ * existing in the conversation. Default `[]` leaves `MESSAGE_ID` as the
+ * chat's own last message — the "this card belongs to the current turn"
+ * case every pre-existing test in this file exercises, unchanged.
  */
 function renderCard(options: {
   dto: PendingActionDTO;
   approvalCard?: ApprovalCardState | null;
   collapsed?: boolean;
   isCurrent?: boolean;
+  laterMessageIds?: string[];
 }) {
-  const { dto, approvalCard, collapsed = false, isCurrent = true } = options;
+  const { dto, approvalCard, collapsed = false, isCurrent = true, laterMessageIds = [] } = options;
   const record: ActionCardRecord = { proposalId: dto.proposal_id, pendingAction: dto, approvalCard, collapsed };
   mockAppState.state.chats[CHAT_ID] = makeChat({
+    messageIds: [MESSAGE_ID, ...laterMessageIds],
     pendingAction: isCurrent ? dto : { ...dto, proposal_id: "some-other-proposal" },
     pendingActionMessageId: isCurrent ? MESSAGE_ID : "some-other-message",
     actionCards: { [MESSAGE_ID]: record },
@@ -373,6 +381,169 @@ describe("ApprovalCard — collapse / expand (Phase 4G hardening pass)", () => {
     });
     expect(screen.getByText("Action completed")).toBeInTheDocument();
     expect(screen.getByText(/message sent\./i)).toBeInTheDocument();
+  });
+});
+
+describe("ApprovalCard — UX-1: historical completed-action presentation", () => {
+  it("a just-completed action on the latest turn (own message is the chat's last) renders 'Action completed', collapsed or expanded", () => {
+    const { unmount } = renderCard({
+      dto: sendMessageAction({ target_display_name: "SLOPANOC Gateway Group Test" }),
+      approvalCard: { proposalId: "p1", phase: "completed", executedAction: null },
+      collapsed: true,
+    });
+    expect(screen.getByText("Action completed")).toBeInTheDocument();
+    expect(screen.queryByText("Earlier action completed")).not.toBeInTheDocument();
+    unmount();
+
+    renderCard({
+      dto: sendMessageAction({ target_display_name: "SLOPANOC Gateway Group Test" }),
+      approvalCard: { proposalId: "p1", phase: "completed", executedAction: null },
+      collapsed: false,
+    });
+    expect(screen.getByText("Action completed")).toBeInTheDocument();
+    expect(screen.queryByText("Earlier action completed")).not.toBeInTheDocument();
+  });
+
+  it("a completed action whose owning message is no longer the chat's last message renders 'Earlier action completed' while collapsed", () => {
+    renderCard({
+      dto: sendMessageAction({ target_display_name: "SLOPANOC Gateway Group Test" }),
+      approvalCard: { proposalId: "p1", phase: "completed", executedAction: null },
+      collapsed: true,
+      laterMessageIds: ["msg-user-2", "msg-assistant-2"],
+    });
+    expect(screen.getByText("Earlier action completed")).toBeInTheDocument();
+    expect(screen.queryByText("Action completed")).not.toBeInTheDocument();
+  });
+
+  it("shows the destination as a compact second line in the historical collapsed presentation", () => {
+    renderCard({
+      dto: sendMessageAction({ target_display_name: "SLOPANOC Gateway Group Test" }),
+      approvalCard: { proposalId: "p1", phase: "completed", executedAction: null },
+      collapsed: true,
+      laterMessageIds: ["msg-user-2", "msg-assistant-2"],
+    });
+    expect(screen.getByText("SLOPANOC Gateway Group Test")).toBeInTheDocument();
+  });
+
+  it("falls back to the same neutral destination placeholder as the expanded Destination row when target_display_name is absent", () => {
+    renderCard({
+      dto: sendMessageAction({ target_display_name: null }),
+      approvalCard: { proposalId: "p1", phase: "completed", executedAction: null },
+      collapsed: true,
+      laterMessageIds: ["msg-user-2", "msg-assistant-2"],
+    });
+    expect(screen.getByText("Selected Teams conversation")).toBeInTheDocument();
+  });
+
+  it("does not repeat the full sent message text in the historical collapsed presentation", () => {
+    renderCard({
+      dto: sendMessageAction({ message: "The full body of the message that was actually sent to the team." }),
+      approvalCard: { proposalId: "p1", phase: "completed", executedAction: null },
+      collapsed: true,
+      laterMessageIds: ["msg-user-2", "msg-assistant-2"],
+    });
+    expect(
+      screen.queryByText("The full body of the message that was actually sent to the team."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("expanding a historical completed card reverts the headline to 'Action completed' and shows full original detail", () => {
+    renderCard({
+      dto: sendMessageAction({
+        target_display_name: "SLOPANOC Gateway Group Test",
+        message: "The full body of the message that was actually sent to the team.",
+      }),
+      approvalCard: { proposalId: "p1", phase: "completed", executedAction: null },
+      collapsed: false,
+      laterMessageIds: ["msg-user-2", "msg-assistant-2"],
+    });
+    expect(screen.getByText("Action completed")).toBeInTheDocument();
+    expect(screen.queryByText("Earlier action completed")).not.toBeInTheDocument();
+    expect(screen.getByText("SLOPANOC Gateway Group Test")).toBeInTheDocument();
+    expect(screen.getByText("The full body of the message that was actually sent to the team.")).toBeInTheDocument();
+    expect(screen.getByText(/message sent\./i)).toBeInTheDocument();
+  });
+
+  it("collapsing a historical card again restores the compact historical wording", () => {
+    const { unmount } = renderCard({
+      dto: sendMessageAction({ target_display_name: "SLOPANOC Gateway Group Test" }),
+      approvalCard: { proposalId: "p1", phase: "completed", executedAction: null },
+      collapsed: false,
+      laterMessageIds: ["msg-user-2", "msg-assistant-2"],
+    });
+    expect(screen.getByText("Action completed")).toBeInTheDocument();
+    unmount();
+
+    renderCard({
+      dto: sendMessageAction({ target_display_name: "SLOPANOC Gateway Group Test" }),
+      approvalCard: { proposalId: "p1", phase: "completed", executedAction: null },
+      collapsed: true,
+      laterMessageIds: ["msg-user-2", "msg-assistant-2"],
+    });
+    expect(screen.getByText("Earlier action completed")).toBeInTheDocument();
+  });
+
+  it("createChat historical wording uses the chat title as its destination summary", () => {
+    renderCard({
+      dto: createChatAction({ title: "Ops Bridge" }),
+      approvalCard: {
+        proposalId: "p1",
+        phase: "completed",
+        executedAction: { chatId: "c1", title: "Ops Bridge", webUrl: null },
+      },
+      collapsed: true,
+      laterMessageIds: ["msg-user-2", "msg-assistant-2"],
+    });
+    expect(screen.getByText("Earlier action completed")).toBeInTheDocument();
+    expect(screen.getByText("Ops Bridge")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["pending", undefined],
+    ["expired", { proposalId: "p1", phase: "expired" as const, message: "This proposal has expired." }],
+    ["failed", { proposalId: "p1", phase: "failed" as const, message: "Something went wrong." }],
+  ])("does not apply historical wording to a non-completed state (%s)", (_label, approvalCard) => {
+    renderCard({
+      dto: sendMessageAction(),
+      approvalCard,
+      collapsed: true,
+      laterMessageIds: ["msg-user-2", "msg-assistant-2"],
+    });
+    expect(screen.queryByText("Earlier action completed")).not.toBeInTheDocument();
+  });
+
+  it("rejected historical action keeps its ordinary 'Action rejected' wording, never 'Earlier'", () => {
+    renderCard({
+      dto: sendMessageAction({ status: "rejected" }),
+      collapsed: true,
+      laterMessageIds: ["msg-user-2", "msg-assistant-2"],
+    });
+    expect(screen.getByText("Action rejected")).toBeInTheDocument();
+    expect(screen.queryByText("Earlier action completed")).not.toBeInTheDocument();
+  });
+
+  it("historical card remains expandable and toggles via the same toggleActionCardCollapsed call", () => {
+    renderCard({
+      dto: sendMessageAction({ target_display_name: "SLOPANOC Gateway Group Test" }),
+      approvalCard: { proposalId: "p1", phase: "completed", executedAction: null },
+      collapsed: true,
+      laterMessageIds: ["msg-user-2", "msg-assistant-2"],
+    });
+
+    fireEvent.click(screen.getByRole("button", { expanded: false }));
+
+    expect(mockAppState.toggleActionCardCollapsed).toHaveBeenCalledExactlyOnceWith(CHAT_ID, MESSAGE_ID);
+  });
+
+  it("historical determination never touches ownership: actionCards/pendingAction/pendingActionMessageId are read, never written, by this component", () => {
+    renderCard({
+      dto: sendMessageAction({ target_display_name: "SLOPANOC Gateway Group Test" }),
+      approvalCard: { proposalId: "p1", phase: "completed", executedAction: null },
+      collapsed: true,
+      laterMessageIds: ["msg-user-2", "msg-assistant-2"],
+    });
+    expect(mockAppState.state.chats[CHAT_ID].actionCards?.[MESSAGE_ID].proposalId).toBe("p1");
+    expect(mockAppState.state.chats[CHAT_ID].pendingActionMessageId).toBe(MESSAGE_ID);
   });
 });
 

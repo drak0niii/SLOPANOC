@@ -107,6 +107,20 @@ deterministically strip any `evidence` entry incident_manager's final
 answer cites that does not correspond to real retrieved data -- "no fake
 provenance may reach team_manager." This tool only ever *adds* to that
 set; it never validates or trusts anything itself.
+
+REWIND-CLEARED STATE (corrective pass): a rewind that discards a branch
+which previously wrote `KNOWN_MESSAGE_IDS_STATE_KEY` leaves the key
+PRESENT with value `None` (ADK's own rewind `state_delta` convention --
+see `read_known_message_ids`'s own docstring for the verified mechanism),
+never absent. Every reader of this key -- inside this module and in
+`evidence.py`/`direct_read_fast_path.py` -- must go through
+`read_known_message_ids` rather than `state.get(KNOWN_MESSAGE_IDS_STATE_
+KEY, [])` directly, so a rewind-cleared key is treated exactly like an
+absent one (an empty set) instead of raising `TypeError: 'NoneType'
+object is not iterable`. A subsequent real `teams_get_messages` call
+still accumulates onto that empty starting point normally -- no discarded
+branch's ids reappear, and newly retrieved ids are recorded exactly as
+before.
 """
 from __future__ import annotations
 
@@ -144,6 +158,33 @@ from backend.tools.teams.time_range import (
 # evidence validation to read. Not Power-Automate-facing; purely internal
 # bookkeeping.
 KNOWN_MESSAGE_IDS_STATE_KEY = "known_message_ids"
+
+
+def read_known_message_ids(state: Any) -> set[str]:
+    """Normalize any `KNOWN_MESSAGE_IDS_STATE_KEY` read into a `set[str]`.
+
+    ADK's own rewind mechanism represents "this key's value must be
+    reverted to before it existed" as an explicit `None` written into the
+    rewind event's `state_delta` (verified against installed
+    `google-adk==1.33.0`'s `Runner._compute_state_delta_for_rewind`, which
+    deliberately sets a discarded key to `None` rather than omitting it) --
+    and both session-service implementations this codebase uses
+    (`DatabaseSessionService`/`InMemorySessionService`) persist that `None`
+    as a literal dict value (`state.update({key: None})`), never by
+    actually deleting the key. So after a rewind that discarded a branch
+    which had written this key, the key is PRESENT with value `None`, not
+    absent -- `state.get(KNOWN_MESSAGE_IDS_STATE_KEY, [])`'s own `[]`
+    default therefore never fires (a `dict`/ADK `State.get` only falls
+    back to its default when the key is missing entirely), and the caller
+    gets `None` back instead. Every reader of this key must go through
+    this function rather than repeating that `.get(..., [])` pattern
+    directly, so "absent" and "explicitly rewind-cleared" are always
+    treated identically -- an empty set, never a `TypeError` -- while a
+    real, previously-accumulated list of ids survives unchanged.
+    """
+    raw = state.get(KNOWN_MESSAGE_IDS_STATE_KEY, [])
+    return set(raw or [])
+
 
 # The live Power Automate flow's configured page size (Top=50). Not sent
 # by this client -- it's fixed on the flow side -- but needed here to
@@ -227,7 +268,7 @@ def _record_known_message_ids(
     if tool_context is None:
         return
 
-    known_ids: set[str] = set(tool_context.state.get(KNOWN_MESSAGE_IDS_STATE_KEY, []))
+    known_ids: set[str] = read_known_message_ids(tool_context.state)
     for msg in messages:
         known_ids.add(msg.id)
         for reference in msg.message_references:

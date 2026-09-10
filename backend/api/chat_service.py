@@ -437,54 +437,129 @@ async def _merge_adk_and_activity_events(
     identical to the pre-Phase-2 `async for event in agen` loop.
 
     Never duplicates or re-invokes the Runner -- `agen` is iterated
-    exactly as before, one `__anext__()` at a time. Every pending task
-    (whichever of the two is still in flight when the other completes,
-    or both at generator-exhaustion/exception time) is cancelled and
-    awaited in `finally`, so no orphaned asyncio task or generator
-    reference survives this function -- satisfies the same "no leak on
-    any exit path" discipline this module already enforces for its other
-    per-run resources.
+    exactly as before, one item at a time, in original order. Every
+    pending task is cancelled and awaited in `finally`, so no orphaned
+    asyncio task or generator reference survives this function --
+    satisfies the same "no leak on any exit path" discipline this module
+    already enforces for its other per-run resources.
+
+    D2 CORRECTIVE PASS -- ONE PERSISTENT TASK DRIVES `agen`, NEVER ONE
+    PER ITEM: an earlier revision of this function called
+    `asyncio.ensure_future(agen.__anext__())` freshly on EVERY loop
+    iteration -- each call wrapping that ONE resumption of `agen` in a
+    brand-new asyncio Task. `asyncio.ensure_future`/`create_task` copies
+    the current `contextvars.Context` at Task-creation time (proven
+    elsewhere in this codebase for a different ContextVar -- see
+    `direct_read_fast_path.py`'s own "ContextVar bridge never worked"
+    correction-pass docstring for the identical, independently-verified
+    mechanism), so each new Task got a DIFFERENT Context object than the
+    one before it. `agen` (an ADK `Runner.run_async()` generator) wraps
+    its own body in `with tracer.start_as_current_span('invocation'):`
+    (installed `google-adk==1.33.0`, `runners.py`'s `_run_with_trace`) --
+    a context manager whose `attach()` happens on whichever Task first
+    resumes the generator and whose `detach()` happens on whichever Task
+    resumes it LAST (at exhaustion). Handing every resumption to a fresh
+    Task meant `attach()` and `detach()` almost always ran in different
+    `contextvars.Context` objects, so OpenTelemetry's own
+    `ContextVar.reset(token)` raised `ValueError: Token ... was created
+    in a different Context` on effectively every multi-event turn --
+    caught and merely logged by `opentelemetry.context.detach()`'s own
+    `try/except`, so requests still succeeded, but the tracing lifecycle
+    was genuinely broken. FIX: `_drain_agen` below is ONE task, created
+    exactly once, that drives `agen` via a plain `async for` loop into an
+    internal `asyncio.Queue` -- every resumption of `agen`, from the
+    first to the last, now happens inside that SAME Task/Context, so
+    `attach()`/`detach()` always pair correctly. The activity-channel
+    side is unaffected -- it holds no ContextVar-sensitive state and
+    keeps racing independently, exactly as before.
     """
     if activity_channel is None:
         async for event in agen:
             yield _MergedEvent("adk", event)
         return
 
-    agen_task: "asyncio.Task[Any]" = asyncio.ensure_future(agen.__anext__())
+    _ADK_ITEM = "item"
+    _ADK_DONE = "done"
+    _ADK_ERROR = "error"
+    adk_queue: "asyncio.Queue[tuple[str, Any]]" = asyncio.Queue()
+
+    async def _drain_agen() -> None:
+        # The ONE and ONLY place `agen` is ever resumed -- see this
+        # function's own docstring above. A real exception from `agen`
+        # (never `StopAsyncIteration`, which `async for` already absorbs
+        # as normal completion) is relayed, not swallowed, so it still
+        # propagates out of `_merge_adk_and_activity_events` exactly as
+        # it did before this correction.
+        try:
+            async for event in agen:
+                await adk_queue.put((_ADK_ITEM, event))
+        except BaseException as exc:  # noqa: BLE001 -- relayed to the consumer below, never swallowed
+            # DEADLOCK FIX (found by the D2 focused-test/full-regression
+            # pass, not merely theorized): `agen` -- e.g. a real ADK
+            # Runner, or a fake one in tests that simulates a mid-stream
+            # failure -- can raise `asyncio.CancelledError` directly, not
+            # only via this Task being externally `.cancel()`'d. That is
+            # a `BaseException`, not an `Exception` -- an `except
+            # Exception:` clause here does NOT catch it, so it would
+            # propagate straight out of `_drain_agen` WITHOUT ever
+            # reaching either `adk_queue.put()` call below, leaving the
+            # consumer's `adk_queue.get()` awaiting forever (a genuine
+            # deadlock, not merely a missed error -- reproduced directly
+            # by `test_chat_service_turn_context_lifecycle.py`'s own
+            # `test_cleanup_after_asyncio_cancelled_error_raised_mid_run`,
+            # whose fake runner does exactly this). Catching
+            # `BaseException` here and relaying it through the SAME
+            # queue as any other error restores the original,
+            # pre-correction propagation contract exactly: the consumer
+            # below re-raises whatever `agen` raised, byte-for-byte,
+            # including `CancelledError`. If THIS Task is itself being
+            # genuinely, externally cancelled at the same moment (the
+            # `finally` block's own `task.cancel()` below), the `await
+            # adk_queue.put(...)` call is safe either way -- `adk_queue`
+            # is unbounded, so `put()` never truly suspends.
+            await adk_queue.put((_ADK_ERROR, exc))
+            return
+        await adk_queue.put((_ADK_DONE, None))
+
+    adk_task: "asyncio.Task[None]" = asyncio.ensure_future(_drain_agen())
+    adk_get_task: "asyncio.Task[tuple[str, Any]]" = asyncio.ensure_future(adk_queue.get())
     queue_task: "asyncio.Task[Any]" = asyncio.ensure_future(activity_channel.get())
     try:
         while True:
-            done, _pending = await asyncio.wait({agen_task, queue_task}, return_when=asyncio.FIRST_COMPLETED)
+            done, _pending = await asyncio.wait({adk_get_task, queue_task}, return_when=asyncio.FIRST_COMPLETED)
 
             if queue_task in done:
                 activity_event = queue_task.result()
                 yield _MergedEvent("activity", activity_event)
                 queue_task = asyncio.ensure_future(activity_channel.get())
 
-            if agen_task in done:
-                try:
-                    event = agen_task.result()
-                except StopAsyncIteration:
-                    # The outer Runner has genuinely finished. A tool
-                    # called deep inside the LAST nested `incident_
-                    # manager` call may have reported activity with no
-                    # `await` between that call and the Runner's own
-                    # final yield -- a real race against `queue_task`'s
-                    # own "done" propagation (asyncio schedules a
-                    # `put_nowait` waiter's wakeup on the next loop
-                    # tick, which is not guaranteed to land in the SAME
-                    # `asyncio.wait()` call as `agen_task`'s own
-                    # resolution). One final non-blocking drain here
-                    # means a genuinely-reported activity event is never
-                    # silently lost merely because it arrived on the
-                    # very last iteration.
-                    while not activity_channel.empty():
-                        yield _MergedEvent("activity", activity_channel.get_nowait())
-                    return
-                yield _MergedEvent("adk", event)
-                agen_task = asyncio.ensure_future(agen.__anext__())
+            if adk_get_task in done:
+                kind, payload = adk_get_task.result()
+                if kind == _ADK_ITEM:
+                    yield _MergedEvent("adk", payload)
+                    adk_get_task = asyncio.ensure_future(adk_queue.get())
+                    continue
+
+                # Either genuine completion or a real error -- both mean
+                # the outer Runner is done producing events. A tool
+                # called deep inside the LAST nested `incident_manager`
+                # call may have reported activity with no `await` between
+                # that call and the Runner's own final yield -- a real
+                # race against `queue_task`'s own "done" propagation
+                # (asyncio schedules a `put_nowait` waiter's wakeup on the
+                # next loop tick, which is not guaranteed to land in the
+                # SAME `asyncio.wait()` call as `adk_get_task`'s own
+                # resolution). One final non-blocking drain here means a
+                # genuinely-reported activity event is never silently
+                # lost merely because it arrived on the very last
+                # iteration.
+                while not activity_channel.empty():
+                    yield _MergedEvent("activity", activity_channel.get_nowait())
+                if kind == _ADK_ERROR:
+                    raise payload
+                return
     finally:
-        for task in (agen_task, queue_task):
+        for task in (adk_get_task, queue_task, adk_task):
             if not task.done():
                 task.cancel()
                 try:

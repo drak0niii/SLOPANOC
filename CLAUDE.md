@@ -2903,6 +2903,260 @@ Drawer source+version consolidation is COMPLETE and live-validated.**
 NEXT: **5.X — Teams Rich Content / Media Retrieval** (NOT STARTED),
 unchanged by this refinement.
 
+===================================================================
+CORRECTIVE PASS — KNOWN_MESSAGE_IDS_STATE_KEY REWIND-NULL NORMALIZATION
+===================================================================
+
+An out-of-band reliability fix, not a roadmap milestone — does not
+reorder anything above and does not touch 5.X's NEXT status.
+
+DEFECT: after an edit/rewind discarded a branch that had written Teams
+evidence-validation state, the next Teams read could crash with
+`TypeError: 'NoneType' object is not iterable` inside
+`backend/tools/teams/get_messages.py`'s `_record_known_message_ids`,
+before the Power Automate gateway was ever called.
+
+ROOT CAUSE, verified against installed `google-adk==1.33.0` source
+(`Runner._compute_state_delta_for_rewind`, both
+`DatabaseSessionService`/`InMemorySessionService.append_event`): ADK's
+own rewind mechanism represents "this key must be reverted to before it
+existed" as an explicit `None` written into the rewind event's
+`state_delta`, and both session-service implementations persist that
+`None` as a literal dict value rather than deleting the key — so a
+rewound `KNOWN_MESSAGE_IDS_STATE_KEY` is PRESENT with value `None`, not
+absent. Four call sites did `set(state.get(KNOWN_MESSAGE_IDS_STATE_KEY,
+[]))`, whose `[]` default only fires when a key is missing entirely, not
+when it is present with value `None` — a legitimate, deliberate ADK
+representation, not an ADK defect.
+
+FIX: `backend.tools.teams.get_messages.read_known_message_ids` is a new,
+single normalization function (`set(state.get(KEY, []) or [])`) every
+reader now goes through — `get_messages.py`'s own
+`_record_known_message_ids`, `evidence.py`'s `strip_unverified_evidence`/
+`enforce_incident_manager_response_integrity`, and
+`direct_read_fast_path.py`'s fast-path evidence-seeding step. A rewind-
+cleared key and an absent key are now both treated as an empty set —
+never a crash — while a real, previously-accumulated list of ids
+survives unchanged. Discarded-branch ids never reappear; a subsequent
+real `teams_get_messages` call still accumulates newly retrieved ids onto
+that empty starting point exactly as before. No change to Power
+Automate/the gateway client, ADK rewind itself, tracing/OpenTelemetry, or
+any approval/provenance trust boundary — provenance remains exactly as
+strict (an unretrieved id is still rejected either way).
+
+17 new focused tests
+(`backend/tests/test_known_message_ids_rewind_normalization.py`) cover
+the pure normalization function, `teams_get_messages` surviving both an
+absent and a rewind-cleared key, discarded-branch ids never reappearing,
+the Power Automate gateway still being called normally, message-
+reference ids still being recorded, both `evidence.py` callbacks
+surviving the same state, the direct unique-match fast path's own
+evidence-seeding step, and the exact real-stack code path
+(`_seeded_state` → `_StateCapture` → `teams_get_messages`) the
+deterministic-retrieval branch uses for both the direct fast path and a
+resumed SelectionCard continuation. Full backend suite: 2997 passed, 1
+skipped (2980 pre-existing baseline at this HEAD + 17 new). Frontend
+untouched by this pass; `npm run build`/`npx tsc -b` re-run clean anyway
+per standing convention.
+
+DEFERRED, NOT FIXED (same-class audit, no live hazard found): a
+write-only `LAST_TEAMS_EVIDENCE_STATE_KEY` in
+`backend/agents/team_manager/state_sync.py` is never read by any
+production code with a `.get(..., [])`-then-iterate pattern (only by a
+test), so it is not currently reachable by this bug class — left
+unchanged.
+
+===================================================================
+CORRECTIVE PASS — OPENTELEMETRY CROSS-TASK CONTEXT-DETACH LIFECYCLE FIX
+(D2)
+===================================================================
+
+A second, separate out-of-band reliability fix, immediately after the
+KNOWN_MESSAGE_IDS_STATE_KEY rewind-null pass (D1) above — not a roadmap
+milestone, does not reorder anything, does not touch 5.X's NEXT status.
+
+DEFECT: real-stack turns completed successfully but repeatedly logged
+`opentelemetry.context ERROR Failed to detach context` /
+`ValueError: Token ... was created in a different Context`, independent
+of D1 and independent of Power Automate/Teams — reproducible on
+essentially any multi-event turn (streaming or non-streaming alike).
+
+ROOT CAUSE, verified against installed `opentelemetry-api==1.41.1`
+(`opentelemetry/context/contextvars_context.py`'s
+`ContextVarsRuntimeContext.detach` → `ContextVar.reset(token)`) and
+`google-adk==1.33.0` (`runners.py`'s `Runner.run_async`/`_run_with_trace`,
+which wraps its own multi-`yield` generator body in `with tracer.
+start_as_current_span('invocation'):`): `backend/api/chat_service.py`'s
+`_merge_adk_and_activity_events` (added by the same commit as D1, for
+Runtime Activity Truthfulness) drove the ADK Runner's own event generator
+via a FRESH `asyncio.ensure_future(agen.__anext__())` call on EVERY loop
+iteration — each resumption of `agen` running in a brand-new asyncio
+Task. `asyncio.ensure_future`/`create_task` copies the current
+`contextvars.Context` at Task-creation time (the SAME mechanism this
+codebase's own `direct_read_fast_path.py` had already independently
+proved and documented for a different ContextVar — see that module's own
+"ContextVar bridge never worked" correction-pass docstring), so
+`attach()` (on the first resumption) and `detach()` (on the last, at
+generator exhaustion) almost always ran in different `contextvars
+.Context` objects — caught and merely logged by `opentelemetry.context
+.detach()`'s own `try/except`, so requests still succeeded, but the
+tracing lifecycle was genuinely broken on virtually every real turn.
+Classified, with direct source evidence: SLOPANOC lifecycle misuse, not
+an ADK defect (ADK's own `AgentTool.run_async` and every one of
+SLOPANOC's other Runner-driving call sites — `_run_specialist_and_collect`,
+`_run_trusted_presentation`, `_retry_trusted_presentation_once` — all use
+a plain, single-task `async for`, all verified self-consistent) and not
+an OpenTelemetry defect (its `ContextVar`-based detach is working exactly
+as designed). D1 unrelated (a separate, synchronous state-normalization
+fix). Power Automate/Teams contract unrelated (the failure is entirely in
+event-generator consumption, upstream of any tool/gateway call);
+SLOPANOC does not configure OpenTelemetry anywhere.
+
+FIX: `_drain_agen`, a single persistent task created exactly once, now
+drives `agen` via a plain `async for` loop into an internal
+`asyncio.Queue` — every resumption of `agen`, first to last, happens
+inside that SAME Task/Context, so `attach()`/`detach()` always pair
+correctly. The activity-channel side is unaffected (no ContextVar-
+sensitive state, still races independently). External behavior
+(interleaving/ordering, trailing-activity drain on completion, exception
+propagation, `activity_channel is None` passthrough, no Runner/task leak
+on early abandonment) preserved exactly — proved by 9 new focused tests
+in `backend/tests/test_d2_merge_adk_activity_events_context_lifecycle.py`,
+including a direct reproduction with a real `contextvars.ContextVar`
+shaped exactly like ADK's own span (empirically confirmed: running the
+OLD per-iteration-task pattern against the same reproduction produces the
+exact real-stack `ValueError` text; the fix does not).
+
+DEADLOCK FOUND AND FIXED DURING THIS PASS' OWN FULL-REGRESSION RUN (not
+merely theorized): the first implementation of `_drain_agen` caught only
+`except Exception`, which does not match `asyncio.CancelledError` (a
+`BaseException` since Python 3.8). `test_chat_service_turn_context_
+lifecycle.py::test_cleanup_after_asyncio_cancelled_error_raised_mid_run`
+(a real fake Runner that raises `CancelledError` directly mid-stream, not
+via external task cancellation) hung the entire backend test suite —
+`agen`'s `CancelledError` propagated straight out of `_drain_agen`
+without ever reaching either `adk_queue.put()` call, leaving the
+consumer's `adk_queue.get()` awaiting forever. Fixed by catching
+`BaseException` in `_drain_agen` and relaying it through the same queue
+as any other error, restoring the original propagation contract exactly
+(the consumer re-raises whatever `agen` raised, byte-for-byte). Covered
+by a new, dedicated regression test
+(`test_agen_raising_cancellederror_directly_does_not_deadlock`, bounded
+by `asyncio.wait_for` so a reintroduction of this class of defect fails
+the test loudly instead of hanging the suite again).
+
+REGRESSION: full backend suite 3006 passed, 1 skipped (2997 D1 baseline
++ 9 new; one `test_api_persistence.py::test_timezone_aware_expires_at_
+survives_restart` failure was observed on one run, confirmed pre-existing
+order-dependent flakiness unrelated to D1/D2 — passes standalone and on
+a clean re-run of the full suite, and neither D1 nor D2 touched that file
+or any SQLAlchemy session machinery); Teams/Team Manager/Incident
+Manager/fast-path/presentation/streaming/cancellation/rewind/read-
+continuation/selection/provenance/multimodal-focused subset 1017 passed,
+1 skipped; KM-focused subset 1002 passed; D1's own regression file +
+explicit cancellation-focused tests 28 passed; frontend untouched;
+`npm run build`/`npx tsc -b` re-run clean anyway per standing convention.
+
+NOT TOUCHED: Power Automate/gateway client, ADK rewind itself, D1's
+`read_known_message_ids` normalization, tracing/OpenTelemetry
+configuration (none exists in this codebase), any trust boundary
+(Team Manager as sole user-facing agent, Incident Manager specialist
+boundary, trusted specialist result envelope, deterministic conversation
+targeting, Teams provenance, approval/write separation, Case/Knowledge
+context, attachment provenance). No log suppression, no tracing
+disablement, no dependency version change.
+
+===================================================================
+D3 AUDIT — HISTORICAL COMPLETED-ACTION CARD, AND UX-1 REFINEMENT
+===================================================================
+
+D3 audited whether a historical "Action completed" card visible near a
+newer read-only response indicated a state/ownership defect (card
+migrated to the wrong message, survived a discarded rewind branch, or was
+recreated from unrelated state). **Confirmed NOT a defect** — `chat
+.actionCards` ownership is strictly keyed by stable assistant message id
+throughout (`BACKEND_ACTION_PENDING`'s "find existing owner or mint a
+fresh one" upsert, `withMatchingProposal`'s owner-id-scoped mutation,
+`EDIT_MESSAGE`'s exact-set-membership cleanup); rendering
+(`Message.tsx`'s `activeChat?.actionCards?.[message.id]`) is strictly
+per-message; a read-only turn has no code path that can create an
+`actionCards` entry (only a real `action.pending` event does); completed
+action cards are frontend-session-only state (`SessionHistoryMessageDTO`
+has no such field), so a backend restart with the browser still alive
+cannot affect them either. The observed visual proximity is fully
+explained by ordinary chronological adjacency after rewind removed the
+turns in between, plus the pre-existing, correct "collapse every older
+card on a new message" rule (`collapseAllActionCards`). No code changed
+for D3 itself. Architectural note, recorded not acted on: if a write's
+owning turn IS later discarded by rewind, its UI card disappears from
+the conversation, but the real Teams write is not "forgotten" — ADK's
+own append-only session event log (Cloud SQL) still holds the full
+proposal/approval/execution history regardless of what the frontend
+currently displays; no new audit subsystem was built or is needed.
+
+**UX-1** (immediate follow-up, presentation-only): even though D3 found
+no defect, a real ambiguity remained — a correctly-owned, correctly-
+collapsed historical "Action completed" row could still read as "the
+latest request just executed a write." Fixed in
+`src/components/conversation/ApprovalCard.tsx` only: a completed card
+whose owning message is no longer the chat's last message (`chat
+.messageIds[chat.messageIds.length - 1] !== messageId` — the same stable
+message-id/array-position check `EDIT_MESSAGE`'s own ownership cleanup
+already relies on; never a timer, timestamp, DOM query, or prompt/
+destination text) now renders, **while collapsed only**, "Earlier action
+completed" plus a compact one-line destination summary (`target_display
+_name`/chat title, same fallback text the expanded Destination/Chat
+title rows already used) instead of the ambiguous "Action completed" —
+factored into one shared `destinationSummary()` helper so the collapsed
+summary and the expanded detail row can never drift apart. Expanding the
+card reverts the headline to the ordinary "Action completed" plus its
+full existing detail (Destination/Message/"Message sent") — the
+historical distinction only matters for the compact one-line summary,
+per instruction. A card still on the chat's own latest turn (or already
+expanded) is completely unaffected. Deliberately independent of `record
+.collapsed` (the pre-existing, separate, user-toggleable presentation
+flag) — a historical card the user manually re-expands does not keep
+showing "Earlier" wording. Pending/approving/executing/rejecting/
+rejected/expired/unconfirmed/failed wording is completely untouched — the
+refinement applies only to `view.kind === "completed"`. No change to
+`chat.actionCards`, `pendingAction`, `pendingActionMessageId`, proposal
+ownership resolution, `BACKEND_ACTION_PENDING`, `withMatchingProposal`,
+`BACKEND_MESSAGE_COMPLETED`, `EDIT_MESSAGE`'s cleanup, history hydration,
+or any approval/execution API — verified both by code diff scope (two
+files touched, both frontend-presentation-only) and by the full existing
+ownership/cleanup/collapse test suite passing unchanged.
+
+TESTS: 14 new focused tests in `ApprovalCard.test.tsx` (current-turn
+completed action keeps "Action completed" collapsed and expanded;
+historical completed action renders "Earlier action completed" while
+collapsed; destination shown compactly, with the same neutral fallback
+the expanded row uses; the full sent message is never repeated in the
+collapsed summary; expanding a historical card reverts to "Action
+completed" plus full original detail; re-collapsing restores the
+historical wording; createChat's own destination summary uses the chat
+title; pending/expired/failed/rejected wording is unaffected;
+historical card remains expandable via the same `toggleActionCardCollapsed`
+call; historical determination never mutates `actionCards`/
+`pendingActionMessageId`). The existing `renderCard` test helper's
+default `messageIds` was updated to seed the owning message as the
+chat's own last message (matching every pre-existing test's implicit
+"this is the current turn" assumption) with a new opt-in
+`laterMessageIds` param for the historical case — the only change to any
+pre-existing test, and purely additive (no existing assertion changed).
+
+REGRESSION: full frontend suite 804 passed (790 baseline + 14 new);
+`ApprovalCard`/`Message`/`AppState` reducer+integration+savedChats+
+cleanup+attachments subset re-run explicitly, all green; D1/D2's own
+backend focused regression files re-run unchanged at 26 passed (no
+backend file touched by UX-1, so the full backend suite was not re-run
+per this pass's own scope); `npm run build`/`npx tsc -b`/`git diff
+--check` all clean.
+
+NOT TOUCHED: `Message.tsx`, `AppState.tsx`, `types.ts`, any backend file,
+Power Automate, Teams contracts, approval/execution semantics, D1, D2.
+
+===================================================================
+
 COMPLETE (this section is preserved as it was originally written, when
 Phase 5.1 was still the next phase in this locked list — do not read the
 word order below as current status; see "Phase 5.1 is now complete" a
