@@ -408,8 +408,8 @@ sequence and topology evolution behind this summary.
 
 **Locked execution order (replaces the previous A5 → Phase 4H → 5.2–5.7 →
 Phase 6 order — see `docs/BUILD_SEQUENCE.md` §2a for the full
-rationale):** CURRENT → 5.X (← NEXT) → Phase 6A → Phase 4H → 5.2–5.7 →
-Phase 6B → Phase 7 (product target).
+rationale):** CURRENT → 5.X (COMPLETE / FROZEN) → Phase 6A (← NEXT) →
+Phase 4H → 5.2–5.7 → Phase 6B → Phase 7 (product target).
 
 ### Current
 
@@ -423,25 +423,22 @@ A5 — real TELCO/RAN Knowledge Island capability (complete, including real
   live-runtime validation)
 Current-turn SLOPANOC image multimodality, combined with Teams and/or
   Knowledge Context in one specialist turn (POST-5.1 B, B0-B7, complete)
+5.X — Teams Rich Content / Media Retrieval (complete, frozen, canonical
+  P10 -- Teams-originated rich visual evidence (images), retrieved with
+  full provenance binding and delivered deterministically into the same
+  multimodal path as the direct-upload capability above; see
+  `docs/MASTER_ROADMAP.md`)
 ```
 
 ### Next
 
 ```text
-5.X — Teams Rich Content / Media Retrieval (← NEXT, NOT STARTED)
-  Teams-originated rich visual evidence (images first) added to the
-  existing multimodal path -- distinct from the CURRENT direct-upload
-  capability above.
-```
-
-### Then
-
-```text
-Phase 6A — Intelligence Architecture Foundation (FUTURE, after 5.X)
+Phase 6A — Intelligence Architecture Foundation (<- NEXT, NOT STARTED,
+  after 5.X)
   Bounded Context Engineering foundation, Troubleshooting Manager,
   Skills framework, Experience Memory foundation -- built against the
-  context sources that exist after A5/5.X, not the full future
-  Operational Context surface.
+  context sources that exist now that A5 and 5.X are both complete, not
+  the full future Operational Context surface.
 ```
 
 ### Then
@@ -778,8 +775,9 @@ If not, the capability may be useful elsewhere, but it must not distort the core
 
 **Locked execution order (see `docs/BUILD_SEQUENCE.md` §2a for the full
 realignment rationale — this replaces the previous 5.1 → 4H → 5.2+ → 6
-order):** 5.1 (COMPLETE, includes A5) → **5.X (← NEXT, NOT STARTED)** →
-**Phase 6A** → Phase 4H → 5.2+ → **Phase 6B** → Phase 7. The locked
+order):** 5.1 (COMPLETE, includes A5) → **5.X (COMPLETE / FROZEN,
+canonical P10)** → **Phase 6A (← NEXT, NOT STARTED)** → Phase 4H → 5.2+
+→ **Phase 6B** → Phase 7. The locked
 roadmap ends at Phase 7 — Phase 8 (below) is pre-existing content
 describing what lies beyond the current roadmap, not part of this
 locked order.
@@ -802,21 +800,27 @@ Must support the future troubleshooting experience by delivering:
 It must not attempt to build the full troubleshooting loop. Complete,
 including A5's real TELCO/RAN compound Knowledge Island validation.
 
-## 5.X — Teams Rich Content / Media Retrieval (← NEXT, NOT STARTED)
+## 5.X — Teams Rich Content / Media Retrieval (COMPLETE / FROZEN, canonical P10)
 
-Adds Teams-originated rich visual evidence (images first) to the
+Added Teams-originated rich visual evidence (images) to the
 troubleshooting experience's evidence sources, on top of Teams message
-text. Distinct from the CURRENT capability of a user uploading an image
-directly into a SLOPANOC chat. Must preserve the same
+text — now CURRENT, alongside the pre-existing capability of a user
+uploading an image directly into a SLOPANOC chat. Preserves the same
 `chat → message → media` deterministic-binding and provenance discipline
-already governing Teams text evidence — see `docs/BUILD_SEQUENCE.md` §2b
-for the full target definition and design constraints.
+already governing Teams text evidence, extended to the full
+`(chat, message, hosted-content)` triple — see `docs/BUILD_SEQUENCE.md`
+§2b for the as-built contract and design constraints, and
+`docs/MASTER_ROADMAP.md`/`docs/DEFECT_REGISTER.md` for the full
+implementation and defect history. FROZEN: do not casually rework this
+surface without a real, observed defect or a new, explicitly approved
+milestone.
 
-## Phase 6A — Intelligence Architecture Foundation (FUTURE, after 5.X)
+## Phase 6A — Intelligence Architecture Foundation (← NEXT, NOT STARTED, after 5.X)
 
 Builds a BOUNDED intelligence/orchestration foundation against the
-context sources that already exist after 5.1/A5/5.X — not the full
-future Operational Context surface (5.2+ do not exist yet). New agents
+context sources that already exist now that 5.1/A5/5.X are all complete
+— not the full future Operational Context surface (5.2+ do not exist
+yet). New agents
 should correspond to real bounded operational responsibilities. Do not
 add agents merely to make the architecture appear more agentic.
 

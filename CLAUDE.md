@@ -151,8 +151,9 @@ and nothing in it changes the frozen architecture above.
        |                 |                 |
      Teams          Generic KM Layer     Cases
     [CURRENT --      [CURRENT]          [CURRENT]
-   text; media
-   is 5.X/NEXT]           |
+   text AND media
+   are CURRENT --
+   5.X COMPLETE]           |
                 +--------+--------+--------+
                 v        v        v        v
                MOP      SOP      RCA      KB
@@ -181,11 +182,11 @@ includes" or "the system does" — those phrasings are reserved for what
   reintroduce a "[NEXT]" label for Generic KM anywhere else in this file.
 - The Context Engineering Layer remains a future conceptual abstraction —
   its FOUNDATION is Phase 6A scope (bounded to context sources that exist
-  by then: Knowledge Context, Case Context, Teams text + 5.X media,
-  session state), its EXPANSION against the full Operational Context
-  surface is Phase 6B scope (after 5.2–5.7). Do not build either during
-  5.X, and do not conflate 6A's bounded foundation with 6B's fuller
-  expansion.
+  now that 5.X is complete: Knowledge Context, Case Context, Teams text +
+  5.X media, session state), its EXPANSION against the full Operational
+  Context surface is Phase 6B scope (after 5.2–5.7). Do not build either
+  during Phase 6A, and do not conflate 6A's bounded foundation with 6B's
+  fuller expansion.
 - Troubleshooting Manager, Skills, and Experience Memory belong to Phase
   6A (docs/BUILD_SEQUENCE.md §2a). Head of Automated Operations remains
   FUTURE and OPTIONAL — it is not automatically part of 6A merely because
@@ -195,8 +196,10 @@ includes" or "the system does" — those phrasings are reserved for what
   Change, Handover) are Phase 5.2–5.7 roadmap items, now scheduled after
   Phase 6A and Phase 4H (not directly after A5) — listed here only to
   show where Operational Context is headed — do not build any of them
-  early. Teams-originated rich media (images first) is 5.X, the
-  immediate next milestone — see docs/BUILD_SEQUENCE.md §2b.
+  early. Teams-originated rich media (images) is 5.X — COMPLETE and
+  FROZEN (canonical P10) — see docs/BUILD_SEQUENCE.md §2b and
+  docs/MASTER_ROADMAP.md for the canonical status/history. Phase 6A is
+  now NEXT.
 
 ===================================================================
 ARCHITECTURE INVARIANTS — KNOWLEDGE / MEMORY / SKILLS / TOOLS / MCP /
@@ -557,17 +560,26 @@ live-validated. **A5 — Knowledge Island Ingestion Foundation + Real
 TELCO/RAN Compound Knowledge Validation (see its own entry below) is
 COMPLETE and live-validated.** **POST-A5 REFINEMENT — Cloud SQL-only
 runtime hardening + Source Drawer source+version consolidation (see its
-own entry below) is COMPLETE and live-validated.** This refinement does
-NOT reorder the roadmap below — 5.X remains NEXT.
+own entry below) is COMPLETE and live-validated.** This refinement did
+NOT reorder the roadmap below. **5.X — Teams Rich Content / Media
+Retrieval (canonical P10) is now also COMPLETE and FROZEN** (deterministic
+Teams inline-image discovery, retrieval, full `(chat, message,
+hosted-content)` provenance binding, multi-image delivery in true
+document order, Source-drawer visual evidence, and deterministic
+all-image reasoning — all live-validated; see the dedicated "5.X —
+TEAMS RICH CONTENT / MEDIA RETRIEVAL" entries further below and
+docs/MASTER_ROADMAP.md/docs/DEFECT_REGISTER.md for the canonical,
+always-current status and full defect history). **Phase 6A is now
+NEXT.**
 
 **ROADMAP REALIGNMENT (locked, replaces the previous A5 → Phase 4H →
 5.2–5.7 → Phase 6 order — see docs/BUILD_SEQUENCE.md §2a for the full
-rationale):** the execution order after A5 is now **5.X (Teams Rich
+rationale):** the execution order after A5 is **5.X (Teams Rich
 Content / Media Retrieval) → Phase 6A (Intelligence Architecture
 Foundation) → Phase 4H (Security Hardening) → 5.2–5.7 → Phase 6B
-(Context Engineering Expansion) → Phase 7**. **5.X is NEXT — NOT
-STARTED.** Phase 4H no longer immediately follows A5; it now follows
-Phase 6A.
+(Context Engineering Expansion) → Phase 7**. **5.X is COMPLETE / FROZEN.
+Phase 6A is NEXT — NOT STARTED.** Phase 4H no longer immediately follows
+A5; it now follows Phase 6A.
 
 POST-5.1 B execution sequence (locked, do not reorder):
   B0 [DONE] Durable chat attachment architecture + ADK persistence audit
@@ -2757,12 +2769,14 @@ app) has been performed end to end, including the two safety-critical
 gates (VSWR prohibition, mandatory conflict isolation) and all 8 gates
 retested after the final corrective pass. Two genuine, previously-
 undiscovered defects were found and fixed during this pass (the
-completion-boundary discard-ordering bug; the Pydantic
-`default_factory` serialization bug) — both confirmed via full backend
-regression and, for the first, via direct live re-verification. NEXT:
-**5.X — Teams Rich Content / Media Retrieval** (NOT STARTED), per the
-post-A5 roadmap realignment (docs/BUILD_SEQUENCE.md §2a) — followed by
-Phase 6A, then Phase 4H security hardening, then 5.2–5.7, then Phase 6B.
+completion-boundary discard-ordering bug — DEF-0007; the Pydantic
+`default_factory` serialization bug — DEF-0008; see
+docs/DEFECT_REGISTER.md) — both confirmed via full backend
+regression and, for the first, via direct live re-verification.
+(HISTORICAL, as of this A5 closure: NEXT was 5.X — Teams Rich Content /
+Media Retrieval, NOT STARTED, per the post-A5 roadmap realignment
+[docs/BUILD_SEQUENCE.md §2a]. 5.X has SINCE been completed and frozen
+[canonical P10 — see docs/MASTER_ROADMAP.md] — Phase 6A is now NEXT.)
 Phase 4H is not cancelled; it is scheduled after Phase 6A instead of
 directly after A5.
 
@@ -2772,8 +2786,11 @@ SOURCE+VERSION CONSOLIDATION — COMPLETE
 ===================================================================
 
 A bounded, out-of-band refinement milestone, inserted after A5 and
-before 5.X — does NOT reorder the roadmap (5.X remains NEXT, NOT
-STARTED). Root-caused by a real live-UI corrective-pass finding: a
+before 5.X — does NOT reorder the roadmap. (HISTORICAL, at the time
+this refinement was written: 5.X remained NEXT, NOT STARTED. 5.X has
+SINCE been completed and frozen — canonical P10, see
+docs/MASTER_ROADMAP.md.) Root-caused by a real live-UI corrective-pass
+finding: a
 manual backend restart with no explicit database env vars silently
 resolved BOTH persistence domains to an empty/stale local SQLite
 fallback instead of the real, fully-populated Cloud SQL corpus — a
@@ -2900,15 +2917,17 @@ Troubleshooting Manager, no 5.X/6A scope.
 
 STATUS: **POST-A5 REFINEMENT — Cloud SQL-only runtime hardening + Source
 Drawer source+version consolidation is COMPLETE and live-validated.**
-NEXT: **5.X — Teams Rich Content / Media Retrieval** (NOT STARTED),
-unchanged by this refinement.
+(HISTORICAL, at the time this refinement closed: NEXT was 5.X — Teams
+Rich Content / Media Retrieval, NOT STARTED, unchanged by this
+refinement. 5.X has SINCE been completed and frozen — canonical P10,
+see docs/MASTER_ROADMAP.md — Phase 6A is now NEXT.)
 
 ===================================================================
 CORRECTIVE PASS — KNOWN_MESSAGE_IDS_STATE_KEY REWIND-NULL NORMALIZATION
 ===================================================================
 
 An out-of-band reliability fix, not a roadmap milestone — does not
-reorder anything above and does not touch 5.X's NEXT status.
+reorder anything above and did not touch 5.X's roadmap position (5.X has since been completed and frozen -- canonical P10, see docs/MASTER_ROADMAP.md).
 
 DEFECT: after an edit/rewind discarded a branch that had written Teams
 evidence-validation state, the next Teams read could crash with
@@ -2973,7 +2992,7 @@ CORRECTIVE PASS — OPENTELEMETRY CROSS-TASK CONTEXT-DETACH LIFECYCLE FIX
 
 A second, separate out-of-band reliability fix, immediately after the
 KNOWN_MESSAGE_IDS_STATE_KEY rewind-null pass (D1) above — not a roadmap
-milestone, does not reorder anything, does not touch 5.X's NEXT status.
+milestone, does not reorder anything, and did not touch 5.X's roadmap position (5.X has since been completed and frozen -- canonical P10, see docs/MASTER_ROADMAP.md).
 
 DEFECT: real-stack turns completed successfully but repeatedly logged
 `opentelemetry.context ERROR Failed to detach context` /
@@ -3404,6 +3423,147 @@ Gemini vision/multimodal propagation (still not implemented), multiple-
 image support (still deferred).
 
 ===================================================================
+5.X — TEAMS IMAGE VISION, FULL PROVENANCE BINDING, MULTIPLE IMAGES,
+VISUAL SOURCE EVIDENCE, AND DETERMINISTIC ALL-IMAGE RETRIEVAL —
+COMPLETE, FROZEN, LIVE-VALIDATED (closes 5.X; canonical P10 — see
+docs/MASTER_ROADMAP.md and docs/DEFECT_REGISTER.md for the canonical
+chronological record and every confirmed defect below)
+===================================================================
+
+Closes every remaining 5.X gap the prior two milestones (first slice,
+routing correction) left open: the deliberate "retrieval only, no vision
+yet" stop condition, single-chat-id-only provenance, single-image-only
+delivery, no Source-drawer visual evidence, and model-nondeterministic
+image selection. All committed in one pass at repository HEAD
+`0407808805d8388d81602d2f66cdfa5b0164805f` ("feat: add deterministic
+Teams inline image vision and visual source evidence").
+
+FULL PROVENANCE BINDING. Provenance is now bound to the full
+`(chat_id, message_id, hosted_content_id)` triple, not merely
+`message_id`/`hosted_content_id` in isolation — closing a gap where an id
+could in principle be replayed against the wrong chat. `KNOWN_HOSTED_
+CONTENT_IDS_STATE_KEY` (`backend/tools/teams/get_messages.py`) is
+structured `dict[chat_id, dict[message_id, set[hosted_content_id]]]`;
+`fetch_and_validate_hosted_content` (`backend/tools/teams/get_hosted_
+content.py`) revalidates all three dimensions before ever calling the
+gateway.
+
+REAL GEMINI MULTIMODAL DELIVERY. Previously a successful `teams_get_
+hosted_content` call proved retrieval/validation succeeded but never
+made the image available as model vision input (the 5.X first-slice
+"retrieval only" stop condition). `backend/api/hosted_content_vision_
+context.py` (NEW) is a run-scoped, in-process, never-persisted store
+(keyed by `current_run_id()`, cleaned up in `chat_service.py`'s central
+`finally` block on every exit path including `asyncio.CancelledError`)
+whose `inject_pending_hosted_content_image` is wired as an ADK
+`before_model_callback` — the correct, already-proven-safe ADK extension
+point for adding content to incident_manager's OWN NEXT model call
+(verified against installed ADK 1.33.0 source: a `FunctionTool`
+response's `Part`s cannot carry media — `FunctionResponse.parts` is
+hardcoded to `ComputerUseTool` only — so a tool return value alone can
+never deliver vision; `before_model_callback` is the correct mechanism,
+mirroring the same audit discipline B6's `MultimodalAgentTool` used).
+
+MULTIPLE TEAMS HOSTED IMAGES. Up to `MAX_HOSTED_IMAGES_PER_MESSAGE = 5`
+images per message, bounded by `MAX_TOTAL_HOSTED_IMAGE_BYTES =
+20_000_000`, delivered in TRUE HTML source order (never retrieval/
+completion order — ADK executes multiple function calls from one model
+turn concurrently via `asyncio.gather`, so arrival order is never
+trustworthy; verified by a real-ADK test with deliberately reversed
+function-call completion order). Best-effort partial-failure semantics:
+one image failing validation never blocks its siblings.
+
+DETERMINISTIC ALL-IMAGE RETRIEVAL. Closes a genuine nondeterminism
+defect (DEF-0016, see docs/DEFECT_REGISTER.md) where Gemini sometimes
+retrieved only 2 of 3 images despite being asked for all of them and all
+being within limits — a model free-choice reliability problem, not a
+backend bug. Fixed with a NEW deterministic tool, `teams_get_all_hosted_
+content` (`backend/tools/teams/get_hosted_content.py`), added to
+`incident_manager.tools` (inherited by its `.model_copy` variants): it
+takes NO id-list parameter, reads the authoritative discovery order
+itself via `get_message_hosted_content_order`, provenance-checks every
+id, is idempotent per run (`already_retrieved_this_run`), and is
+best-effort across siblings. The model's ONLY decision is which of two
+tools to call (single-image vs. all-images) — it never manually
+enumerates individual `hosted_content_id`s for a multi-image request.
+This is the same "agent vs. tool" boundary principle already governing
+this codebase (docs/AGENT_CONTRACT.md §5): a deterministic capability
+must never become an agent-driven loop. Not a stronger prompt, not a
+Power Automate batch operation, not direct Graph access — per this
+milestone's own explicit constraints.
+
+SOURCE VISUAL EVIDENCE IN THE UI. Surfaces ACTUALLY-DELIVERED images
+(never merely discovered/retrieved/queued — the DISCOVERED → RETRIEVED →
+QUEUED → ACTUALLY ATTACHED delivery chain is a deliberate distinction;
+"Visual Evidence" means only the last category) in the existing
+frontend Source drawer. A new opaque `(source_id, image_id)` pair —
+server-minted, never a raw Teams identifier — maps to the durable
+internal `(chat_id, message_id, hosted_content_id)` binding, persisted
+inside the SAME per-turn `TURN_SOURCE_REFERENCES_STATE_KEY` ADK
+session-state entry B7's provenance persistence already uses (inherits
+rewind-correctness for free, no new table/migration). Lazy, authenticated
+HTTP retrieval: `GET /api/sessions/{session_id}/sources/{source_id}/
+images/{image_id}` (`backend/api/source_images.py`, wired in
+`backend/api/app.py`) reuses the SAME `fetch_and_validate_hosted_content`
+validator on every fetch (never trusts cached mime_type/size_bytes from
+the original turn) and never exposes raw Teams `chat_id`/`message_id`/
+`hostedContentId`/Base64/bytes to the frontend — anti-enumeration,
+session-scoped, survives refresh/reopen/backend restart. Frontend:
+`src/api/sourceImages.ts`, `src/components/conversation/
+VisualEvidenceGallery.tsx` (NEW), `SourceChip.tsx` (gained a `sessionId`
+prop for `kind: "teams"`), `src/lib/sourceReference.ts`
+(`formatSourceFooter`).
+
+DEFECTS FOUND AND FIXED DURING THIS MILESTONE'S OWN LIVE VALIDATION (full
+detail, root cause, and regression coverage in docs/DEFECT_REGISTER.md —
+summarized here only): DEF-0010 (hosted-image ordinal duplication across
+separate model-turn-scoped injection calls — `ordinal` was computed via
+a per-call `enumerate(..., start=1)` instead of true position in the
+canonical order map); DEF-0011 (`_message_order` was consumed via
+`.pop()` on first successful injection instead of read via `.get()`,
+silently breaking a second injection call later in the same run);
+DEF-0012 (an image-only Teams message — no substantive text evidence —
+produced NO Source reference at all, because `TeamsSourceCapture.
+build_source_reference()` returns `None` whenever the textual evidence
+citation list is empty; fixed with `ensure_source_reference_for_visual_
+evidence`, a new pure function in `backend/api/source_reference.py` that
+synthesizes a minimal `SourceReferenceDTO` when real delivered images
+exist for the resolved `chat_id` even with no textual evidence).
+
+TESTS AND REGRESSION: full backend and frontend suites green at HEAD
+(see the commit's own test additions across `backend/tests/test_teams_
+visual_evidence.py`, `test_teams_get_all_hosted_content.py`, and the
+hosted-content-vision-context/ordinal/provenance-binding focused test
+files); `npm run build`/`npx tsc -b` clean.
+
+LIVE VALIDATION: performed end to end against the real stack (real React
+UI, real FastAPI backend, real Gemini/Vertex, real Power Automate, a real
+Microsoft Teams conversation) — a genuine 3-image Teams message was
+correctly retrieved, delivered to Gemini as real vision input, correctly
+described (per-image), and rendered in the Source drawer as "Visual
+evidence · 3 images analyzed" with 3 correctly-ordered/labeled
+thumbnails, confirmed via a real backend log trace, a real API response
+capture, and a real browser screenshot. Backend-restart durability
+(mirroring B7's own "Test I") was NOT separately re-exercised in this
+milestone's own live pass — this specific check was consciously left
+unpursued at the time (the user chose the browser-check validation path
+over the backend-restart-durability path when both were offered) and
+remains open for a future live pass; the underlying persistence
+mechanism (the same `TURN_SOURCE_REFERENCES_STATE_KEY` ADK session-state
+entry B7 already proved survives a real backend restart) is unchanged,
+so this is recorded as NOT SEPARATELY RE-PROVEN for 5.X specifically,
+not as a known defect.
+
+STATUS: DONE. **5.X — Teams Rich Content / Media Retrieval (canonical
+P10) is COMPLETE and FROZEN.** FROZEN means what it means everywhere
+else in this file: do not casually rework `backend/tools/teams/get_
+hosted_content.py`, `backend/api/hosted_content_vision_context.py`,
+`backend/api/source_images.py`, `backend/api/turn_source_references.py`'s
+visual-evidence extension, or the frontend Visual Evidence Gallery
+without a real, observed defect or a new, explicitly approved milestone.
+**NEXT: Phase 6A — Intelligence Architecture Foundation.**
+
+===================================================================
 
 COMPLETE (this section is preserved as it was originally written, when
 Phase 5.1 was still the next phase in this locked list — do not read the
@@ -3481,24 +3641,35 @@ see docs/BUILD_SEQUENCE.md §2a for the full rationale)
 
 The execution order after A5 is now:
 
-Then: 5.X TEAMS RICH CONTENT / MEDIA RETRIEVAL — ← NEXT, IN PROGRESS
-(5.X-A audit complete; first implementation slice — single inline-image
-discovery/retrieval, no multimodal injection yet — complete; see the
-dedicated milestone note above for exact scope/status. Multimodal
-injection and multiple-image support remain unimplemented.)
+Then: 5.X TEAMS RICH CONTENT / MEDIA RETRIEVAL — COMPLETE AND FROZEN
+(canonical P10 — see docs/MASTER_ROADMAP.md and docs/DEFECT_REGISTER.md
+for the canonical, always-current status and full defect history). All
+of: 5.X-A audit, first-slice single-image discovery/retrieval, the
+fast-path routing correction, real Gemini multimodal delivery of
+Teams-retrieved images with full `(chat, message, hosted-content)`
+provenance binding, multi-image support with true document order,
+Source-drawer visual evidence, and deterministic backend-owned
+all-image retrieval (`teams_get_all_hosted_content`, eliminating model
+nondeterminism) are DONE and live-validated end to end against real
+Power Automate/Teams and real Gemini/Vertex. See the dedicated
+"5.X — TEAMS RICH CONTENT / MEDIA RETRIEVAL" milestone entries further
+below (in this file's own chronological narrative) for the full
+implementation/defect/validation history.
 
-  Reasons from Teams-originated rich visual evidence (starting with
-  images), not just Teams message text. Distinct from the CURRENT
+  Reasoning from Teams-originated rich visual evidence (images), not
+  just Teams message text, is now CURRENT. Distinct from the CURRENT
   capability where a user uploads an image directly into a SLOPANOC
-  chat (B5/B6) — 5.X adds retrieving an image actually posted inside a
+  chat (B5/B6) — 5.X added retrieving an image actually posted inside a
   real Teams chat and passing it into the same multimodal reasoning
-  path. See docs/BUILD_SEQUENCE.md §2b for the full target definition
-  and design constraints (deterministic chat→message→media binding, no
+  path, and both paths are now CURRENT. See docs/BUILD_SEQUENCE.md §2b
+  and docs/TEAMS_TOOL_CONTRACT.md §4b–§4c for the full contract and
+  design constraints (deterministic chat→message→media binding, no
   arbitrary-URL fetch, provenance preservation, documents remaining a
   distinct governed-ingestion concern, reuse of the existing B5/B6
   architecture rather than a second vision pipeline).
 
-Then: PHASE 6A — INTELLIGENCE ARCHITECTURE FOUNDATION — FUTURE, after 5.X
+Then: PHASE 6A — INTELLIGENCE ARCHITECTURE FOUNDATION — ← NEXT, NOT
+STARTED, after 5.X
 
   Builds a BOUNDED intelligence/orchestration foundation against the
   context sources that already exist after A5 and 5.X (Knowledge

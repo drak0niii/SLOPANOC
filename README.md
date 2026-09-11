@@ -184,22 +184,34 @@ consistent target.
   foundation + real TELCO/RAN compound knowledge validation, through
   the existing, unchanged Generic KM pipeline) is **COMPLETE**,
   including real live-runtime validation (real Vertex Gemini, real
-  Cloud SQL PostgreSQL, real GCS). **NEXT: 5.X — Teams Rich Content /
-  Media Retrieval** — not started (roadmap realignment: 5.X → Phase 6A →
-  Phase 4H → 5.2–5.7 → Phase 6B → Phase 7; see [Roadmap](#roadmap)).
+  Cloud SQL PostgreSQL, real GCS). **5.X — Teams Rich Content / Media
+  Retrieval is COMPLETE and FROZEN** (canonical ID P10 — see
+  [`docs/MASTER_ROADMAP.md`](docs/MASTER_ROADMAP.md)): deterministic
+  discovery/retrieval/full-provenance-binding/multi-image/visual-source-
+  evidence/deterministic-all-image delivery of Teams-posted inline images
+  into the same Gemini multimodal reasoning path, all live-validated.
+  **NEXT: Phase 6A — Intelligence Architecture Foundation** — not started
+  (roadmap realignment: 5.X → Phase 6A → Phase 4H → 5.2–5.7 → Phase 6B →
+  Phase 7; see [Roadmap](#roadmap)).
+- **CURRENT (as of 5.X):** Teams-originated rich media (images) now flows
+  into the same multimodal reasoning path as a direct SLOPANOC image
+  upload — direct SLOPANOC image upload was already CURRENT (B5/B6);
+  retrieving an image actually posted inside a real Teams chat, binding
+  its provenance, and delivering it (all images, deterministically) into
+  the model's own reasoning is now ALSO CURRENT (5.X). See
+  [`docs/TEAMS_TOOL_CONTRACT.md`](docs/TEAMS_TOOL_CONTRACT.md) §4b/§4c
+  and [`docs/MASTER_ROADMAP.md`](docs/MASTER_ROADMAP.md) for the full
+  contract and defect history.
 - **NEXT / FUTURE (target architecture, not yet designed in detail):**
-  5.X adds Teams-originated rich media (images first) to the CURRENT
-  multimodal path — direct SLOPANOC image upload is already CURRENT
-  (B5/B6); retrieving an image posted inside a real Teams chat is NOT
-  CURRENT, that is what 5.X adds. Phase 6A then builds a bounded
-  Context Engineering foundation, a second specialist (Troubleshooting
-  Manager), a Skills behavioral framework, and an Experience Memory
-  foundation, against the context sources that exist by then. Phase 4H
-  (security hardening) follows 6A. A supervisory Head of Automated
-  Operations agent remains optional future architecture. Phase 6B later
-  expands Context Engineering against the full Operational Context
-  surface (ITSM, alarms, topology, KPIs, change, handover — 5.2–5.7,
-  see [Roadmap](#roadmap)) once it exists.
+  Phase 6A builds a bounded Context Engineering foundation, a second
+  specialist (Troubleshooting Manager), a Skills behavioral framework,
+  and an Experience Memory foundation, against the context sources that
+  exist now (including 5.X's Teams media). Phase 4H (security hardening)
+  follows 6A. A supervisory Head of Automated Operations agent remains
+  optional future architecture. Phase 6B later expands Context
+  Engineering against the full Operational Context surface (ITSM,
+  alarms, topology, KPIs, change, handover — 5.2–5.7, see
+  [Roadmap](#roadmap)) once it exists.
 
 See [`docs/BUILD_SEQUENCE.md`](docs/BUILD_SEQUENCE.md) for the full Phase
 0 → Phase 7 progression and topology diagrams for every phase in between.
@@ -213,7 +225,7 @@ flowchart TD
     IM --> CEL["Context Engineering Layer<br/>(FUTURE — 6A foundation, 6B expansion)"]
     TSM --> CEL
     SK --> CEL
-    CEL --> OC["Operational Context<br/>Teams text (CURRENT), Teams media (5.X / NEXT)"]
+    CEL --> OC["Operational Context<br/>Teams text (CURRENT), Teams media (CURRENT — 5.X COMPLETE)"]
     CEL --> KC["Knowledge Context<br/>Generic KM Layer (CURRENT)"]
     CEL --> CC["Case Context<br/>Cases (CURRENT)"]
     CEL --> EM["Experience Memory (FUTURE / Phase 6A)"]
@@ -377,7 +389,12 @@ clearly escalated.
   (real TELCO/RAN compound knowledge ingestion) is **COMPLETE**,
   including real live-runtime validation. (POST-5.1 B7 is complete —
   see [Roadmap](#roadmap).)
-- **NEXT:** 5.X — Teams Rich Content / Media Retrieval — not started.
+- **COMPLETE / FROZEN:** 5.X — Teams Rich Content / Media Retrieval
+  (canonical P10) — deterministic Teams inline-image discovery,
+  retrieval, full provenance binding, multi-image delivery, visual
+  source evidence, and deterministic all-image reasoning are all live.
+  **NEXT:** Phase 6A — Intelligence Architecture Foundation — not
+  started.
 - **FUTURE:** Phase 6A (a Troubleshooting Manager, a Skills behavioral
   framework, an Experience Memory foundation, a bounded Context
   Engineering foundation), then Phase 4H security hardening, then
@@ -704,10 +721,16 @@ SLOPANOC is not production-ready. Known gaps include at least:
 5.1 generic governed Knowledge, POST-5.1 A–B (Cloud SQL, multimodal
 attachments, B0–B7, all COMPLETE including B7's own real-stack live
 validation), the POST-B7 UI/UX Refinement Milestone (COMPLETE,
-live-validated — see below), and **A5** (Knowledge Island ingestion
-foundation + real TELCO/RAN compound knowledge validation) are all
-**COMPLETE**, including A5's real live-runtime validation (real Vertex
-Gemini, real Cloud SQL PostgreSQL, real GCS).
+live-validated — see below), **A5** (Knowledge Island ingestion
+foundation + real TELCO/RAN compound knowledge validation), and **5.X**
+(Teams Rich Content / Media Retrieval) are all **COMPLETE**, including
+real live-runtime validation (real Vertex Gemini, real Cloud SQL
+PostgreSQL, real GCS, real Power Automate/Teams). See
+[`docs/MASTER_ROADMAP.md`](docs/MASTER_ROADMAP.md) for the canonical,
+chronologically-ordered implementation ledger (Pxx / Pxx-Myy IDs mapped
+to every legacy milestone name used in this file and in `CLAUDE.md`) and
+[`docs/DEFECT_REGISTER.md`](docs/DEFECT_REGISTER.md) for every confirmed
+defect found and fixed along the way.
 
 **NEXT — locked execution order (replaces the previous A5 → Phase 4H →
 5.2–5.7 → Phase 6 order; see `docs/BUILD_SEQUENCE.md` §2a for the full
@@ -715,20 +738,28 @@ rationale):**
 
 ```text
 A5 (COMPLETE)
-  → 5.X Teams Rich Content / Media Retrieval   ← NEXT, NOT STARTED
-  → Phase 6A Intelligence Architecture Foundation   FUTURE
+  → 5.X Teams Rich Content / Media Retrieval   COMPLETE / FROZEN
+  → Phase 6A Intelligence Architecture Foundation   ← NEXT, NOT STARTED
   → Phase 4H Security Hardening                     FUTURE
   → 5.2–5.7 Operational Integrations                FUTURE
   → Phase 6B Context Engineering Expansion          FUTURE
   → Phase 7 Advanced Troubleshooting / JOC          FUTURE (product target)
 ```
 
-5.X adds Teams-originated rich media (images first) to the existing
-multimodal reasoning path — direct SLOPANOC image upload is already
-CURRENT (B5/B6); retrieving an image posted inside a real Teams chat is
-NOT CURRENT, that is what 5.X adds. Phase 6A is intentionally a bounded
-foundation (built against context sources that exist after A5 and 5.X),
-not the finished Context Engineering / Troubleshooting Manager
+5.X added Teams-originated rich media (images) to the existing
+multimodal reasoning path — direct SLOPANOC image upload was already
+CURRENT (B5/B6); retrieving an image actually posted inside a real Teams
+chat, binding its full `(chat, message, hosted-content)` provenance,
+delivering multiple images in true document order, surfacing genuinely-
+delivered images as Source-drawer visual evidence, and doing so
+deterministically (never leaving image selection to model nondeterminism)
+is what 5.X added — all now CURRENT and FROZEN (see
+[`docs/TEAMS_TOOL_CONTRACT.md`](docs/TEAMS_TOOL_CONTRACT.md) §4b–§4c).
+FROZEN here means the same thing it means everywhere else in this
+document: do not casually rework this surface without a real, observed
+defect or a new, explicitly approved milestone. Phase 6A is intentionally
+a bounded foundation (built against context sources that exist after A5
+and 5.X), not the finished Context Engineering / Troubleshooting Manager
 architecture — Phase 6B later expands it once 5.2–5.7 exist. Phase 4H
 (security hardening) is not cancelled — it now follows Phase 6A instead
 of directly following A5/5.X, so it evaluates the richer, more stable
@@ -1671,10 +1702,12 @@ modal, and composer attachment/text separation were each independently
 confirmed correct in the same live pass. **STATUS: DONE.** **A5**
 (Knowledge Island ingestion foundation + real TELCO/RAN compound
 knowledge validation) is **COMPLETE**, including real live-runtime
-validation. **NEXT: 5.X — Teams Rich Content / Media Retrieval**
-(not started), followed by Phase 6A, then Phase 4H security hardening,
-then 5.2–5.7, then Phase 6B — see [Roadmap](#roadmap) for the locked
-order.
+validation. (HISTORICAL, as of this milestone's own closure: **NEXT: 5.X
+— Teams Rich Content / Media Retrieval** (not started), followed by
+Phase 6A, then Phase 4H security hardening, then 5.2–5.7, then Phase 6B
+was the forward order at that point. 5.X has SINCE been completed and
+frozen — see [Roadmap](#roadmap) for the current locked order, where
+Phase 6A is now NEXT.)
 
 Locked Gemini/ADK multimodal construction rule (B0, proven against the
 installed `google-adk==1.33.0`/`google-genai==1.75.0` stack, both by
@@ -1887,23 +1920,28 @@ by A5) — not a future plan.*
 **ROADMAP REALIGNMENT (locked — replaces the previous A5 → Phase 4H →
 5.2–5.7 → Phase 6 order; see `docs/BUILD_SEQUENCE.md` §2a):**
 
-**Then — 5.X: Teams Rich Content / Media Retrieval.** ← NEXT, NOT
-STARTED. Teams-originated rich visual evidence (images first) added to
-the existing multimodal reasoning path — distinct from the CURRENT
-capability of a user directly uploading an image into SLOPANOC. See
-`docs/BUILD_SEQUENCE.md` §2b for the target concept and design
-constraints (deterministic `chat → message → media` binding, no
-arbitrary-URL fetch, provenance preservation, documents remaining a
-distinct governed-ingestion concern, reuse of the existing B5/B6
-architecture).
+**Then — 5.X: Teams Rich Content / Media Retrieval — COMPLETE / FROZEN**
+(canonical P10; see [`docs/MASTER_ROADMAP.md`](docs/MASTER_ROADMAP.md)).
+Teams-originated rich visual evidence (images) added to the existing
+multimodal reasoning path — distinct from the CURRENT capability of a
+user directly uploading an image into SLOPANOC, and now itself CURRENT:
+deterministic `chat → message → hosted-content` provenance binding, no
+arbitrary-URL fetch, multi-image delivery in true document order,
+Source-drawer visual evidence for genuinely-delivered images only, and a
+backend-owned deterministic all-image retrieval tool (never model
+nondeterminism) — reusing the existing B5/B6 multimodal architecture
+rather than a second vision pipeline. Documents remain a distinct,
+untouched governed-ingestion concern. Live-validated end to end against
+real Power Automate/Teams and real Gemini/Vertex. Full contract in
+`docs/TEAMS_TOOL_CONTRACT.md` §4b–§4c and `docs/BUILD_SEQUENCE.md` §2b.
 
-**Then — Phase 6A: Intelligence Architecture Foundation.** FUTURE, after
-5.X. A bounded Context Engineering foundation (Knowledge Context, Case
-Context, Teams text + 5.X media, session context — not the full future
-Operational Context surface); a second specialist, Troubleshooting
-Manager, alongside Incident Manager; a Skills behavioral framework
-("how should this kind of work be performed?" — not an agent, not a
-MOP/SOP, not a tool, not memory); an Experience Memory foundation
+**Then — Phase 6A: Intelligence Architecture Foundation.** ← NEXT, NOT
+STARTED, after 5.X. A bounded Context Engineering foundation (Knowledge
+Context, Case Context, Teams text + 5.X media, session context — not the
+full future Operational Context surface); a second specialist,
+Troubleshooting Manager, alongside Incident Manager; a Skills behavioral
+framework ("how should this kind of work be performed?" — not an agent,
+not a MOP/SOP, not a tool, not memory); an Experience Memory foundation
 ("what have we seen before?" — never Approved Knowledge, never silently
 promoted to it). Does not implement Phase 7's mature troubleshooting
 loop.
@@ -1944,6 +1982,7 @@ a pre-existing long-term product concept, not a scheduled next
 implementation step: it has no assigned position after Phase 7 and is
 not part of the locked sequence above. A possible future direction only.
 
-None of the roadmap items above (5.X onward) are implemented. They are
-listed here so the current architecture can be evaluated against where
-it is headed, not as a description of current functionality.
+5.X (above) is now COMPLETE and FROZEN. None of the roadmap items from
+Phase 6A onward are implemented. They are listed here so the current
+architecture can be evaluated against where it is headed, not as a
+description of current functionality.

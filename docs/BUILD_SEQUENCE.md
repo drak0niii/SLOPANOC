@@ -48,8 +48,8 @@ not that the code is wrong.
 | POST-5.1 B — Multimodal Attachments (B0–B7) | ✅ COMPLETE |
 | POST-B7 UI/UX Refinement Milestone | ✅ COMPLETE |
 | A5 — Knowledge Island Ingestion Foundation + Real TELCO/RAN Compound Knowledge Validation | ✅ COMPLETE |
-| 5.X — Teams Rich Content / Media Retrieval | **← NEXT** — not started |
-| Phase 6A — Intelligence Architecture Foundation | FUTURE — after 5.X |
+| 5.X — Teams Rich Content / Media Retrieval | ✅ COMPLETE / FROZEN |
+| Phase 6A — Intelligence Architecture Foundation | **← NEXT** — not started |
 | Phase 4H — Security Hardening | FUTURE — after 6A |
 | 5.2–5.7 — Operational Integrations | FUTURE — after 4H |
 | Phase 6B — Context Engineering Expansion | FUTURE — after 5.2–5.7 |
@@ -114,11 +114,13 @@ PHASE 5 — Context + Operational Integrations
     Knowledge Validation — COMPLETE, including real live-runtime
     validation (see §8 below)
 
-  5.X Teams Rich Content / Media Retrieval — ← NEXT, NOT STARTED (see §2a)
+  5.X Teams Rich Content / Media Retrieval — COMPLETE / FROZEN (see §2a,
+    §2b, and docs/MASTER_ROADMAP.md for the as-built contract and full
+    defect history)
 
-PHASE 6A — Intelligence Architecture Foundation — FUTURE, after 5.X
-  (Context Engineering foundation, Troubleshooting Manager, Skills
-  framework foundation, Experience Memory foundation — see §2a)
+PHASE 6A — Intelligence Architecture Foundation — ← NEXT, NOT STARTED,
+  after 5.X (Context Engineering foundation, Troubleshooting Manager,
+  Skills framework foundation, Experience Memory foundation — see §2a)
 
 PHASE 4H — Security Hardening — FUTURE, after 6A (see §2a for why 4H now
   follows 6A instead of directly following A5)
@@ -407,8 +409,8 @@ now:
 
 ```text
 A5 (COMPLETE)
-  → 5.X Teams Rich Content / Media Retrieval (← NEXT, NOT STARTED)
-  → Phase 6A Intelligence Architecture Foundation (FUTURE)
+  → 5.X Teams Rich Content / Media Retrieval (COMPLETE / FROZEN)
+  → Phase 6A Intelligence Architecture Foundation (← NEXT, NOT STARTED)
   → Phase 4H Security Hardening (FUTURE)
   → 5.2 ITSM
   → 5.3 Alarm / Fault
@@ -465,10 +467,24 @@ and 4H moved; nothing about their own sequence changed.
 
 ---
 
-## 2b. 5.X — Teams Rich Content / Media Retrieval (target definition, roadmap only)
+## 2b. 5.X — Teams Rich Content / Media Retrieval (as-built; canonical P10)
 
 **Canonical name:** 5.X — Teams Rich Content / Media Retrieval
-**Status:** ← NEXT — NOT STARTED
+(canonical ID P10 — see `docs/MASTER_ROADMAP.md`)
+**Status:** COMPLETE / FROZEN — live-validated end to end against real
+Power Automate/Teams and real Gemini/Vertex. FROZEN means: do not
+casually rework this surface without a real, observed defect or a new,
+explicitly approved milestone.
+
+The design constraints below were the roadmap-only target definition
+when this section was first written; they are preserved here because the
+as-built implementation honors every one of them (verified against the
+real code at HEAD — see `docs/TEAMS_TOOL_CONTRACT.md` §4b–§4c for the
+authoritative as-built contract and `CLAUDE.md`'s own "5.X — TEAMS IMAGE
+VISION, FULL PROVENANCE BINDING, MULTIPLE IMAGES, VISUAL SOURCE EVIDENCE,
+AND DETERMINISTIC ALL-IMAGE RETRIEVAL" section for the full
+implementation/defect/validation history). Read everything below this
+line as "what 5.X was designed to do, and did," not as an open target.
 
 **Purpose:** allow SLOPANOC to reason from rich visual evidence that
 exists inside a real Microsoft Teams conversation, rather than only from
@@ -542,8 +558,8 @@ flowchart TD
     P2 --> P3["Phase 3<br/>Trusted Runtime"]
     P3 --> P4["Phase 4<br/>Durable Stateful Runtime"]
     P4 --> P5["Phase 5<br/>Multisource Context (A5 COMPLETE)"]
-    P5 --> PX["5.X<br/>Teams Rich Content / Media Retrieval (← NEXT)"]
-    PX --> P6A["Phase 6A<br/>Intelligence Architecture Foundation (FUTURE)"]
+    P5 --> PX["5.X<br/>Teams Rich Content / Media Retrieval (COMPLETE)"]
+    PX --> P6A["Phase 6A<br/>Intelligence Architecture Foundation (← NEXT)"]
     P6A --> P4H["Phase 4H<br/>Security Hardening (FUTURE)"]
     P4H --> P5B["5.2–5.7<br/>Operational Integrations (FUTURE)"]
     P5B --> P6B["Phase 6B<br/>Context Engineering Expansion (FUTURE)"]
@@ -552,12 +568,12 @@ flowchart TD
 
 Phase 7 is the product strategy target defined in
 `docs/TROUBLESHOOTING_STRATEGY.md`. **It is not implemented today.**
-Phases 0–5 (through POST-5.1 B, B0–B7, and A5 — Knowledge Island
-ingestion foundation + real TELCO/RAN compound knowledge validation) are
-complete. **5.X (Teams Rich Content / Media Retrieval) is the next
-implementation milestone — NOT STARTED.** Phase 6A, Phase 4H, 5.2–5.7,
-Phase 6B, and Phase 7 all remain FUTURE, in that order — see §2a for the
-realignment rationale.
+Phases 0–5 (through POST-5.1 B, B0–B7, A5 — Knowledge Island ingestion
+foundation + real TELCO/RAN compound knowledge validation — and 5.X —
+Teams Rich Content / Media Retrieval, canonical P10) are complete. **5.X
+is COMPLETE / FROZEN. Phase 6A is the next implementation milestone —
+NOT STARTED.** Phase 4H, 5.2–5.7, Phase 6B, and Phase 7 all remain
+FUTURE, in that order — see §2a for the realignment rationale.
 
 ---
 
@@ -626,23 +642,26 @@ remains the sole user-facing agent; Incident Manager receives the same
 trusted current-turn image evidence Team Manager sees, propagated by a
 narrow `MultimodalAgentTool` adapter, never model-controlled.
 
-### D2. 5.X target topology (Teams Rich Content / Media Retrieval — FUTURE, not built)
+### D2. 5.X topology (Teams Rich Content / Media Retrieval — COMPLETE, as-built, canonical P10)
 
 ```mermaid
 flowchart TD
     TCHAT["Teams chat"] --> TMSG["real message"]
-    TMSG --> TREF["trusted media reference (FUTURE)"]
-    TREF --> TRET["deterministic media retrieval (FUTURE)"]
-    TRET --> MM["existing B5/B6 multimodal reasoning path"]
+    TMSG --> TREF["trusted (chat_id, message_id, hosted_content_id) reference"]
+    TREF --> TRET["deterministic media retrieval<br/>(teams_get_hosted_content / teams_get_all_hosted_content)"]
+    TRET --> MM["existing B5/B6 multimodal reasoning path<br/>(before_model_callback injection)"]
     MM --> COMBINED["Teams text + image + Knowledge + Case Context"]
     COMBINED --> IM[Incident Manager]
+    TRET --> VE["Source-drawer visual evidence<br/>(opaque source_id/image_id, lazy authenticated fetch)"]
 ```
 
 This reuses the CURRENT B5/B6 multimodal path (§D above) rather than a
 second vision pipeline — see §2b for the full 5.X design constraints
 (deterministic `chat → message → media` binding, no arbitrary-URL fetch,
 provenance preservation, documents remaining a distinct governed-
-ingestion concern). Nothing in this diagram is built yet.
+ingestion concern) and `docs/TEAMS_TOOL_CONTRACT.md` §4b–§4c for the
+as-built contract. Everything in this diagram is built, live-validated,
+and FROZEN.
 
 ### E. Phase 6A target topology (FUTURE, after 5.X, before Phase 4H)
 
@@ -1021,9 +1040,10 @@ Gateway Group Test").
 below) is **✅ COMPLETE** — implementation, full regression, and
 real-stack live validation all passed. **A5** (see §8 below) is
 **✅ COMPLETE**, including real live-runtime validation.
-**5.X — Teams Rich Content / Media Retrieval is NEXT** (← NEXT — NOT
-STARTED), per the locked roadmap realignment (§2a); Phase 6A, Phase 4H,
-5.2–5.7, and Phase 6B all follow in that order, before Phase 7.
+**5.X — Teams Rich Content / Media Retrieval is COMPLETE / FROZEN**
+(canonical P10 — see §2b and `docs/MASTER_ROADMAP.md`). **Phase 6A is
+NEXT — NOT STARTED**, per the locked roadmap realignment (§2a); Phase
+4H, 5.2–5.7, and Phase 6B all follow in that order, before Phase 7.
 
 Do not invent B7 implementation details beyond what this document and
 `CLAUDE.md`'s own roadmap already establish.
@@ -1439,11 +1459,13 @@ verification-code prompt) now correctly described and cited.
 
 **STATUS: A5 — COMPLETE.** Real live-runtime validation performed end
 to end, including both safety-critical gates and all 8 retested gates.
-**NEXT: 5.X — Teams Rich Content / Media Retrieval** (NOT STARTED),
-followed by Phase 6A, Phase 4H, 5.2–5.7, and Phase 6B in that order —
-see §2a for the locked roadmap realignment. (Phase 4H no longer
-immediately follows A5 — that scheduling changed after this A5 closure;
-this section's own A5 content above is otherwise unchanged.)
+5.X — Teams Rich Content / Media Retrieval was completed and frozen
+after A5 (canonical P10 — see §2b and `docs/MASTER_ROADMAP.md`).
+**NEXT: Phase 6A — Intelligence Architecture Foundation** (NOT STARTED),
+followed by Phase 4H, 5.2–5.7, and Phase 6B in that order — see §2a for
+the locked roadmap realignment. (Phase 4H no longer immediately follows
+A5 — that scheduling changed after this A5 closure; this section's own
+A5 content above is otherwise unchanged.)
 
 ---
 

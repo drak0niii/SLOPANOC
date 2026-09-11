@@ -81,7 +81,7 @@ flowchart TD
     CEL --> KC["Knowledge Context (CURRENT, via Generic KM/RAG)"]
     CEL --> EM["Experience Memory (FUTURE / Phase 6A)"]
     CEL --> CC["Case Context (CURRENT)"]
-    CEL --> OC["Operational Context (evolving -- Teams text CURRENT,<br/>Teams media 5.X/NEXT, others 5.2-5.7/FUTURE)"]
+    CEL --> OC["Operational Context (evolving -- Teams text + Teams media both CURRENT (5.X COMPLETE),<br/>others 5.2-5.7/FUTURE)"]
 ```
 
 A `Skill` (§3a) is not a node in the AGENT topology above in the sense
@@ -92,12 +92,15 @@ own. It is drawn here only to show where it would sit conceptually
 relative to Context Engineering, not to imply it is itself invoked like
 an `AgentTool`.
 
-This is target architecture only — nothing in this section exists in the
-codebase today. It is documented here so 5.X, Phase 6A, and later phases
-are designed toward a consistent destination, not so it can be mistaken
-for a current capability. Execution order (locked, see
-`docs/BUILD_SEQUENCE.md` §2a): A5 (COMPLETE) → 5.X (← NEXT) → Phase 6A →
-Phase 4H → 5.2–5.7 → Phase 6B → Phase 7.
+This is target architecture only — nothing in this section (Troubleshooting
+Manager, Skills, Experience Memory, the Context Engineering Layer, Head
+of Automated Operations) exists in the codebase today, even though 5.X
+(one of its prerequisites) is now complete. It is documented here so
+Phase 6A and later phases are designed toward a consistent destination,
+not so it can be mistaken for a current capability. Execution order
+(locked, see `docs/BUILD_SEQUENCE.md` §2a): A5 (COMPLETE) → 5.X
+(COMPLETE / FROZEN, canonical P10) → Phase 6A (← NEXT) → Phase 4H →
+5.2–5.7 → Phase 6B → Phase 7.
 
 - **`team_manager` remains the only user-facing agent today**, and remains
   so until a "Head of Automated Operations" agent is actually designed and
@@ -109,9 +112,11 @@ Phase 4H → 5.2–5.7 → Phase 6B → Phase 7.
   reasoning work, introduced as part of **Phase 6A — Intelligence
   Architecture Foundation** (`docs/BUILD_SEQUENCE.md` §2a), maturing into
   Phase 7's full iterative loop. It would attach to `team_manager` via
-  `AgentTool`, the same way `incident_manager` does (§12) — never built
-  before 5.X (Teams Rich Content / Media Retrieval, the current
-  prerequisite milestone) is complete.
+  `AgentTool`, the same way `incident_manager` does (§12) — its
+  prerequisite milestone, 5.X (Teams Rich Content / Media Retrieval,
+  canonical P10), is now COMPLETE and FROZEN, so Phase 6A is unblocked
+  and is the next milestone on the locked roadmap — but Troubleshooting
+  Manager itself remains unbuilt until Phase 6A actually builds it.
 - **Skills** (§3a) belong to Phase 6A — a reusable behavioral
   framework/registry the Troubleshooting Manager selects from, avoiding
   one new agent per fault type.
@@ -538,8 +543,10 @@ generic, safe response — it never falls back to a normal, tool-enabled
   MOP/SOP reading logic owned by a single agent.
 - The currently planned next specialist is **Troubleshooting Manager**,
   introduced as part of **Phase 6A — Intelligence Architecture
-  Foundation** (`docs/BUILD_SEQUENCE.md` §2a) — not before **5.X (Teams
-  Rich Content / Media Retrieval)**, the current next implementation
-  milestone, is complete. Troubleshooting Manager and Head of Automated
-  Operations (§2's future topology) must not be introduced during 5.X —
-  5.X is scoped to Teams media retrieval only.
+  Foundation** (`docs/BUILD_SEQUENCE.md` §2a), the current next
+  implementation milestone — its prerequisite, **5.X (Teams Rich Content
+  / Media Retrieval, canonical P10)**, is now COMPLETE and FROZEN.
+  Troubleshooting Manager and Head of Automated Operations (§2's future
+  topology) were correctly never introduced during 5.X — 5.X was scoped
+  to Teams media retrieval only — and must not be introduced except as
+  part of Phase 6A actually building them.

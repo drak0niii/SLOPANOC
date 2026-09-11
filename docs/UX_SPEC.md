@@ -2,6 +2,15 @@ UX_SPEC.md
 
 Enterprise AI Assistant — UI/UX Specification
 
+> **Status note (added during the documentation governance pass, not a
+> content rewrite):** this document describes original product/UX
+> intent from the UI/UX-only prototype phase. Much of it (Projects,
+> global Knowledge, Connectors beyond Teams, Skills) remains local-state
+> mock UI, not backend-wired — see README.md's "Current capabilities"
+> and `docs/MASTER_ROADMAP.md` for what actually exists today. Do not
+> read any UI surface described below as current runtime capability
+> merely because it is described here.
+
 1. UX Objective
 
 Create an interface that makes a governed enterprise AI assistant feel as easy to use as a consumer conversational AI product.
