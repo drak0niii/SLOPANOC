@@ -100,10 +100,23 @@ def test_generic_incident_manager_instruction_is_byte_for_byte_unchanged() -> No
     corrective pass rewrote "ITERATIVE TROUBLESHOOTING" to redirect the
     output mechanism from free-prose self-restraint (proven unreliable
     by real live testing) to the new typed `troubleshooting_guidance`
-    structured field -- this is that legitimate, intentional length, not
-    P4B.2-era drift.
+    structured field, the Teams Image Vision + Full Provenance Binding
+    corrective milestone rewrote the "TEAMS HOSTED IMAGES" paragraph (a
+    successful `teams_get_hosted_content` call now delivers a real image
+    to the model, so the prior "cannot yet interpret its visual content"
+    wording was replaced with the same IMAGE EVIDENCE discipline already
+    governing user-uploaded images), the Multiple Teams Hosted Images
+    milestone extended that same paragraph again for several images per
+    message (per-image `delivered_for_visual_reasoning`/`hosted_content_
+    truncated` budget signals, positional "first image"/"second image"
+    references, synthesizing across images), and the Deterministic
+    All-Image Retrieval milestone extended it once more to describe the
+    two-tool split (`teams_get_hosted_content` for one specific image vs.
+    `teams_get_all_hosted_content` for a deterministic, exhaustive batch)
+    and `failed_ordinals`/count-based reporting -- this is that
+    legitimate, intentional length, not P4B.2-era drift.
     """
-    assert len(INCIDENT_MANAGER_INSTRUCTION) == 50365
+    assert len(INCIDENT_MANAGER_INSTRUCTION) == 54429
 
 
 def test_synthesis_only_agent_no_longer_uses_the_generic_instruction() -> None:

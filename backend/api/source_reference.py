@@ -196,6 +196,59 @@ def build_teams_source_reference(
     )
 
 
+def ensure_source_reference_for_visual_evidence(
+    source_reference: Optional[SourceReferenceDTO],
+    chat_id: Optional[str],
+    delivered_visual_evidence: list[Any],
+) -> Optional[SourceReferenceDTO]:
+    """Teams Visual Evidence live-validation bugfix: `build_teams_source_
+    reference` above returns `None` whenever `incident_manager`'s own
+    `evidence` citation list came back empty -- real live validation
+    proved this happens for a genuinely image-focused message (nothing
+    TEXTUAL worth citing as `TeamsEvidence`, even though real images WERE
+    retrieved and delivered to Gemini for the SAME turn). Without this
+    function, Visual Evidence had no Source to attach to and silently
+    never appeared, even for a fully successful "describe all N images"
+    answer.
+
+    Returns `source_reference` unchanged if it is already non-`None`
+    (the common case -- real textual evidence exists, nothing to do here).
+    Otherwise, constructs and returns a MINIMAL, honest `SourceReferenceDTO`
+    -- `message_count`/`period_start`/`period_end` stay `None` and
+    `evidence`/`contributors` stay `[]` (never fabricated; there is
+    genuinely no textual evidence to report) -- ONLY when `chat_id` is
+    known AND at least one of `delivered_visual_evidence` (each expected to
+    expose a `.chat_id` attribute -- `hosted_content_vision_context.
+    DeliveredVisualEvidence`) actually belongs to that exact chat. Returns
+    `None` (no Source at all) when there is nothing -- neither text nor
+    visual evidence -- to show, exactly matching the pre-existing behavior
+    for an ordinary non-Teams turn.
+
+    `contributors` is intentionally left `[]` here (never resolved) -- the
+    caller (`chat_service.py`) already resolves it authoritatively, in one
+    place, for BOTH the text-evidence and this visual-only case, via
+    `resolve_authoritative_contributors`.
+    """
+    if source_reference is not None:
+        return source_reference
+    if chat_id is None:
+        return None
+    if not any(getattr(image, "chat_id", None) == chat_id for image in delivered_visual_evidence):
+        return None
+
+    return SourceReferenceDTO(
+        source_id=str(uuid.uuid4()),
+        source_type="teams",
+        label=TEAMS_SOURCE_LABEL,
+        title=None,
+        message_count=None,
+        period_start=None,
+        period_end=None,
+        contributors=[],
+        evidence=[],
+    )
+
+
 async def resolve_authoritative_contributors(chat_id: Optional[str]) -> list[str]:
     """The Teams `Source` drawer's `contributors` list, sourced
     authoritatively from `teams_get_members` -- NEVER inferred from

@@ -72,6 +72,44 @@ def test_get_members_requires_a_chat_id() -> None:
     assert exc_info.value.safe_error.error_code == "validation_error"
 
 
+def test_get_hosted_content_sends_exact_operation_and_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Teams Rich Content milestone (single-image scope) -- proves the
+    OUTGOING request shape exactly (test matrix case G): the fixed
+    `teams.getHostedContent` operation with `chatId`/`messageId`/
+    `hostedContentId` and nothing else project-specific added.
+    """
+    captured: dict = {}
+
+    def fake_post(url, json, timeout):
+        captured["json"] = json
+        return FakeResponse(200, {"success": True, "contentType": "image/png", "contentBase64": "AA=="})
+
+    monkeypatch.setattr(pac_module.requests, "post", fake_post)
+
+    PowerAutomateClient().get_hosted_content("chat-42", "msg-1", "content-abc")
+
+    assert captured["json"]["operation"] == "teams.getHostedContent"
+    assert captured["json"]["chatId"] == "chat-42"
+    assert captured["json"]["messageId"] == "msg-1"
+    assert captured["json"]["hostedContentId"] == "content-abc"
+
+
+@pytest.mark.parametrize(
+    "chat_id,message_id,hosted_content_id",
+    [
+        ("", "msg-1", "content-abc"),
+        ("chat-42", "", "content-abc"),
+        ("chat-42", "msg-1", ""),
+        ("   ", "msg-1", "content-abc"),
+    ],
+)
+def test_get_hosted_content_requires_all_three_ids(chat_id: str, message_id: str, hosted_content_id: str) -> None:
+    with pytest.raises(SafeErrorException) as exc_info:
+        PowerAutomateClient().get_hosted_content(chat_id, message_id, hosted_content_id)
+
+    assert exc_info.value.safe_error.error_code == "validation_error"
+
+
 def test_timeout_maps_to_run_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_post(*args, **kwargs):
         raise requests.exceptions.Timeout("timed out")

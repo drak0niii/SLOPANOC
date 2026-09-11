@@ -1108,6 +1108,7 @@ describe("Message — structured Teams source/provenance (pre-4H UX/provenance m
       period_end: "2026-09-01T09:00:00Z",
       contributors: ["Alex", "Priya"],
       evidence: [{ author: "Alex", sent_at: "2026-08-26T09:00:00Z", snippet: "We should escalate this now." }],
+      visual_evidence: [],
       ...overrides,
     };
   }
@@ -1217,6 +1218,7 @@ describe("Message — source chip layout alignment (Runtime Activity Truthfulnes
       period_end: "2026-09-01T09:00:00Z",
       contributors: ["Alex", "Priya"],
       evidence: [{ author: "Alex", sent_at: "2026-08-26T09:00:00Z", snippet: "We should escalate this now." }],
+      visual_evidence: [],
       ...overrides,
     };
   }
@@ -1371,6 +1373,7 @@ describe("Message — Markdown rendering (frontend Markdown pass)", () => {
       period_end: "2026-09-01T09:00:00Z",
       contributors: ["Alex", "Priya"],
       evidence: [{ author: "Alex", sent_at: "2026-08-26T09:00:00Z", snippet: "We should escalate this now." }],
+      visual_evidence: [],
       ...overrides,
     };
   }

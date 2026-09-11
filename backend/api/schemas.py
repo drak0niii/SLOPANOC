@@ -178,6 +178,34 @@ class SourceEvidenceItem(BaseModel):
     snippet: str
 
 
+class SourceVisualEvidenceItemDTO(BaseModel):
+    """Teams Visual Evidence milestone -- ONE Teams-hosted image that was
+    ACTUALLY validated AND attached as a real Gemini multimodal Part for
+    THIS answer (never merely discovered/retrieved/queued -- see
+    `backend.api.hosted_content_vision_context`'s own "DISCOVERED ->
+    RETRIEVED -> QUEUED -> ACTUALLY ATTACHED" distinction). `image_id` is
+    an OPAQUE, server-minted token (a fresh `uuid4`, minted once per turn
+    when this DTO is built) -- it resolves server-side, via a durable
+    INTERNAL binding never sent to the frontend, to the real
+    `(chat_id, message_id, hosted_content_id)` triple needed to lazily
+    re-fetch this image's bytes through the authenticated content
+    endpoint. Deliberately excludes chat_id/message_id/hosted_content_id/
+    any Power-Automate-or-Graph URL/Base64/raw bytes -- see this DTO's own
+    "SAFE BOUNDARY" note on `SourceReferenceDTO` below, which applies
+    identically here.
+    """
+
+    image_id: str
+    ordinal: int
+    """1-based position in true Teams source-HTML order (never retrieval/
+    attachment-completion order -- see hosted_content_vision_context.py's
+    own ordering guarantee, unchanged and reused here)."""
+    mime_type: str
+    size_bytes: int
+    author: str
+    sent_at: str
+
+
 class SourceReferenceDTO(BaseModel):
     """Safe, structured provenance for a Teams-derived answer (pre-4H
     UX/provenance milestone) -- the frontend's source drawer renders this
@@ -232,6 +260,13 @@ class SourceReferenceDTO(BaseModel):
     period_end: Optional[str] = None
     contributors: list[str] = Field(default_factory=list)
     evidence: list[SourceEvidenceItem] = Field(default_factory=list)
+    visual_evidence: list[SourceVisualEvidenceItemDTO] = Field(default_factory=list)
+    """Teams Visual Evidence milestone -- empty (`[]`) for any turn that
+    did not actually attach a Teams-hosted image to Gemini's visual input,
+    including every turn that predates this milestone -- fully backward
+    compatible, never populated retroactively for historical data. See
+    `SourceVisualEvidenceItemDTO`'s own docstring for the exact "only
+    actually-attached images" rule and its safe-boundary guarantees."""
 
 
 class KnowledgeSourceReferenceDTO(BaseModel):

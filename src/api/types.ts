@@ -90,6 +90,24 @@ export interface SourceEvidenceItemDTO {
   snippet: string;
 }
 
+/** Teams Visual Evidence milestone — mirrors backend/api/schemas.py's
+ * `SourceVisualEvidenceItemDTO` field-for-field. `image_id` is an OPAQUE,
+ * server-minted token, never a raw Teams chat_id/message_id/
+ * hosted_content_id — it is only ever used, verbatim, as a path segment
+ * for `GET /api/sessions/{sessionId}/sources/{sourceId}/images/{imageId}`
+ * (see src/api/sourceImages.ts). Only ever populated for an image that
+ * was ACTUALLY validated AND attached as a real Gemini multimodal Part
+ * for this answer — never every image merely found in the Teams chat. */
+export interface SourceVisualEvidenceItemDTO {
+  image_id: string;
+  /** 1-based position in true Teams source-HTML order. */
+  ordinal: number;
+  mime_type: string;
+  size_bytes: number;
+  author: string;
+  sent_at: string;
+}
+
 export interface SourceReferenceDTO {
   source_id: string;
   source_type: "teams";
@@ -100,6 +118,10 @@ export interface SourceReferenceDTO {
   period_end: string | null;
   contributors: string[];
   evidence: SourceEvidenceItemDTO[];
+  /** Teams Visual Evidence milestone — `[]` for any answer that did not
+   * actually attach a Teams-hosted image to Gemini's visual input,
+   * including every historical answer that predates this milestone. */
+  visual_evidence: SourceVisualEvidenceItemDTO[];
 }
 
 /** Phase 5.1J correction pass (Part C) — safe, structured provenance for

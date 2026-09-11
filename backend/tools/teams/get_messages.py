@@ -121,6 +121,18 @@ object is not iterable`. A subsequent real `teams_get_messages` call
 still accumulates onto that empty starting point normally -- no discarded
 branch's ids reappear, and newly retrieved ids are recorded exactly as
 before.
+
+HOSTED CONTENT (Teams Rich Content milestone, single-image scope):
+`hosted_content.extract_hosted_content_ids` deterministically finds any
+inline/pasted image reference in a message's own `content` HTML and
+populates `TeamsMessage.hosted_content_ids` -- never downloads anything.
+The ids are additionally recorded into session state under
+`KNOWN_HOSTED_CONTENT_IDS_STATE_KEY` (mirroring `KNOWN_MESSAGE_IDS_STATE_
+KEY` exactly, same rewind-cleared-state normalization discipline), for
+`backend/tools/teams/get_hosted_content.py`'s own deterministic provenance
+enforcement: a hosted_content_id may only ever be retrieved if it was
+actually discovered, for that exact message_id, by a real
+`teams_get_messages` call this turn -- never a model-asserted id.
 """
 from __future__ import annotations
 
@@ -130,6 +142,11 @@ from typing import Any, Optional
 from google.adk.tools import ToolContext
 
 from backend.api.activity_queue import ActivityKind, report_activity
+from backend.api.hosted_content_vision_context import (
+    MAX_HOSTED_IMAGES_PER_MESSAGE,
+    record_message_hosted_content_order,
+    record_message_metadata,
+)
 from backend.api.turn_context import current_run_id, record_message_texts
 from backend.gateway.power_automate_client import (
     GatewayPayload,
@@ -138,6 +155,7 @@ from backend.gateway.power_automate_client import (
 )
 from backend.gateway.safe_error import SafeErrorException, internal_error, validation_error
 from backend.tools.teams.coverage import build_coverage
+from backend.tools.teams.hosted_content import extract_hosted_content_ids
 from backend.tools.teams.html_text import normalize_teams_content
 from backend.tools.teams.message_references import (
     is_message_reference_attachment,
@@ -184,6 +202,63 @@ def read_known_message_ids(state: Any) -> set[str]:
     """
     raw = state.get(KNOWN_MESSAGE_IDS_STATE_KEY, [])
     return set(raw or [])
+
+
+# Session-state key `teams_get_messages` accumulates known-good hosted-
+# content ids into, keyed by OWNING CHAT ID then MESSAGE ID -- Teams Rich
+# Content milestone (single-image scope), FULL PROVENANCE BINDING
+# corrective pass. For `backend/tools/teams/get_hosted_content.py`'s
+# deterministic provenance enforcement to read: a hosted_content_id may
+# only ever be retrieved using exactly the (chat_id, message_id) pair it
+# was actually discovered for, by a real `teams_get_messages` call this
+# turn -- mirrors `KNOWN_MESSAGE_IDS_STATE_KEY`'s own "no model-asserted
+# identifier may authorize retrieval" discipline exactly.
+#
+# CORRECTIVE PASS: the ORIGINAL shape (`dict[message_id, set[hosted_
+# content_id]]`) bound a hosted_content_id only to the message it came
+# from, never to the chat it came from -- real-stack validation proved
+# this meant a request supplying the correct (message_id, hosted_content_
+# id) pair alongside a WRONG chat_id would pass this check regardless
+# (the only chat_id cross-check left was `get_hosted_content.py`'s own
+# `_echoed_value_mismatches(raw, "chatId", ...)`, which is conditional on
+# the gateway CHOOSING to echo a chatId back -- an indirect, provider-
+# dependent protection, not a SLOPANOC-internal deterministic binding).
+# The nested `dict[chat_id, dict[message_id, set[hosted_content_id]]]`
+# shape below closes that gap: the full (chat_id, message_id, hosted_
+# content_id) triple must now match a real discovery, checked entirely
+# inside this backend, BEFORE Power Automate is ever called.
+KNOWN_HOSTED_CONTENT_IDS_STATE_KEY = "known_hosted_content_ids"
+
+
+def read_known_hosted_content_ids(state: Any) -> dict[str, dict[str, set[str]]]:
+    """Normalize any `KNOWN_HOSTED_CONTENT_IDS_STATE_KEY` read into a
+    `dict[chat_id, dict[message_id, set[hosted_content_id]]]`.
+
+    Mirrors `read_known_message_ids`'s own defensive normalization
+    (hardened proactively, not reactively, against the exact same
+    rewind-clears-a-key-to-a-literal-None mechanism that key's own
+    docstring documents in detail): a missing key, an explicitly
+    rewind-cleared key (`None`), or any other unexpected shape all
+    normalize to `{}` -- never a `TypeError` or an `AttributeError` from
+    treating `None`/a malformed value as a dict. Any inner level that
+    does not match the expected shape (a non-dict message map, a
+    non-list id list) is likewise dropped rather than raised on -- a
+    corrupted/foreign entry for one chat must never crash retrieval for
+    an unrelated, well-formed one.
+    """
+    raw = state.get(KNOWN_HOSTED_CONTENT_IDS_STATE_KEY, {}) or {}
+    if not isinstance(raw, dict):
+        return {}
+    result: dict[str, dict[str, set[str]]] = {}
+    for chat_id, messages in raw.items():
+        if not isinstance(chat_id, str) or not isinstance(messages, dict):
+            continue
+        result[chat_id] = {
+            message_id: set(ids)
+            for message_id, ids in messages.items()
+            if isinstance(message_id, str) and isinstance(ids, list)
+        }
+    return result
 
 
 # The live Power Automate flow's configured page size (Top=50). Not sent
@@ -233,11 +308,26 @@ def _parse_messages(raw: GatewayPayload) -> list[TeamsMessage]:
     messages: list[TeamsMessage] = []
     for entry in items:
         try:
+            message_id = entry["id"]
             raw_content = entry.get("content") or ""
             message_references, suppressed_attachment_ids = _extract_message_references(entry)
+            # Teams Rich Content milestone, extended by the Multiple Teams
+            # Hosted Images milestone: deterministic, provider-neutral,
+            # order-preserving extraction -- see hosted_content.py's own
+            # module docstring. This never downloads anything; it only
+            # records WHICH inline image(s), if any, this message's own
+            # HTML references, in true source order. Bounded to
+            # MAX_HOSTED_IMAGES_PER_MESSAGE here (never in hosted_
+            # content.py itself, which stays a pure, unbounded HTML
+            # parser) -- the deterministic first-N-in-HTML-order prefix,
+            # never a random/reordered subset; `hosted_content_truncated`
+            # tells incident_manager truthfully when more existed.
+            all_hosted_content_ids = extract_hosted_content_ids(raw_content, message_id)
+            hosted_content_ids = all_hosted_content_ids[:MAX_HOSTED_IMAGES_PER_MESSAGE]
+            hosted_content_truncated = len(all_hosted_content_ids) > MAX_HOSTED_IMAGES_PER_MESSAGE
             messages.append(
                 TeamsMessage(
-                    id=entry["id"],
+                    id=message_id,
                     author=entry.get("senderName") or "Unknown",
                     text=normalize_teams_content(
                         raw_content, suppressed_attachment_ids=suppressed_attachment_ids
@@ -246,6 +336,8 @@ def _parse_messages(raw: GatewayPayload) -> list[TeamsMessage]:
                     raw_content=raw_content,
                     content_type=entry.get("contentType"),
                     message_references=message_references,
+                    hosted_content_ids=hosted_content_ids,
+                    hosted_content_truncated=hosted_content_truncated,
                 )
             )
         except (KeyError, TypeError):
@@ -274,6 +366,65 @@ def _record_known_message_ids(
         for reference in msg.message_references:
             known_ids.add(reference.message_id)
     tool_context.state[KNOWN_MESSAGE_IDS_STATE_KEY] = sorted(known_ids)
+
+
+def _record_known_hosted_content_ids(
+    tool_context: Optional[ToolContext], chat_id: str, messages: list[TeamsMessage]
+) -> None:
+    """Accumulate `{chat_id: {message_id: {hosted_content_id, ...}}}` into
+    session state -- see `KNOWN_HOSTED_CONTENT_IDS_STATE_KEY`'s own
+    docstring above. `chat_id` is this call's own real, gateway-scoped
+    chat id (the same one every message in `messages` was actually
+    retrieved from) -- never a value derived from message content. Only
+    ever adds; never validates or trusts anything itself (the same "this
+    tool only records what it actually retrieved" discipline `_record_
+    known_message_ids` already follows). A hosted_content_id discovered
+    for this chat is recorded ONLY under this chat_id -- a later call for
+    a DIFFERENT chat that happens to retrieve a message with the same
+    message_id (a real possibility -- Teams message ids are not
+    guaranteed globally unique across chats) starts its own, separate
+    inner map and can never see or extend this chat's entries.
+    """
+    if tool_context is None:
+        return
+
+    known = read_known_hosted_content_ids(tool_context.state)
+    known_for_chat = known.setdefault(chat_id, {})
+    for msg in messages:
+        if not msg.hosted_content_ids:
+            continue
+        known_for_chat.setdefault(msg.id, set()).update(msg.hosted_content_ids)
+    tool_context.state[KNOWN_HOSTED_CONTENT_IDS_STATE_KEY] = {
+        c_id: {message_id: sorted(ids) for message_id, ids in messages_map.items()}
+        for c_id, messages_map in known.items()
+    }
+
+
+def _record_hosted_content_order(messages: list[TeamsMessage]) -> None:
+    """Multiple Teams Hosted Images milestone: forwards each message's own
+    TRUE, already-truncated, HTML-source-order `hosted_content_ids` to
+    `hosted_content_vision_context.record_message_hosted_content_order`
+    (backend/api/) -- used ONLY to sort whatever images actually get
+    stashed for Gemini delivery back into canonical order at injection
+    time, since ADK executes multiple concurrent `teams_get_hosted_
+    content` calls in a nondeterministic completion order (see that
+    module's own "MULTIPLE IMAGES" docstring). Deliberately independent of
+    `tool_context`/provenance (`read_known_hosted_content_ids` above) --
+    this is pure ordering metadata, never an authorization decision, and
+    the vision-context module derives its own run correlation from
+    `current_run_id()` exactly like `_record_message_texts` below does.
+    """
+    for msg in messages:
+        if msg.hosted_content_ids:
+            record_message_hosted_content_order(msg.id, msg.hosted_content_ids)
+            # Teams Visual Evidence milestone: this message's own real
+            # author/sent_at, needed later to fill in `SourceVisual
+            # EvidenceItemDTO.author`/`sent_at` for any of its images that
+            # end up actually delivered to Gemini -- see hosted_content_
+            # vision_context.py's own docstring for why this is captured
+            # here (deterministic retrieval) rather than derived from
+            # incident_manager's own curated `evidence` selection.
+            record_message_metadata(msg.id, msg.author, msg.sent_at)
 
 
 def _record_message_texts(messages: list[TeamsMessage]) -> None:
@@ -490,11 +641,16 @@ def teams_get_messages(
     # System/event and content-free filtering -- applied only here, after
     # every pagination decision above has already been made from the raw,
     # unfiltered pages (see the module docstring's "SYSTEM/EVENT
-    # FILTERING" note).
+    # FILTERING" note). `has_hosted_content` (Teams Rich Content
+    # milestone) exempts ONLY the empty-text exclusion for a genuine
+    # image-only message -- a real system/event marker is still always
+    # excluded, unconditionally (see system_events.py's own docstring).
     after_system_filter = [
         msg
         for msg in ordered_raw
-        if not is_excludable_from_reasoning(msg.raw_content, msg.text)
+        if not is_excludable_from_reasoning(
+            msg.raw_content, msg.text, has_hosted_content=bool(msg.hosted_content_ids)
+        )
     ]
     filtered_system_event_count = retrieved_count_raw - len(after_system_filter)
 
@@ -510,6 +666,8 @@ def teams_get_messages(
     filtered_out_of_range_count = len(after_system_filter) - len(ordered)
 
     _record_known_message_ids(tool_context, ordered)
+    _record_known_hosted_content_ids(tool_context, chat_id, ordered)
+    _record_hosted_content_order(ordered)
     _record_message_texts(ordered)
 
     requested_from_utc = format_utc(from_dt) if from_dt is not None else None

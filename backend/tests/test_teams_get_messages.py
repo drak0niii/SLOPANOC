@@ -50,6 +50,8 @@ def test_messages_are_normalized_with_provenance_fields(monkeypatch: pytest.Monk
             "raw_content": "Gateway is back up.",
             "content_type": "text",
             "message_references": [],
+            "hosted_content_ids": [],
+            "hosted_content_truncated": False,
         }
     ]
 
@@ -97,6 +99,8 @@ def test_html_content_is_normalized_while_raw_content_is_preserved(
             "raw_content": raw_html,
             "content_type": "html",
             "message_references": [],
+            "hosted_content_ids": [],
+            "hosted_content_truncated": False,
         }
     ]
 
@@ -233,6 +237,8 @@ def test_raw_top_level_array_is_the_accepted_success_shape(
             "raw_content": "Gateway is back up.",
             "content_type": "text",
             "message_references": [],
+            "hosted_content_ids": [],
+            "hosted_content_truncated": False,
         }
     ]
 

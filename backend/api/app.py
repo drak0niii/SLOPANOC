@@ -182,6 +182,7 @@ from backend.api import attachment_service as attachment_orchestration
 from backend.api import case_service as case_orchestration
 from backend.api import execution_service
 from backend.api import selection_service
+from backend.api import source_images
 from backend.api.chat_service import ChatService, get_chat_service
 from backend.api.errors import handle_request_validation_error, handle_safe_error, handle_unexpected_error
 from backend.api.identity import UserContext, resolve_user_context
@@ -701,6 +702,31 @@ def create_app() -> FastAPI:
                 "Content-Disposition": f'inline; filename="{safe_filename}"',
                 "Cache-Control": "private",
             },
+        )
+
+    @app.get("/api/sessions/{session_id}/sources/{source_id}/images/{image_id}")
+    async def get_source_image_content_endpoint(
+        session_id: str,
+        source_id: str,
+        image_id: str,
+        user: UserContext = Depends(resolve_user_context),
+        session_service: ApiSessionService = Depends(get_session_service),
+    ) -> Response:
+        """Teams Visual Evidence milestone -- lazy, authenticated retrieval
+        of ONE Teams-hosted image that was actually delivered to Gemini for
+        a past turn's answer. `source_id`/`image_id` are both opaque,
+        server-minted tokens the frontend received on `SourceReferenceDTO`/
+        `SourceVisualEvidenceItemDTO` -- never a raw Teams identifier. See
+        source_images.py's own module docstring for the full authorization/
+        anti-enumeration/validation-reuse rationale.
+        """
+        data, content_type = await source_images.get_source_image_content(
+            session_service, user.user_id, session_id, source_id, image_id
+        )
+        return Response(
+            content=data,
+            media_type=content_type,
+            headers={"Cache-Control": "private"},
         )
 
     @app.delete(

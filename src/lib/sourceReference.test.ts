@@ -1,13 +1,30 @@
 import { describe, expect, it } from "vitest";
-import type { KnowledgeSourceReferenceDTO } from "../api/types";
+import type { KnowledgeSourceReferenceDTO, SourceReferenceDTO } from "../api/types";
 import {
   formatEvidenceTimestamp,
   formatKnowledgeSourceGroupLabel,
   formatKnowledgeSourceLabel,
   formatShortIsoDate,
+  formatSourceFooter,
   formatSourcePeriod,
   groupKnowledgeSourceReferences,
 } from "./sourceReference";
+
+function makeSource(overrides: Partial<SourceReferenceDTO> = {}): SourceReferenceDTO {
+  return {
+    source_id: "src1",
+    source_type: "teams",
+    label: "Teams conversation",
+    title: "Ops Bridge",
+    message_count: 5,
+    period_start: null,
+    period_end: null,
+    contributors: [],
+    evidence: [],
+    visual_evidence: [],
+    ...overrides,
+  };
+}
 
 function makeKnowledgeSource(overrides: Partial<KnowledgeSourceReferenceDTO> = {}): KnowledgeSourceReferenceDTO {
   return {
@@ -270,5 +287,68 @@ describe("formatKnowledgeSourceGroupLabel (POST-A5 refinement, Track B)", () => 
   it("falls back to the generic 'Governed knowledge · <version>' when no title/display name is usable", () => {
     const groups = groupKnowledgeSourceReferences([makeKnowledgeSource({ title: "", source_display_name: null })]);
     expect(formatKnowledgeSourceGroupLabel(groups[0])).toBe("Governed knowledge · v1");
+  });
+});
+
+describe("formatSourceFooter — Teams Visual Evidence milestone", () => {
+  it("uses the original generic sentence when there is no visual evidence", () => {
+    const source = makeSource({ visual_evidence: [] });
+    expect(formatSourceFooter(source)).toBe(
+      "This response was derived from retrieved Teams messages in the conversation above.",
+    );
+  });
+
+  it("singular message, singular image", () => {
+    const source = makeSource({
+      message_count: 1,
+      visual_evidence: [{ image_id: "i1", ordinal: 1, mime_type: "image/png", size_bytes: 1, author: "A", sent_at: "x" }],
+    });
+    expect(formatSourceFooter(source)).toBe(
+      "This response was derived from 1 Teams message and 1 image retrieved from the conversation above.",
+    );
+  });
+
+  it("singular message, plural images", () => {
+    const source = makeSource({
+      message_count: 1,
+      visual_evidence: [1, 2, 3].map((n) => ({
+        image_id: `i${n}`,
+        ordinal: n,
+        mime_type: "image/png",
+        size_bytes: 1,
+        author: "A",
+        sent_at: "x",
+      })),
+    });
+    expect(formatSourceFooter(source)).toBe(
+      "This response was derived from 1 Teams message and 3 images retrieved from the conversation above.",
+    );
+  });
+
+  it("plural messages, plural images", () => {
+    const source = makeSource({
+      message_count: 5,
+      visual_evidence: [1, 2].map((n) => ({
+        image_id: `i${n}`,
+        ordinal: n,
+        mime_type: "image/png",
+        size_bytes: 1,
+        author: "A",
+        sent_at: "x",
+      })),
+    });
+    expect(formatSourceFooter(source)).toBe(
+      "This response was derived from 5 Teams messages and 2 images retrieved from the conversation above.",
+    );
+  });
+
+  it("falls back to the generic sentence when message_count is null, even with visual evidence present (defensive)", () => {
+    const source = makeSource({
+      message_count: null,
+      visual_evidence: [{ image_id: "i1", ordinal: 1, mime_type: "image/png", size_bytes: 1, author: "A", sent_at: "x" }],
+    });
+    expect(formatSourceFooter(source)).toBe(
+      "This response was derived from retrieved Teams messages in the conversation above.",
+    );
   });
 });

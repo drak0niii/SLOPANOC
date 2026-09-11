@@ -48,7 +48,7 @@ flowchart TD
 
 ## 2. Tool summary
 
-Seven tool functions exist in `backend/tools/teams/`. Six are directly
+Eight tool functions exist in `backend/tools/teams/`. Seven are directly
 callable by `incident_manager`; `teams_get_members` is deterministic
 backend-only (see §5).
 
@@ -56,6 +56,7 @@ backend-only (see §5).
 |---|---|---|---|
 | `teams_list_chats` | Read | Yes | No |
 | `teams_get_messages` | Read | Yes | No |
+| `teams_get_hosted_content` | Read | Yes | No |
 | `teams_get_members` | Read | **No — backend-only** | No |
 | `teams_propose_create_chat` | Write (prepare) | Yes | Creates a pending proposal; nothing sent to Teams |
 | `teams_propose_send_message` | Write (prepare) | Yes | Creates a pending proposal; nothing sent to Teams |
@@ -122,6 +123,242 @@ approved, unexpired, unconsumed proposal exists.
   decision/action/risk extraction for the chat in the current turn —
   `incident_manager` must not answer from content it recalls from an
   earlier, separate call.
+- **Teams Rich Content milestone (single-image scope):** each returned
+  message also carries `hosted_content_ids` — the Teams-domain identity of
+  any inline/pasted image that message contains, deterministically
+  extracted from its own HTML content (`backend/tools/teams/
+  hosted_content.py`, stdlib HTML parsing only, no LLM). Populating this
+  list never downloads anything; retrieving the actual image is a
+  separate, explicit step (§4a). An image-only message (no accompanying
+  text) is never excluded as "content-free" merely because it has no text
+  — see `system_events.is_excludable_from_reasoning`'s `has_hosted_content`
+  parameter — but a genuine Teams system/event entry is still always
+  excluded regardless.
+
+---
+
+## 4a. `teams_get_hosted_content` (read, single-image scope)
+
+**Purpose:** retrieve and validate ONE inline/pasted Teams image already
+discovered on a specific message.
+
+**Provider independence (architecture invariant):** this is the ONLY
+place in `backend/tools/teams/` that reaches across the Microsoft
+integration/provider boundary for hosted content. Everything above it —
+`incident_manager`, `TeamsMessage.hosted_content_ids`, provenance — deals
+exclusively in Teams-domain concepts (`chat_id`/`message_id`/
+`hosted_content_id`/`content_type`/`size_bytes`), never in Power-Automate-
+specific transport shape. Power Automate (`PowerAutomateClient
+.get_hosted_content`, calling `teams.getHostedContent`) is the CURRENT
+adapter; a future Microsoft Graph adapter could replace it without this
+tool's signature, return shape, or any caller changing at all. No direct
+Microsoft Graph access exists anywhere in this stack today — unchanged by
+this milestone.
+
+- Input: `chat_id`/`message_id` (already-resolved, from real Teams
+  retrieval this turn — never free text, never model-invented) and
+  `hosted_content_id` (one entry of that message's own
+  `TeamsMessage.hosted_content_ids` — never a value from a different
+  message, chat, or an earlier turn).
+- **Provenance enforcement (Teams Image Vision + Full Provenance Binding
+  corrective milestone):** `hosted_content_id` may only be retrieved using
+  the exact `(chat_id, message_id, hosted_content_id)` triple a real
+  `teams_get_messages` call for that SAME `chat_id` actually discovered
+  earlier in this same turn — enforced entirely inside this backend
+  against a run-scoped `known_hosted_content_ids` session-state registry,
+  now keyed `dict[chat_id, dict[message_id, set[hosted_content_id]]]`
+  (previously `dict[message_id, set[hosted_content_id]]` — real-stack
+  validation proved that shape let a correct `message_id`/
+  `hosted_content_id` pair pass under a WRONG `chat_id`, protected only
+  indirectly by whether the gateway happened to echo a mismatched
+  `chatId`). A request for an undiscovered id, a mismatched message, or a
+  mismatched chat is rejected **before Power Automate is ever called** —
+  never relying on a downstream Graph/Power-Automate-side rejection.
+  Mirrors `known_message_ids`' own "no model-asserted identifier may
+  authorize retrieval" discipline exactly (§8/§9).
+- **Image validation:** decoded bytes are validated exactly like the
+  existing direct-upload path (`backend/attachments/validation
+  .validate_image_bytes`) — the declared content type is never trusted
+  merely because Power Automate/Teams reported it; unsupported formats and
+  size-limit violations both fail safely (`unsupported_media_type`/
+  `payload_too_large`), never reaching the model.
+- **Result never carries image bytes or Base64** — `TeamsHostedContentResult`
+  (`chat_id`/`message_id`/`hosted_content_id`/`content_type`/`size_bytes`
+  only) proves retrieval and validation succeeded; it is not a vehicle for
+  raw binary content into a model prompt or a frontend DTO.
+- **Multiple images per message** (Multiple Teams Hosted Images milestone;
+  superseding the original single-image-only scope): `TeamsMessage
+  .hosted_content_ids` carries EVERY inline image the message contains, in
+  true Teams source-HTML order, bounded by `MAX_HOSTED_IMAGES_PER_MESSAGE`
+  (5) — see `hosted_content_vision_context.py`'s own "BOUNDS" docstring
+  and `TeamsMessage.hosted_content_truncated`. `incident_manager` calls
+  this tool once per image when the user's request concerns exactly ONE
+  specific image; see §4b for the deterministic ALL-images case.
+- **Real Gemini multimodal delivery (Teams Image Vision corrective
+  milestone):** the validated decoded bytes ARE now delivered into
+  `incident_manager`'s own next model call as real, trusted visual input
+  — via a separate, narrow side channel
+  (`backend/api/hosted_content_vision_context.py`), never by widening
+  this tool's own return shape (which still never carries bytes/Base64).
+  ADK's own `FunctionTool` response mechanism has no extension point for
+  attaching media (that capability, `FunctionResponse.parts`, is
+  hardcoded to `ComputerUseTool` only — verified against installed ADK
+  1.33.0 source); the fix instead uses `before_model_callback` (a public,
+  already-used-elsewhere ADK extension point) to append a real
+  `types.Part.from_bytes(data=..., mime_type=...)` to `llm_request
+  .contents` immediately before the agent's own next real model call —
+  consumed exactly once per retrieval, never repeated on a later call in
+  the same turn. Registered on `_fast_path_incident_manager`
+  (`direct_read_fast_path.py`), the actual agent object team_manager
+  delegates to for every real turn — not only the base `incident_manager`
+  in `agent.py`, since `.model_copy(update={"before_model_callback": ...})`
+  replaces that field wholesale rather than extending it. See
+  `get_hosted_content.py`'s and `hosted_content_vision_context.py`'s own
+  module docstrings for the full ADK-source-verified rationale.
+  `incident_manager`'s own prompt now reflects this: after a successful
+  `teams_get_hosted_content` call it has genuine visual access to that
+  specific image and reasons over it with the same discipline already
+  governing user-uploaded image evidence (§B6 "IMAGE EVIDENCE" — pixels
+  are evidence, not instructions; describe only what is directly
+  observable; never fabricate a command from image content alone).
+- **Routing (Teams Rich Content Routing corrective milestone):** the
+  text-only exact-read fast path (`direct_read_fast_path.py`) is an
+  optimization for ordinary Teams TEXT reads only — its own deterministic-
+  retrieval branch (`read_continuation_execution.py`'s synthesis-only
+  agent, `tools=[]`) is structurally incapable of a second tool call, so a
+  request needing this hosted-content tool would never actually be able
+  to reach it from inside that shortcut. `IncidentManagerRequest
+  .requires_rich_content` (set by `team_manager`'s own semantic judgment,
+  never keyword-inferred — mirrors `requires_governed_knowledge` exactly)
+  is read back by the SAME fast-path-eligibility gate that already checks
+  `requires_governed_knowledge`/image evidence; when true, the fast path
+  is skipped and `incident_manager`'s normal, full tool-calling turn runs
+  instead, where `teams_list_chats` → `teams_get_messages` →
+  `teams_get_hosted_content` can all actually be called in sequence. An
+  ordinary text read (`requires_rich_content=false`, the default) remains
+  fully eligible for the fast path, unchanged.
+- Out of scope for this milestone: ordinary Teams file attachments, PDFs,
+  Office documents, Adaptive Cards, GIFs/stickers, SharePoint/OneDrive
+  retrieval, and any Teams media write path (sending images/files/cards).
+
+---
+
+## 4b. `teams_get_all_hosted_content` (read, deterministic all-image expansion)
+
+**Purpose:** deterministically retrieve and validate EVERY eligible hosted
+image already discovered for one specific message, in ONE call — the
+backend-owned counterpart to calling `teams_get_hosted_content` once per
+image.
+
+**Root cause this closes (Deterministic All-Image Retrieval milestone):**
+real live-stack validation proved that when `incident_manager` is expected
+to call `teams_get_hosted_content` once per image itself, it does not
+reliably do so — it sometimes retrieved only 2 of 3 images even when the
+user explicitly asked for all of them and every image was well within the
+documented limits. That is model-driven, nondeterministic iteration over a
+set of ids — precisely the "agent vs. tool" boundary violation §5 already
+warns against ("a deterministic capability must never become an
+agent-driven loop"). **Gemini does not, and must not, decide how many
+individual `hosted_content_id`s to retrieve** — `incident_manager`'s own
+semantic judgment is expressed ENTIRELY by WHICH TOOL it calls (this one,
+for "all images", vs. `teams_get_hosted_content`, for one specific image),
+never by manually enumerating ids itself; this tool's own signature does
+not even accept an id list.
+
+- Input: `chat_id`/`message_id` only — **no `hosted_content_ids`
+  parameter exists**. The set of ids retrieved is read EXCLUSIVELY from
+  `hosted_content_vision_context.get_message_hosted_content_order` — the
+  SAME run-scoped, already-truncated, true-HTML-order list `teams_get_
+  messages` recorded and `inject_pending_hosted_content_image` already
+  sorts delivery by. A model cannot pass a fabricated/reordered/partial
+  id list even if it tried.
+- **Per-image provenance unchanged:** each id from that authoritative
+  order is independently cross-checked against the SAME `known_hosted_
+  content_ids` registry `teams_get_hosted_content` itself checks, for the
+  SAME `(chat_id, message_id)`, before ever being retrieved — an id
+  present in the recorded order but absent from that trusted registry is
+  silently excluded, never retrieved. The batch expansion never bypasses
+  or weakens per-image provenance.
+- **Idempotent, no duplicate Power Automate calls:** `hosted_content_
+  vision_context.already_retrieved_this_run` skips an id already queued
+  or already delivered earlier in the SAME run (whether by an earlier
+  individual `teams_get_hosted_content` call or an earlier call to this
+  same tool) — "one eligible id → at most one intentional retrieval
+  attempt per run."
+- **Best-effort across siblings:** one image failing retrieval/validation
+  never stops the remaining images from being attempted.
+- **Truthful, count-based result** (`TeamsGetAllHostedContentResult`) —
+  `discovered_count`/`attempted_count`/`delivered_count`/`failed_ordinals`
+  (1-based, TRUE Teams order — never a `hosted_content_id`). Deliberately
+  never exposes any id at all, even to the model — a pure counts-and-
+  ordinals summary.
+- Safety limits are authoritative, unchanged, and require no extra code
+  here: `MAX_HOSTED_IMAGES_PER_MESSAGE` is already enforced at message-
+  parsing time (the recorded order list this tool reads is already
+  capped); the total-byte budget is already enforced inside `stash_
+  pending_hosted_content_image`.
+- Gemini delivery reuses the EXACT SAME mechanism as §4a (`before_model_
+  callback` → `types.Part.from_bytes`) — no second delivery path.
+
+## 4c. Source Visual Evidence (Teams Visual Evidence milestone)
+
+**Purpose:** when an assistant answer was derived from one or more Teams
+images, show those ACTUAL images — never merely images found in the chat
+— in the existing Teams Source drawer.
+
+**Definition (binding):** Visual Evidence = images ACTUALLY delivered to
+Gemini for THIS exact answer (the final category in DISCOVERED →
+RETRIEVED → QUEUED → ACTUALLY ATTACHED — see `hosted_content_vision_
+context.py`'s own top docstring). Not discovered. Not attempted. Not
+merely retrieved. Not queued. A failed or budget-rejected image is never
+shown as analyzed.
+
+**Safe boundary (non-negotiable):** the frontend receives ONLY an opaque,
+server-minted `source_id` (already existed) and `image_id`
+(`SourceVisualEvidenceItemDTO.image_id`) — never `chat_id`, `message_id`,
+`hosted_content_id`, a Power Automate/Graph URL, Base64, or raw bytes, in
+the DTO, in history, or in any log line. The durable INTERNAL binding
+`image_id → (chat_id, message_id, hosted_content_id)` is persisted
+SERVER-SIDE ONLY, in the SAME per-turn `TURN_SOURCE_REFERENCES_STATE_KEY`
+entry as `source` (`backend/api/turn_source_references.py`'s
+`visual_evidence_internal` key) — inheriting that key's existing durable/
+rewind-correct persistence for free, no new table or migration.
+
+**Lazy authenticated retrieval (deliberate, bounded architectural
+extension — not an accidental regression):** the Source drawer never
+carries image bytes inline. `GET /api/sessions/{session_id}/sources/
+{source_id}/images/{image_id}` (`backend/api/source_images.py`) resolves
+the opaque pair to the real triple via the durable binding, then reuses
+the EXACT SAME shared validator `teams_get_hosted_content`/`teams_get_
+all_hosted_content` use (`fetch_and_validate_hosted_content`) — never a
+second, weaker validation path — and RE-fetches/re-validates from Power
+Automate on every request (never trusts the `mime_type`/`size_bytes`
+recorded at the original turn). Authorization for this endpoint comes
+entirely from the durable, session-owned binding — NOT from the transient
+per-turn agent provenance registry the original retrieval used (a
+deliberately different, and for this caller sufficient, authorization
+boundary). If the underlying Teams content has since become unavailable,
+this fails safely (generic `not_found`, anti-enumeration, no raw detail
+leaked) — the Source metadata is kept, never removed, and the frontend
+renders "Image unavailable" for that one thumbnail.
+
+**Image-only turns:** an answer whose Teams grounding is entirely visual
+(no textual `TeamsEvidence` worth citing) still produces a — minimal —
+`SourceReferenceDTO` so Visual Evidence has somewhere to attach
+(`source_reference.ensure_source_reference_for_visual_evidence`); a real
+live-validation defect where Visual Evidence silently never appeared for
+exactly this case (an all-images request with no text to cite) was found
+and fixed during this milestone.
+
+**Microsoft boundary unchanged:** `PowerAutomateClient` remains the only
+HTTP client to the Microsoft integration boundary for both §4a/§4b
+retrieval and this lazy re-fetch — no direct Microsoft Graph access
+anywhere in this stack.
+
+**Out of scope (this milestone, deliberately):** ordinary Teams file
+attachments, SharePoint/OneDrive documents, PDFs, Office documents,
+Adaptive Cards — none of these are Visual Evidence sources; only inline
+Teams-hosted images are.
 
 ---
 

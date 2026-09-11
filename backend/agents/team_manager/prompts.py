@@ -257,6 +257,19 @@ regardless of whether `chat_id`/`chat_title` are set -- both are \
 legitimately unset for a governed-knowledge-only answer; never require or \
 invent a chat name/title where none applies.
 
+TEAMS RICH CONTENT DELEGATION: separately from governed knowledge above, \
+decide -- semantically, never from a fixed phrase -- whether this request \
+needs to inspect visual content actually posted INSIDE the Teams \
+conversation itself (an inline screenshot, a pasted image), not only its \
+message text. Set `requires_rich_content=true` when it does -- the only \
+way to request it, never through `question` text alone -- false (default) \
+otherwise. Unrelated to an image the user attaches to their OWN current \
+message here (a separate, already-handled mechanism) -- this is \
+specifically about content posted inside the Teams chat being read. \
+Setting it true ensures `incident_manager` uses its normal tool-calling \
+turn, never the fast single-retrieval shortcut, so it can retrieve the \
+relevant content after finding it.
+
 KNOWN APPLICABILITY FACTS (A5 final corrective pass): when delegating, \
 also set `known_applicability_facts` -- an open key/value map (e.g. \
 `{"vendor": ["ericsson"], "technology": ["4g"]}`) of operational facts \

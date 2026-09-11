@@ -45,11 +45,13 @@ from backend.agents.incident_manager.schemas import (
     IncidentManagerResponse,
 )
 from backend.agents.incident_manager.tool_call_diagnostics import log_incident_manager_tool_call
+from backend.api.hosted_content_vision_context import inject_pending_hosted_content_image
 from backend.api.perf_timing import after_model_call, before_model_call
 from backend.config.settings import get_settings, get_shared_llm
 from backend.tools.knowledge.tools import knowledge_search, knowledge_select_evidence
 from backend.tools.runtime_time import get_current_time_context
 from backend.tools.teams.execute_write import teams_create_chat, teams_send_message
+from backend.tools.teams.get_hosted_content import teams_get_all_hosted_content, teams_get_hosted_content
 from backend.tools.teams.get_messages import teams_get_messages
 from backend.tools.teams.list_chats import teams_list_chats
 from backend.tools.teams.propose_write import teams_propose_create_chat, teams_propose_send_message
@@ -79,6 +81,28 @@ incident_manager = Agent(
     tools=[
         teams_list_chats,
         teams_get_messages,
+        # Teams Rich Content milestone (single-image scope), Teams Image
+        # Vision corrective pass: retrieves AND validates one Teams-hosted
+        # image; the validated bytes are then delivered into this agent's
+        # own next model call as real Gemini multimodal input via the
+        # `inject_pending_hosted_content_image` before_model_callback
+        # below -- see get_hosted_content.py's and hosted_content_vision_
+        # context.py's own module docstrings for the full mechanism.
+        # `hosted_content_id` values are only ever ones `teams_get_
+        # messages` itself already returned this turn, for the SAME chat
+        # -- enforced deterministically, never by prompt wording alone
+        # (see that tool's own provenance enforcement).
+        teams_get_hosted_content,
+        # Deterministic All-Image Retrieval milestone: the exhaustive
+        # counterpart to teams_get_hosted_content -- call this ONCE (never
+        # teams_get_hosted_content repeatedly) when the user's request
+        # requires reviewing ALL of a message's images. Reads the
+        # authoritative, already-discovered hosted_content_ids itself;
+        # the model never enumerates individual ids for this case -- see
+        # that tool's own module docstring for the full root-cause
+        # rationale (real live validation proved model-driven iteration
+        # over individual ids unreliable).
+        teams_get_all_hosted_content,
         get_current_time_context,
         teams_propose_create_chat,
         teams_propose_send_message,
@@ -118,7 +142,18 @@ incident_manager = Agent(
     # `AgentTool` delegation or `read_continuation_execution.py`'s own
     # direct Runner invocation -- both paths run through this SAME agent
     # object.
-    before_model_callback=before_model_call("incident_manager"),
+    # Teams Image Vision corrective milestone: a LIST -- ADK's own
+    # documented multi-callback mechanism (`LlmAgent.canonical_before_
+    # model_callbacks`, verified against the installed 1.33.0 source) --
+    # additive alongside the existing perf-timing callback, never
+    # replacing it. NOTE: team_manager actually delegates to `_fast_path_
+    # incident_manager` (direct_read_fast_path.py), a `.model_copy` that
+    # explicitly OVERRIDES `before_model_callback` with its own list --
+    # this base agent's own list matters for standalone `adk run`/test use
+    # of `incident_manager` directly; the live-turn wiring that matters
+    # for a real user turn is that module's own list, kept in sync with
+    # this one.
+    before_model_callback=[before_model_call("incident_manager"), inject_pending_hosted_content_image],
     after_model_callback=after_model_call("incident_manager"),
 )
 

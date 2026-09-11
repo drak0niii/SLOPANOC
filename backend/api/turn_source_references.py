@@ -75,7 +75,7 @@ after a hard refresh or backend restart, without a database migration.
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
 
 from backend.api.knowledge_source_reference import dedupe_knowledge_source_references
 from backend.api.schemas import KnowledgeSourceReferenceDTO, SourceReferenceDTO
@@ -96,6 +96,7 @@ def build_turn_source_references_delta(
     turn_id: str,
     source: Optional[SourceReferenceDTO],
     knowledge_sources: list[KnowledgeSourceReferenceDTO],
+    visual_evidence_internal: Optional[list[dict[str, Any]]] = None,
 ) -> Optional[dict[str, Any]]:
     """Returns the FULL updated value to persist for `TURN_SOURCE_
     REFERENCES_STATE_KEY`, or `None` when this turn has nothing worth
@@ -107,6 +108,22 @@ def build_turn_source_references_delta(
     as `Any` and treated as empty if it is not actually a dict -- a
     single corrupted/foreign value must never crash a turn that otherwise
     completed successfully).
+
+    `visual_evidence_internal` (Teams Visual Evidence milestone) -- a
+    plain list of `{"image_id", "chat_id", "message_id",
+    "hosted_content_id"}` dicts, ONE per image `source.visual_evidence`
+    (the PUBLIC DTO) also carries this turn, same order, `image_id`
+    values matching 1:1. Stored under a SEPARATE key
+    (`visual_evidence_internal`) in the SAME per-turn entry as `source`,
+    so it inherits the exact same durability/rewind-reversal guarantee
+    for free (see this module's own top docstring) -- but
+    `resolve_turn_source_references` below NEVER reads it back; only
+    `resolve_visual_evidence_binding` does, and that function is used
+    exclusively by the authenticated Source visual-evidence HTTP content
+    endpoint (`source_images.py`), never by the history projection that
+    builds the PUBLIC DTO the frontend receives. Omitted when empty/None
+    -- a turn with no delivered images writes no such key, exactly
+    mirroring `knowledge_sources`'s own "omit when empty" discipline.
     """
     if source is None and not knowledge_sources:
         return None
@@ -117,8 +134,65 @@ def build_turn_source_references_delta(
         entry["source"] = source.model_dump(mode="json")
     if knowledge_sources:
         entry["knowledge_sources"] = [item.model_dump(mode="json") for item in knowledge_sources]
+    if visual_evidence_internal:
+        entry["visual_evidence_internal"] = list(visual_evidence_internal)
 
     return {**base, turn_id: entry}
+
+
+class VisualEvidenceBinding(NamedTuple):
+    """The real, durable provenance triple a public, opaque `image_id`
+    resolves to -- NEVER sent to the frontend (see `source_images.py`,
+    the sole consumer of `resolve_visual_evidence_binding`)."""
+
+    chat_id: str
+    message_id: str
+    hosted_content_id: str
+
+
+def resolve_visual_evidence_binding(state: Any, source_id: str, image_id: str) -> Optional[VisualEvidenceBinding]:
+    """Teams Visual Evidence milestone -- scans every turn currently
+    present in `TURN_SOURCE_REFERENCES_STATE_KEY` (already naturally
+    rewind-correct: a discarded turn's entry is simply absent, per ADK's
+    own state-delta reversal -- see this module's own top docstring) for
+    one whose persisted `source.source_id` matches `source_id`, then looks
+    up `image_id` within that SAME turn's own `visual_evidence_internal`
+    list. Returns `None` for an unknown `source_id`, an unknown
+    `image_id`, an `image_id` that belongs to a DIFFERENT source/turn, or
+    any malformed data at any level -- never raises, mirrors `resolve_
+    turn_source_references`'s own defensive tolerance exactly. The caller
+    (`source_images.py`) is responsible for turning a `None` result into a
+    generic, anti-enumeration-safe `not_found` -- this function itself
+    never distinguishes "wrong source_id" from "wrong image_id" in its
+    return value, by construction (both are simply `None`).
+    """
+    all_entries = state.get(TURN_SOURCE_REFERENCES_STATE_KEY) if hasattr(state, "get") else None
+    if not isinstance(all_entries, dict):
+        return None
+
+    for entry in all_entries.values():
+        if not isinstance(entry, dict):
+            continue
+        raw_source = entry.get("source")
+        if not isinstance(raw_source, dict) or raw_source.get("source_id") != source_id:
+            continue
+        raw_bindings = entry.get("visual_evidence_internal")
+        if not isinstance(raw_bindings, list):
+            return None
+        for raw_binding in raw_bindings:
+            if not isinstance(raw_binding, dict):
+                continue
+            if raw_binding.get("image_id") != image_id:
+                continue
+            chat_id = raw_binding.get("chat_id")
+            message_id = raw_binding.get("message_id")
+            hosted_content_id = raw_binding.get("hosted_content_id")
+            if not (isinstance(chat_id, str) and isinstance(message_id, str) and isinstance(hosted_content_id, str)):
+                return None
+            return VisualEvidenceBinding(chat_id=chat_id, message_id=message_id, hosted_content_id=hosted_content_id)
+        return None
+
+    return None
 
 
 def resolve_turn_source_references(

@@ -102,6 +102,7 @@ const TEAMS_SOURCE: SourceReferenceDTO = {
   period_end: "2026-08-20T09:05:00Z",
   contributors: ["Priya"],
   evidence: [{ author: "Priya", sent_at: "2026-08-20T09:00:00Z", snippet: "TEAM-ORION is the platform owner." }],
+  visual_evidence: [],
 };
 
 function kmSource(overrides: Partial<KnowledgeSourceReferenceDTO> = {}): KnowledgeSourceReferenceDTO {

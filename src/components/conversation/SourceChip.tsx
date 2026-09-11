@@ -2,10 +2,12 @@ import { FileText, MessagesSquare, NotebookText } from "../ui/icons";
 import type { Citation } from "../../types";
 import type { KnowledgeSourceReferenceDTO, SourceReferenceDTO } from "../../api/types";
 import { DrawerContent, DrawerRoot, DrawerTitle, DrawerTrigger } from "../ui/Drawer";
+import { VisualEvidenceSection } from "./VisualEvidenceGallery";
 import {
   formatEvidenceTimestamp,
   formatKnowledgeSourceGroupLabel,
   formatKnowledgeSourceLabel,
+  formatSourceFooter,
   formatSourcePeriod,
   type KnowledgeSourceGroup,
 } from "../../lib/sourceReference";
@@ -28,7 +30,7 @@ import {
  */
 export type SourceChipProps =
   | { kind: "mop"; citation: Citation }
-  | { kind: "teams"; source: SourceReferenceDTO }
+  | { kind: "teams"; source: SourceReferenceDTO; sessionId: string }
   | { kind: "knowledge"; source: KnowledgeSourceReferenceDTO }
   | { kind: "knowledge-group"; group: KnowledgeSourceGroup };
 
@@ -89,7 +91,7 @@ export function SourceChip(props: SourceChipProps) {
       </DrawerTrigger>
       <DrawerContent className="flex flex-col overflow-y-auto p-5">
         {props.kind === "mop" && <MopSourceDetails citation={props.citation} />}
-        {props.kind === "teams" && <TeamsSourceDetails source={props.source} />}
+        {props.kind === "teams" && <TeamsSourceDetails source={props.source} sessionId={props.sessionId} />}
         {props.kind === "knowledge" && <KnowledgeSourceDetails source={props.source} />}
         {props.kind === "knowledge-group" && <KnowledgeSourceGroupDetails group={props.group} />}
       </DrawerContent>
@@ -149,7 +151,7 @@ function hasDisplayableSnippet(item: { snippet?: string | null }): item is { sni
  * Fields that weren't authoritative for this particular answer (no
  * known period, no known contributors) are simply omitted, never shown
  * as a placeholder/guess. */
-function TeamsSourceDetails({ source }: { source: SourceReferenceDTO }) {
+function TeamsSourceDetails({ source, sessionId }: { source: SourceReferenceDTO; sessionId: string }) {
   const period = formatSourcePeriod(source.period_start, source.period_end);
   const evidence = source.evidence.filter(hasDisplayableSnippet).slice(0, MAX_RENDERED_EVIDENCE_ITEMS);
 
@@ -192,9 +194,14 @@ function TeamsSourceDetails({ source }: { source: SourceReferenceDTO }) {
         </div>
       )}
 
-      <p className="mt-5 text-sm text-tertiary">
-        This response was derived from retrieved Teams messages in the conversation above.
-      </p>
+      <VisualEvidenceSection
+        sessionId={sessionId}
+        sourceId={source.source_id}
+        items={source.visual_evidence}
+        conversationTitle={source.title}
+      />
+
+      <p className="mt-5 text-sm text-tertiary">{formatSourceFooter(source)}</p>
 
       {evidence.length > 0 && (
         <div className="mt-5">

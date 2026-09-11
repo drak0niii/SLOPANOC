@@ -131,6 +131,29 @@ class TeamsMessage(BaseModel):
     points to (see `TeamsMessageReference`) -- these describe a *different*
     message than the one `author`/`text`/`sent_at` describe, and must never
     be attributed to this message's own author.
+
+    `hosted_content_ids` (Teams Rich Content milestone; Multiple Teams
+    Hosted Images milestone extends this to more than one) -- the
+    Teams-domain identity of every inline/pasted image this message
+    carries, deterministically extracted from `raw_content` in TRUE
+    SOURCE-HTML ORDER (see hosted_content.py) -- never Power Automate
+    transport detail (no `contentBase64`, no gateway operation name, no
+    provider-specific shape belongs here; see docs on the Microsoft
+    integration/provider boundary). Empty for a message with no
+    recognized inline image. Bounded to at most `get_messages.py`'s own
+    `MAX_HOSTED_IMAGES_PER_MESSAGE` entries -- see `hosted_content_
+    truncated` below for what happens beyond that. Retrieving the actual
+    image bytes for one of these ids is a SEPARATE, explicit step
+    (`teams_get_hosted_content`) -- populating this list never itself
+    downloads anything.
+
+    `hosted_content_truncated` -- `True` only when this message's raw
+    content actually referenced MORE inline images than `MAX_HOSTED_
+    IMAGES_PER_MESSAGE` allows; `hosted_content_ids` above then holds only
+    the deterministic first-N-in-HTML-order prefix (never a random/
+    reordered subset). Exists so `incident_manager` can truthfully tell
+    the user that additional images existed but were not processed,
+    rather than silently reviewing only some of them without saying so.
     """
 
     id: str
@@ -140,6 +163,8 @@ class TeamsMessage(BaseModel):
     raw_content: str
     content_type: Optional[str] = None
     message_references: list[TeamsMessageReference] = Field(default_factory=list)
+    hosted_content_ids: list[str] = Field(default_factory=list)
+    hosted_content_truncated: bool = False
 
 
 class CoverageStatus(str, Enum):
@@ -267,3 +292,95 @@ class TeamsGetMessagesResult(BaseModel):
     oldest_retrieved_at: Optional[str] = None
     newest_retrieved_at: Optional[str] = None
     coverage: TeamsCoverage
+
+
+class TeamsHostedContentResult(BaseModel):
+    """Result of `teams_get_hosted_content` (Teams Rich Content milestone,
+    single-image scope) -- PROVIDER-NEUTRAL: describes Teams concepts only
+    (conversation/message/hosted-content identity, content type, size),
+    never a Power Automate transport shape. See get_hosted_content.py's
+    own module docstring for the full integration-boundary rationale.
+
+    Deliberately carries NO image bytes and no Base64 -- this is a safe,
+    model-visible/frontend-safe summary proving retrieval and validation
+    succeeded, never a vehicle for raw binary content. `chat_id`/
+    `message_id`/`hosted_content_id` are echoed back so a caller can
+    confirm this result answers the exact request it made -- never a
+    different id than the one requested (see get_hosted_content.py's own
+    provenance enforcement, which happens before this result is ever
+    constructed).
+
+    Successful construction of this object already implies the decoded
+    bytes were validated as a genuine, supported, decodable image
+    (`backend.attachments.validation.validate_image_bytes`) -- a retrieval
+    or validation failure never reaches this type at all; it surfaces as
+    the tool's `{"error": ...}` SafeError shape instead (see
+    get_hosted_content.py), mirroring every other Teams tool's own
+    success/error contract.
+
+    `delivered_for_visual_reasoning` (Multiple Teams Hosted Images
+    milestone) -- `True` if this image's validated bytes were actually
+    queued for real Gemini multimodal delivery on the next model call
+    (`backend.api.hosted_content_vision_context.stash_pending_hosted_
+    content_image` succeeded); `False` if retrieval and validation BOTH
+    succeeded but the image was NOT queued because this run already
+    reached `MAX_HOSTED_IMAGES_PER_MESSAGE` or `MAX_TOTAL_HOSTED_IMAGE_
+    BYTES` (see that module's own "BOUNDS" docstring). Exists so a caller
+    can never mistake "retrieval succeeded" for "the model will actually
+    see this image" -- `incident_manager`'s own prompt is instructed to
+    say plainly when this is `False` rather than claim to have observed
+    an image it never actually received as visual input.
+    """
+
+    chat_id: str
+    message_id: str
+    hosted_content_id: str
+    content_type: str
+    size_bytes: int
+    delivered_for_visual_reasoning: bool
+
+
+class TeamsGetAllHostedContentResult(BaseModel):
+    """Result of `teams_get_all_hosted_content` (Deterministic All-Image
+    Retrieval milestone) -- the deterministic BACKEND expansion over one
+    message's ALREADY-DISCOVERED, ALREADY-ORDERED `hosted_content_ids`,
+    replacing model-driven iteration (which real live validation proved
+    unreliable -- see get_hosted_content.py's own module docstring for the
+    full root-cause rationale) with one call.
+
+    Deliberately NEVER carries a `hosted_content_id` (singular or list) at
+    all -- unlike `TeamsHostedContentResult`, which echoes back the ONE id
+    it was asked for, this is a pure COUNTS-AND-ORDINALS summary; exposing
+    the underlying ids here would give the model (and, if this shape were
+    ever reused elsewhere, a caller) a list it could misuse to attempt
+    individual re-retrieval outside the deterministic expansion this tool
+    exists to replace. `failed_ordinals` uses 1-based, TRUE-Teams-HTML-
+    order positions ONLY (never a hosted_content_id) -- exactly the same
+    identity space `SourceVisualEvidenceItemDTO.ordinal` already uses, so
+    "ordinal 2 failed" means exactly the same thing here as it does in the
+    Source drawer.
+
+    `discovered_count`: how many hosted-content ids this run's own
+    `teams_get_messages` call recorded for this message (already capped at
+    `MAX_HOSTED_IMAGES_PER_MESSAGE` -- see `TeamsMessage.hosted_content_
+    truncated` for whether the RAW message actually carried more than
+    that).
+    `attempted_count`: how many of those this call actually attempted
+    retrieval for (equal to `discovered_count` unless `chat_id`/
+    `message_id` provenance excluded some).
+    `delivered_count`: how many were ACTUALLY validated AND queued for
+    real Gemini multimodal delivery -- the authoritative "how many images
+    will the model actually see" number.
+    `failed_ordinals`: 1-based ordinals (true Teams order) that did NOT
+    end up delivered, for ANY reason -- a genuine retrieval/validation
+    failure, or a successful retrieval that the per-run image-count/
+    total-byte budget excluded. Always `len(failed_ordinals) ==
+    attempted_count - delivered_count`.
+    """
+
+    chat_id: str
+    message_id: str
+    discovered_count: int
+    attempted_count: int
+    delivered_count: int
+    failed_ordinals: list[int] = Field(default_factory=list)

@@ -470,6 +470,7 @@ function sourceReference(overrides: Partial<SourceReferenceDTO> = {}): SourceRef
     period_end: "2026-09-01T09:00:00Z",
     contributors: ["Alex", "Priya"],
     evidence: [{ author: "Alex", sent_at: "2026-08-26T09:00:00Z", snippet: "We should escalate this now." }],
+    visual_evidence: [],
     ...overrides,
   };
 }

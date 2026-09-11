@@ -3156,6 +3156,254 @@ NOT TOUCHED: `Message.tsx`, `AppState.tsx`, `types.ts`, any backend file,
 Power Automate, Teams contracts, approval/execution semantics, D1, D2.
 
 ===================================================================
+5.X — TEAMS RICH CONTENT / MEDIA RETRIEVAL — FIRST SLICE: SINGLE INLINE
+IMAGE, RETRIEVAL ONLY (implemented after the 5.X-A audit above)
+===================================================================
+
+Implements end-to-end discovery and retrieval (never multimodal
+injection yet) of ONE inline/pasted Teams image per message, closing
+5.X-A's own "REAL RICH-CONTENT SAMPLE REQUIRED" evidence gap for the
+image case with a real, live-proven `teams.getHostedContent` Power
+Automate operation.
+
+PROVIDER INDEPENDENCE (frozen architecture invariant, verified in the
+diff): canonical Teams schemas (`TeamsMessage.hosted_content_ids`,
+`TeamsHostedContentResult`) describe Teams concepts only — no
+`contentBase64`/`teams.getHostedContent`/PA `requestId` semantics anywhere
+above `backend/gateway/power_automate_client.py`. A future Microsoft
+Graph adapter could replace `PowerAutomateClient.get_hosted_content`
+without `TeamsMessage`, provenance, `incident_manager`, or any frontend
+contract changing. No direct Graph access was added.
+
+DETERMINISTIC EXTRACTION: `backend/tools/teams/hosted_content.py`'s
+`extract_hosted_content_ids` (stdlib `HTMLParser`, no LLM) recognizes the
+stable Graph URL PATH shape `/messages/{messageId}/hostedContents/
+{hostedContentId}/$value` inside a message's own `<img src>` — never
+hostname-bound (works for both `beta`/`v1.0` prefixes) — and REJECTS a
+hosted-content id whose own embedded `messageId` does not match the
+message currently being parsed (provenance safety at the extraction layer
+itself, not only at retrieval time).
+
+PROVENANCE ENFORCEMENT: a new `KNOWN_HOSTED_CONTENT_IDS_STATE_KEY`
+session-state registry (`get_messages.py`, `dict[message_id, set[content_
+id]]`) — populated only by a real `teams_get_messages` call, consulted by
+`teams_get_hosted_content` before the gateway is ever called — mirrors
+`known_message_ids`' own "no model-asserted identifier may authorize
+retrieval" discipline exactly, including the SAME D1-class rewind-null
+normalization (`read_known_hosted_content_ids`), hardened proactively
+from the start rather than found live later.
+
+REAL BUG FOUND AND FIXED DURING THIS PASS' OWN TEST-WRITING (not merely
+theorized): an inline Teams image is represented as a bare `<img>` tag,
+which `html_text.normalize_teams_content` produces NO text for (unlike
+`<attachment>`, which becomes `"[Attachment]"`) — an image-only message
+(the milestone's own real validation target, message `1789114360805`,
+whose own example payload shows `"text": ""`) would otherwise normalize
+to empty text and be silently discarded by the PRE-EXISTING `system_
+events.is_excludable_from_reasoning`'s "no meaningful content" rule,
+before `hosted_content_ids` could ever reach `incident_manager`. Fixed by
+adding an explicit `has_hosted_content` parameter (default `False`,
+every pre-existing caller/behavior byte-for-byte unchanged) that exempts
+ONLY the empty-text exclusion — a genuine system/event marker is still
+always excluded first, unconditionally, so rich content can never smuggle
+a system/event entry into evidence.
+
+MULTIMODAL INJECTION STOP CONDITION (deliberate, per the milestone's own
+explicit instruction): this milestone stops at the retrieval boundary.
+`teams_get_hosted_content` returns `TeamsHostedContentResult`
+(`content_type`/`size_bytes` only — never bytes/Base64) proving retrieval
+and image validation succeeded; it does NOT make the image available as
+Gemini vision input. No proven-safe ADK mechanism exists yet to convert a
+NESTED-tool-discovered image (found mid-reasoning, inside `incident_
+manager`'s own tool calls) into an actual multimodal `Part` for that same
+agent's subsequent reasoning step — structurally different from the
+existing B5/B6 `MultimodalAgentTool` path, which only ever propagates an
+image already known BEFORE `team_manager`'s turn starts (confirmed by
+audit: ADK's own generic tool-response-`Part`-injection mechanism,
+`Part.from_function_response`'s `parts` argument, is populated by ADK
+itself only for `ComputerUseTool`, never for an ordinary `FunctionTool`;
+no `save_artifact`/artifact-service-based injection pattern exists
+anywhere in this codebase either). `incident_manager`'s own prompt is
+explicit that a successful retrieval never grants vision — it must state
+plainly that it cannot yet interpret an image's visual content if asked,
+never fabricate a description. **NEXT MILESTONE: prove, via a fresh
+ADK-installed-source audit (mirroring B6's own precedent before
+`MultimodalAgentTool` was built), a safe mechanism to inject a Teams-
+retrieved image into `incident_manager`'s own nested reasoning step —
+this is an architecture-correct prerequisite, not a variant of "multiple
+hosted images," which should follow only afterward.**
+
+TOOL REGISTRATION: `teams_get_hosted_content` added directly to
+`incident_manager`'s own `tools=[...]` (read-only, no confirmation
+required, same class as `teams_get_messages`) — inherited automatically
+by its `.model_copy` variants (`_fast_path_incident_manager`,
+`_CONTINUATION_INCIDENT_MANAGER`); `_SYNTHESIS_ONLY_INCIDENT_MANAGER`
+correctly keeps `tools=[]` (prefetched-evidence synthesis only, unchanged).
+`team_manager.tools` unchanged — Team Manager still never receives a
+Teams tool directly.
+
+SECURITY: MIME type is decoded and verified, never trusted merely because
+declared (`validate_image_bytes`, reused as-is from the direct-upload
+path); size is bounded by the existing `chat_attachment_max_bytes`
+setting; every gateway-echoed identifier (`chatId`/`messageId`/
+`hostedContentId`), when present, is cross-checked against exactly what
+was requested — an inconsistent provider response is rejected, never
+trusted; Base64 is decoded deterministically and never logged, printed,
+or returned to the model as text; the gateway URL is never logged
+(unchanged `PowerAutomateClient._call` discipline).
+
+OUT OF SCOPE (explicitly, per the milestone's own instruction): multiple
+hosted images, ordinary Teams file attachments, PDFs, Office documents,
+Adaptive Cards, GIFs/stickers, SharePoint/OneDrive retrieval, direct
+Microsoft Graph, delegated Microsoft identity, and any Teams media WRITE
+path (sending images/files/cards) — none of these were touched.
+
+TESTS: 55 new focused tests across `test_teams_hosted_content_extraction
+.py` (extractor, matrix cases A-F plus provenance-mismatch cases),
+`test_teams_get_hosted_content.py` (tool-level: response parsing,
+invalid/empty Base64, mismatched echoed ids, provenance enforcement
+including the rewind-null case, no-PA-fields-leak), `test_teams_get_
+messages_hosted_content.py` (integration: population, messageReference/
+system-event/pagination/coverage non-regression, known-ids-registry
+accumulation), plus 3 new `test_system_events.py` unit tests and 4 new
+`test_power_automate_client.py` gateway-payload tests. Three pre-existing
+`test_teams_get_messages.py` assertions were updated to include the new,
+additive `hosted_content_ids: []` field (the only pre-existing test
+content this pass changed, and only because those are exact full-dict
+equality checks) — the deliberately-exhaustive `test_api_security_
+contract.py::test_agent_topology_is_unaffected_by_the_api_layer` allow-
+list was similarly updated to include the one new, legitimate tool.
+
+REGRESSION: full backend suite 3061 passed, 1 skipped (3006 pre-milestone
+baseline + 55 new); Teams/Incident-Manager/provenance/rewind/evidence-
+focused subset 738 passed; D1 + D2 focused regression files re-run
+unchanged at 26 passed; frontend untouched — `npm run build`/`npx tsc -b`
+re-run clean anyway per standing convention; `git diff --check` clean.
+
+REAL-STACK VALIDATION: NOT performed in this pass — no live Power
+Automate/Gemini credentials are available in this environment (same
+standing limitation as every prior milestone, including the immediately
+preceding 5.X-A audit). Ready for the user's own real-stack validation
+against the known real target (`SLOPANOC Gateway Group Test`, message
+`1789114360805`) per this milestone's own validation checklist.
+
+===================================================================
+TEAMS RICH CONTENT ROUTING — CORRECTIVE MILESTONE (closes the live
+single-inline-image fast-path interception defect)
+===================================================================
+
+LIVE DEFECT: a request needing Teams-posted visual content (e.g. "read
+the latest image... and tell me what is shown in it") was silently
+intercepted by the text-only exact-read fast path
+(`direct_read_fast_path.py`) — live evidence showed `teams.getMessages`
+succeeding but `teams.getHostedContent` NEVER being called, ending in
+"No matching Teams content was found." Power Automate itself was never
+the failure.
+
+ROOT CAUSE, proven by audit: the fast path had NO structural signal
+distinguishing an ordinary text read from a rich-content read — ANY
+unique `teams_list_chats` match for a non-write read was eligible. Once
+intercepted, the shortcut hands off to `read_continuation_execution.py`'s
+synthesis-only agent (`_SYNTHESIS_ONLY_INCIDENT_MANAGER`/`_CONTINUATION_
+INCIDENT_MANAGER`, both `tools=[]`) — structurally incapable of a SECOND
+tool call (`teams_get_hosted_content`) after `teams_get_messages`, so
+retrieval genuinely succeeded but the hosted-content tool was never
+reachable from inside that shortcut, by construction, regardless of any
+routing signal.
+
+FIX — reused, never invented, an existing precedent: `direct_read_fast_
+path.py` already gates fast-path eligibility on two structured signals
+read back from `tool_context.user_content` — `requires_governed_knowledge`
+(5.1J) and image evidence (B6) — both set by `team_manager`'s own
+semantic judgment, never keyword-inferred. Added a THIRD, identically-
+shaped signal: `IncidentManagerRequest.requires_rich_content: bool`
+(`backend/agents/incident_manager/schemas.py`, default `False`,
+mirroring `requires_governed_knowledge`'s exact docstring/fail-closed
+contract), set by `team_manager`'s own new "TEAMS RICH CONTENT
+DELEGATION" prompt paragraph (mirroring "GOVERNED KNOWLEDGE DELEGATION"'s
+own structure), read back by a new `_requires_rich_content` gate
+function in `direct_read_fast_path.py` (identical shape to `_requires_
+governed_knowledge`, including the SAME fail-closed-on-structural-
+failure semantics) and checked alongside the two existing gates in
+`_capture_unique_match_for_fast_path`. When true, the fast-path marker is
+never written; `incident_manager`'s own normal, full tool-calling turn
+runs instead, where `teams_list_chats` → `teams_get_messages` →
+`teams_get_hosted_content` can genuinely be called in sequence — the
+SAME `_fast_path_incident_manager` agent object either way, since the
+fast-path callbacks are no-ops whenever their own marker is absent. No
+natural-language substring/regex routing was introduced — the gate reads
+a typed JSON field only (proven by a dedicated source-scan test); no
+keyword ("image"/"screenshot"/etc.) ever appears in its executable logic.
+
+TEAM_MANAGER_INSTRUCTION grew by one concise paragraph (31916 -> 32730
+chars) — `test_p4a_orchestration_overhead_reduction.py`'s own generous,
+explicitly-non-brittle size ceiling was raised accordingly (32000 ->
+33500), mirroring its own prior precedent (raised once already for B6's
+"IMAGE EVIDENCE" paragraph). `incident_manager`'s own existing "TEAMS
+HOSTED IMAGES" prompt paragraph (previous milestone) already fully
+satisfied this milestone's "no vision claims yet" requirement verbatim —
+audited, found correct, left completely unchanged.
+
+DEFERRED FINDING (audited, not fixed — genuinely out of this milestone's
+scope): a rich-content request that ALSO hits AMBIGUOUS chat resolution
+(SelectionCard) and is then resumed after the user picks a candidate
+would face the SAME structural limitation once resumed — `execute_read_
+continuation`'s own dispatch always ends in one of the two frozen
+`tools=[]` synthesis-only agents, regardless of any routing signal, for
+BOTH the direct-fast-path case (fixed here, by never entering that
+dispatch at all) AND the selection-continuation-resume case (NOT fixed
+here, since fixing it would require changing `read_continuation_
+execution.py` itself — explicitly frozen per that module's own
+docstring, and explicitly out of scope: "do NOT extend the text fast
+path itself to orchestrate media retrieval in this milestone"). This
+pre-existing gap is unchanged by this pass, in either direction — not
+newly introduced, not newly closed. A future milestone that gives the
+continuation-execution agents real tool-calling ability (or a different
+resumption design) would need to address it.
+
+TESTS: 20 new focused tests in `test_teams_rich_content_routing.py`
+(ordinary text read stays fast-path eligible; rich-content read is not;
+bypass is a silent no-op, never an error; tool registration on
+`incident_manager`/`_fast_path_incident_manager`, absent from
+`team_manager`; fail-closed edge cases mirroring `_requires_governed_
+knowledge`'s own exact contract, including the corrected "well-formed
+JSON missing the key defaults to False, matching the twin signal's own
+real behavior" case; ambiguous/not-found/write resolutions all provably
+unaffected — they already exit before either `requires_*` gate is
+reached; source-level proof of no keyword/regex routing; independence
+from the governed-knowledge gate; a distinguishable perf-log line).
+
+REGRESSION: full backend suite 3081 passed, 1 skipped (3061 pre-milestone
+baseline + 20 new) on a clean run; `test_api_persistence.py` showed
+intermittent, order-dependent `MissingGreenlet` SQLAlchemy failures on
+two separate full-suite runs (different specific tests each time,
+untouched by this milestone, all 14 passing cleanly in isolation both
+times) — confirmed, exactly as previously found and reported during the
+D2 milestone, pre-existing test-suite flakiness unrelated to any change
+in this pass. Teams/Incident-Manager/provenance/rewind/read-continuation-
+focused subset: 683 passed. D1 + D2 focused regression: 26 passed.
+`npm run build`/`npx tsc -b` clean (no frontend touched); `git diff
+--check` clean.
+
+REAL-STACK VALIDATION: NOT performed — same standing environment
+limitation as every prior milestone (no live Power Automate/Gemini
+credentials in this session). Ready for the user's own live validation:
+"Read the latest image in the Teams chat 'SLOPANOC Gateway Group Test'
+and tell me what is shown in it" should now show `incident_manager_
+function_call tool_name=teams_get_hosted_content` and `power_automate_
+gateway operation=teams.getHostedContent outcome=ok` in the logs, with
+the final answer honestly stating retrieval succeeded without claiming
+to have seen the image's visual contents; a subsequent "Read the latest
+messages... and summarize them" should still show `exact_read_fast_path_
+entered` with no `teams.getHostedContent` call.
+
+NOT TOUCHED: `read_continuation_execution.py` (frozen, per its own
+docstring), Power Automate flow/client beyond the previous milestone's
+own `get_hosted_content` method, Microsoft Graph (none added), D1, D2,
+Gemini vision/multimodal propagation (still not implemented), multiple-
+image support (still deferred).
+
+===================================================================
 
 COMPLETE (this section is preserved as it was originally written, when
 Phase 5.1 was still the next phase in this locked list — do not read the
@@ -3233,7 +3481,11 @@ see docs/BUILD_SEQUENCE.md §2a for the full rationale)
 
 The execution order after A5 is now:
 
-Then: 5.X TEAMS RICH CONTENT / MEDIA RETRIEVAL — ← NEXT, NOT STARTED
+Then: 5.X TEAMS RICH CONTENT / MEDIA RETRIEVAL — ← NEXT, IN PROGRESS
+(5.X-A audit complete; first implementation slice — single inline-image
+discovery/retrieval, no multimodal injection yet — complete; see the
+dedicated milestone note above for exact scope/status. Multimodal
+injection and multiple-image support remain unimplemented.)
 
   Reasons from Teams-originated rich visual evidence (starting with
   images), not just Teams message text. Distinct from the CURRENT

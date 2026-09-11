@@ -5,7 +5,7 @@
  * independently testable without mounting anything.
  */
 
-import type { KnowledgeSourceReferenceDTO } from "../api/types";
+import type { KnowledgeSourceReferenceDTO, SourceReferenceDTO } from "../api/types";
 
 /** Short, readable date from an ISO timestamp string (e.g. "Aug 26") —
  * never throws on a malformed value, falling back to the raw string so a
@@ -35,6 +35,30 @@ export function formatEvidenceTimestamp(sentAt: string): string {
   const date = new Date(sentAt);
   if (Number.isNaN(date.getTime())) return sentAt;
   return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+/** Teams Visual Evidence milestone — dynamic explanatory footer copy for
+ * the Source drawer. When the answer also attached one or more real Teams
+ * images to Gemini's visual input (`source.visual_evidence.length > 0`),
+ * names both counts explicitly ("This response was derived from 1 Teams
+ * message and 3 images retrieved from the conversation above."),
+ * correctly pluralizing "message"/"image" independently. Falls back to
+ * the original, unchanged generic sentence when there is no visual
+ * evidence, OR (defensive only — `message_count` is always a real int
+ * whenever a `SourceReferenceDTO` exists in practice, see backend/api/
+ * source_reference.py's own `build_teams_source_reference`) when
+ * `message_count` is somehow `null` — never a grammatically broken
+ * sentence with a missing count. */
+export function formatSourceFooter(source: SourceReferenceDTO): string {
+  const genericFooter = "This response was derived from retrieved Teams messages in the conversation above.";
+  if (source.visual_evidence.length === 0 || source.message_count == null) {
+    return genericFooter;
+  }
+  const messageCount = source.message_count;
+  const imageCount = source.visual_evidence.length;
+  const messageWord = messageCount === 1 ? "message" : "messages";
+  const imageWord = imageCount === 1 ? "image" : "images";
+  return `This response was derived from ${messageCount} Teams ${messageWord} and ${imageCount} ${imageWord} retrieved from the conversation above.`;
 }
 
 /** POST-5.1 B7 corrective pass — a concise, per-reference label for a

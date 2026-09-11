@@ -231,6 +231,13 @@ def test_only_the_expected_routes_exist() -> None:
         # entry -- that path already exists (POST, above).
         "/api/sessions/{session_id}",
         "/api/sessions/{session_id}/history",
+        # Teams Visual Evidence milestone -- lazy, authenticated retrieval
+        # of ONE Teams-hosted image actually delivered to Gemini for a past
+        # turn (backend/api/source_images.py). session_id/source_id/
+        # image_id are ALL opaque/session-ownership-scoped -- never a raw
+        # Teams chat_id/message_id/hosted_content_id. Read-only; never a
+        # tool-execution/state-mutation channel.
+        "/api/sessions/{session_id}/sources/{source_id}/images/{image_id}",
         "/openapi.json",
         "/docs",
         "/docs/oauth2-redirect",
@@ -337,6 +344,17 @@ def test_agent_topology_is_unaffected_by_the_api_layer() -> None:
     layer injected -- and, critically, `team_manager.tools` below remains
     exactly the pre-5.1J three: Team Manager never receives either KM
     tool directly (docs/KNOWLEDGE_CONTRACT.md's Phase 5.1J section).
+
+    `teams_get_hosted_content` (Teams Rich Content milestone, single-image
+    scope) is the same kind of legitimate, deliberate addition -- added
+    directly on `incident_manager`'s own definition, read-only, retrieval
+    only (no multimodal injection yet -- see get_hosted_content.py's own
+    module docstring), never something the API layer injected.
+
+    `teams_get_all_hosted_content` (Deterministic All-Image Retrieval
+    milestone) is the same kind of legitimate, deliberate addition --
+    read-only, deterministic backend expansion over one message's
+    already-discovered hosted_content_ids, never a model-driven loop.
     """
     from backend.agents.incident_manager.agent import incident_manager
     from backend.agents.team_manager.agent import team_manager
@@ -353,6 +371,8 @@ def test_agent_topology_is_unaffected_by_the_api_layer() -> None:
     assert [tname(t) for t in incident_manager.tools] == [
         "teams_list_chats",
         "teams_get_messages",
+        "teams_get_hosted_content",
+        "teams_get_all_hosted_content",
         "get_current_time_context",
         "teams_propose_create_chat",
         "teams_propose_send_message",

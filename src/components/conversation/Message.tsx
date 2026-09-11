@@ -756,7 +756,11 @@ export function Message({ message }: { message: MessageType }) {
               // identity/ordering/drawer content are untouched.
               <div className="anim-fade mt-4 flex flex-col items-start gap-1.5">
                 {activeChat?.sources?.[message.id] && (
-                  <SourceChip kind="teams" source={activeChat.sources[message.id]} />
+                  <SourceChip
+                    kind="teams"
+                    source={activeChat.sources[message.id]}
+                    sessionId={activeChat?.backendSessionId ?? ""}
+                  />
                 )}
                 {groupKnowledgeSourceReferences(activeChat?.knowledgeSources?.[message.id]).map((group) => (
                   <SourceChip key={group.groupKey} kind="knowledge-group" group={group} />

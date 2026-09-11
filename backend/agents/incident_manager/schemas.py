@@ -115,6 +115,27 @@ class IncidentManagerRequest(BaseModel):
             "knowledge together."
         ),
     )
+    requires_rich_content: bool = Field(
+        default=False,
+        description=(
+            "Teams Rich Content routing milestone -- true when this "
+            "request needs to inspect visual/rich content actually posted "
+            "INSIDE the Teams conversation itself (e.g. an inline "
+            "screenshot), set by team_manager's own semantic judgment, "
+            "never inferred from keywords. False (the default) means an "
+            "ordinary text read -- the exact-read Teams fast path remains "
+            "fully eligible. Mirrors `requires_governed_knowledge` exactly: "
+            "also read by direct_read_fast_path.py to decide whether a "
+            "request can be fully satisfied by the fast path's single "
+            "retrieval+synthesis shortcut -- when True, that optimization "
+            "is skipped so the normal, multi-tool incident_manager turn can "
+            "call teams_get_hosted_content after finding the relevant "
+            "message. Unrelated to an image the user attaches directly to "
+            "their own current message (a separate, already-handled "
+            "mechanism, see IMAGE EVIDENCE in incident_manager's own "
+            "instruction)."
+        ),
+    )
 
 
 class TroubleshootingInteractionMode(str, Enum):

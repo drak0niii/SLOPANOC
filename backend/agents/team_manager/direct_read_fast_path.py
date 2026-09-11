@@ -349,6 +349,7 @@ from backend.agents.team_manager.read_continuation_presentation import (
     build_and_validate_trusted_envelope,
     content_has_nonblank_text,
 )
+from backend.api.hosted_content_vision_context import inject_pending_hosted_content_image
 from backend.api.perf_timing import before_model_call
 from backend.api.turn_context import current_run_id
 from backend.attachments.service import get_attachment_service
@@ -536,6 +537,63 @@ def _requires_governed_knowledge(tool_context: Any) -> bool:
     return bool(payload.get("requires_governed_knowledge", False))
 
 
+def _requires_rich_content(tool_context: Any) -> bool:
+    """Reads `IncidentManagerRequest.requires_rich_content` back from
+    `tool_context.user_content` -- Teams Rich Content routing milestone,
+    identical mechanism to `_requires_governed_knowledge` immediately
+    above (same `tool_context.user_content` source, same JSON-parse
+    approach, same fail-closed semantics), reused for a THIRD, independent
+    signal rather than inventing a new one.
+
+    ROOT CAUSE THIS CLOSES (live defect): a request needing Teams-posted
+    visual content (e.g. "what is shown in the latest image") was
+    reaching this fast path exactly like an ordinary text read, because
+    NOTHING previously distinguished the two at fast-path-eligibility
+    time. Once intercepted, the shortcut hands off to `read_continuation_
+    execution.py`'s deterministic-retrieval branch, whose synthesis-only
+    agent (`_SYNTHESIS_ONLY_INCIDENT_MANAGER`, `tools=[]`) is structurally
+    incapable of a SECOND tool call (`teams_get_hosted_content`) after
+    `teams_get_messages` -- so `teams.getMessages` genuinely succeeded
+    live, but the hosted-content tool was never reachable, and synthesis
+    correctly (within its own zero-tool constraints) reported no matching
+    content. This is a deterministic, structural signal -- never a
+    substring/keyword check over the user's own wording -- set by
+    `team_manager`'s own semantic judgment when it decides whether THIS
+    request needs to inspect Teams-posted visual content (see its own
+    "TEAMS RICH CONTENT DELEGATION" prompt paragraph), exactly mirroring
+    how `requires_governed_knowledge` is already set and read back here.
+
+    FAILS CLOSED (returns `True`, i.e. "assume rich content might be
+    needed, skip the fast path") on any STRUCTURAL problem reading the
+    signal at all -- no `user_content`, no parts, no text, or text that
+    is not valid JSON/not a JSON object -- identical justification to
+    `_requires_governed_knowledge`: incorrectly SKIPPING the optimization
+    only costs latency, while incorrectly ENTERING it when rich content
+    was actually required reproduces the live defect this closes. A
+    STRUCTURALLY WELL-FORMED payload that simply omits this key (never
+    produced by this codebase's own `IncidentManagerRequest.model_dump_
+    json()`, which always serializes every field) falls back to `False`
+    via `dict.get`'s own default -- the exact same "well-formed but
+    missing key" behavior `_requires_governed_knowledge` already has, kept
+    identical on purpose rather than inventing a stricter rule for only
+    one of the two twin signals.
+    """
+    user_content = getattr(tool_context, "user_content", None)
+    parts = getattr(user_content, "parts", None) if user_content else None
+    if not parts:
+        return True
+    text = "".join(p.text for p in parts if getattr(p, "text", None))
+    if not text:
+        return True
+    try:
+        payload = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return True
+    if not isinstance(payload, dict):
+        return True
+    return bool(payload.get("requires_rich_content", False))
+
+
 def _capture_unique_match_for_fast_path(
     tool: Any, args: dict[str, Any], tool_context: Any, tool_response: Any
 ) -> None:
@@ -569,6 +627,14 @@ def _capture_unique_match_for_fast_path(
     if _requires_governed_knowledge(tool_context):
         _perf_logger.info(
             "perf stage=fast_path_skipped_requires_governed_knowledge run_id=%s", current_run_id()
+        )
+        return None
+
+    if _requires_rich_content(tool_context):
+        # Teams Rich Content routing milestone -- see `_requires_rich_
+        # content`'s own docstring for the exact live defect this closes.
+        _perf_logger.info(
+            "perf stage=fast_path_skipped_requires_rich_content run_id=%s", current_run_id()
         )
         return None
 
@@ -751,7 +817,24 @@ async def _fast_path_before_model_callback(callback_context: Any, llm_request: A
 _fast_path_incident_manager = incident_manager.model_copy(
     update={
         "after_tool_callback": _capture_unique_match_for_fast_path,
-        "before_model_callback": [_fast_path_before_model_callback, before_model_call("incident_manager")],
+        # Teams Image Vision corrective milestone: `inject_pending_hosted_
+        # content_image` appended here (NOT merely present on the base
+        # `incident_manager` in agent.py) because `model_copy(update=...)`
+        # REPLACES `before_model_callback` wholesale rather than extending
+        # it -- and this object, not the base agent, is what team_manager
+        # actually delegates to (`incident_manager_tool = MultimodalAgent
+        # Tool(agent=_fast_path_incident_manager)`, team_manager/agent.py)
+        # for every real user turn. If `_fast_path_before_model_callback`
+        # short-circuits with a synthesized fast-path result, this
+        # callback never runs for that call -- correct, since the fast
+        # path skips real tool calls entirely, so `teams_get_hosted_
+        # content` (and therefore any pending image) could never have run
+        # in that case either.
+        "before_model_callback": [
+            _fast_path_before_model_callback,
+            before_model_call("incident_manager"),
+            inject_pending_hosted_content_image,
+        ],
     }
 )
 """See this module's own docstring, part 3. Wired into `AgentTool(agent=

@@ -121,6 +121,39 @@ class PowerAutomateClient:
             payload["before"] = before
         return self._call("teams.getMessages", payload)
 
+    def get_hosted_content(
+        self, chat_id: str, message_id: str, hosted_content_id: str
+    ) -> GatewayPayload:
+        """Call `teams.getHostedContent` for one hosted-content item
+        (inline/pasted image) belonging to one already-retrieved Teams
+        message.
+
+        `chat_id`/`message_id`/`hosted_content_id` must all be non-empty --
+        this is a message-scoped retrieval, never a bare content-id lookup.
+        This is an INFRASTRUCTURE/PROVIDER method: it exists on this class
+        because `PowerAutomateClient` is currently the sole HTTP client to
+        the gateway, exactly like every other operation here -- callers
+        above the gateway boundary (backend/tools/teams/) must never
+        reference `"teams.getHostedContent"`, `contentBase64`, or any other
+        Power-Automate-specific shape directly; see
+        backend/tools/teams/get_hosted_content.py for the provider-neutral
+        conversion.
+        """
+        if not chat_id or not chat_id.strip():
+            raise validation_error("A Teams chat id is required to retrieve hosted content.")
+        if not message_id or not message_id.strip():
+            raise validation_error("A Teams message id is required to retrieve hosted content.")
+        if not hosted_content_id or not hosted_content_id.strip():
+            raise validation_error("A Teams hosted content id is required to retrieve hosted content.")
+        return self._call(
+            "teams.getHostedContent",
+            {
+                "chatId": chat_id,
+                "messageId": message_id,
+                "hostedContentId": hosted_content_id,
+            },
+        )
+
     def get_members(self, chat_id: str) -> GatewayPayload:
         """Call `teams.getMembers` for one chat id (docs/TEAMS_TOOL_CONTRACT.md
         #5) -- read-only, no confirmation required. Deterministic

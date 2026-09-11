@@ -152,7 +152,16 @@ from backend.api.knowledge_source_reference import (
     build_knowledge_source_references,
     dedupe_knowledge_source_references,
 )
-from backend.api.source_reference import TeamsSourceCapture, resolve_authoritative_contributors
+from backend.api.source_reference import (
+    TeamsSourceCapture,
+    ensure_source_reference_for_visual_evidence,
+    resolve_authoritative_contributors,
+)
+from backend.api.hosted_content_vision_context import (
+    build_visual_evidence,
+    discard_pending_hosted_content_image,
+    pop_delivered_visual_evidence,
+)
 from backend.api.multimodal_turn_context import (
     discard_run_images,
     register_run_images,
@@ -1610,6 +1619,26 @@ class ChatService:
             # exception, or asyncio.CancelledError -- a `finally` runs on
             # all three). Safe to call even when nothing was registered.
             discard_run_images(sequencer.run_id)
+            # Teams Visual Evidence milestone: snapshot whatever images
+            # were ACTUALLY delivered to Gemini this run, BEFORE the
+            # unconditional discard immediately below would otherwise
+            # clear that same store -- mirrors `selected_knowledge_
+            # evidence`'s own "snapshot in this finally, use later, after
+            # the try/except/finally" shape exactly. `[]` for any turn
+            # that never delivered a Teams image (the overwhelming
+            # majority of turns).
+            delivered_visual_evidence = pop_delivered_visual_evidence(sequencer.run_id)
+            # Teams Image Vision corrective milestone: same unconditional,
+            # every-exit-path cleanup discipline as `discard_run_images`
+            # immediately above -- guarantees a Teams-hosted image stashed
+            # for delivery to Gemini never survives past the one turn/run
+            # that retrieved it, even if no further model call ever
+            # consumed it (e.g. a turn that errors immediately after the
+            # tool call). Safe to call even when nothing was stashed.
+            # (Redundant with the snapshot above for `_delivered` itself --
+            # already popped -- but still the correct, single cleanup call
+            # for `_pending`/`_message_order`/`_message_metadata`.)
+            discard_pending_hosted_content_image(sequencer.run_id)
             # A5 final corrective pass -- mirrors `selected_knowledge_
             # evidence`'s own snapshot-before-discard shape immediately
             # above: `pop_troubleshooting_guidance` both reads AND clears
@@ -1936,6 +1965,38 @@ class ChatService:
             if direct_fast_path_trust_validation_failed
             else source_capture.build_source_reference(message_texts_by_id)
         )
+        visual_evidence_internal: list[dict[str, str]] = []
+
+        # CHAT_ID SOURCE (bugfix): prefer the SAME already-authoritative,
+        # cross-turn-persisted `selected_teams_chat_id` team_manager's own
+        # prompt already relies on for chat continuity (state_sync.py) over
+        # `TeamsSourceCapture`'s own single-event capture -- both are
+        # populated from the identical `incident_manager` tool response,
+        # but the session-state value survives even if this turn's raw
+        # event, for whatever reason, did not carry a usable `chat_id`
+        # (see source_reference.py's `resolve_authoritative_contributors`
+        # docstring for the full investigation notes). Falls back to the
+        # per-turn capture only if session state has nothing (e.g. a bare/
+        # unwired test). Computed here, UNCONDITIONALLY (not only inside
+        # "if source_reference is not None"), because Visual Evidence
+        # below needs it independently of whether text evidence existed --
+        # see the "image-only turn" fix immediately below.
+        chat_id = (
+            None
+            if direct_fast_path_trust_validation_failed
+            else refreshed_session.state.get(SELECTED_TEAMS_CHAT_ID_STATE_KEY) or source_capture.captured_chat_id()
+        )
+
+        # TEAMS VISUAL EVIDENCE LIVE-VALIDATION BUGFIX: see `ensure_
+        # source_reference_for_visual_evidence`'s own docstring -- a
+        # genuinely image-focused turn can deliver real images while
+        # `incident_manager`'s own textual `evidence` citation list stays
+        # empty, which previously meant Visual Evidence had no Source to
+        # attach to at all.
+        source_reference = ensure_source_reference_for_visual_evidence(
+            source_reference, chat_id, delivered_visual_evidence
+        )
+
         if source_reference is not None:
             # Contributor-accuracy fix, hardening pass: `contributors` is
             # resolved authoritatively from real Teams chat membership,
@@ -1945,21 +2006,6 @@ class ChatService:
             # that already produced a Teams source reference (never on
             # every turn).
             #
-            # CHAT_ID SOURCE (bugfix): prefer the SAME already-authoritative,
-            # cross-turn-persisted `selected_teams_chat_id` team_manager's
-            # own prompt already relies on for chat continuity
-            # (state_sync.py) over `TeamsSourceCapture`'s own single-event
-            # capture -- both are populated from the identical
-            # `incident_manager` tool response, but the session-state value
-            # survives even if this turn's raw event, for whatever reason,
-            # did not carry a usable `chat_id` (see source_reference.py's
-            # `resolve_authoritative_contributors` docstring for the full
-            # investigation notes). Falls back to the per-turn capture only
-            # if session state has nothing (e.g. a bare/unwired test).
-            chat_id = refreshed_session.state.get(
-                SELECTED_TEAMS_CHAT_ID_STATE_KEY
-            ) or source_capture.captured_chat_id()
-
             # Performance pass: reuse the task already started mid-loop
             # (above) for this exact chat_id -- it may already be done, in
             # which case awaiting it is instant, having overlapped its
@@ -1980,7 +2026,22 @@ class ChatService:
                 contributors = await self._resolve_teams_contributors(chat_id)
             perf.mark("source_reference_enrichment")
 
-            source_reference = source_reference.model_copy(update={"contributors": contributors})
+            # Teams Visual Evidence milestone: only images ACTUALLY
+            # delivered to Gemini this run, AND belonging to the SAME chat
+            # this Source is actually about -- never attach an unrelated
+            # run's/chat's images to this Source (section 6's own
+            # "Source/message binding" requirement). Pure, independently
+            # unit-tested function -- see hosted_content_vision_context
+            # .py's own docstring for the full "why a separate function"
+            # rationale and why `image_id` is minted once, here, shared
+            # identically by the PUBLIC DTO and the INTERNAL binding.
+            visual_evidence_items, visual_evidence_internal = build_visual_evidence(
+                delivered_visual_evidence, chat_id
+            )
+
+            source_reference = source_reference.model_copy(
+                update={"contributors": contributors, "visual_evidence": visual_evidence_items}
+            )
             message_completed_data["source"] = source_reference.model_dump(mode="json")
         elif contributors_task is not None and not contributors_task.done():
             # No source reference ended up being built after all (e.g. the
@@ -2042,6 +2103,7 @@ class ChatService:
                 turn_invocation_id,
                 source_reference,
                 knowledge_sources,
+                visual_evidence_internal,
             )
             if turn_source_references_delta is not None:
                 await self._session_service.persist_state_delta(

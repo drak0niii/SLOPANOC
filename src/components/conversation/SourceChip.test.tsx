@@ -33,6 +33,7 @@ function makeSource(overrides: Partial<SourceReferenceDTO> = {}): SourceReferenc
       { author: "Alex", sent_at: "2026-08-26T09:00:00Z", snippet: "We should escalate this now." },
       { author: "Priya", sent_at: "2026-08-27T10:00:00Z", snippet: "Agreed, paging on-call." },
     ],
+    visual_evidence: [],
     ...overrides,
   };
 }
@@ -84,19 +85,19 @@ describe("SourceChip — MOP (kind: 'mop') — no regression", () => {
 
 describe("SourceChip — Teams (kind: 'teams')", () => {
   it("renders a compact 'Source · <label>' trigger", () => {
-    render(<SourceChip kind="teams" source={makeSource()} />);
+    render(<SourceChip kind="teams" source={makeSource()} sessionId="session-1" />);
     expect(screen.getByRole("button", { name: /Source · Teams conversation/ })).toBeInTheDocument();
   });
 
   it("opens the SAME drawer shell on click (Radix dialog content becomes visible)", () => {
-    render(<SourceChip kind="teams" source={makeSource()} />);
+    render(<SourceChip kind="teams" source={makeSource()} sessionId="session-1" />);
     expect(screen.queryByText("Microsoft Teams")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button"));
     expect(screen.getByText("Microsoft Teams")).toBeInTheDocument();
   });
 
   it("shows conversation topic, message count, period, and contributors", () => {
-    render(<SourceChip kind="teams" source={makeSource()} />);
+    render(<SourceChip kind="teams" source={makeSource()} sessionId="session-1" />);
     fireEvent.click(screen.getByRole("button"));
 
     expect(screen.getByText("Ops Bridge")).toBeInTheDocument();
@@ -105,7 +106,7 @@ describe("SourceChip — Teams (kind: 'teams')", () => {
   });
 
   it("shows supporting evidence entries with author and timestamp, never a raw message id", () => {
-    render(<SourceChip kind="teams" source={makeSource()} />);
+    render(<SourceChip kind="teams" source={makeSource()} sessionId="session-1" />);
     fireEvent.click(screen.getByRole("button"));
 
     expect(screen.getByText("Supporting evidence")).toBeInTheDocument();
@@ -114,7 +115,7 @@ describe("SourceChip — Teams (kind: 'teams')", () => {
   });
 
   it("never renders a raw chat_id, membership id, or any internal identifier (not present in the DTO at all)", () => {
-    render(<SourceChip kind="teams" source={makeSource()} />);
+    render(<SourceChip kind="teams" source={makeSource()} sessionId="session-1" />);
     fireEvent.click(screen.getByRole("button"));
     const drawerText = document.body.textContent ?? "";
     expect(drawerText).not.toMatch(/19:[a-f0-9-]+@thread/);
@@ -131,7 +132,7 @@ describe("SourceChip — Teams (kind: 'teams')", () => {
       contributors: [],
       evidence: [],
     });
-    render(<SourceChip kind="teams" source={minimal} />);
+    render(<SourceChip kind="teams" source={minimal} sessionId="session-1" />);
     fireEvent.click(screen.getByRole("button"));
 
     expect(screen.queryByText("Conversation")).not.toBeInTheDocument();
@@ -144,7 +145,7 @@ describe("SourceChip — Teams (kind: 'teams')", () => {
   });
 
   it("never dumps entire conversation content — only a short snippet per evidence entry", () => {
-    render(<SourceChip kind="teams" source={makeSource()} />);
+    render(<SourceChip kind="teams" source={makeSource()} sessionId="session-1" />);
     fireEvent.click(screen.getByRole("button"));
     // Each evidence entry shows its own short snippet, never the full
     // conversation dumped as one block.
@@ -158,7 +159,7 @@ describe("SourceChip — Teams (kind: 'teams')", () => {
     const mopClasses = mopButton.className;
     unmount();
 
-    render(<SourceChip kind="teams" source={makeSource()} />);
+    render(<SourceChip kind="teams" source={makeSource()} sessionId="session-1" />);
     const teamsButton = screen.getByRole("button", { name: /Source · Teams conversation/ });
     expect(teamsButton.className).not.toBe(mopClasses);
     expect(teamsButton.className).toMatch(/px-2\.5/);
@@ -171,7 +172,7 @@ describe("SourceChip — Teams supporting evidence (snippet-authenticity fix)", 
     const source = makeSource({
       evidence: [{ author: "Alex", sent_at: "2026-08-26T09:00:00Z", snippet: "We should escalate this now." }],
     });
-    render(<SourceChip kind="teams" source={source} />);
+    render(<SourceChip kind="teams" source={source} sessionId="session-1" />);
     fireEvent.click(screen.getByRole("button"));
     expect(screen.getByText('"We should escalate this now."')).toBeInTheDocument();
   });
@@ -183,7 +184,7 @@ describe("SourceChip — Teams supporting evidence (snippet-authenticity fix)", 
         { author: "Priya", sent_at: "2026-08-27T09:00:00Z", snippet: "A real excerpt." },
       ],
     });
-    render(<SourceChip kind="teams" source={source} />);
+    render(<SourceChip kind="teams" source={source} sessionId="session-1" />);
     fireEvent.click(screen.getByRole("button"));
 
     // The valid item still renders...
@@ -197,7 +198,7 @@ describe("SourceChip — Teams supporting evidence (snippet-authenticity fix)", 
     const source = makeSource({
       evidence: [{ author: "Alex", sent_at: "2026-08-26T09:00:00Z", snippet: "   \n\t  " }],
     });
-    render(<SourceChip kind="teams" source={source} />);
+    render(<SourceChip kind="teams" source={source} sessionId="session-1" />);
     fireEvent.click(screen.getByRole("button"));
     expect(screen.queryByText("Supporting evidence")).not.toBeInTheDocument();
   });
@@ -209,7 +210,7 @@ describe("SourceChip — Teams supporting evidence (snippet-authenticity fix)", 
         { author: "Priya", sent_at: "2026-08-27T09:00:00Z", snippet: "A real excerpt." },
       ],
     });
-    render(<SourceChip kind="teams" source={source} />);
+    render(<SourceChip kind="teams" source={source} sessionId="session-1" />);
     fireEvent.click(screen.getByRole("button"));
     expect(screen.getByText('"A real excerpt."')).toBeInTheDocument();
     expect(screen.queryByText("Alex")).not.toBeInTheDocument();
@@ -222,7 +223,7 @@ describe("SourceChip — Teams supporting evidence (snippet-authenticity fix)", 
         { author: "Priya", sent_at: "2026-08-27T09:00:00Z", snippet: "" },
       ],
     });
-    render(<SourceChip kind="teams" source={source} />);
+    render(<SourceChip kind="teams" source={source} sessionId="session-1" />);
     fireEvent.click(screen.getByRole("button"));
     expect(screen.queryByText("Supporting evidence")).not.toBeInTheDocument();
     // The rest of the drawer is unaffected.
@@ -237,7 +238,7 @@ describe("SourceChip — Teams supporting evidence (snippet-authenticity fix)", 
         snippet: `Message number ${i}.`,
       })),
     });
-    render(<SourceChip kind="teams" source={source} />);
+    render(<SourceChip kind="teams" source={source} sessionId="session-1" />);
     fireEvent.click(screen.getByRole("button"));
     expect(screen.getAllByText(/^"Message number \d+\.".*/)).toHaveLength(5);
   });
@@ -250,7 +251,7 @@ describe("SourceChip — Teams supporting evidence (snippet-authenticity fix)", 
       snippet: [3, 5].includes(i + 1) ? "" : `Message body ${i + 1}.`,
     }));
     const source = makeSource({ evidence });
-    render(<SourceChip kind="teams" source={source} />);
+    render(<SourceChip kind="teams" source={source} sessionId="session-1" />);
     fireEvent.click(screen.getByRole("button"));
 
     for (const n of [1, 2, 4, 6, 7]) {
@@ -261,7 +262,7 @@ describe("SourceChip — Teams supporting evidence (snippet-authenticity fix)", 
   });
 
   it("the drawer content is scrollable so a long panel doesn't clip", () => {
-    render(<SourceChip kind="teams" source={makeSource()} />);
+    render(<SourceChip kind="teams" source={makeSource()} sessionId="session-1" />);
     fireEvent.click(screen.getByRole("button"));
     const drawer = screen.getByRole("dialog");
     expect(drawer.className).toMatch(/overflow-y-auto/);
@@ -387,7 +388,7 @@ describe("SourceChip — Knowledge source disambiguation (POST-5.1 B7 corrective
   });
 
   it("Teams source presentation is completely unchanged by this pass", () => {
-    render(<SourceChip kind="teams" source={makeSource()} />);
+    render(<SourceChip kind="teams" source={makeSource()} sessionId="session-1" />);
     expect(screen.getByRole("button", { name: /Source · Teams conversation/ })).toBeInTheDocument();
   });
 });

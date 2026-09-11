@@ -29,15 +29,32 @@ def is_system_event_content(raw_content: str) -> bool:
     return bool(_SYSTEM_EVENT_TAG_PATTERN.search(raw_content))
 
 
-def is_excludable_from_reasoning(raw_content: str, normalized_text: str) -> bool:
+def is_excludable_from_reasoning(
+    raw_content: str, normalized_text: str, has_hosted_content: bool = False
+) -> bool:
     """True if this message must not be handed to incident_manager for
     reasoning: either it is a known system/event marker, or it carries no
-    meaningful user-visible content at all once normalized (truly empty
-    content, or markup that normalizes to nothing).
+    meaningful content at all once normalized (truly empty content, or
+    markup that normalizes to nothing) AND has no hosted content either.
 
     Never based on sender/author -- a message with no `senderName` but
     real, meaningful text is still included; see the module docstring.
+
+    `has_hosted_content` (Teams Rich Content milestone, single-image
+    scope, default `False` -- every pre-existing caller/behavior is
+    byte-for-byte unchanged): an inline/pasted Teams image is represented
+    as a bare `<img>` tag, which `html_text.normalize_teams_content`
+    produces NO text for (unlike `<attachment>`, which becomes the
+    `"[Attachment]"` marker) -- a genuine image-only message (real,
+    meaningful content) would otherwise normalize to empty text and be
+    wrongly excluded as content-free. `has_hosted_content=True` exempts
+    ONLY the empty-text exclusion -- a genuine system/event marker is
+    STILL always excluded regardless (checked first, unconditionally),
+    so rich content can never cause a system/event entry to become
+    evidence (instruction: system-event non-regression is absolute).
     """
     if is_system_event_content(raw_content):
         return True
+    if has_hosted_content:
+        return False
     return not normalized_text.strip()
