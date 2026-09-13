@@ -7,8 +7,12 @@
 `HeadingStructureProcessor` is the ONE reference implementation this
 phase builds: a deterministic, synchronous, local text processor that
 recognizes explicit Markdown-style ATX heading SYNTAX (`#`, `##`, ...,
-up to `######`) already present in normalized text. It is document-type-
-and source-agnostic by construction -- see the module docstring in
+up to `######`) already present in normalized text -- and, since the
+DEF-0024 corrective pass, a second, equally generic and equally
+syntax-only marker, the bare parenthesis-numbered enumeration item
+(`N) <text>`, e.g. "1) HW Partial Fault") -- both recognized identically,
+neither alarm/document/vendor-specific. It is document-type- and
+source-agnostic by construction -- see the module docstring in
 `backend/knowledge/processing/__init__.py` and
 docs/KNOWLEDGE_CONTRACT.md's Phase 5.1D section for the full rationale.
 
@@ -36,6 +40,25 @@ from backend.knowledge.ingestion.contracts import IngestedKnowledgeDocument
 from backend.knowledge.processing.contracts import StructuredKnowledgeDocument, StructuredKnowledgeSection
 
 _HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(\S.*)$")
+_NUMBERED_PROCEDURE_HEADING_PATTERN = re.compile(r"^(\d+)\)\s+(\S.*)$")
+"""DEF-0024 corrective pass (Alarm Procedure Granularity & Procedure-
+Scoped Grounding): a SECOND, purely SYNTACTIC heading marker -- a line
+that is nothing but "<digits>) <text>" (e.g. "1) HW Partial Fault"),
+deliberately the parenthesis-numbered style, never the far more common
+period-numbered style ("1. Do this step") ordinary sequential
+instructions already use throughout the real corpus (confirmed by a
+read-only audit of every real governed KnowledgeObject's own section
+content before this pattern was added: `N)` never occurs anywhere in the
+real corpus except as this exact kind of independent, named procedure
+enumeration; `N.` occurs pervasively as ordinary step-by-step
+instructions and is deliberately NOT touched by this pattern, to avoid
+exploding an unrelated numbered instruction list into meaningless
+one-line fragments). Detects STRUCTURAL SYNTAX ONLY -- no alarm name,
+vendor, or document-specific string is referenced anywhere in this
+pattern or its handling; it fires identically for any document using
+this same generic enumeration convention. Mirrors `_HEADING_PATTERN`'s
+own "syntax boundary, never semantic interpretation of the heading text"
+discipline exactly."""
 _FENCE_MARKER = "```"
 
 
@@ -76,6 +99,20 @@ class HeadingStructureProcessor:
     body text (including anything inside a fenced block) is preserved
     verbatim; only the heading marker lines themselves are separated out
     into `heading`/`heading_level`.
+
+    DEF-0024 corrective pass: ALSO recognizes a second, independent
+    heading syntax -- a bare parenthesis-numbered enumeration marker
+    (`N) <text>`, e.g. "1) HW Partial Fault") -- as an additional,
+    equally generic structural boundary (see `_NUMBERED_PROCEDURE_
+    HEADING_PATTERN`'s own docstring for why this specific syntax, and
+    not the far more common period-numbered style, was chosen). This
+    lets a document that enumerates several independent, explicitly-
+    named operational procedures using this convention -- without any
+    Markdown `#` syntax at all -- become independently-selectable
+    sections, exactly like an ATX-headed document already does. Both
+    heading styles are recognized identically by `_segment_into_spans`;
+    neither is required, and a document using neither still safely falls
+    back to one whole-document section as before.
     """
 
     def process(self, document: IngestedKnowledgeDocument) -> StructuredKnowledgeDocument:
@@ -125,6 +162,13 @@ class HeadingStructureProcessor:
                     level = len(match.group(1))
                     heading_text = match.group(2)
                     current = _PendingSpan(heading=heading_text, heading_level=level)
+                    continue
+
+                numbered_match = _NUMBERED_PROCEDURE_HEADING_PATTERN.match(line)
+                if numbered_match:
+                    spans.append(current)
+                    heading_text = numbered_match.group(2)
+                    current = _PendingSpan(heading=heading_text, heading_level=1)
                     continue
 
             current.body_line_numbers.append(line_number)

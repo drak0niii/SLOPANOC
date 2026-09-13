@@ -41,13 +41,17 @@ def test_team_manager_tools_are_unchanged_by_this_milestone() -> None:
     # Phase 4D added `record_case_analysis` (see
     # backend/agents/team_manager/case_tools.py); the semantic-scope bug
     # fix added `record_conversation_target` (see
-    # backend/agents/team_manager/conversation_target.py) -- the Teams
-    # write-tooling itself is unchanged.
+    # backend/agents/team_manager/conversation_target.py); Phase 6A.10
+    # added `troubleshooting_manager` (a plain FunctionTool wrapper, see
+    # troubleshooting_tool.py) -- the Teams write-tooling itself is
+    # unchanged.
     assert _tool_names(team_manager) == [
         "incident_manager",
         "record_case_analysis",
         "record_conversation_target",
         "record_source_requirements",
+        "record_request_contract",
+        "troubleshooting_manager",
     ]
 
 

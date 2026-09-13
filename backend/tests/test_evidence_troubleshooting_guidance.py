@@ -15,6 +15,41 @@ from backend.agents.incident_manager.evidence import (
     enforce_incident_manager_response_integrity,
 )
 from backend.api.troubleshooting_guidance_context import pop_troubleshooting_guidance
+from backend.api.turn_context import bind_run_id, reset_run_id
+from backend.knowledge.domain.enums import KnowledgeDocumentType, LifecycleStatus
+from backend.knowledge.domain.models import KnowledgeSection, KnowledgeSource
+from backend.knowledge.provenance.contracts import KnowledgeEvidenceItem, KnowledgeEvidenceReference, KnowledgeEvidenceSelectionKey, KnowledgeEvidenceSet
+from backend.knowledge.tools.contracts import KnowledgeSearchAgentPayload, KnowledgeSearchExecutionResult
+from backend.tools.knowledge import runtime as rt
+
+
+def _grounded_evidence_item(section_id: str, content: str, knowledge_id: str = "def-0024-fixture") -> KnowledgeEvidenceItem:
+    """DEF-0024 corrective pass: a real `KnowledgeEvidenceItem` whose
+    `section.content` genuinely contains the command text a test wants
+    `enforce_procedure_scoped_command_grounding` to treat as grounded --
+    mirrors `test_p5_1j_provenance_compliance.py`'s own established
+    `_evidence_item` fixture pattern."""
+    section = KnowledgeSection(section_id=section_id, knowledge_id=knowledge_id, sequence=0, content=content, heading="Procedure")
+    source = KnowledgeSource(source_system="test", source_id=f"{knowledge_id}-doc")
+    reference = KnowledgeEvidenceReference(knowledge_id=knowledge_id, version_label="v1", section_id=section_id, source_system="test", source_id=f"{knowledge_id}-doc")
+    return KnowledgeEvidenceItem(reference=reference, title="DEF-0024 Fixture Procedure", document_type=KnowledgeDocumentType.SOP, lifecycle_status=LifecycleStatus.APPROVED, source=source, section=section)
+
+
+def _select_as_evidence(run_id: str, *items: KnowledgeEvidenceItem) -> None:
+    """Registers `items` as this run's real AVAILABLE and SELECTED
+    Knowledge evidence, using the exact same production functions
+    `knowledge_search`/`knowledge_select_evidence` use -- never a mock of
+    `snapshot_selected_knowledge_evidence` itself, so these tests exercise
+    the real state machinery `enforce_procedure_scoped_command_grounding`
+    actually reads."""
+    rt.get_or_init_run_state(run_id)
+    execution = KnowledgeSearchExecutionResult(agent_payload=KnowledgeSearchAgentPayload(), evidence_set=KnowledgeEvidenceSet(items=list(items)))
+    rt.record_search_result(run_id, execution)
+    keys = [
+        KnowledgeEvidenceSelectionKey(knowledge_id=item.reference.knowledge_id, version_label=item.reference.version_label, section_id=item.reference.section_id)
+        for item in items
+    ]
+    rt.select_evidence(run_id, keys)
 
 
 class _FakePart:
@@ -90,7 +125,13 @@ def test_no_change_for_unparseable_text() -> None:
 
 
 def test_rewrites_summary_deterministically_when_guidance_present() -> None:
-    corrected = _capture_and_render_troubleshooting_guidance(_next_step_response())
+    run_id = "test-run-rewrite-summary"
+    token = bind_run_id(run_id)
+    try:
+        _select_as_evidence(run_id, _grounded_evidence_item("s0", "The command is: alt"))
+        corrected = _capture_and_render_troubleshooting_guidance(_next_step_response())
+    finally:
+        reset_run_id(token)
     assert corrected is not None
     payload = json.loads(corrected)
     assert payload["summary"] == "The alarm is active.\n\nCheck the alarm status.\n\nRun:\n\nalt\n\nPaste the output here."
@@ -109,8 +150,14 @@ def test_malformed_guidance_treated_as_absent() -> None:
 
 @pytest.mark.asyncio
 async def test_callback_overrides_summary_when_guidance_present() -> None:
-    ctx = _FakeCallbackContext(events=[_FakeEvent("incident_manager", _next_step_response())])
-    result = await enforce_incident_manager_response_integrity(ctx)
+    run_id = "test-run-callback-overrides"
+    token = bind_run_id(run_id)
+    try:
+        _select_as_evidence(run_id, _grounded_evidence_item("s0", "The command is: alt"))
+        ctx = _FakeCallbackContext(events=[_FakeEvent("incident_manager", _next_step_response())])
+        result = await enforce_incident_manager_response_integrity(ctx)
+    finally:
+        reset_run_id(token)
     assert result is not None
     corrected = json.loads(result.parts[0].text)
     assert corrected["summary"] == "The alarm is active.\n\nCheck the alarm status.\n\nRun:\n\nalt\n\nPaste the output here."
@@ -127,6 +174,7 @@ async def test_callback_registers_guidance_for_later_pop(monkeypatch: pytest.Mon
     import backend.agents.incident_manager.evidence as evidence_module
 
     monkeypatch.setattr(evidence_module, "current_run_id", lambda: "test-run-xyz")
+    _select_as_evidence("test-run-xyz", _grounded_evidence_item("s0", "The command is: alt"))
     ctx = _FakeCallbackContext(events=[_FakeEvent("incident_manager", _next_step_response())])
     await enforce_incident_manager_response_integrity(ctx)
 
@@ -154,8 +202,14 @@ async def test_full_procedure_mode_also_rewritten_deterministically() -> None:
             },
         }
     )
-    ctx = _FakeCallbackContext(events=[_FakeEvent("incident_manager", text)])
-    result = await enforce_incident_manager_response_integrity(ctx)
+    run_id = "test-run-full-procedure"
+    token = bind_run_id(run_id)
+    try:
+        _select_as_evidence(run_id, _grounded_evidence_item("s0", "Login with: amos NODE-1\nThen run: alt"))
+        ctx = _FakeCallbackContext(events=[_FakeEvent("incident_manager", text)])
+        result = await enforce_incident_manager_response_integrity(ctx)
+    finally:
+        reset_run_id(token)
     assert result is not None
     corrected = json.loads(result.parts[0].text)
     assert "Log in." in corrected["summary"]

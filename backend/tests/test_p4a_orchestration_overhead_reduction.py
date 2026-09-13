@@ -73,10 +73,14 @@ def test_case_context_instructional_paragraphs_moved_to_conditional_addendum() -
 def test_team_manager_tool_list_is_orchestration_level_only() -> None:
     """A thin orchestrator exposes capabilities, not implementations
     (section 7): `incident_manager` (a specialist CAPABILITY, wrapped via
-    AgentTool), plus the two small deterministic declaration tools -- never
-    a raw Teams tool (`teams_list_chats`/`teams_get_messages`/
-    `teams_get_members`/`teams_create_chat`/etc, all of which live only on
-    `incident_manager`'s own tool list, agents/incident_manager/agent.py).
+    AgentTool), `troubleshooting_manager` (6A.10 -- a second specialist
+    CAPABILITY, wrapped as a plain FunctionTool that calls the canonical
+    6A.9 `run_troubleshooting_assessment`, never a raw Knowledge/
+    Experience/Skill capability of its own), plus the small deterministic
+    declaration tools -- never a raw Teams tool (`teams_list_chats`/
+    `teams_get_messages`/`teams_get_members`/`teams_create_chat`/etc, all
+    of which live only on `incident_manager`'s own tool list, agents/
+    incident_manager/agent.py).
     """
     names = {getattr(tool, "name", None) or getattr(tool, "__name__", None) for tool in team_manager.tools}
     assert names == {
@@ -84,6 +88,8 @@ def test_team_manager_tool_list_is_orchestration_level_only() -> None:
         "record_case_analysis",
         "record_conversation_target",
         "record_source_requirements",
+        "record_request_contract",
+        "troubleshooting_manager",
     }
 
     forbidden_raw_teams_tools = {
@@ -153,10 +159,24 @@ def test_normal_instruction_stays_under_a_generous_size_ceiling() -> None:
     # POST-5.1 B6 legitimately extended this by one concise "IMAGE
     # EVIDENCE" paragraph (~30996 chars); the Teams rich-content routing
     # milestone legitimately extended it again by one concise "TEAMS RICH
-    # CONTENT DELEGATION" paragraph (~32730 chars) -- ceiling raised
-    # accordingly each time, still a generous margin above the current
-    # audited size, not a brittle exact pin.
-    assert len(TEAM_MANAGER_INSTRUCTION) < 33500  # ~8375 tokens; was ~31.5k chars (~7.9k tok) pre-P4A
+    # CONTENT DELEGATION" paragraph (~32730 chars); 6A.10 (Dual-Specialist
+    # Orchestration) legitimately extended it again by one concise
+    # "TROUBLESHOOTING DELEGATION" paragraph (~34050 chars); the DEF-0024
+    # corrective pass legitimately extended it once more by one concise,
+    # deliberately generic (no alarm-name vocabulary -- see
+    # test_prompt_never_dumps_troubleshooting_methodology) "GOVERNED-
+    # KNOWLEDGE FOLLOW-UP CONTINUITY" paragraph (~35510 chars, after this
+    # pass's own audit found the follow-up-continuity resolution
+    # responsibility belongs here -- team_manager genuinely retains
+    # conversation history -- rather than in incident_manager's own
+    # prompt, which does not) -- ceiling raised accordingly each time,
+    # still a generous margin above the current audited size, not a
+    # brittle exact pin.
+    # Phase 6A.13 (Request Contract Foundation) added the "REQUEST
+    # CONTRACT" paragraph (~36812 chars) -- ceiling raised accordingly,
+    # still a generous margin above the current audited size, not a
+    # brittle exact pin.
+    assert len(TEAM_MANAGER_INSTRUCTION) < 38000  # ~9500 tokens; was ~31.5k chars (~7.9k tok) pre-P4A
 
 
 def test_trusted_result_instruction_is_substantially_smaller_than_normal_mode() -> None:

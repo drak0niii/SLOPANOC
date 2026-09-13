@@ -6,6 +6,9 @@ manages ONLY the SLOPANOC-owned SQLAlchemy metadata collections --
   - backend.cases.models.Base.metadata       (Case/Fault Context)
   - backend.knowledge.repository.sqlalchemy.Base.metadata  (Governed Knowledge)
   - backend.attachments.models.Base.metadata  (Chat Attachments, POST-5.1 B1)
+  - backend.context.sqlalchemy.models.Base.metadata  (TELCO Context, 6A.2)
+  - backend.knowledge.hybrid_retrieval.repository.Base.metadata  (Evidence Index, 6A.5)
+  - backend.experience_memory.sqlalchemy.models.Base.metadata  (Experience Memory, 6A.8)
 
 ADK's own `DatabaseSessionService` schema (sessions/events/app_states/
 user_states) is deliberately NEVER imported or referenced here. ADK
@@ -55,6 +58,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from backend.attachments.models import Base as AttachmentBase
 from backend.cases.models import Base as CaseBase
 from backend.config.settings import get_settings
+from backend.context.sqlalchemy.models import Base as ContextBase
+from backend.experience_memory.sqlalchemy.models import Base as ExperienceMemoryBase
+from backend.knowledge.hybrid_retrieval.repository import Base as EvidenceIndexBase
 from backend.knowledge.repository.sqlalchemy import Base as KnowledgeBase
 
 config = context.config
@@ -63,9 +69,14 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # All SLOPANOC-owned metadata collections, never ADK's own session schema.
-# POST-5.1 B1 adds AttachmentBase (backend/attachments/models.py) alongside
-# the two established since POST-5.1 A2.
-target_metadata = [CaseBase.metadata, KnowledgeBase.metadata, AttachmentBase.metadata]
+# POST-5.1 B1 added AttachmentBase (backend/attachments/models.py) alongside
+# the two established since POST-5.1 A2. 6A.2 adds ContextBase
+# (backend/context/sqlalchemy/models.py, the TELCO Context domain) --
+# without this, `_include_object` below would not recognize
+# `slopanoc_telco_context_profiles`/`slopanoc_telco_context_assertions` as
+# SLOPANOC-owned, and a future `alembic revision --autogenerate` run could
+# propose dropping them.
+target_metadata = [CaseBase.metadata, KnowledgeBase.metadata, AttachmentBase.metadata, ContextBase.metadata, EvidenceIndexBase.metadata, ExperienceMemoryBase.metadata]
 
 # POST-5.1 A4: derived (never hand-duplicated) from target_metadata itself
 # -- the exact set of table names Alembic is actually allowed to compare

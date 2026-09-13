@@ -258,7 +258,7 @@ async def test_part10a_prior_turn_history_leakage_is_rejected(monkeypatch: pytes
     from backend.api.chat_service import ChatService
     from backend.api.session_service import ApiSessionService
 
-    async def fake_remediation(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = ()):
+    async def fake_remediation(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = (), prior_governed_evidence: Any = (), active_anchor: Any = None, request_contract_subject: Any = None):
         return "Governed knowledge (freshly verified): checksum 7319, status GREEN.", []
 
     monkeypatch.setattr("backend.api.chat_service.enforce_governed_knowledge_at_completion", fake_remediation)
@@ -291,7 +291,7 @@ async def test_part10b_adversarial_suppression_still_forces_current_retrieval(mo
 
     remediation_calls: list[str] = []
 
-    async def fake_remediation(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = ()):
+    async def fake_remediation(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = (), prior_governed_evidence: Any = (), active_anchor: Any = None, request_contract_subject: Any = None):
         remediation_calls.append(question)
         return "Checksum 7319, status GREEN.", []
 
@@ -434,7 +434,7 @@ async def test_part21a_governed_knowledge_turn_never_streams_untrusted_delta(mon
     from backend.api.chat_service import ChatService
     from backend.api.session_service import ApiSessionService
 
-    async def fake_remediation(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = ()):
+    async def fake_remediation(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = (), prior_governed_evidence: Any = (), active_anchor: Any = None, request_contract_subject: Any = None):
         return (
             "Based on the available governed knowledge, a VSWR reading of 1.82 is below the "
             "specified threshold of 2.2 -- no restart is indicated, diagnosis only.",
@@ -531,7 +531,7 @@ async def test_part21c_unknown_state_buffers_until_classified_governed(monkeypat
     from backend.api.chat_service import ChatService
     from backend.api.session_service import ApiSessionService
 
-    async def fake_remediation(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = ()):
+    async def fake_remediation(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = (), prior_governed_evidence: Any = (), active_anchor: Any = None, request_contract_subject: Any = None):
         return "Trusted governed answer: checksum 7319, status GREEN.", []
 
     monkeypatch.setattr("backend.api.chat_service.enforce_governed_knowledge_at_completion", fake_remediation)
@@ -621,7 +621,7 @@ async def test_part21e_no_declaration_at_all_remediation_governed_never_leaks_pr
     async def fake_declare(*, question: str, run_id: str):
         return False, True  # requires_teams=False, requires_governed_knowledge=True
 
-    async def fake_governed(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = ()):
+    async def fake_governed(*, question: str, chat_topic: Optional[str], run_id: str, image_parts: Any = (), prior_governed_evidence: Any = (), active_anchor: Any = None, request_contract_subject: Any = None):
         return "Governed knowledge (freshly verified): checksum 7319, status GREEN.", []
 
     monkeypatch.setattr("backend.api.chat_service.request_source_requirements_declaration", fake_declare)
@@ -958,9 +958,9 @@ def test_part20_no_regex_or_keyword_routing_in_the_new_modules() -> None:
     import inspect
 
     from backend.agents.team_manager import governed_knowledge_completion, source_requirements
-    from backend.api import source_requirements_capture
+    from backend.api import governed_evidence_continuity, source_requirements_capture
 
-    for module in (source_requirements, source_requirements_capture, governed_knowledge_completion):
+    for module in (source_requirements, source_requirements_capture, governed_knowledge_completion, governed_evidence_continuity):
         path = inspect.getfile(module)
         tree = ast.parse(open(path, encoding="utf-8").read(), filename=path)
         for node in ast.walk(tree):

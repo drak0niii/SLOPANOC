@@ -36,12 +36,38 @@ _REPOSITORY_DIR = _KNOWLEDGE_DIR / "repository"
 _RETRIEVAL_DIR = _KNOWLEDGE_DIR / "retrieval"
 _PROVENANCE_DIR = _KNOWLEDGE_DIR / "provenance"
 _TOOLS_DIR = _KNOWLEDGE_DIR / "tools"
-_ALL_KM_DIRS = (_DOMAIN_DIR, _INGESTION_DIR, _PROCESSING_DIR, _GOVERNANCE_DIR, _REPOSITORY_DIR, _RETRIEVAL_DIR, _PROVENANCE_DIR, _TOOLS_DIR)
-_STORAGE_FREE_DIRS = (_PROCESSING_DIR, _GOVERNANCE_DIR, _PROVENANCE_DIR, _TOOLS_DIR)
-_CLOUD_SDK_FREE_DIRS = (_INGESTION_DIR, _REPOSITORY_DIR)
+_NARROWING_DIR = _KNOWLEDGE_DIR / "narrowing"
+"""6A.4 (P11-M04, new): deterministic TELCO applicability & knowledge
+narrowing -- sits at the same architectural layer as `retrieval`/
+`provenance`/`tools` (depends on `domain`/`governance`, never the other
+way around). Legitimately imports `backend.context.domain` (6A.2's
+TELCO Context types) -- a peer-independent domain package, not a
+forbidden agent/ADK/cloud/storage dependency -- so it is added to every
+restriction list below EXCEPT none needed relaxing: `backend.context` is
+not in any forbidden-prefix tuple."""
+_HYBRID_RETRIEVAL_DIR = _KNOWLEDGE_DIR / "hybrid_retrieval"
+"""6A.5 (P11-M05, new): hybrid Knowledge retrieval & evidence selection --
+sits at the same architectural layer as `narrowing`/`retrieval`. Its own
+concrete embedding provider (`google.genai`) lives OUTSIDE `backend/
+knowledge/` entirely, at `backend/knowledge_hybrid_retrieval/` (mirroring
+A5's `backend/knowledge_ingestion/gemini_image_interpreter.py` precedent)
+-- so this directory itself never imports `google.adk`/`google.genai`.
+Legitimately depends on SQLAlchemy + `pgvector.sqlalchemy` directly (a
+Postgres column-type binding, not a concrete cloud SDK or an ML/ANN
+library) -- the SAME exemption `_REPOSITORY_DIR` already has from
+`_STORAGE_FREE_DIRS`, applied here for the identical reason (this IS the
+package's own persistence layer). Deliberately NOT added to
+`_EMBEDDING_VECTOR_FREE_DIRS` -- this package (never `retrieval/`/
+`provenance/`/`tools/`/`narrowing/`) is exactly the "future concrete
+KnowledgeRelevanceScorer implementation" that comment already anticipates
+being free to depend on such a library, though it does not currently use
+one."""
+_ALL_KM_DIRS = (_DOMAIN_DIR, _INGESTION_DIR, _PROCESSING_DIR, _GOVERNANCE_DIR, _REPOSITORY_DIR, _RETRIEVAL_DIR, _PROVENANCE_DIR, _TOOLS_DIR, _NARROWING_DIR, _HYBRID_RETRIEVAL_DIR)
+_STORAGE_FREE_DIRS = (_PROCESSING_DIR, _GOVERNANCE_DIR, _PROVENANCE_DIR, _TOOLS_DIR, _NARROWING_DIR)
+_CLOUD_SDK_FREE_DIRS = (_INGESTION_DIR, _REPOSITORY_DIR, _HYBRID_RETRIEVAL_DIR)
 _REPOSITORY_CONTRACTS_FILE = _REPOSITORY_DIR / "contracts.py"
-_EMBEDDING_VECTOR_FREE_DIRS = (_RETRIEVAL_DIR, _PROVENANCE_DIR, _TOOLS_DIR)
-_SQLITE_REPOSITORY_FREE_DIRS = (_PROVENANCE_DIR, _TOOLS_DIR)
+_EMBEDDING_VECTOR_FREE_DIRS = (_RETRIEVAL_DIR, _PROVENANCE_DIR, _TOOLS_DIR, _NARROWING_DIR)
+_SQLITE_REPOSITORY_FREE_DIRS = (_PROVENANCE_DIR, _TOOLS_DIR, _NARROWING_DIR, _HYBRID_RETRIEVAL_DIR)
 
 _FORBIDDEN_IMPORT_PREFIXES = (
     "google.adk",
@@ -252,6 +278,9 @@ def test_all_km_packages_actually_importable_standalone() -> None:
         "import backend.knowledge.domain.enums\n"
         "import backend.knowledge.domain.models\n"
         "import backend.knowledge.domain.applicability\n"
+        "import backend.knowledge.domain.telco_applicability\n"
+        "import backend.knowledge.domain.asset_metadata\n"
+        "import backend.knowledge.domain.asset_metadata_applicability_bridge\n"
         "import backend.knowledge.ingestion.contracts\n"
         "import backend.knowledge.ingestion.adapters\n"
         "import backend.knowledge.processing.contracts\n"
@@ -267,6 +296,20 @@ def test_all_km_packages_actually_importable_standalone() -> None:
         "import backend.knowledge.provenance.service\n"
         "import backend.knowledge.tools.contracts\n"
         "import backend.knowledge.tools.service\n"
+        "import backend.knowledge.narrowing.contracts\n"
+        "import backend.knowledge.narrowing.eligibility\n"
+        "import backend.knowledge.narrowing.context_adapter\n"
+        "import backend.knowledge.narrowing.applicability_gate\n"
+        "import backend.knowledge.narrowing.service\n"
+        "import backend.knowledge.hybrid_retrieval.contracts\n"
+        "import backend.knowledge.hybrid_retrieval.indexable_text\n"
+        "import backend.knowledge.hybrid_retrieval.embedding\n"
+        "import backend.knowledge.hybrid_retrieval.repository\n"
+        "import backend.knowledge.hybrid_retrieval.fusion\n"
+        "import backend.knowledge.hybrid_retrieval.reranking\n"
+        "import backend.knowledge.hybrid_retrieval.evidence_selection\n"
+        "import backend.knowledge.hybrid_retrieval.indexing\n"
+        "import backend.knowledge.hybrid_retrieval.service\n"
         "forbidden_roots = ('google.adk', 'google.genai', 'backend.agents', 'backend.tools.teams')\n"
         "found = sorted(name for name in sys.modules if name.startswith(forbidden_roots))\n"
         "print('\\n'.join(found))\n"

@@ -66,6 +66,23 @@ via `temp:`-prefixed session state) from a single-use
 destination/operation/focus/time-range for that call. See that module's
 own docstring for the full ADK-source-verified rationale.
 
+Phase 6A.13 (Request Contract Foundation) -- `record_request_contract`
+(request_contract.py): a same-turn, same-reasoning-pass structured
+declaration tool, exactly the same shape as `record_conversation_target`/
+`record_source_requirements` above (the model decides, a plain
+FunctionTool validates shape only). `validate_and_persist_request_
+contract`, wired as an ADDITIONAL `after_tool_callback` (never replacing
+any existing one), is the deterministic layer that closes the live RRU-9
+defect this milestone exists to fix: it re-verifies every `provided_
+context` parameter's claimed USER provenance against this turn's own
+real user text (or a durable, same-subject-only, session-scoped carry-
+forward), dropping anything neither path can establish, before writing
+the corrected contract into session state. See that module's own
+docstring for the full design. 6A.13 is a FOUNDATION milestone only --
+this contract is produced, validated, and stored, but nothing in this
+file (or elsewhere) yet makes execution/routing OBEY it; that is 6A.14's
+own, later scope.
+
 P4B.3 -- `incident_manager_tool` wraps `_fast_path_incident_manager`
 (direct_read_fast_path.py), not the base `incident_manager` agent
 directly. Same name, same `IncidentManagerRequest`/`IncidentManagerResponse`
@@ -87,12 +104,18 @@ from backend.agents.team_manager.case_tools import record_case_analysis
 from backend.agents.team_manager.conversation_target import record_conversation_target
 from backend.agents.team_manager.multimodal_agent_tool import MultimodalAgentTool
 from backend.agents.team_manager.read_continuation_enforcement import enforce_read_continuation
+from backend.agents.team_manager.request_contract import record_request_contract, validate_and_persist_request_contract
 from backend.agents.team_manager.source_requirements import record_source_requirements
 from backend.agents.team_manager.selection_delegation_guard import (
     block_repeated_delegation_after_selection_needed,
     record_selection_needed,
 )
 from backend.agents.team_manager.state_sync import sync_incident_manager_result_to_state
+from backend.agents.team_manager.troubleshooting_tool import (
+    block_repeated_troubleshooting_invocation,
+    cache_troubleshooting_result_this_turn,
+    troubleshooting_manager,
+)
 from backend.api.perf_timing import after_model_call, before_model_call
 from backend.config.settings import get_settings, get_shared_llm
 
@@ -120,7 +143,18 @@ team_manager = Agent(
         "incident_manager specialist."
     ),
     instruction=team_manager_instruction_provider,
-    tools=[incident_manager_tool, record_case_analysis, record_conversation_target, record_source_requirements],
+    # Phase 6A.10: `troubleshooting_manager` (troubleshooting_tool.py) is
+    # a plain FunctionTool -- ADDITIVE alongside every pre-existing tool,
+    # never a replacement for any of them. See that module's own
+    # docstring for why it is a FunctionTool, never an `AgentTool`.
+    tools=[
+        incident_manager_tool,
+        record_case_analysis,
+        record_conversation_target,
+        record_source_requirements,
+        record_request_contract,
+        troubleshooting_manager,
+    ],
     # R3 FIX (correctness-regression pass): a LIST of callbacks -- ADK's
     # own documented multi-callback mechanism (verified against the
     # installed 1.33.0 source, `flows/llm_flows/functions.py`'s `_run_
@@ -131,8 +165,26 @@ team_manager = Agent(
     # needed` structurally forbids a second `incident_manager` delegation
     # in the same turn once an earlier one already returned "selection_
     # needed" (see selection_delegation_guard.py's own module docstring).
-    before_tool_callback=[enforce_read_continuation, block_repeated_delegation_after_selection_needed],
-    after_tool_callback=[sync_incident_manager_result_to_state, record_selection_needed],
+    # Phase 6A.10: `block_repeated_troubleshooting_invocation`/`cache_
+    # troubleshooting_result_this_turn` bound `troubleshooting_manager`
+    # to at most one REAL invocation per turn, mirroring the identical,
+    # already-proven `temp:` state mechanism (see troubleshooting_tool.py's
+    # own module docstring) -- additive to this list, never replacing the
+    # existing incident_manager guards.
+    before_tool_callback=[enforce_read_continuation, block_repeated_delegation_after_selection_needed, block_repeated_troubleshooting_invocation],
+    after_tool_callback=[
+        sync_incident_manager_result_to_state,
+        record_selection_needed,
+        cache_troubleshooting_result_this_turn,
+        # Phase 6A.13 (Request Contract Foundation): fires ONLY for
+        # `record_request_contract` calls (checked by name internally,
+        # exactly like the three callbacks above) -- deterministically
+        # re-verifies parameter provenance and persists the corrected
+        # contract into session state. See request_contract.py's own
+        # module docstring for the full design; additive, never replacing
+        # any existing callback in this list.
+        validate_and_persist_request_contract,
+    ],
     # Latency-diagnosis pass: correlated model-call timing (see perf_
     # timing.py's own module docstring, "MODEL-CALL INSTRUMENTATION") --
     # ADK's own documented before/after-model-callback extension points,

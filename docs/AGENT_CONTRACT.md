@@ -1,14 +1,19 @@
-# Agent Contract — Team Manager & Incident Manager
+# Agent Contract — Team Manager, Incident Manager & Troubleshooting Manager
 
 Status: **Implemented.** This document describes the current, running
-architecture of SLOPANOC's two agents — `team_manager` (orchestrator,
-Python module `backend/agents/team_manager/`) and `incident_manager` (Teams
-specialist, `backend/agents/incident_manager/`) — as they actually exist in
-this repository today. It supersedes the earlier design-only version of this
-document; where the two disagree, the implementation described here is
-authoritative. Historical design rationale that shaped the implementation
-(e.g. why `AgentTool` was chosen over native `sub_agents` transfer) is kept
-where it remains accurate.
+architecture of SLOPANOC's three agents — `team_manager` (orchestrator,
+Python module `backend/agents/team_manager/`), `incident_manager` (Teams
+and governed-Knowledge specialist, `backend/agents/incident_manager/`),
+and `troubleshooting_manager` (the Phase 6A / 6A.9–6A.10 troubleshooting
+specialist, `backend/agents/troubleshooting_manager/`, reachable from a
+live turn but not yet the target of automatic specialist-intent routing
+— see §1/§6a) — as they actually exist in this repository today. It
+supersedes the earlier design-only version of this document; where the
+two disagree, the implementation described here is authoritative.
+Historical design rationale that shaped the implementation (e.g. why
+`AgentTool` was chosen over native `sub_agents` transfer for `incident_
+manager`, and why a plain `FunctionTool` — never `AgentTool` — was chosen
+for `troubleshooting_manager`) is kept where it remains accurate.
 
 Tool contracts referenced below (`teams_list_chats`, etc.) are defined in
 [`docs/TEAMS_TOOL_CONTRACT.md`](TEAMS_TOOL_CONTRACT.md).
@@ -26,14 +31,24 @@ architecture those passes produced.
 |---|---|---|---|---|
 | `team_manager` | Orchestrator, sole user-facing author | Yes | No — never calls a Teams tool directly | No — presents proposals and outcomes; a deterministic policy gate owns actual authorization |
 | `incident_manager` | Teams specialist | No — never produces text the user sees directly | Yes — sole caller of the Teams tools (`docs/TEAMS_TOOL_CONTRACT.md`) | No — prepares/executes writes only when told to, and execution is independently re-authorized by the tool implementation itself |
+| `troubleshooting_manager` | Troubleshooting specialist (6A.9/6A.10) | No — never produces text the user sees directly | No — `tools=[]`, structurally incapable of any Tool call | No — advisory-only; no write path exists at all |
 
-No other agent exists today. The future second specialist is
-**Troubleshooting Manager** (Phase 6A — see `docs/BUILD_SEQUENCE.md`
-§2a and §2's "Future agent topology" below), which would attach to
-`team_manager` the same way `incident_manager` does. There is no
-Knowledge Agent, planned or built — Generic Governed Knowledge is a
-Knowledge Context provider/tool surface (§3a, §12), never a specialist
-of its own.
+A real second specialist, **Troubleshooting Manager** (`backend/agents/
+troubleshooting_manager/`, Phase 6A / P11-M09 / 6A.9 — COMPLETE, see
+`docs/INTELLIGENCE_ARCHITECTURE.md` §19), is now REACHABLE from a live
+user turn (Phase 6A / P11-M10 / 6A.10 — COMPLETE, see `docs/
+INTELLIGENCE_ARCHITECTURE.md` §21): `team_manager.tools` now includes a
+`troubleshooting_manager` capability, wired as a plain ADK `FunctionTool`
+(`backend/agents/team_manager/troubleshooting_tool.py`) that calls the
+canonical 6A.9 `run_troubleshooting_assessment` — deliberately NEVER
+`AgentTool(agent=troubleshooting_manager)` (see §12's own "Why FunctionTool,
+not AgentTool" rationale). `team_manager` decides, via its own ordinary
+model reasoning (no keyword/regex router), whether a request needs
+`incident_manager`, `troubleshooting_manager`, both, or neither; neither
+specialist ever calls the other. There is no Knowledge
+Agent, planned or built — Generic Governed Knowledge is a Knowledge
+Context provider/tool surface (§3a, §12), never a specialist of its
+own.
 
 ---
 
@@ -42,8 +57,11 @@ of its own.
 ```mermaid
 flowchart TD
     User --> TM[team_manager - ADK root agent]
+    TM -->|record_request_contract, FunctionTool| RC["Request Contract (6A.13)<br/>NOT an agent"]
+    RC --> EP["Deterministic Execution Policy (6A.14)<br/>NOT an agent"]
     TM -->|AgentTool call| IM[incident_manager - ADK specialist agent]
-    IM -->|typed tool calls| TOOLS[tools/teams/* - deterministic Python]
+    TM -->|plain FunctionTool, never AgentTool| TSM[troubleshooting_manager - ADK specialist agent, tools=empty]
+    IM -->|typed tool calls| TOOLS[tools/teams/* and tools/knowledge/* - deterministic Python]
 ```
 
 - `team_manager` is the ADK root agent and the sole user-facing author
@@ -51,12 +69,19 @@ flowchart TD
 - `incident_manager` is invoked via **`AgentTool`**
   (`incident_manager_tool = AgentTool(agent=_fast_path_incident_manager)`,
   wired into `team_manager.tools`) — not native `sub_agents` transfer.
-- Both run in the same ADK application/runtime, in-process. Invoking
-  `incident_manager` is a same-turn call/return, not a network call and not
-  a conversational hand-off.
-- There is no separate service, process, or network hop for
-  `incident_manager` — `AgentTool` runs it through a nested, in-process ADK
-  `Runner`/session inside the same backend process.
+- `troubleshooting_manager` is invoked via a **plain `FunctionTool`**
+  (`backend/agents/team_manager/troubleshooting_tool.py`), deliberately
+  NEVER `AgentTool` — see §12's own "Why FunctionTool, not AgentTool"
+  rationale. `team_manager`'s own model reasoning decides, per turn,
+  whether to call `incident_manager`, `troubleshooting_manager`, both, or
+  neither — this is NOT yet automatic intent-based routing (see §6a and
+  the planned, not-yet-started 6A.17 "Specialist Routing Alignment").
+- Both `incident_manager` and `troubleshooting_manager` run in the same
+  ADK application/runtime, in-process. Invoking either is a same-turn
+  call/return, not a network call and not a conversational hand-off.
+- There is no separate service, process, or network hop for either
+  specialist — both run through a nested, in-process ADK `Runner`/session
+  inside the same backend process.
 
 ### Why `AgentTool`, not native `sub_agents` delegation
 
@@ -68,38 +93,97 @@ user-facing text. `AgentTool` — "allows an agent to be called as a tool ...
 the agent's output is returned as the tool's result" — keeps `team_manager`
 in control of the turn instead, which is why it is used.
 
-### Future agent topology (target architecture — not implemented)
+### Target agent topology (mixed CURRENT/FUTURE — see inline labels; NOT all "not implemented" despite this section's historical heading)
 
 ```mermaid
 flowchart TD
     HOO["Head of Automated Operations (FUTURE, optional)<br/>supervision / efficiency / governance"] --> TM[team_manager - user-facing orchestrator]
     TM --> IM["incident_manager (CURRENT)"]
-    TM --> TSM["Troubleshooting Manager (FUTURE / Phase 6A)"]
-    TSM --> SK["Skills (FUTURE / Phase 6A)<br/>reusable behavioral layer -- not agents"]
+    TM --> TSM["Troubleshooting Manager (CURRENT / 6A.9-6A.10 -- reachable from team_manager, tools=[], advisory only)"]
+    TSM --> SK["Skills (CONTRACT CURRENT / 6A.7, backend/skills/;<br/>SELECTION/EXECUTION by an agent FUTURE)<br/>reusable behavioral layer -- not agents"]
     IM --> CEL["Context Engineering Layer<br/>(FUTURE -- 6A foundation, 6B expansion)"]
     SK --> CEL
     CEL --> KC["Knowledge Context (CURRENT, via Generic KM/RAG)"]
-    CEL --> EM["Experience Memory (FUTURE / Phase 6A)"]
+    CEL --> EM["Experience Memory (FOUNDATION CURRENT / 6A.8, backend/experience_memory/;<br/>producer/consumer wiring FUTURE)"]
     CEL --> CC["Case Context (CURRENT)"]
     CEL --> OC["Operational Context (evolving -- Teams text + Teams media both CURRENT (5.X COMPLETE),<br/>others 5.2-5.7/FUTURE)"]
 ```
 
 A `Skill` (§3a) is not a node in the AGENT topology above in the sense
 `incident_manager`/`Troubleshooting Manager` are — it is a reusable unit
-of behavior a specialist (here, the future Troubleshooting Manager)
-selects and executes, never a separate reasoning boundary/agent of its
-own. It is drawn here only to show where it would sit conceptually
-relative to Context Engineering, not to imply it is itself invoked like
-an `AgentTool`.
+of behavior `Troubleshooting Manager` deterministically resolves (never
+selects via its own model reasoning — see §12), never a separate
+reasoning boundary/agent of its own. It is drawn here only to show where
+it would sit conceptually relative to Context Engineering, not to imply
+it is itself invoked like an `AgentTool`.
 
-This is target architecture only — nothing in this section (Troubleshooting
-Manager, Skills, Experience Memory, the Context Engineering Layer, Head
-of Automated Operations) exists in the codebase today, even though 5.X
-(one of its prerequisites) is now complete. It is documented here so
+Most of this diagram remains target architecture only — the assembled
+Context Engineering Layer's live wiring (real TELCO Context/hybrid-
+retrieval Evidence feeding a live turn), Experience Memory producer
+wiring, and Head of Automated Operations do not exist in the codebase
+today. **`team_manager` reaching `Troubleshooting Manager` is now
+CURRENT** (6A.10, `docs/INTELLIGENCE_ARCHITECTURE.md` §21) — via a plain
+FunctionTool wrapper (`troubleshooting_tool.py`) calling the canonical
+6A.9 `run_troubleshooting_assessment`, itself consuming an honestly
+MINIMAL live `ContextPackage` (Case Context reused from the existing
+Team Manager prompt provider; TELCO Context and hybrid-retrieval
+Evidence both intentionally empty, since neither has a live producer
+wired yet) and a deterministically (never agent-)resolved 6A.7 Skill.
+Three of this diagram's other prerequisites are COMPLETE as standalone
+contracts: Context Engineering's own `ContextPackage`/`EvidencePackage`
+assembly (6A.6, `backend/context_engineering/`), the Skill CONTRACT
+itself (6A.7, `backend/skills/` — typed `SkillDefinition`, registry,
+`ContextPackage`-aware readiness, typed-only applicability), and the
+Experience Memory foundation (6A.8, `backend/experience_memory/`) — no
+agent SELECTS among multiple Skills (today's registry has exactly one
+production Skill, resolved deterministically), and Experience Memory
+still has zero production WRITERS. It is documented here so
 Phase 6A and later phases are designed toward a consistent destination,
 not so it can be mistaken for a current capability. Execution order
 (locked, see `docs/BUILD_SEQUENCE.md` §2a): A5 (COMPLETE) → 5.X
-(COMPLETE / FROZEN, canonical P10) → Phase 6A (← NEXT) → Phase 4H →
+(COMPLETE / FROZEN, canonical P10) → Phase 6A (COMPLETE / FROZEN —
+6A.0 through 6A.11 all COMPLETE; bounded POST-6A corrective/
+foundational work, 6A.12–6A.14, follows without reopening the freeze
+— see CLAUDE.md's own 6A.11 closure section) — 6A.0
+architecture/contract freeze COMPLETE, see
+`docs/INTELLIGENCE_ARCHITECTURE.md`; 6A.1 GCP physical-architecture
+decision record COMPLETE, see `docs/GCP_INTELLIGENCE_RUNTIME.md`; 6A.2
+TELCO Context & Applicability Model COMPLETE, see `backend/context/`;
+6A.3 Multimodal Knowledge Ingestion & Provenance COMPLETE, see
+`docs/KNOWLEDGE_CONTRACT.md` §24; 6A.4 Deterministic TELCO Applicability
+& Knowledge Narrowing COMPLETE, see `docs/KNOWLEDGE_CONTRACT.md` §26;
+6A.5 Hybrid Knowledge Retrieval & Evidence Selection COMPLETE — see
+`docs/KNOWLEDGE_CONTRACT.md` §27, real pgvector similarity search
+validated live after the earlier-confirmed Cloud SQL privilege denial
+was resolved externally, never worked around; 6A.6 Context Engineering
+& Evidence Package COMPLETE — see `docs/KNOWLEDGE_CONTRACT.md` §28, a
+deterministic, in-process `backend/context_engineering/` capability,
+never an agent, never an LLM call, never wired into Team Manager or
+Incident Manager; 6A.7 Skills Framework COMPLETE — see `docs/KNOWLEDGE_
+CONTRACT.md` §29, a typed, declarative `backend/skills/` contract, never
+an agent, never an LLM call, never selected/executed by anything; 6A.8
+Experience Memory Foundation COMPLETE — see `docs/KNOWLEDGE_CONTRACT.md`
+§30, a typed, persisted `backend/experience_memory/` contract (Cloud SQL,
+deterministic admission, owner/customer-scoped structured retrieval),
+never an agent, never an LLM call, zero production writers wired; 6A.9
+Troubleshooting Manager & Intelligence Assembly COMPLETE — see `docs/
+INTELLIGENCE_ARCHITECTURE.md` §19, a real, second ADK specialist
+(`backend/agents/troubleshooting_manager/`, `tools=[]`) plus a
+deterministic `backend/troubleshooting_intelligence/` assembly layer;
+6A.10 Dual-Specialist Orchestration COMPLETE — see `docs/INTELLIGENCE_
+ARCHITECTURE.md` §21, `team_manager.tools` now includes `troubleshooting_
+manager` (a plain FunctionTool, `backend/agents/team_manager/
+troubleshooting_tool.py`, never an `AgentTool`); 6A.11 Integrated TELCO
+Validation & Phase 6A Freeze COMPLETE — Phase 6A / P11 is now formally
+FROZEN → **POST-6A CANONICAL CLOSURE PLAN, 6A.12 through 6A.28**
+(bounded/sequential, does NOT reopen the Phase 6A freeze — the full
+milestone table, done-when criteria, and current per-milestone status
+are authoritative in `docs/MASTER_ROADMAP.md` §7a; the TARGET end-state
+architecture this closure plan builds toward — including where
+`troubleshooting_manager` above fits once 6A.17 Specialist Routing
+Alignment and 6A.16 Hybrid Evidence Production are both done — is in
+`docs/INTELLIGENCE_ARCHITECTURE.md` §20a; only 6A.13 is currently
+COMPLETE, do not read 6A.15 through 6A.28 as implemented) → Phase 4H →
 5.2–5.7 → Phase 6B → Phase 7.
 
 - **`team_manager` remains the only user-facing agent today**, and remains
@@ -107,22 +191,56 @@ not so it can be mistaken for a current capability. Execution order
   built — not merely documented. Nothing about this future diagram changes
   today's runtime path (§2): the user still talks to `team_manager`
   directly.
-- **Troubleshooting Manager** is a planned second specialist, alongside
-  `incident_manager`, for future contextual-troubleshooting/next-step
-  reasoning work, introduced as part of **Phase 6A — Intelligence
-  Architecture Foundation** (`docs/BUILD_SEQUENCE.md` §2a), maturing into
-  Phase 7's full iterative loop. It would attach to `team_manager` via
-  `AgentTool`, the same way `incident_manager` does (§12) — its
-  prerequisite milestone, 5.X (Teams Rich Content / Media Retrieval,
-  canonical P10), is now COMPLETE and FROZEN, so Phase 6A is unblocked
-  and is the next milestone on the locked roadmap — but Troubleshooting
-  Manager itself remains unbuilt until Phase 6A actually builds it.
+- **Troubleshooting Manager** (P11-M09 / 6A.9 — **COMPLETE**,
+  `docs/INTELLIGENCE_ARCHITECTURE.md` §19) is a real, second
+  specialist, alongside `incident_manager`, for contextual-
+  troubleshooting/next-step reasoning — `backend/agents/troubleshooting_
+  manager/agent.py`, a real ADK `Agent` with `tools=[]` (structurally
+  incapable of any capability execution). **It is now REACHABLE from
+  `team_manager` (P11-M10 / 6A.10 — COMPLETE, `docs/INTELLIGENCE_
+  ARCHITECTURE.md` §21)**, via a plain `FunctionTool` wrapper
+  (`troubleshooting_tool.py`) that calls the canonical 6A.9 `run_
+  troubleshooting_assessment` — deliberately NEVER `AgentTool(agent=
+  troubleshooting_manager)` (audited: an `AgentTool` would build the
+  nested agent's `Content` directly from raw tool arguments, bypassing
+  the 6A.9 deterministic preparation pipeline entirely — see §21's own
+  as-built record). Maturing into Phase 7's full
+  iterative loop remains future work. Phase 6A's own internal
+  architecture (this topology's detailed contract — the TELCO Context
+  model, the Context Engineering
+  platform-layer boundary, the Skill/Experience Memory boundaries as
+  they apply inside Phase 6A) is now frozen in
+  `docs/INTELLIGENCE_ARCHITECTURE.md` (P11-M00 / 6A.0 — COMPLETE,
+  architecture/contract freeze only, zero runtime capability); this
+  document's own agent-topology/delegation-contract rules remain
+  authoritative and are unchanged by it.
 - **Skills** (§3a) belong to Phase 6A — a reusable behavioral
-  framework/registry the Troubleshooting Manager selects from, avoiding
-  one new agent per fault type.
+  CONTRACT/registry Troubleshooting Manager selects from, avoiding one
+  new agent per fault type. The contract itself is COMPLETE (P11-M07 /
+  6A.7, `backend/skills/`); Troubleshooting Manager (P11-M09 / 6A.9,
+  COMPLETE) is now the first real Skill CONSUMER — `backend/agents/
+  troubleshooting_manager/skill_resolution.py` deterministically
+  resolves at most one Skill from `backend/skills/definitions/` (one
+  production Skill exists, `telco.troubleshooting_assessment` v1.0.0)
+  against an already-assembled `ContextPackage`, never via a model call
+  to choose it. No Skill SELECTION mechanism beyond this deterministic
+  resolution exists — multi-Skill model-driven selection remains an
+  explicitly documented future deferral (`docs/INTELLIGENCE_
+  ARCHITECTURE.md` §19).
 - **Experience Memory** belongs to Phase 6A as a foundation/boundary
-  (`docs/KNOWLEDGE_CONTRACT.md` §22.3–22.4) — never Approved Knowledge,
-  never silently promoted to it.
+  (`docs/KNOWLEDGE_CONTRACT.md` §22.3–22.4/§30) — never Approved
+  Knowledge, never silently promoted to it. The FOUNDATION itself is
+  COMPLETE (P11-M08 / 6A.8, `backend/experience_memory/` — typed
+  `ExperienceRecord`, Cloud SQL persistence, deterministic `ACCEPT`/
+  `REJECT`/`INDETERMINATE` admission, owner/customer-isolated structured
+  retrieval); Troubleshooting Manager (P11-M09 / 6A.9, COMPLETE) is now
+  the first production CONSUMER (`backend/agents/troubleshooting_
+  manager/experience_support.py`, bounded/owner-scoped/Skill-filtered
+  `.query` only, never `.record_experience`) — production Experience
+  remains genuinely empty (zero writers still exist), so this consumer
+  has been proven correct against a real, honest empty result, and
+  against real Vertex AI validation using synthetic, non-persisted
+  Experience records.
 - **Head of Automated Operations** is a planned future supervisory agent
   (oversight/efficiency/governance across specialists), not a mandatory hop
   in any current or near-term turn. It is not designed in detail here, is
@@ -193,19 +311,24 @@ responsibility.
 
 ## 3a. Agent vs. Skill vs. Tool/Connector vs. MCP (target model)
 
-Four distinct concepts, not implemented as a hierarchy of agents. Only
-`Agent` and `Tool` exist in the codebase today; `Skill` and `MCP` are
-FUTURE, documented here so later phases build toward one consistent
-model rather than inventing competing vocabulary.
+Four distinct concepts, not implemented as a hierarchy of agents. `Agent`
+and `Tool` have existed in the codebase from the start; `Skill` is now
+also CURRENT as a typed, declarative CONTRACT (P11-M07 / 6A.7,
+`backend/skills/`) — but SELECTION and EXECUTION of a Skill by an agent
+remain entirely unimplemented (no agent/tool file anywhere imports
+`backend.skills`, confirmed by a real, empty, scoped `git diff`); `MCP`
+remains FUTURE. Documented here so later phases build toward one
+consistent model rather than inventing competing vocabulary.
 
 ```text
 Agent      = reasoning boundary
              "Given my objective, available Skills, trusted context and
              capabilities, what should I do next?"
 
-Skill      = FUTURE reusable behavior
+Skill      = CURRENT (6A.7) reusable behavior CONTRACT, backend/skills/
              "How should this kind of work be performed?"
              Not an agent, not a document, not a tool, not memory.
+             Selection/execution by an agent remains FUTURE.
 
 Tool /     = deterministic capability
 Connector    "What can SLOPANOC observe or do?"
@@ -217,16 +340,22 @@ MCP        = FUTURE, OPTIONAL capability-discovery/invocation mechanism
 ```
 
 - **Agent ≠ Skill.** A specialist agent (`incident_manager`, or a future
-  `Troubleshooting Manager`) decides *what* to do; a Skill (once built)
-  would encode *how* a recurring kind of work is conducted — a reusable
-  behavioral procedure the agent selects and executes, not a nested
+  `Troubleshooting Manager`) decides *what* to do; a Skill encodes *how*
+  a recurring kind of work is conducted — a reusable behavioral
+  procedure a future agent would select and execute, not a nested
   reasoning boundary. Do not create a new named agent (a "VSWR Agent," a
   "Cell Down Agent") for work that can instead be represented as a Skill
   executed by an existing specialist. The Skills framework/registry
-  foundation belongs to **Phase 6A** (`docs/BUILD_SEQUENCE.md` §2a); see
-  that document and docs/KNOWLEDGE_CONTRACT.md for how Skills are
-  expected to relate to Knowledge/Memory/Case/Operational Context once
-  built.
+  foundation (`backend/skills/`: typed `SkillDefinition`, deterministic
+  versioning/fingerprint/registry, `ContextPackage`-aware readiness,
+  typed-only applicability) is now COMPLETE — see `docs/KNOWLEDGE_
+  CONTRACT.md` §29 and `docs/INTELLIGENCE_ARCHITECTURE.md` §11 for the
+  full, as-built contract. `Troubleshooting Manager` (6A.9, COMPLETE) is
+  the first agent that consumes a Skill — deterministically (0 or 1,
+  never a model choice); no Skill SELECTION-among-many mechanism exists
+  (no ranking/recommendation/intent detection/keyword-semantic-LLM
+  router — a documented future deferral, `docs/INTELLIGENCE_
+  ARCHITECTURE.md` §19); no Skill EXECUTION engine exists.
 - **Tool/Connector ≠ Agent.** Unchanged from §3 above — a tool is
   deterministic Python, never a reasoning boundary, regardless of
   whether it is a direct typed client (today's Teams tools) or, later, a
@@ -368,6 +497,197 @@ SelectionCard (§8) rather than as a list `team_manager` must recite — see
 actually made this turn (`evidence`/`decisions`/etc. are never populated from
 assumed content). Evidence beyond what was actually retrieved is stripped
 before the response is finalized — see §9.
+
+---
+
+## 6a. Request Contract and Deterministic Execution Policy (Phase 6A.13 + 6A.14)
+
+Two layers, introduced between `team_manager`'s own natural-language
+understanding and every downstream specialist/action path — each with a
+genuinely separate concern:
+
+```text
+USER
+  ↓
+TEAM MANAGER (LLM understands meaning)
+  ↓
+REQUEST CONTRACT (records that meaning, as a typed, closed-schema object — 6A.13)
+  ↓
+DETERMINISTIC EXECUTION POLICY (decides what the runtime is ALLOWED to output/do — 6A.14)
+  ↓
+CURRENT specialist / action path (routing itself is UNCHANGED — see below)
+```
+
+- **Request Contract** describes what the user means.
+- **Execution Policy** determines what the system is allowed to output/do.
+- **Grounded Knowledge** (DEF-0024/0026/0027, `evidence.py`, unchanged)
+  determines what authoritative content supports the response.
+
+These are three separate concerns, never conflated: a command can be
+perfectly *grounded* (the right procedure, verbatim text) while the
+Execution Policy still withholds it (the live target parameter was never
+actually confirmed by the user) — both layers must agree before a
+command reaches the user.
+
+**Why:** the DEF-0027 corrective passes proved that Knowledge retrieval,
+command grounding, and governed-evidence continuity each independently
+reconstruct their own, narrow guess at "what does the user mean right
+now" — and a real live defect fell through exactly the seam between
+those guesses: a genuinely governed command was surfaced immediately
+after the user said "it's an RRU," even though the user never supplied
+the specific unit identifier the command required. The command was
+*grounded* (verbatim, Approved, real) but not *correctly parameterized*
+— GROUNDED != CORRECTLY PARAMETERIZED.
+
+**What exists now (`backend/agents/team_manager/request_contract.py`):**
+`RequestContract` — `intent` (INFORMATION / PROCEDURE / COMMAND /
+TROUBLESHOOTING / KNOWLEDGE_INVENTORY / ACTION), `subject`,
+`requested_output` (FACT / PROCEDURE_STEPS / EXACT_COMMAND /
+TROUBLESHOOTING_NEXT_STEP / KNOWLEDGE_LIST / ACTION),
+`requires_governed_knowledge`, `requires_operational_context`,
+`continuation`, `provided_context` (a list of `RequestParameter{name,
+value, provenance}`), `missing_context`, `action_requested`,
+`approval_required`, `ambiguity`. Produced once per turn by
+`record_request_contract` (a plain FunctionTool on `team_manager`,
+mirroring `record_conversation_target`/`record_source_requirements`'s
+own already-proven "model decides, tool validates shape" pattern — never
+a second agent, never a second LLM call). Deterministically re-verified
+by `validate_and_persist_request_contract` (an `after_tool_callback`):
+every `provided_context` entry claiming user provenance must be a
+literal, verifiable substring of the current turn's own real user text,
+or of a durably confirmed value from an earlier, same-subject turn in
+the SAME session — anything neither path can establish is silently
+dropped, never trusted merely because the model's JSON parsed. ACTION
+always forces `approval_required=true` deterministically, never trusting
+the model's own claim (the real approval gate remains §7, completely
+unchanged).
+
+**Phase 6A.14 — Deterministic Request Execution (COMPLETE):**
+`backend/agents/team_manager/request_execution_policy.py`'s
+`derive_execution_decision` reads the validated, CURRENT-TURN
+`RequestContract` (freshness enforced via a new, additive `RequestContract
+.run_id` field, stamped only by `validate_and_persist_request_contract`
+from the same trusted `current_run_id()` correlation used throughout this
+codebase — never settable by the model) and produces a
+`RequestExecutionDecision` — `status` (ALLOW / NEEDS_INFORMATION /
+AMBIGUOUS / REQUIRES_APPROVAL / UNSUPPORTED_CAPABILITY /
+INVALID_CONTRACT), `may_emit_command`, `may_execute_action`,
+`may_emit_operational_steps`, plus the contract's own `missing_context`/
+`ambiguity`/`approval_required`. Pure Python, no LLM reasoning. A
+missing/stale contract is treated at least as restrictively as
+`INVALID_CONTRACT` — it can never grant MORE capability than an explicit
+gate would.
+
+Enforced at `chat_service.py`'s own turn-completion boundary — the ONE
+point with simultaneous access to team_manager's own real session state
+(where the contract lives) and the turn's final `TroubleshootingGuidance`
+(`incident_manager` cannot enforce this itself: `AgentTool` gives it a
+brand-new, throwaway nested session every call, with no access to team_
+manager's own state at all). A `KNOWLEDGE_INVENTORY`-intent turn's
+`final_text` is unconditionally overridden with a fixed "not yet
+supported" message, regardless of what ordinary semantic search
+otherwise produced — routing itself (which specialist gets called) is
+explicitly UNCHANGED in 6A.14; this layer only constrains OUTPUT.
+
+**DEF-0028 FINAL corrective pass (widened intent scope + free-form
+output bypass close):** a live-acceptance audit found `_TARGET_SPECIFIC_
+INTENTS` originally covered only `COMMAND`/`TROUBLESHOOTING`, letting a
+`PROCEDURE`/`INFORMATION`-classified request bypass the missing-context
+gate regardless of `missing_context` — now widened to include both.
+Separately, `enforce_execution_decision_on_guidance` originally stripped
+only `command`/`step.command` — a command could still reach the user
+embedded in `interpretation`/`next_action`/`TroubleshootingStep.action`
+narrative text while the structured `command` field was correctly left
+unset; it now suppresses the ENTIRE `TroubleshootingGuidance` object
+whenever `may_emit_command` is `False`, substituting a deterministic
+clarification. A third, independent gap — `incident_manager` answering
+via free-form `summary` prose with `TroubleshootingGuidance` never
+populated at all, which neither this policy nor DEF-0024/0026/0027's own
+grounding can see — is closed by `requires_unstructured_response_
+backstop`: when the CURRENT, validated `RequestExecutionDecision.status`
+is `NEEDS_INFORMATION`/`AMBIGUOUS` (a signal that POSITIVELY proves
+unresolved target/condition context, deliberately distinct from and
+stronger than the mere absence of a contract) and no structured guidance
+exists to enforce against, `chat_service.py` unconditionally replaces
+`final_text` with the same deterministic clarification — never by
+scanning response text for command-shaped substrings. All three fixes
+are an ADDITIONAL layer on top of DEF-0024/0026/0027's own `evidence.py`
+grounding, never a replacement for it. See `docs/DEFECT_REGISTER.md`
+DEF-0028 for the full record.
+
+**DEF-0029 — Active Procedure Continuity Correction:** a real live
+follow-up sequence proved `LAST_SELECTED_GOVERNED_EVIDENCE_STATE_KEY`
+(DEF-0026) persists every distinct selected identity a turn produces —
+active AND merely supporting — as equally authoritative candidates; a
+follow-up that had, in effect, already resolved which one was meant (via
+its own text, or an already-validated `RequestContract.subject`) was
+still incorrectly asked to disambiguate again. `backend/api/governed_
+evidence_continuity.py` gained a SEPARATE, single-identity
+`ACTIVE_GOVERNED_PROCEDURE_STATE_KEY` (written from THIS turn's own
+fresh selection via `compute_fresh_active_procedure_anchor`, reusing
+DEF-0024/0027's own turn-local `resolve_active_section_id`, never
+overwriting a valid anchor with an ambiguous/absent result) and a
+three-step precedence chain, consulted ONLY when the pre-existing
+ambiguity check already found more than one candidate: (1) does the
+CURRENT turn's own raw text verbatim name exactly one candidate
+(`resolve_explicit_current_candidate` — deliberately separate from
+`detect_explicit_sibling_topic_override`, whose own job remains finding a
+heading OUTSIDE the candidate set); (2) does the CURRENT, already
+provenance-verified `RequestContract.subject` match exactly one; (3) does
+the existing, re-validated active-procedure anchor match one of the
+candidates. `chat_service.py`'s own `current_turn_request_contract` read
+was moved earlier (pure re-ordering, no duplicate generation) so it is
+available before this disambiguation runs. See `docs/DEFECT_REGISTER.md`
+DEF-0029 for the full record.
+
+**DEF-0030 — Request Parameter Consistency & Identifier Normalization:**
+a real live sequence proved `missing_context` was the model's OWN
+unmediated self-report — `validate_and_persist_request_contract`
+deterministically verified `provided_context` but passed `missing_
+context` straight through, and `derive_execution_decision`'s own
+target-specific gate trusted it with no independent cross-check, so a
+model that (correctly or not) declared `missing_context=[]` let a
+governed Knowledge EXAMPLE identifier (`RRU-9`) reach the user as a live
+command before any real unit was ever confirmed. Separately, a genuinely
+user-supplied identifier ("RRU 5") was silently dropped by `_verify_
+and_filter_provided_context`'s own literal-substring-only check, purely
+because a model-canonicalized "RRU-5" is not a literal substring of the
+user's own natural phrasing. `request_contract.py` gained: `TARGET_
+SPECIFIC_INTENTS` (consolidated, one public definition, moved from
+`request_execution_policy.py`'s own former private copy), `required_
+target_parameter_gaps` (a small, closed, documented rule — a target TYPE
+that is itself identifier-bearing, RRU/AAS, but has no `unit_id`
+deterministically requires it; a real governed `"SupportUnit"` branch,
+which has nothing to identify, never triggers this), `reconcile_missing_
+context` (merges the model's own still-unsatisfied claims with the
+deterministic additions, wired into the validator so the DURABLY
+PERSISTED `missing_context` is always reconciled, never the raw claim),
+and `extract_canonical_identifiers` (deterministic, token/boundary-safe
+identifier extraction — no `re`, no fuzzy matching, no bare-numeric-alone
+inference — wired as a third `_verify_and_filter_provided_context` path
+so "RRU 5" verifies a claimed "RRU-5" and vice versa, while "AAS 3"
+never verifies RRU-3 and "RRU 15" never verifies RRU-5). `derive_
+execution_decision` gained a defense-in-depth backstop independently
+re-deriving the same gap from `contract.provided_context`, so a
+malformed/stale contract cannot fail open. A dedicated, real, read-only
+Cloud SQL query of the governed "HW Partial Fault" section (performed
+during this pass) found NO placeholder/substitution language for either
+`RRU-9` or `AAS-1` — both are literal, asset-specific identifiers as
+written, unlike the SAME document's own sibling sections ("HW Fault,"
+"No Connection") which explicitly use a dynamic-lookup + "identified
+unit" pattern for genuinely variable targets. **PARAMETERIZATION_
+AUTHORITY: NOT_AUTHORIZED** — command-template substitution remains
+deliberately unimplemented; DEF-0024/0027's own exact-verbatim grounding
+is completely unchanged and still correctly withholds a synthesized
+RRU-5/AAS-X command. See `docs/DEFECT_REGISTER.md` DEF-0030 for the
+full record.
+
+**Specialist routing alignment (e.g. TROUBLESHOOTING intent routing to
+`troubleshooting_manager`) remains a later milestone**, blocked on
+closing the Troubleshooting Manager's own Evidence-index population gap
+first — do not read either 6A.13 or 6A.14 as having changed which
+specialist a request reaches; only what that specialist's output is
+permitted to contain.
 
 ---
 
@@ -541,12 +861,38 @@ generic, safe response — it never falls back to a normal, tool-enabled
   remain independent of `incident_manager` and of any future specialist
   (e.g. the future Troubleshooting Manager) — it must not become one-off
   MOP/SOP reading logic owned by a single agent.
-- The currently planned next specialist is **Troubleshooting Manager**,
-  introduced as part of **Phase 6A — Intelligence Architecture
-  Foundation** (`docs/BUILD_SEQUENCE.md` §2a), the current next
-  implementation milestone — its prerequisite, **5.X (Teams Rich Content
-  / Media Retrieval, canonical P10)**, is now COMPLETE and FROZEN.
-  Troubleshooting Manager and Head of Automated Operations (§2's future
-  topology) were correctly never introduced during 5.X — 5.X was scoped
-  to Teams media retrieval only — and must not be introduced except as
-  part of Phase 6A actually building them.
+- **Troubleshooting Manager** was introduced as part of **Phase 6A —
+  Intelligence Architecture Foundation** (`docs/BUILD_SEQUENCE.md` §2a)
+  and is now a real, second specialist, REACHABLE from `team_manager`
+  (6A.9/6A.10, both COMPLETE) — its prerequisite, **5.X (Teams Rich
+  Content / Media Retrieval, canonical P10)**, was COMPLETE and FROZEN
+  first. Head of Automated Operations (§2's future topology) remains
+  entirely FUTURE and optional — nothing in 6A.9/6A.10 introduced it.
+  See
+  `docs/INTELLIGENCE_ARCHITECTURE.md` for Phase 6A's canonical
+  `P11-M00`–`P11-M11` sub-milestone sequence — `P11-M00` (6A.0),
+  `P11-M01` (6A.1, a GCP physical-architecture decision record, see
+  `docs/GCP_INTELLIGENCE_RUNTIME.md`), `P11-M02` (6A.2, the TELCO
+  Context & Applicability Model, see `backend/context/`),
+  `P11-M03` (6A.3, Multimodal Knowledge Ingestion & Provenance, see
+  `docs/KNOWLEDGE_CONTRACT.md` §24), and `P11-M04` (6A.4, Deterministic
+  TELCO Applicability & Knowledge Narrowing, see `docs/KNOWLEDGE_
+  CONTRACT.md` §26), `P11-M05` (6A.5, Hybrid Knowledge
+  Retrieval & Evidence Selection, see `docs/KNOWLEDGE_CONTRACT.md` §27),
+  `P11-M06` (6A.6, Context Engineering & Evidence Package, see
+  `docs/KNOWLEDGE_CONTRACT.md` §28), and `P11-M07` (6A.7, Skills
+  Framework, see `docs/KNOWLEDGE_CONTRACT.md` §29) are all **COMPLETE**
+  — real exact/lexical/semantic retrieval and real embedding generation
+  are validated end to end against the real DEV database, including a
+  real pgvector `<=>` similarity search. The earlier-confirmed Cloud SQL
+  `CREATE EXTENSION` privilege denial was resolved externally mid-
+  milestone, never worked around. `backend/context_engineering/` is a
+  deterministic, in-process `ContextPackage`/`EvidencePackage` assembly;
+  `backend/skills/` is a deterministic, typed, declarative Skill
+  contract (`SkillDefinition`, registry, readiness, applicability) —
+  neither is an agent, neither makes an LLM call. `Troubleshooting
+  Manager` (6A.9, COMPLETE) is the first real consumer of both — via its
+  own deterministic Skill resolution and Experience query, never a live
+  Context Engineering/TELCO-Context/hybrid-retrieval wiring (still
+  future) — and is now reachable from `team_manager`'s own live turn
+  (6A.10, COMPLETE, `docs/INTELLIGENCE_ARCHITECTURE.md` §21).

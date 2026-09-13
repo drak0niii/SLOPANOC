@@ -122,6 +122,19 @@ from backend.agents.team_manager.governed_knowledge_completion import (
     SAFE_COMPLETION_FAILURE_TEXT,
     enforce_governed_knowledge_at_completion,
 )
+from backend.agents.team_manager.request_contract import (
+    VALIDATED_REQUEST_CONTRACT_STATE_KEY,
+    safe_request_contract_observability_fields,
+)
+from backend.agents.team_manager.request_execution_policy import (
+    KNOWLEDGE_INVENTORY_UNSUPPORTED_TEXT,
+    RequestExecutionStatus,
+    command_suppression_fallback_text,
+    derive_execution_decision,
+    enforce_execution_decision_on_guidance,
+    load_current_turn_contract,
+    requires_unstructured_response_backstop,
+)
 from backend.agents.team_manager.source_requirements_completion import (
     SAFE_DECLARATION_FAILURE_TEXT,
     request_source_requirements_declaration,
@@ -148,6 +161,17 @@ from backend.api.run_trace import RunTraceRecorder
 from backend.api.schemas import ActiveCaseDTO, AssistantMessage, ChatResponse, PendingActionDTO
 from backend.api.session_service import APP_NAME, DEFAULT_USER_ID, ApiSessionService, get_session_service
 from backend.api.session_state_keys import record_user_turn_activity
+from backend.api.governed_evidence_continuity import (
+    ACTIVE_GOVERNED_PROCEDURE_STATE_KEY,
+    LAST_SELECTED_GOVERNED_EVIDENCE_STATE_KEY,
+    build_active_governed_procedure_state_update,
+    build_last_selected_governed_evidence_state_update,
+    compute_fresh_active_procedure_anchor,
+    detect_governed_evidence_anchor_mismatch,
+    parse_active_governed_procedure,
+    parse_last_selected_governed_evidence,
+    revalidate_prior_governed_evidence,
+)
 from backend.api.knowledge_source_reference import (
     build_knowledge_source_references,
     dedupe_knowledge_source_references,
@@ -184,7 +208,11 @@ from backend.cases.service import CaseService, get_case_service
 from backend.config.settings import get_settings
 from backend.gateway.safe_error import SafeErrorException, run_failure, validation_error
 from backend.selection.service import PENDING_READ_CONTINUATION_STATE_KEY, pop_read_continuation
-from backend.tools.knowledge.runtime import discard_knowledge_run_evidence_state, snapshot_selected_knowledge_evidence
+from backend.tools.knowledge.runtime import (
+    discard_knowledge_run_evidence_state,
+    get_knowledge_repository,
+    snapshot_selected_knowledge_evidence,
+)
 from backend.tools.teams.state_keys import (
     SELECTED_TEAMS_CHAT_ID_STATE_KEY,
     SELECTED_TEAMS_CHAT_TOPIC_STATE_KEY,
@@ -1776,6 +1804,51 @@ class ChatService:
         # this is still exactly one extra session read per turn, not two.
         refreshed_session = await self._session_service.get_session(session_id, user_id)
 
+        # Phase 6A.13 (Request Contract Foundation) -- OBSERVABILITY ONLY:
+        # logs the validated (and, if needed, provenance-corrected)
+        # `RequestContract` this turn produced, if any -- never a raw
+        # parameter VALUE, only key names (see `safe_request_contract_
+        # observability_fields`'s own docstring). This is a pure read of
+        # already-durable session state (written by team_manager's own
+        # `validate_and_persist_request_contract` after_tool_callback) --
+        # it does not change `final_text`, routing, or any execution
+        # behavior; 6A.14 is the milestone that will make execution
+        # actually obey this contract.
+        observable_contract = safe_request_contract_observability_fields(
+            refreshed_session.state.get(VALIDATED_REQUEST_CONTRACT_STATE_KEY)
+        )
+        if observable_contract is not None:
+            _logger.info("request_contract=%s run_id=%s", observable_contract, sequencer.run_id)
+
+        # 6A.14 Active Procedure Continuity Correction -- moved earlier
+        # (was previously computed only much later, immediately before the
+        # `TroubleshootingGuidance` output-shape enforcement) so the SAME
+        # already-validated `RequestContract` this method already reads
+        # for observability, above, is also available to the governed-
+        # knowledge continuity disambiguation below -- see the
+        # corresponding audit for why running continuity BEFORE this
+        # contract was ever consumed was itself part of the live defect.
+        # `load_current_turn_contract` is fail-closed-tolerant (malformed/
+        # absent state -> `None`) and does NOT itself check freshness --
+        # `request_contract_subject`, below, is deliberately only trusted
+        # when this SAME turn's `run_id` matches AND the contract does not
+        # itself declare `ambiguity=True` (an ambiguous contract's own
+        # `subject` is not a safe disambiguation input). `execution_
+        # decision` (6A.14's own output-shape policy) is still derived
+        # from this SAME variable further below, at its original location
+        # -- this is a pure re-ordering, never a duplicate contract read/
+        # generation.
+        current_turn_request_contract = load_current_turn_contract(
+            refreshed_session.state.get(VALIDATED_REQUEST_CONTRACT_STATE_KEY), sequencer.run_id
+        )
+        request_contract_subject = (
+            current_turn_request_contract.subject
+            if current_turn_request_contract is not None
+            and current_turn_request_contract.run_id == sequencer.run_id
+            and not current_turn_request_contract.ambiguity
+            else None
+        )
+
         if (
             error is None
             and final_text is not None
@@ -1844,27 +1917,84 @@ class ChatService:
                 # whether the declaration came from the main turn or from
                 # this remediation.
 
-        if error is None and source_requirements_capture.requires_governed_knowledge and not selected_knowledge_evidence:
-            # FOURTH pre-4H correction pass: PAST ASSISTANT OUTPUT != GOVERNED
-            # KNOWLEDGE. team_manager's own turn declared (via `record_
-            # source_requirements`, directly or via the remediation just
-            # above) that THIS request requires current governed
-            # knowledge, but this run's own trusted, run-scoped SELECTED
-            # evidence (snapshotted above, in the `finally` block) is
-            # empty -- whether because team_manager never delegated to
-            # incident_manager at all, or because its own free-form
-            # presentation did not carry a validated result forward
-            # faithfully. `final_text` is therefore UNTRUSTED for this
-            # governed-knowledge portion and must not reach the user as-is.
-            # See governed_knowledge_completion.py's own module docstring
-            # for the full live-failure rationale -- this deterministically
-            # forces the REAL, unmodified `incident_manager` to run, so ITS
-            # OWN existing compliance retry (provenance_compliance.py,
-            # third correction pass) is what actually enforces selection;
-            # this is not a second, competing selection mechanism.
+        governed_completion_needed = False
+        if error is None and source_requirements_capture.requires_governed_knowledge:
+            if not selected_knowledge_evidence:
+                # FOURTH pre-4H correction pass: PAST ASSISTANT OUTPUT !=
+                # GOVERNED KNOWLEDGE. team_manager's own turn declared (via
+                # `record_source_requirements`, directly or via the
+                # remediation just above) that THIS request requires
+                # current governed knowledge, but this run's own trusted,
+                # run-scoped SELECTED evidence (snapshotted above, in the
+                # `finally` block) is empty -- whether because team_manager
+                # never delegated to incident_manager at all, or because
+                # its own free-form presentation did not carry a validated
+                # result forward faithfully.
+                governed_completion_needed = True
+            else:
+                # DEF-0027 FINAL corrective pass (Fix #1): the pre-existing
+                # gate above only ever protected the EMPTY-evidence case --
+                # a real, live-observed defect proved a turn that selected
+                # SOME evidence, but from an unrelated governed document
+                # entirely (a genuinely successful "HW Partial Fault" turn
+                # followed by "it's a SupportUnit", where incident_manager's
+                # own fresh retrieval selected an unrelated Rogers Resource
+                # Timeout MOP instead), sailed straight through this gate
+                # untouched. See `governed_evidence_continuity.py`'s own
+                # `detect_governed_evidence_anchor_mismatch` docstring for
+                # the full design -- this reuses the SAME revalidation/
+                # override machinery the empty-evidence branch below
+                # already relies on, never a new state system.
+                #
+                # 6A.14 Active Procedure Continuity Correction: the anchor
+                # this check compares against is now the dedicated,
+                # single-identity `ACTIVE_GOVERNED_PROCEDURE_STATE_KEY`
+                # (never `LAST_SELECTED_GOVERNED_EVIDENCE_STATE_KEY`'s own
+                # full, possibly-multi-identity list gated by a `len == 1`
+                # coincidence) -- more precise, and no longer accidentally
+                # inert whenever a genuinely successful turn selected both
+                # an active procedure and a merely supporting sibling.
+                try:
+                    active_key_for_consistency_check = parse_active_governed_procedure(
+                        refreshed_session.state.get(ACTIVE_GOVERNED_PROCEDURE_STATE_KEY)
+                    )
+                    if active_key_for_consistency_check is not None:
+                        revalidated_for_consistency_check = await revalidate_prior_governed_evidence(
+                            [active_key_for_consistency_check], get_knowledge_repository()
+                        )
+                        if len(revalidated_for_consistency_check) == 1 and detect_governed_evidence_anchor_mismatch(
+                            message_text, revalidated_for_consistency_check[0], selected_knowledge_evidence
+                        ):
+                            governed_completion_needed = True
+                except Exception:
+                    # Fails CLOSED (forces remediation) rather than silently
+                    # trusting an unverified, possibly-contaminated answer
+                    # merely because this NEW consistency check itself
+                    # broke -- the remediation call below has its own
+                    # robust safe-failure fallback either way.
+                    _logger.warning(
+                        "chat_service: governed-evidence anchor-consistency check raised -- "
+                        "forcing deterministic remediation defensively run_id=%s",
+                        sequencer.run_id,
+                    )
+                    governed_completion_needed = True
+
+        if governed_completion_needed:
+            # See the FOURTH pre-4H correction pass / DEF-0027 FINAL
+            # corrective pass comments immediately above for why this
+            # branch is entered -- either no current selected evidence, or
+            # a selected-evidence/prior-anchor mismatch. `final_text` is
+            # therefore UNTRUSTED for this governed-knowledge portion and
+            # must not reach the user as-is. See governed_knowledge_
+            # completion.py's own module docstring for the full
+            # live-failure rationale -- this deterministically forces the
+            # REAL, unmodified `incident_manager` to run, so ITS OWN
+            # existing compliance retry (provenance_compliance.py, third
+            # correction pass) is what actually enforces selection; this
+            # is not a second, competing selection mechanism.
             _logger.warning(
-                "chat_service: requires_governed_knowledge declared but no current selected evidence -- "
-                "forcing deterministic governed-knowledge remediation run_id=%s",
+                "chat_service: governed knowledge required but current selection is empty or inconsistent "
+                "with the prior anchor -- forcing deterministic governed-knowledge remediation run_id=%s",
                 sequencer.run_id,
             )
             try:
@@ -1872,6 +2002,30 @@ class ChatService:
                     refreshed_session.state.get(SELECTED_TEAMS_CHAT_TOPIC_STATE_KEY)
                     if source_requirements_capture.requires_teams
                     else None
+                )
+                # DEF-0026 corrective pass -- the SAME kind of durable,
+                # plain-session-state read `chat_topic` immediately above
+                # already performs for Teams, applied here for governed
+                # Knowledge: a prior, genuinely successful turn's own
+                # selected evidence identity (never prose, never an
+                # available-but-unselected item), re-validated in real
+                # time by `enforce_governed_knowledge_at_completion` itself
+                # before it is trusted for anything. See `backend/api/
+                # governed_evidence_continuity.py`'s own module docstring.
+                prior_governed_evidence = parse_last_selected_governed_evidence(
+                    refreshed_session.state.get(LAST_SELECTED_GOVERNED_EVIDENCE_STATE_KEY)
+                )
+                # 6A.14 Active Procedure Continuity Correction -- the
+                # single, dedicated active-procedure anchor (revalidated
+                # inside `enforce_governed_knowledge_at_completion` itself,
+                # never trusted blindly here) and this turn's own already
+                # provenance-verified `RequestContract.subject` (computed
+                # earlier in this method, `None` whenever stale/ambiguous/
+                # absent) -- both consulted ONLY to deterministically
+                # narrow a genuinely ambiguous `prior_governed_evidence`
+                # set down to one, never to select evidence themselves.
+                active_procedure_anchor = parse_active_governed_procedure(
+                    refreshed_session.state.get(ACTIVE_GOVERNED_PROCEDURE_STATE_KEY)
                 )
                 final_text, selected_knowledge_evidence = await enforce_governed_knowledge_at_completion(
                     question=_remediation_question(message_text),
@@ -1885,6 +2039,9 @@ class ChatService:
                     # completion.py's own module docstring for the full
                     # live-failure narrative this closes.
                     image_parts=trusted_image_parts_from_content(content),
+                    prior_governed_evidence=prior_governed_evidence,
+                    active_anchor=active_procedure_anchor,
+                    request_contract_subject=request_contract_subject,
                 )
             except Exception:
                 _logger.warning(
@@ -1893,6 +2050,40 @@ class ChatService:
                 )
                 final_text = SAFE_COMPLETION_FAILURE_TEXT
                 selected_knowledge_evidence = []
+
+        # Phase 6A.14 (Deterministic Request Execution) -- derives what
+        # this turn's runtime is ALLOWED to do from the validated,
+        # CURRENT-TURN `RequestContract` (6A.13), computed earlier in this
+        # method (see the 6A.14 Active Procedure Continuity Correction
+        # comment above `current_turn_request_contract`'s own definition)
+        # -- never a duplicate read/generation. `derive_execution_
+        # decision` treats a missing/stale contract (run_id mismatch
+        # against `sequencer.run_id`) at LEAST as restrictively as
+        # `INVALID_CONTRACT` -- see request_execution_policy.py's own
+        # module docstring for the full design. This is still the one
+        # point in the whole turn that has simultaneous access to team_
+        # manager's own real session state AND the turn's final
+        # `TroubleshootingGuidance`.
+        execution_decision = derive_execution_decision(current_turn_request_contract, sequencer.run_id)
+        _logger.info(
+            "request_execution_decision status=%s may_emit_command=%s may_execute_action=%s run_id=%s",
+            execution_decision.status,
+            execution_decision.may_emit_command,
+            execution_decision.may_execute_action,
+            sequencer.run_id,
+        )
+
+        if error is None and execution_decision.status == RequestExecutionStatus.UNSUPPORTED_CAPABILITY:
+            # Section 8's own explicit requirement: a KNOWLEDGE_INVENTORY-
+            # shaped request must never be silently answered by ordinary
+            # semantic Knowledge search results presented as though they
+            # were a complete catalog -- overridden UNCONDITIONALLY,
+            # regardless of what team_manager/incident_manager otherwise
+            # produced this turn (mirrors the SAME "hard override"
+            # philosophy the troubleshooting-guidance block below already
+            # uses). The real, deterministic catalog capability is a
+            # future milestone.
+            final_text = KNOWLEDGE_INVENTORY_UNSUPPORTED_TEXT
 
         if error is None and final_text is not None:
             # A5 final corrective pass -- the HARD, deterministic one-
@@ -1910,8 +2101,55 @@ class ChatService:
             # unaffected: `pop_troubleshooting_guidance` returns `None`
             # and `final_text` is left exactly as team_manager produced
             # it.
+            #
+            # Phase 6A.14 -- BEFORE rendering, `enforce_execution_
+            # decision_on_guidance` applies the SEPARATE, ADDITIONAL
+            # layer above: DEF-0024/0026/0027's own `evidence.py`
+            # grounding already answered "IF a command may be shown, is
+            # THIS one actually grounded in the right procedure" (still
+            # completely unchanged, still fully in force); this answers
+            # "is the runtime even ALLOWED to show a command for this
+            # request AT ALL" (e.g. a real, live-target parameter the
+            # user never actually supplied is still missing) -- both
+            # must agree before a command reaches the user. A turn whose
+            # execution decision permits commands (the overwhelming
+            # majority) is completely unaffected.
             if captured_troubleshooting_guidance is not None:
-                final_text = render_troubleshooting_guidance(captured_troubleshooting_guidance)
+                corrected_guidance, command_suppressed_by_policy = enforce_execution_decision_on_guidance(
+                    captured_troubleshooting_guidance, execution_decision
+                )
+                final_text = render_troubleshooting_guidance(corrected_guidance)
+                if command_suppressed_by_policy:
+                    fallback_text = command_suppression_fallback_text(execution_decision)
+                    final_text = f"{final_text}\n\n{fallback_text}" if final_text else fallback_text
+            elif requires_unstructured_response_backstop(execution_decision, troubleshooting_guidance_present=False):
+                # Phase 6A.14 FINAL corrective pass -- ROOT CAUSE A
+                # backstop: no `troubleshooting_guidance` exists for this
+                # turn at all (the branch above never ran), so `evidence
+                # .py`'s own DEF-0024/0027 grounding and `enforce_
+                # execution_decision_on_guidance` both had NOTHING to
+                # examine -- yet this turn's own CURRENT, FRESH contract
+                # positively shows unresolved target/condition context
+                # (`execution_decision.status` is `NEEDS_INFORMATION` or
+                # `AMBIGUOUS`). Whatever free-form text team_manager/
+                # incident_manager actually produced (`final_text`,
+                # already computed above) cannot be verified safe --
+                # never scanned/parsed (see `requires_unstructured_
+                # response_backstop`'s own docstring for why not) --  so
+                # it is replaced, unconditionally, with the SAME
+                # deterministic clarification `enforce_execution_
+                # decision_on_guidance` would have produced had
+                # structured guidance existed to strip. This is the
+                # direct, structural fix for the real live defect where
+                # `accn FieldReplaceableUnit=RRU-9 restartunit 1 1 1`/
+                # `...AAS-1...` reached the user via ordinary `summary`
+                # prose, entirely unvalidated by any existing safeguard.
+                _logger.warning(
+                    "chat_service: unresolved target context with no structured troubleshooting_guidance to "
+                    "enforce against -- replacing free-form response deterministically run_id=%s",
+                    sequencer.run_id,
+                )
+                final_text = command_suppression_fallback_text(execution_decision)
 
         if error is None and final_text is None:
             # A turn that produced no final text at all is itself an
@@ -2098,6 +2336,7 @@ class ChatService:
         # source_references_delta` returns `None` for that case, and no
         # write happens at all.
         if turn_invocation_id is not None:
+            end_of_turn_state_delta: dict[str, Any] = {}
             turn_source_references_delta = build_turn_source_references_delta(
                 refreshed_session.state.get(TURN_SOURCE_REFERENCES_STATE_KEY),
                 turn_invocation_id,
@@ -2106,9 +2345,38 @@ class ChatService:
                 visual_evidence_internal,
             )
             if turn_source_references_delta is not None:
-                await self._session_service.persist_state_delta(
-                    refreshed_session, {TURN_SOURCE_REFERENCES_STATE_KEY: turn_source_references_delta}
+                end_of_turn_state_delta[TURN_SOURCE_REFERENCES_STATE_KEY] = turn_source_references_delta
+
+            # DEF-0026 corrective pass -- written ONLY from this turn's own
+            # trusted, already-provenance-validated `selected_knowledge_
+            # evidence` (the SAME list `knowledge_sources` above was just
+            # built from) -- a turn that selected nothing this turn leaves
+            # this key completely untouched (see `build_last_selected_
+            # governed_evidence_state_update`'s own "empty means no
+            # change" contract), never blanking out a previously valid
+            # continuity anchor. Combined into the SAME single session-
+            # state write as the provenance persistence above, avoiding a
+            # second round trip.
+            end_of_turn_state_delta.update(
+                build_last_selected_governed_evidence_state_update(selected_knowledge_evidence)
+            )
+            # 6A.14 Active Procedure Continuity Correction -- a SEPARATE,
+            # single-identity anchor derived from the SAME turn-local
+            # `resolve_active_section_id` (DEF-0024/0027) applied to this
+            # SAME `selected_knowledge_evidence`, using this turn's own raw
+            # question text. Returns no key at all (a no-op, exactly like
+            # the call immediately above) whenever this turn's own fresh
+            # selection does not uniquely resolve one active section --
+            # never overwrites a previously valid anchor with an
+            # ambiguous/absent result.
+            end_of_turn_state_delta.update(
+                build_active_governed_procedure_state_update(
+                    compute_fresh_active_procedure_anchor(selected_knowledge_evidence, _remediation_question(message_text))
                 )
+            )
+
+            if end_of_turn_state_delta:
+                await self._session_service.persist_state_delta(refreshed_session, end_of_turn_state_delta)
 
         yield sequencer.build(StreamEventType.MESSAGE_COMPLETED, message_completed_data)
 

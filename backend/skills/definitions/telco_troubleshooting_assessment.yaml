@@ -1,0 +1,65 @@
+skill_schema_version: "1.0"
+skill_id: "telco.troubleshooting_assessment"
+version: "1.0.0"
+lifecycle: active
+
+name: "TELCO Troubleshooting Assessment"
+description: >
+  Generic, vendor-independent methodology for assessing what should be
+  investigated or done next during an operational troubleshooting
+  conversation, grounded in trusted current context and authoritative
+  selected evidence. Derived from docs/TROUBLESHOOTING_STRATEGY.md's own
+  non-negotiable "what should I check next, and why?" principle -- never
+  a vendor-specific or fault-specific procedure of its own.
+objective: >
+  Establish current known/unknown/conflicting operational context,
+  review authoritative selected evidence, identify unresolved
+  information gaps, and identify the single next diagnostic objective
+  and the capability it would require -- never a full remediation plan
+  and never an executable command sequence of its own.
+
+context_requirements:
+  - dimension: fault
+
+evidence_requirement:
+  minimum_selected_items: 1
+  requires_source_evidence: false
+
+methodology:
+  - step_id: establish_context
+    sequence: 0
+    title: "Establish trusted current context"
+    purpose: "Identify which TELCO Context dimensions are KNOWN, UNKNOWN, CONFLICTING, or NOT_APPLICABLE for this request -- never guess a missing or disputed value."
+  - step_id: review_evidence
+    sequence: 1
+    title: "Review authoritative selected evidence"
+    purpose: "Review only the already-selected governed Knowledge evidence provided in this package -- never re-search, never infer beyond it, never treat a merely-retrieved-but-unselected item as usable."
+  - step_id: identify_gaps
+    sequence: 2
+    title: "Identify unresolved information gaps"
+    purpose: "State which UNKNOWN/CONFLICTING context dimensions, or missing evidence, block a fully grounded next step."
+  - step_id: identify_next_objective
+    sequence: 3
+    title: "Identify the next diagnostic objective"
+    purpose: "State the single next check, reading, or piece of information that would most reduce uncertainty right now, and the capability obtaining it would require -- never the action itself."
+    required_capability: "diagnostics.read"
+  - step_id: evaluate_stop_conditions
+    sequence: 4
+    title: "Evaluate stop / escalation conditions"
+    purpose: "State whether current evidence is sufficient to stop, escalate, or hand over, per any escalation guidance the selected evidence itself states -- never invent an escalation target not stated in evidence or current context."
+
+guardrails:
+  - "Never recommend a state-changing or service-affecting action as if it were already approved -- this Skill produces advisory assessment only, never an executable command sequence."
+  - "Never treat historical Experience as authorization to override governed Knowledge -- an explicit Approved procedural prohibition always outranks prior pattern information."
+  - "Never resolve an UNKNOWN or CONFLICTING context dimension by guessing, inferring, or picking one disputed value."
+  - "Never invent an operational command -- reproduce a command only verbatim from selected governed evidence, and only when the next diagnostic objective genuinely requires one."
+  - "Never present a next diagnostic requirement as if it were already executed or approved."
+
+expected_output: >
+  A structured assessment identifying: a brief grounded interpretation
+  of current context, findings grounded in selected evidence,
+  information gaps, exactly one next diagnostic requirement (never an
+  executable command by itself), and any stop/escalation condition --
+  always attributing which parts of the answer come from current
+  context, governed evidence, or historical Experience, and never
+  blending the three.

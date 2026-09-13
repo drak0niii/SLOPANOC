@@ -21,7 +21,14 @@ from backend.knowledge.ingestion.extractors.pdf import EncryptedPdfError, extrac
 from backend.knowledge.ingestion.extractors.txt import extract_txt
 from backend.knowledge.ingestion.extractors.xlsx import extract_xlsx
 
-from ._synthetic_docs import inject_embedded_member, make_minimal_docx, make_minimal_pdf, make_minimal_png, make_minimal_xlsx
+from ._synthetic_docs import (
+    inject_embedded_member,
+    make_minimal_docx,
+    make_minimal_pdf,
+    make_minimal_png,
+    make_minimal_xlsx,
+    make_minimal_xlsx_with_table,
+)
 
 
 def _limits(**overrides: int) -> ExtractionLimits:
@@ -148,6 +155,72 @@ def test_xlsx_multiple_sheets_each_own_artifact() -> None:
     data = make_minimal_xlsx({"Sheet1": [["A"], [1]], "Sheet2": [["B"], [2]]})
     _, sheets = extract_xlsx(data, container_artifact_id="root", depth=0, budget=_budget())
     assert {s.display_name for s in sheets} == {"Sheet1", "Sheet2"}
+
+
+# --- XLSX range/table provenance (6A.3) -------------------------------------
+
+
+def test_xlsx_sheet_locator_includes_used_range() -> None:
+    data = make_minimal_xlsx({"VSWR": [["Technology", "Warning", "Critical"], ["LTE", 1.5, 2.0], ["NR", 1.4, 1.8]]})
+    _, artifacts = extract_xlsx(data, container_artifact_id="root", depth=0, budget=_budget())
+    sheet = next(a for a in artifacts if a.kind == "xlsx_sheet")
+    assert sheet.locator_detail == "sheet=VSWR;range=A1:C3"
+
+
+def test_xlsx_sheet_with_no_rows_has_no_range_in_locator() -> None:
+    data = make_minimal_xlsx({"Empty": []})
+    _, artifacts = extract_xlsx(data, container_artifact_id="root", depth=0, budget=_budget())
+    sheet = next(a for a in artifacts if a.kind == "xlsx_sheet")
+    assert sheet.locator_detail == "sheet=Empty"
+
+
+def test_xlsx_sheet_with_no_native_table_produces_no_table_artifact() -> None:
+    data = make_minimal_xlsx({"Report": [["Node", "Status"], ["N1", "OK"]]})
+    _, artifacts = extract_xlsx(data, container_artifact_id="root", depth=0, budget=_budget())
+    assert not [a for a in artifacts if a.kind == "xlsx_table"]
+
+
+def test_xlsx_native_table_extracted_as_child_artifact_with_range_provenance() -> None:
+    data = make_minimal_xlsx_with_table(
+        "VSWR",
+        ["Technology", "Warning", "Critical"],
+        [["LTE", 1.5, 2.0], ["NR", 1.4, 1.8]],
+        table_name="VSWRThreshold",
+    )
+    _, artifacts = extract_xlsx(data, container_artifact_id="root", depth=0, budget=_budget())
+    sheet = next(a for a in artifacts if a.kind == "xlsx_sheet")
+    tables = [a for a in artifacts if a.kind == "xlsx_table"]
+    assert len(tables) == 1
+    table = tables[0]
+    assert table.parent_artifact_id == sheet.artifact_id
+    assert table.depth == sheet.depth + 1
+    assert table.locator_detail == "sheet=VSWR;table=VSWRThreshold;range=A1:C3"
+    assert table.display_name == "VSWRThreshold"
+    assert "Columns: Technology | Warning | Critical" in table.extracted_text
+    assert "LTE | 1.5 | 2" in table.extracted_text
+    assert table.derived is False
+    assert table.extraction_status == ArtifactExtractionStatus.COMPLETE
+
+
+def test_xlsx_table_artifact_content_hash_deterministic() -> None:
+    data = make_minimal_xlsx_with_table("S", ["A", "B"], [[1, 2]], table_name="T")
+    _, artifacts_1 = extract_xlsx(data, container_artifact_id="root", depth=0, budget=_budget())
+    _, artifacts_2 = extract_xlsx(data, container_artifact_id="root", depth=0, budget=_budget())
+    table_1 = next(a for a in artifacts_1 if a.kind == "xlsx_table")
+    table_2 = next(a for a in artifacts_2 if a.kind == "xlsx_table")
+    assert table_1.artifact_id == table_2.artifact_id
+    assert table_1.content_hash == table_2.content_hash
+
+
+def test_xlsx_table_extraction_reaches_root_document_via_dispatch() -> None:
+    # Proves the native-table path is reachable through the SAME
+    # extract_root_document entry point every other XLSX test uses --
+    # not merely callable in isolation.
+    data = make_minimal_xlsx_with_table("Report", ["Alarm", "Action"], [["VSWR", "Escalate"]], table_name="AlarmActions")
+    _, artifacts = extract_root_document(data, budget=_budget())
+    tables = [a for a in artifacts if a.kind == "xlsx_table"]
+    assert len(tables) == 1
+    assert "Escalate" in tables[0].extracted_text
 
 
 # --- PDF -------------------------------------------------------------------

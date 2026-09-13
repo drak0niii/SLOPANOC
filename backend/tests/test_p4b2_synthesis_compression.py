@@ -113,10 +113,18 @@ def test_generic_incident_manager_instruction_is_byte_for_byte_unchanged() -> No
     All-Image Retrieval milestone extended it once more to describe the
     two-tool split (`teams_get_hosted_content` for one specific image vs.
     `teams_get_all_hosted_content` for a deterministic, exhaustive batch)
-    and `failed_ordinals`/count-based reporting -- this is that
-    legitimate, intentional length, not P4B.2-era drift.
+    and `failed_ordinals`/count-based reporting; the DEF-0024 corrective
+    pass (Alarm Procedure Granularity & Procedure-Scoped Grounding)
+    added a "PROCEDURE-SCOPED GROUNDING FOR EVERY REQUEST" paragraph
+    (later revised in place, after this pass's own audit found
+    incident_manager is invoked fresh on every delegation and never sees
+    conversation history itself -- the follow-up-continuity resolution
+    responsibility was relocated to team_manager's own prompt instead;
+    this paragraph keeps only what incident_manager itself can actually
+    act on: grounding retrieval in whatever `question` it is given) --
+    this is that legitimate, intentional length, not P4B.2-era drift.
     """
-    assert len(INCIDENT_MANAGER_INSTRUCTION) == 54429
+    assert len(INCIDENT_MANAGER_INSTRUCTION) == 58291  # 6A.14 FINAL corrective pass: +1533 chars, mandatory command-bearing troubleshooting_guidance paragraph
 
 
 def test_synthesis_only_agent_no_longer_uses_the_generic_instruction() -> None:

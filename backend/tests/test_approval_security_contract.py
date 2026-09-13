@@ -29,12 +29,18 @@ def test_team_manager_has_no_approval_tools() -> None:
     # scope bug fix added `record_conversation_target` (a deterministic
     # declaration tool, see conversation_target.py) -- still no
     # approval-mutation tool of any kind.
+    # Phase 6A.10 added `troubleshooting_manager` (a plain FunctionTool
+    # wrapper calling the canonical 6A.9 run_troubleshooting_assessment,
+    # see backend/agents/team_manager/troubleshooting_tool.py) -- still
+    # no approval-mutation tool of any kind.
     names = _tool_names(team_manager)
     assert names == [
         "incident_manager",
         "record_case_analysis",
         "record_conversation_target",
         "record_source_requirements",
+        "record_request_contract",
+        "troubleshooting_manager",
     ]
     for forbidden in ("approve_proposal", "reject_proposal", "consume_proposal", "create_action_proposal"):
         assert forbidden not in names

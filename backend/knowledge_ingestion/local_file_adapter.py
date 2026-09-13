@@ -37,6 +37,33 @@ PIPELINE, per file:
 
 Produces a structural `IngestionReport` per file (section 53) --
 counts only, never real document content, so this is safe to log.
+
+6A.3 / P11-M03 ADDITION -- `ingest_and_structure_local_file(s)`: closes a
+real, audited integration gap. `process_compound_document` (A5 Layer H,
+`backend/knowledge/processing/compound.py`) already existed and was
+already unit-tested against synthetic fixtures, but NOTHING in this
+module -- the only real local-file ingestion entry point that exists --
+ever called it; a `grep` for `materialize_candidate(` across all of
+`backend/` (excluding tests) found ZERO production call sites either.
+The practical consequence, verified directly (not assumed): for a PDF or
+XLSX ROOT document specifically, `extract_root_document`'s own returned
+"root text" is a short structural summary (e.g. "PDF document with 24
+page(s)." / "Workbook with 4 sheet(s): ..."), never the real page/sheet
+content -- that real content exists ONLY inside each `KnowledgeArtifact
+.extracted_text`. Without Layer H, a caller who stopped at
+`ingest_local_file` and handed its `IngestedKnowledgeDocument` straight
+to a plain `HeadingStructureProcessor.process()` call (the pre-A5 shape)
+would segment only that one-line summary into `KnowledgeObject.sections`
+-- meaning the real page/sheet/embedded content would never become a
+retrievable `KnowledgeSection` at all, only inert `KnowledgeArtifact`
+metadata. `ingest_and_structure_local_file` composes the two existing,
+UNMODIFIED steps (`ingest_local_file` then `process_compound_document`)
+so a caller gets a `StructuredKnowledgeDocument` with real sections for
+the root text AND for every artifact that has `extracted_text` -- ready
+for the SAME explicit, separate, trusted `materialize_candidate` step
+every other 5.1E caller already uses. This function still does not call
+`materialize_candidate`/`approve_version` itself -- governance remains
+exactly as explicit and separate as before this pass.
 """
 from __future__ import annotations
 
@@ -50,6 +77,7 @@ from backend.knowledge.domain.models import KnowledgeSource
 from backend.knowledge.ingestion.contracts import IngestedKnowledgeDocument
 from backend.knowledge.ingestion.extraction import ExtractionBudget, ExtractionLimits, hash_bytes
 from backend.knowledge.ingestion.extractors.dispatch import EncryptedDocumentError, UnsupportedRootDocumentError, extract_root_document
+from backend.knowledge.processing.contracts import StructuredKnowledgeDocument
 from backend.knowledge.ingestion.image_interpretation import ImageInterpreter, apply_image_interpretation
 from backend.knowledge_ingestion.artifact_storage import KnowledgeArtifactStorage, build_artifact_object_name
 
@@ -191,5 +219,63 @@ async def ingest_local_files(
     for path in paths:
         results.append(
             await ingest_local_file(path, source_system=source_system, limits=limits, storage=storage, interpreter=interpreter)
+        )
+    return results
+
+
+@dataclass
+class StructuredLocalFileIngestionResult:
+    """Like `LocalFileIngestionResult`, plus the `StructuredKnowledgeDocument`
+    Layer H produced -- `structured` is `None` exactly when `result
+    .document` is `None` (extraction itself failed; nothing to structure).
+    """
+
+    result: LocalFileIngestionResult
+    structured: Optional[StructuredKnowledgeDocument]
+
+
+async def ingest_and_structure_local_file(
+    path: Path,
+    *,
+    source_system: str = "local_file",
+    limits: Optional[ExtractionLimits] = None,
+    storage: Optional[KnowledgeArtifactStorage] = None,
+    interpreter: Optional[ImageInterpreter] = None,
+) -> StructuredLocalFileIngestionResult:
+    """`ingest_local_file` followed by `process_compound_document` -- see
+    this module's own docstring ("6A.3 / P11-M03 ADDITION") for exactly
+    why this composition exists and what gap it closes. Both underlying
+    functions are called completely unmodified; this is composition, not
+    a new extraction/processing implementation. Still stops short of
+    governance -- the returned `StructuredKnowledgeDocument` is ready for
+    an explicit, separate `materialize_candidate` call, never invoked
+    here.
+    """
+    from backend.knowledge.processing.compound import process_compound_document  # noqa: PLC0415 -- avoids importing Layer H at module scope for callers that only ever use ingest_local_file.
+
+    result = await ingest_local_file(path, source_system=source_system, limits=limits, storage=storage, interpreter=interpreter)
+    if result.document is None:
+        return StructuredLocalFileIngestionResult(result=result, structured=None)
+    structured = process_compound_document(result.document)
+    return StructuredLocalFileIngestionResult(result=result, structured=structured)
+
+
+async def ingest_and_structure_local_files(
+    paths: list[Path],
+    *,
+    source_system: str = "local_file",
+    limits: Optional[ExtractionLimits] = None,
+    storage: Optional[KnowledgeArtifactStorage] = None,
+    interpreter: Optional[ImageInterpreter] = None,
+) -> list[StructuredLocalFileIngestionResult]:
+    """Batch form of `ingest_and_structure_local_file` -- one file's
+    failure never aborts the batch, mirroring `ingest_local_files`.
+    """
+    results = []
+    for path in paths:
+        results.append(
+            await ingest_and_structure_local_file(
+                path, source_system=source_system, limits=limits, storage=storage, interpreter=interpreter
+            )
         )
     return results

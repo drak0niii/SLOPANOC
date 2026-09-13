@@ -17,9 +17,14 @@ import pytest
 from backend.knowledge.domain.artifacts import ArtifactExtractionStatus, KnowledgeArtifact
 from backend.knowledge.ingestion.image_interpretation import ImageInterpretationResult
 from backend.knowledge_ingestion.artifact_storage import KnowledgeArtifactStorage
-from backend.knowledge_ingestion.local_file_adapter import ingest_local_file, ingest_local_files
+from backend.knowledge_ingestion.local_file_adapter import (
+    ingest_and_structure_local_file,
+    ingest_and_structure_local_files,
+    ingest_local_file,
+    ingest_local_files,
+)
 
-from backend.tests.knowledge._synthetic_docs import make_minimal_docx, make_minimal_png
+from backend.tests.knowledge._synthetic_docs import make_minimal_docx, make_minimal_pdf, make_minimal_png, make_minimal_xlsx
 
 
 class _FakeGcsBlob:
@@ -179,3 +184,97 @@ async def test_ingest_batch_one_failure_does_not_abort_others(tmp_path: Path) ->
     results = await ingest_local_files([bad_file, good_file])
     assert results[0].report.succeeded is False
     assert results[1].report.succeeded is True
+
+
+# --- ingest_and_structure_local_file(s) -- 6A.3 Layer H integration --------
+
+
+@pytest.mark.asyncio
+async def test_structure_extraction_failure_yields_no_structured_document(tmp_path: Path) -> None:
+    bad_file = tmp_path / "bad.docx"
+    bad_file.write_bytes(b"not a docx")
+    outcome = await ingest_and_structure_local_file(bad_file)
+    assert outcome.result.report.succeeded is False
+    assert outcome.structured is None
+
+
+@pytest.mark.asyncio
+async def test_structure_plain_docx_root_text_becomes_a_section(tmp_path: Path) -> None:
+    file_path = tmp_path / "procedure.docx"
+    file_path.write_bytes(make_minimal_docx(heading="Synthetic Procedure", paragraphs=["Step one.", "Step two."]))
+
+    outcome = await ingest_and_structure_local_file(file_path)
+    assert outcome.structured is not None
+    root_sections = [s for s in outcome.structured.sections if s.artifact_id is None]
+    assert root_sections
+    assert any("Step one." in s.content for s in root_sections)
+
+
+@pytest.mark.asyncio
+async def test_structure_pdf_root_document_page_content_becomes_retrievable_sections(tmp_path: Path) -> None:
+    """THE gap this milestone closes, proven directly: a PDF root
+    document's own `IngestedKnowledgeDocument.content` is only a short
+    structural summary ("PDF document with 1 page(s)."), never the real
+    page text -- without Layer H wired in, the real text
+    ("A specific real sentence only on the PDF page.") would never reach
+    any `StructuredKnowledgeSection`, only an inert `KnowledgeArtifact`.
+    """
+    file_path = tmp_path / "spec.pdf"
+    file_path.write_bytes(make_minimal_pdf("A specific real sentence only on the PDF page."))
+
+    outcome = await ingest_and_structure_local_file(file_path)
+    assert outcome.structured is not None
+    # The root section is indeed just the structural summary -- confirms
+    # the gap was real, not merely theoretical.
+    root_sections = [s for s in outcome.structured.sections if s.artifact_id is None]
+    assert root_sections
+    assert "page(s)" in root_sections[0].content
+    assert "A specific real sentence" not in root_sections[0].content
+    # But the real page text IS now reachable as its own, separately
+    # tagged, artifact-linked section.
+    artifact_sections = [s for s in outcome.structured.sections if s.artifact_id is not None]
+    assert artifact_sections
+    assert any("A specific real sentence only on the PDF page." in s.content for s in artifact_sections)
+
+
+@pytest.mark.asyncio
+async def test_structure_xlsx_root_document_sheet_content_becomes_retrievable_sections(tmp_path: Path) -> None:
+    file_path = tmp_path / "workbook.xlsx"
+    file_path.write_bytes(make_minimal_xlsx({"VSWR": [["Technology", "Warning"], ["LTE", 1.5]]}))
+
+    outcome = await ingest_and_structure_local_file(file_path)
+    assert outcome.structured is not None
+    artifact_sections = [s for s in outcome.structured.sections if s.artifact_id is not None]
+    assert artifact_sections
+    assert any("LTE | 1.5" in s.content for s in artifact_sections)
+
+
+@pytest.mark.asyncio
+async def test_structure_section_artifact_ids_resolve_within_same_document(tmp_path: Path) -> None:
+    """Every StructuredKnowledgeSection.artifact_id, when set, must
+    resolve to a real artifact_id in the same document's own artifacts
+    -- StructuredKnowledgeDocument's own model_validator already enforces
+    this; this test proves it holds for a REAL extracted+structured
+    document, not only for hand-built fixtures.
+    """
+    file_path = tmp_path / "workbook.xlsx"
+    file_path.write_bytes(make_minimal_xlsx({"Sheet1": [["A", "B"], [1, 2]], "Sheet2": [["C"], [3]]}))
+
+    outcome = await ingest_and_structure_local_file(file_path)
+    assert outcome.structured is not None
+    artifact_ids = {a.artifact_id for a in outcome.structured.source_document.artifacts}
+    for section in outcome.structured.sections:
+        if section.artifact_id is not None:
+            assert section.artifact_id in artifact_ids
+
+
+@pytest.mark.asyncio
+async def test_structure_batch_one_failure_does_not_abort_others(tmp_path: Path) -> None:
+    good_file = tmp_path / "good.docx"
+    good_file.write_bytes(make_minimal_docx(heading="H", paragraphs=["p"]))
+    bad_file = tmp_path / "bad.docx"
+    bad_file.write_bytes(b"not a docx")
+
+    outcomes = await ingest_and_structure_local_files([bad_file, good_file])
+    assert outcomes[0].structured is None
+    assert outcomes[1].structured is not None

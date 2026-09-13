@@ -49,8 +49,9 @@ not that the code is wrong.
 | POST-B7 UI/UX Refinement Milestone | ✅ COMPLETE |
 | A5 — Knowledge Island Ingestion Foundation + Real TELCO/RAN Compound Knowledge Validation | ✅ COMPLETE |
 | 5.X — Teams Rich Content / Media Retrieval | ✅ COMPLETE / FROZEN |
-| Phase 6A — Intelligence Architecture Foundation | **← NEXT** — not started |
-| Phase 4H — Security Hardening | FUTURE — after 6A |
+| Phase 6A — Intelligence Architecture Foundation | **COMPLETE / FROZEN** — 6A.0 (architecture/contract freeze) ✅ COMPLETE; 6A.1 (GCP runtime/tooling decision record) ✅ COMPLETE; 6A.2 (TELCO Context & Applicability Model, `backend/context/`) ✅ COMPLETE; 6A.3 (Multimodal Knowledge Ingestion & Provenance, DEF-0017 fixed) ✅ COMPLETE; 6A.4 (Deterministic TELCO Applicability & Knowledge Narrowing, `backend/knowledge/narrowing/`) ✅ COMPLETE; 6A.5 (Hybrid Knowledge Retrieval & Evidence Selection, `backend/knowledge/hybrid_retrieval/`) ✅ **COMPLETE** — real exact/lexical/semantic retrieval + real Vertex embedding generation + real pgvector similarity search all validated live (the `CREATE EXTENSION vector` privilege denial this row previously recorded was resolved externally mid-milestone, never worked around; DEF-0018 destructive-test-teardown defect also fixed); 6A.6 (Context Engineering & Evidence Package, `backend/context_engineering/`) ✅ **COMPLETE** — deterministic ContextPackage/EvidencePackage assembly, never an agent, never an LLM call, never an independent path to Knowledge; 6A.7 (Skills Framework, `backend/skills/`) ✅ **COMPLETE** — typed, declarative SkillDefinition contract, never an agent, never Knowledge, never a Tool, never memory, never executed/selected; 6A.8 (Experience Memory Foundation, `backend/experience_memory/`) ✅ **COMPLETE** — typed, durably-persisted ExperienceRecord foundation (Cloud SQL, Alembic `c7e2a4f9b83d`), deterministic ACCEPT/REJECT/INDETERMINATE admission, owner/customer-isolated structured retrieval, semantic/vector retrieval explicitly deferred, zero production writers/consumers wired (a migration-test target-isolation incident, OPS-0001, occurred and was fully, safely recovered with zero data loss); 6A.9 (Troubleshooting Manager & Intelligence Assembly, `backend/troubleshooting_intelligence/` + `backend/agents/troubleshooting_manager/`) ✅ **COMPLETE** — a real second ADK specialist (`tools=[]`, structurally incapable of capability execution), deterministic (never model-driven) Skill resolution over one production Skill, bounded/owner-scoped Experience consumption, fail-closed grounding validation, and real Vertex AI validation proving Governed Knowledge outranks conflicting Experience and prompt injection is never followed (DEF-0019 found and fixed); 6A.10 (Dual-Specialist Orchestration, `backend/agents/team_manager/troubleshooting_tool.py`) ✅ **COMPLETE** — `team_manager` now reaches `troubleshooting_manager` as a sibling of `incident_manager` via a plain FunctionTool (never an AgentTool); real Vertex AI validation through the actual `team_manager` object proved incident-only/troubleshooting-only/dual-specialist routing, no-execution, and Experience-read-only behavior live, plus two corrective passes (6A.10.1, 6A.10.2, DEF-0020/DEF-0021 fixed); 6A.11 (Integrated TELCO Validation & Phase 6A Freeze) ✅ **COMPLETE** — a two-pass validation milestone (no new production capability) proving the full 6A.0-6A.10 foundation holds end to end against real Cloud SQL/pgvector/Vertex/Gemini, a materially different second TELCO scenario, insufficient/conflicting-context behavior, a full prompt-injection stress matrix, and provider-failure fail-closed behavior (DEF-0022 found/fixed/reclassified as validation-only). **Phase 6A / P11 is now COMPLETE AND FROZEN** |
+| POST-6A Canonical Closure Plan — 6A.12 through 6A.28 (see `docs/MASTER_ROADMAP.md` §7a, authoritative) | 6A.13 ✅ COMPLETE; 6A.12/6A.14 implemented, live acceptance still open (DEF-0024/0026/0027/0028/0029/0030, see `docs/DEFECT_REGISTER.md`); 6A.15 through 6A.28 PLANNED, NOT STARTED |
+| Phase 4H — Security Hardening | FUTURE — after POST-6A work concludes |
 | 5.2–5.7 — Operational Integrations | FUTURE — after 4H |
 | Phase 6B — Context Engineering Expansion | FUTURE — after 5.2–5.7 |
 | Phase 7 — Advanced Troubleshooting / JOC | FUTURE (product target) |
@@ -118,9 +119,64 @@ PHASE 5 — Context + Operational Integrations
     §2b, and docs/MASTER_ROADMAP.md for the as-built contract and full
     defect history)
 
-PHASE 6A — Intelligence Architecture Foundation — ← NEXT, NOT STARTED,
+PHASE 6A — Intelligence Architecture Foundation — COMPLETE / FROZEN,
   after 5.X (Context Engineering foundation, Troubleshooting Manager,
-  Skills framework foundation, Experience Memory foundation — see §2a)
+  Skills framework foundation, Experience Memory foundation — see §2a;
+  see also the "POST-6A CANONICAL CLOSURE PLAN, 6A.12 → 6A.28" note
+  further below, and `docs/MASTER_ROADMAP.md` §7a — the authoritative
+  source for that full plan — for the bounded/sequential work that
+  follows this freeze without reopening it).
+  6A.0
+  (Canonical Intelligence Architecture & Contracts — an architecture/
+  contract freeze, zero runtime capability, see
+  docs/INTELLIGENCE_ARCHITECTURE.md) is COMPLETE. 6A.1 (Existing GCP
+  Intelligence Runtime & Tooling Extension — a physical-architecture
+  decision record, zero infrastructure change, see
+  docs/GCP_INTELLIGENCE_RUNTIME.md) is COMPLETE. 6A.2 (TELCO Context &
+  Applicability Model — real domain/persistence code, see
+  docs/INTELLIGENCE_ARCHITECTURE.md §6) is COMPLETE. 6A.3 (Multimodal
+  Knowledge Ingestion & Provenance — industrialized A5's ingestion
+  pipeline, fixed DEF-0017, see docs/KNOWLEDGE_CONTRACT.md §24) is
+  COMPLETE. 6A.4 (Deterministic TELCO Applicability & Knowledge
+  Narrowing — two-gate deterministic filtering, see docs/KNOWLEDGE_
+  CONTRACT.md §26) is COMPLETE. 6A.5 (Hybrid Knowledge Retrieval &
+  Evidence Selection, see docs/KNOWLEDGE_CONTRACT.md §27) is now also
+  COMPLETE — real exact/lexical/semantic retrieval and real Vertex
+  embedding generation are validated end to end against the live DEV
+  Cloud SQL database, including a real pgvector `<=>` similarity search
+  (§27.9). The earlier-confirmed Cloud SQL privilege denial (§27.7) was
+  resolved externally mid-milestone, never worked around. 6A.6 (Context
+  Engineering & Evidence Package, see docs/KNOWLEDGE_CONTRACT.md §28) is
+  now also COMPLETE — a deterministic, in-process `ContextPackage`/
+  `EvidencePackage` assembly (`backend/context_engineering/`), never an
+  agent, never an LLM call, never an independent path to Knowledge. 6A.7
+  (Skills Framework, see docs/KNOWLEDGE_CONTRACT.md §29) is now also
+  COMPLETE — a typed, declarative, deterministic Skill contract
+  (`backend/skills/`), never an agent, never Knowledge, never a Tool,
+  never memory, never executed or selected by anything. 6A.8 (Experience
+  Memory Foundation, see docs/KNOWLEDGE_CONTRACT.md §30) is now also
+  COMPLETE — a typed, durably-persisted `ExperienceRecord` foundation
+  (`backend/experience_memory/`, Cloud SQL revision `c7e2a4f9b83d`),
+  deterministic ACCEPT/REJECT/INDETERMINATE admission (no LLM),
+  owner/customer-isolated structured retrieval, semantic/vector
+  retrieval explicitly deferred, zero production writers/consumers
+  wired. 6A.9 (Troubleshooting Manager & Intelligence Assembly, see
+  docs/INTELLIGENCE_ARCHITECTURE.md §19) is now also COMPLETE — a real
+  second ADK specialist (`backend/agents/troubleshooting_manager/`,
+  `tools=[]`) plus a deterministic assembly layer
+  (`backend/troubleshooting_intelligence/`), deterministic Skill
+  resolution over one production Skill, bounded/owner-scoped Experience
+  consumption, fail-closed grounding validation, and real Vertex AI
+  validation. 6A.10 (Dual-Specialist Orchestration, see docs/
+  INTELLIGENCE_ARCHITECTURE.md §20) is now also COMPLETE —
+  `backend/agents/team_manager/troubleshooting_tool.py` (a plain
+  FunctionTool, never an AgentTool) reaches `troubleshooting_manager` as
+  a sibling of `incident_manager`; real Vertex AI validation through the
+  actual `team_manager` object proved incident-only/troubleshooting-only/
+  dual-specialist routing, no-execution, and Experience-read-only
+  behavior live, plus 6A.10.1/6A.10.2 corrective passes. 6A.11
+  (Integrated TELCO Validation & Phase 6A Freeze) is COMPLETE.
+  **Phase 6A / P11 is now COMPLETE AND FROZEN.**
 
 PHASE 4H — Security Hardening — FUTURE, after 6A (see §2a for why 4H now
   follows 6A instead of directly following A5)
@@ -283,6 +339,47 @@ Incident Manager, never a new agent.
 
 ### Phase 6A — Intelligence Architecture Foundation
 
+**Status: COMPLETE / FROZEN** (P11-M00 through P11-M11, i.e. 6A.0
+through 6A.11, all COMPLETE — see CLAUDE.md's own 6A.11 closure section
+for the formal freeze record; bounded POST-6A corrective/foundational
+work, 6A.12–6A.14, followed this freeze without reopening it — see the
+note at the end of this subsection). 6A.0 (Canonical Intelligence Architecture &
+Contracts — an architecture/contract freeze; see
+`docs/INTELLIGENCE_ARCHITECTURE.md`, the canonical document for this
+phase's internal architecture: the TELCO Context model, the Context
+Engineering platform-layer boundary, the applicability-before-retrieval
+narrowing order, the hybrid-retrieval boundary, the multimodal-knowledge
+provenance hierarchy, the Skill/Experience Memory boundaries, the Next
+Check/Mitigation/Resolution/RCA distinction, and the canonical
+`P11-M00`–`P11-M11` sub-milestone sequence) is COMPLETE and introduced
+zero runtime capability. 6A.1 (Existing GCP Intelligence Runtime &
+Tooling Extension — the physical GCP architecture decision record, see
+`docs/GCP_INTELLIGENCE_RUNTIME.md`: as-built GCP inventory, the REUSE/
+EXTEND/ADD/DEFER/REJECT matrix, and the Cloud SQL + `pgvector` retrieval
+decision, pending a live extension-availability check) is also COMPLETE
+and introduced zero infrastructure change. 6A.2 (TELCO Context &
+Applicability Model — `backend/context/domain/`, `backend/context/
+sqlalchemy/`, `backend/knowledge/domain/telco_applicability.py`) is
+COMPLETE, the first Phase 6A sub-milestone with real implemented
+runtime/persistence code. 6A.3 (Multimodal Knowledge Ingestion &
+Provenance — `backend/knowledge_ingestion/local_file_adapter.py`'s
+`ingest_and_structure_local_file(s)`, XLSX range/table provenance, and
+DEF-0017 found+fixed) is COMPLETE. 6A.4 (Deterministic TELCO
+Applicability & Knowledge Narrowing — `backend/knowledge/narrowing/`,
+the two-gate authority/eligibility + TELCO-applicability filtering
+engine) is COMPLETE. 6A.5 (Hybrid Knowledge Retrieval & Evidence
+Selection — `backend/knowledge/hybrid_retrieval/`) is now also
+COMPLETE — the earlier-confirmed Cloud SQL pgvector privilege denial
+was resolved externally mid-milestone, never worked around, and real
+pgvector similarity search was validated end to end. 6A.6 (Context
+Engineering & Evidence Package — `backend/context_engineering/`, a
+deterministic, in-process `ContextPackage`/`EvidencePackage` assembly,
+never an agent, never an LLM call) is now also COMPLETE. 6A.7 (Skills
+Framework — `backend/skills/`, a typed, declarative, deterministic
+Skill contract, never an agent, never Knowledge, never a Tool, never
+memory, never executed or selected) is now also COMPLETE. 6A.8 is next,
+not started.
+
 **Objective:** can a bounded intelligence/orchestration foundation be
 built and validated against the context sources that already exist,
 before every future Operational Context source exists?
@@ -410,7 +507,14 @@ now:
 ```text
 A5 (COMPLETE)
   → 5.X Teams Rich Content / Media Retrieval (COMPLETE / FROZEN)
-  → Phase 6A Intelligence Architecture Foundation (← NEXT, NOT STARTED)
+  → Phase 6A Intelligence Architecture Foundation (COMPLETE / FROZEN —
+       6A.0 architecture/contract freeze COMPLETE, docs/INTELLIGENCE_ARCHITECTURE.md;
+       6A.1 GCP runtime/tooling decision record COMPLETE, docs/GCP_INTELLIGENCE_RUNTIME.md;
+       6A.2 TELCO Context & Applicability Model COMPLETE, backend/context/;
+       6A.3 Multimodal Knowledge Ingestion & Provenance COMPLETE, DEF-0017 fixed;
+       6A.4 Deterministic TELCO Applicability & Knowledge Narrowing COMPLETE, backend/knowledge/narrowing/;
+       6A.5 Hybrid Knowledge Retrieval & Evidence Selection COMPLETE, backend/knowledge/hybrid_retrieval/ —
+         real pgvector similarity search validated live, privilege denial resolved externally, never worked around)
   → Phase 4H Security Hardening (FUTURE)
   → 5.2 ITSM
   → 5.3 Alarm / Fault
@@ -559,7 +663,7 @@ flowchart TD
     P3 --> P4["Phase 4<br/>Durable Stateful Runtime"]
     P4 --> P5["Phase 5<br/>Multisource Context (A5 COMPLETE)"]
     P5 --> PX["5.X<br/>Teams Rich Content / Media Retrieval (COMPLETE)"]
-    PX --> P6A["Phase 6A<br/>Intelligence Architecture Foundation (← NEXT)"]
+    PX --> P6A["Phase 6A<br/>Intelligence Architecture Foundation (COMPLETE / FROZEN — 6A.0-6A.11 all COMPLETE)"]
     P6A --> P4H["Phase 4H<br/>Security Hardening (FUTURE)"]
     P4H --> P5B["5.2–5.7<br/>Operational Integrations (FUTURE)"]
     P5B --> P6B["Phase 6B<br/>Context Engineering Expansion (FUTURE)"]
@@ -571,9 +675,81 @@ Phase 7 is the product strategy target defined in
 Phases 0–5 (through POST-5.1 B, B0–B7, A5 — Knowledge Island ingestion
 foundation + real TELCO/RAN compound knowledge validation — and 5.X —
 Teams Rich Content / Media Retrieval, canonical P10) are complete. **5.X
-is COMPLETE / FROZEN. Phase 6A is the next implementation milestone —
-NOT STARTED.** Phase 4H, 5.2–5.7, Phase 6B, and Phase 7 all remain
-FUTURE, in that order — see §2a for the realignment rationale.
+is COMPLETE / FROZEN. Phase 6A is now COMPLETE / FROZEN (P11-M00 through
+P11-M11, i.e. 6A.0 through 6A.11, all COMPLETE — see CLAUDE.md's own
+6A.11 closure section for the final freeze record). HISTORICAL, at the
+time this paragraph was first written: 6A.0 (architecture/
+contract freeze), 6A.1 (GCP physical-architecture decision record), and
+6A.2 (TELCO Context & Applicability Model, `backend/context/`), 6A.3
+(Multimodal Knowledge Ingestion & Provenance, DEF-0017 fixed), and 6A.4
+(Deterministic TELCO Applicability & Knowledge Narrowing,
+`backend/knowledge/narrowing/`) are all
+COMPLETE, and 6A.5 (Hybrid Knowledge Retrieval & Evidence Selection,
+`backend/knowledge/hybrid_retrieval/`) is now also COMPLETE — real
+pgvector similarity search was validated end to end; the earlier-
+confirmed Cloud SQL privilege denial was resolved externally mid-
+milestone, never worked around. 6A.6 (Context Engineering & Evidence
+Package, `backend/context_engineering/`) is now also COMPLETE. 6A.7
+(Skills Framework, `backend/skills/`) is now also COMPLETE. 6A.8
+(Experience Memory Foundation, `backend/experience_memory/`) is now
+also COMPLETE. 6A.9 (Troubleshooting Manager & Intelligence Assembly,
+`backend/troubleshooting_intelligence/` + `backend/agents/
+troubleshooting_manager/`) is now also COMPLETE. 6A.10 (Dual-Specialist
+Orchestration, `backend/agents/team_manager/troubleshooting_tool.py`) is
+now also COMPLETE — `team_manager` reaches `troubleshooting_manager` as
+a sibling of `incident_manager`, real Vertex AI routing validated live.
+6A.11 (Integrated TELCO Validation & Phase 6A Freeze) is now also
+COMPLETE — Phase 6A / P11 is formally FROZEN.**
+
+**POST-6A CANONICAL CLOSURE PLAN, 6A.12 → 6A.28 (bounded/sequential
+passes, NOT new P11-Mxx sub-milestones, do NOT reopen the freeze):** a
+real live-acceptance defect chain (DEF-0024 through DEF-0030 — see
+`docs/DEFECT_REGISTER.md`) drove this closure plan. **`docs/
+MASTER_ROADMAP.md` §7a is the AUTHORITATIVE source for the full
+milestone table (scope, done-when criteria, and current status per
+milestone) and for the DEF-0028 non-collision note — this section
+restates only the dependency chain, never the full table, to avoid
+drift between two copies:**
+
+```text
+6A.12  Conditional Command Safety              IMPLEMENTED — final live closure open
+   ↓
+6A.13  Request Contract Foundation             COMPLETE
+   ↓
+6A.14  Deterministic Request Execution         IMPLEMENTED — live acceptance open
+   ↓
+6A.15  Support Classification Contract         NOT STARTED
+   ↓
+6A.16  Hybrid Evidence Production Path         NOT STARTED — DEF-0023 OPEN
+   ↓
+6A.17  Specialist Routing Alignment            NOT STARTED
+   ↓
+6A.18  Knowledge Inventory / Catalog           NOT STARTED — DEF-0025 OPEN
+   ↓
+6A.19  Semantic Grounding Precision            NOT STARTED
+   ↓
+6A.20  Multimodal Evidence Contract            NOT STARTED
+   ↓
+6A.21  Tool / Action Contract                  NOT STARTED
+   ↓
+6A.22  Approval & Write Safety                 NOT STARTED
+   ↓
+6A.23  Teams / External Handoff Fidelity       NOT STARTED
+   ↓
+6A.24  Session Continuity & Isolation          NOT STARTED
+   ↓
+6A.25  Observability & Audit                   NOT STARTED
+   ↓
+6A.26  Failure / Degradation Contract          NOT STARTED
+   ↓
+6A.27  6A Security & Non-Regression Gate       NOT STARTED
+   ↓
+6A.28  Full End-to-End Live Stress & Freeze    NOT STARTED
+```
+
+Phase 4H, 5.2–5.7, Phase 6B, and Phase 7 all remain
+FUTURE, in that order, after this POST-6A closure plan concludes at
+6A.28 — see §2a for the realignment rationale.
 
 ---
 
@@ -1041,9 +1217,29 @@ below) is **✅ COMPLETE** — implementation, full regression, and
 real-stack live validation all passed. **A5** (see §8 below) is
 **✅ COMPLETE**, including real live-runtime validation.
 **5.X — Teams Rich Content / Media Retrieval is COMPLETE / FROZEN**
-(canonical P10 — see §2b and `docs/MASTER_ROADMAP.md`). **Phase 6A is
-NEXT — NOT STARTED**, per the locked roadmap realignment (§2a); Phase
-4H, 5.2–5.7, and Phase 6B all follow in that order, before Phase 7.
+(canonical P10 — see §2b and `docs/MASTER_ROADMAP.md`). **Phase 6A is IN
+PROGRESS** — 6A.0 (architecture/contract freeze,
+`docs/INTELLIGENCE_ARCHITECTURE.md`) and 6A.1 (GCP physical-architecture
+decision record, `docs/GCP_INTELLIGENCE_RUNTIME.md`), 6A.2 (TELCO
+Context & Applicability Model, `backend/context/`), and 6A.3
+(Multimodal Knowledge Ingestion & Provenance, DEF-0017 fixed), and 6A.4
+(Deterministic TELCO Applicability & Knowledge Narrowing,
+`backend/knowledge/narrowing/`) are all
+COMPLETE, 6A.5 (Hybrid Knowledge Retrieval & Evidence Selection,
+`backend/knowledge/hybrid_retrieval/`) is now also COMPLETE — real
+pgvector similarity search was validated end to end; the earlier-
+confirmed Cloud SQL privilege denial was resolved externally, never
+worked around — and 6A.6 (Context Engineering & Evidence Package,
+`backend/context_engineering/`), 6A.7 (Skills Framework, `backend/
+skills/`), 6A.8 (Experience Memory Foundation, `backend/
+experience_memory/`), 6A.9 (Troubleshooting Manager & Intelligence
+Assembly, `backend/troubleshooting_intelligence/` + `backend/agents/
+troubleshooting_manager/`), and 6A.10 (Dual-Specialist Orchestration,
+`backend/agents/team_manager/troubleshooting_tool.py` — `team_manager`
+now reaches `troubleshooting_manager` as a sibling of `incident_manager`)
+are now also all COMPLETE — per the locked roadmap
+realignment (§2a); Phase 4H, 5.2–5.7, and Phase 6B all follow in that
+order, after 6A.11, before Phase 7.
 
 Do not invent B7 implementation details beyond what this document and
 `CLAUDE.md`'s own roadmap already establish.

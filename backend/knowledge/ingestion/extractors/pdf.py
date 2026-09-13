@@ -19,6 +19,7 @@ Encrypted PDFs are detected and reported cleanly (never guessed).
 from __future__ import annotations
 
 import io
+from typing import Optional
 
 from backend.knowledge.domain.artifacts import ArtifactExtractionStatus, KnowledgeArtifact
 from backend.knowledge.ingestion.extraction import ExtractionBudget, deterministic_artifact_id, hash_bytes
@@ -31,11 +32,34 @@ class EncryptedPdfError(RuntimeError):
     """
 
 
-def extract_pdf(data: bytes, *, container_artifact_id: str, depth: int, budget: ExtractionBudget) -> tuple[str, list[KnowledgeArtifact]]:
+def extract_pdf(data: bytes, *, container_artifact_id: Optional[str], depth: int, budget: ExtractionBudget) -> tuple[str, list[KnowledgeArtifact]]:
     """Returns (document summary text, one `KnowledgeArtifact` per page,
     each with `parent_artifact_id=container_artifact_id`,
     `kind="pdf_page"`, `depth=depth`, `locator_detail="page=<n>"`, 1-based).
     Raises `EncryptedPdfError` if the PDF is password-protected.
+
+    `container_artifact_id=None` means "this PDF is itself the root
+    document" (mirrors `extract_docx`'s own, already-correct convention)
+    -- page artifacts then correctly get `parent_artifact_id=None`,
+    satisfying `KnowledgeArtifact`/`IngestedKnowledgeDocument`'s own
+    lineage invariant ("None means embedded directly in the root
+    document"). 6A.3 / P11-M03 FIX: `dispatch.py` previously passed the
+    literal string `"root"` here for a root-level PDF, which produced
+    page artifacts whose `parent_artifact_id="root"` pointed at an
+    artifact_id that was never actually present in the resulting
+    document's own `artifacts` list -- `IngestedKnowledgeDocument`'s
+    lineage validator correctly rejects this as a dangling parent
+    reference. This was a real, previously-undiscovered defect: no
+    existing test ever constructed an `IngestedKnowledgeDocument` from a
+    ROOT-level PDF (the real corpus validation's three files, and every
+    existing `local_file_adapter` test, use only DOCX root documents),
+    so it was never triggered before 6A.3's own new tests found it.
+    `deterministic_artifact_id`'s own basis string already treats a
+    missing parent as the literal word `'root'` internally
+    (`parent_artifact_id or 'root'`), so this fix changes NO artifact_id/
+    content_hash/storage key that may already exist from a prior real
+    ingestion run -- only the stored `parent_artifact_id` value itself
+    changes, from the dangling string `"root"` to the correct `None`.
     """
     import pypdf  # noqa: PLC0415 -- imported lazily, matching this codebase's convention.
 

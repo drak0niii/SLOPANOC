@@ -48,12 +48,27 @@ checkpoint.
 - Per-model-call performance/timing instrumentation for diagnosing latency.
 
 **Agent architecture**
-- Team Manager: the only agent that ever produces user-facing text.
+- Team Manager: the only agent that ever produces user-facing text. For
+  every request it also records a typed `RequestContract` (Phase 6A.13 —
+  intent/subject/requested output/provided vs. missing context/
+  ambiguity), deterministically provenance-verified and reconciled by
+  backend code, never trusted from the model alone — a downstream
+  `Deterministic Execution Policy` (Phase 6A.14) then constrains what a
+  turn may emit/do. Neither the Request Contract nor the Execution
+  Policy is an agent.
 - Incident Manager: the Teams and governed-knowledge specialist, invoked by
   Team Manager through an ADK `AgentTool` call (an in-process call/return,
   not a hand-off). It has both Teams tools and generic `knowledge_search`/
   `knowledge_select_evidence` KM tools directly — there is no separate
-  Knowledge agent.
+  Knowledge agent. Its live Knowledge path today still uses the legacy
+  5.1G lexical (token-overlap) retrieval, not the newer 6A.5 hybrid path.
+- Troubleshooting Manager (Phase 6A.9/6A.10): a real, second specialist,
+  reachable from Team Manager via a plain ADK `FunctionTool` (never
+  `AgentTool`) — `tools=[]`, structurally incapable of calling anything,
+  advisory-only. Reachable today, but NOT yet the automatic target of
+  intent-based specialist routing, and its own hybrid-retrieval Evidence
+  production/reconciliation is not yet wired to a live producer (see
+  [Roadmap](#roadmap)).
 - Deterministic resolution of what "this chat" refers to — the current
   SLOPANOC conversation, a previously-selected Teams chat, or a Teams chat
   named explicitly in the current message.
@@ -127,7 +142,9 @@ backend-driven experience today is the chat conversation itself.
 flowchart TD
     UI[React UI] --> API[FastAPI backend]
     API --> TM[Team Manager - Gemini/ADK]
+    TM --> RC["Request Contract (6A.13) -> Execution Policy (6A.14)<br/>deterministic, NOT an agent"]
     TM --> IM[Incident Manager - Gemini/ADK]
+    TM --> TSM["Troubleshooting Manager - Gemini/ADK<br/>(6A.9/6A.10, tools=empty, advisory-only)"]
     IM --> TOOLS[Teams tools - deterministic Python]
     TOOLS --> PA[Power Automate gateway]
     PA --> M365[Microsoft Teams / M365]
@@ -135,11 +152,17 @@ flowchart TD
 
 Principles that hold throughout the backend:
 
-- Team Manager is the only user-facing agent; Incident Manager never
-  produces text the user sees directly.
-- Team Manager invokes Incident Manager through an ADK `AgentTool`, not
-  native agent-to-agent transfer — this keeps Team Manager structurally in
-  control of the turn.
+- Team Manager is the only user-facing agent; neither Incident Manager nor
+  Troubleshooting Manager produces text the user sees directly.
+- Team Manager invokes Incident Manager through an ADK `AgentTool`;
+  Troubleshooting Manager is invoked through a plain `FunctionTool`, never
+  `AgentTool` — neither is native agent-to-agent transfer, keeping Team
+  Manager structurally in control of the turn either way.
+- Every turn also produces a typed `RequestContract` (Phase 6A.13),
+  deterministically verified and reconciled, and a `Deterministic
+  Execution Policy` decision (Phase 6A.14) constraining what may be
+  emitted/done — neither is an agent; see [Roadmap](#roadmap) for current
+  live-acceptance status.
 - Power Automate remains the sole Microsoft 365 execution gateway. There is
   no direct Microsoft Graph integration anywhere in this stack.
 - Gemini/ADK performs reasoning and orchestration only. Deterministic Python
@@ -152,19 +175,24 @@ Principles that hold throughout the backend:
 flowchart TD
     User --> TM[Team Manager]
     TM --> IM[Incident Manager]
+    TM --> TSM["Troubleshooting Manager (tools=empty)"]
     IM --> TOOLS[Teams tools]
-    IM --> KMTOOLS[Governed KM tools]
+    IM --> KMTOOLS[Governed KM tools - legacy lexical retrieval]
     TOOLS --> PA[Power Automate]
     KMTOOLS --> KMREPO[Knowledge Repository]
 ```
 
-This is the current topology. Incident Manager is the only specialist, and
-it reasons from Teams and governed Knowledge directly, through its own two
-tool families — **there is no separate Knowledge agent, and none is
-planned** (Knowledge Context is a generic capability behind Incident
-Manager, not an agent of its own). A future second specialist
-(Troubleshooting Manager, see [Roadmap](#roadmap)) would attach to Team
-Manager the same way Incident Manager does.
+This is the current topology. Incident Manager and Troubleshooting
+Manager are the two specialists; Incident Manager reasons from Teams and
+governed Knowledge directly, through its own two tool families — **there
+is no separate Knowledge agent, and none is planned** (Knowledge Context
+is a generic capability behind Incident Manager, not an agent of its
+own). Troubleshooting Manager (Phase 6A.9/6A.10) is reachable from Team
+Manager the same way Incident Manager is (a same-process ADK call), but
+via a plain `FunctionTool` rather than `AgentTool`, and `team_manager`'s
+own model reasoning decides per turn whether to call it — this is NOT
+yet automatic intent-based specialist routing (planned, not started —
+see [Roadmap](#roadmap)).
 
 ## Architecture Evolution
 
@@ -190,9 +218,37 @@ consistent target.
   discovery/retrieval/full-provenance-binding/multi-image/visual-source-
   evidence/deterministic-all-image delivery of Teams-posted inline images
   into the same Gemini multimodal reasoning path, all live-validated.
-  **NEXT: Phase 6A — Intelligence Architecture Foundation** — not started
-  (roadmap realignment: 5.X → Phase 6A → Phase 4H → 5.2–5.7 → Phase 6B →
-  Phase 7; see [Roadmap](#roadmap)).
+  **Phase 6A — Intelligence Architecture Foundation is COMPLETE AND
+  FROZEN** (6A.0 through 6A.11, i.e. P11-M00 through P11-M11 — see
+  [`docs/INTELLIGENCE_ARCHITECTURE.md`](docs/INTELLIGENCE_ARCHITECTURE.md)
+  and `CLAUDE.md`'s own 6A.11 closure section for the formal freeze
+  record). Every Phase 6A capability now genuinely exists in the
+  codebase: TELCO Context & Applicability (`backend/context/`,
+  `backend/knowledge/narrowing/`), Hybrid Knowledge Retrieval &
+  Evidence Selection (`backend/knowledge/hybrid_retrieval/` — real
+  exact/lexical/semantic retrieval and real Vertex embedding
+  generation, including a real pgvector similarity search, validated
+  live), Context Engineering (`backend/context_engineering/` —
+  deterministic `ContextPackage`/`EvidencePackage` assembly, never an
+  agent, never an LLM call), a Skills contract (`backend/skills/` —
+  typed, declarative, never an agent, never executed/selected;
+  production Skill count = 1), an Experience Memory foundation
+  (`backend/experience_memory/` — Cloud SQL-persisted, deterministic
+  admission, owner-isolated; zero production writers/consumers wired),
+  and **Troubleshooting Manager** (`backend/agents/troubleshooting_
+  manager/`) — a real, second ADK specialist (`tools=[]`), reachable
+  from Team Manager via a plain `FunctionTool` (6A.9/6A.10). Bounded
+  POST-6A corrective/foundational work followed the freeze without
+  reopening it: 6A.12 (Conditional Command Safety), 6A.13 (Request
+  Contract Foundation — **COMPLETE**), and 6A.14 (Deterministic
+  Request Execution — implemented, live acceptance still open); see
+  [Roadmap](#roadmap) for exact status and the open defects
+  (`docs/DEFECT_REGISTER.md`) this work closed. **Still genuinely
+  open:** specialist-intent routing to Troubleshooting Manager is not
+  automatic yet, and its own hybrid-retrieval Evidence-index
+  production/reconciliation has no live producer wired (tracked as
+  DEF-0023) — Incident Manager's live Knowledge path still uses the
+  legacy 5.1G lexical retrieval, not the 6A.5 hybrid path.
 - **CURRENT (as of 5.X):** Teams-originated rich media (images) now flows
   into the same multimodal reasoning path as a direct SLOPANOC image
   upload — direct SLOPANOC image upload was already CURRENT (B5/B6);
@@ -202,12 +258,17 @@ consistent target.
   [`docs/TEAMS_TOOL_CONTRACT.md`](docs/TEAMS_TOOL_CONTRACT.md) §4b/§4c
   and [`docs/MASTER_ROADMAP.md`](docs/MASTER_ROADMAP.md) for the full
   contract and defect history.
-- **NEXT / FUTURE (target architecture, not yet designed in detail):**
-  Phase 6A builds a bounded Context Engineering foundation, a second
-  specialist (Troubleshooting Manager), a Skills behavioral framework,
-  and an Experience Memory foundation, against the context sources that
-  exist now (including 5.X's Teams media). Phase 4H (security hardening)
-  follows 6A. A supervisory Head of Automated Operations agent remains
+- **NEXT / FUTURE:** deterministic support classification (does the
+  system clearly say when something is supported, partial, unsupported,
+  or ambiguous?), specialist routing alignment (does a
+  troubleshooting-shaped request actually reach Troubleshooting Manager
+  automatically?), hybrid-Evidence production for Troubleshooting
+  Manager (DEF-0023), a Knowledge inventory/catalog capability
+  (DEF-0025), and semantic-precision retrieval-quality work are all
+  planned but not started (see [Roadmap](#roadmap) and
+  [`docs/MASTER_ROADMAP.md`](docs/MASTER_ROADMAP.md) §7a for the full
+  canonical 6A.15–6A.28 closure plan). Phase 4H (security hardening)
+  follows this POST-6A work. A supervisory Head of Automated Operations agent remains
   optional future architecture. Phase 6B later expands Context
   Engineering against the full Operational Context surface (ITSM,
   alarms, topology, KPIs, change, handover — 5.2–5.7, see
@@ -228,7 +289,7 @@ flowchart TD
     CEL --> OC["Operational Context<br/>Teams text (CURRENT), Teams media (CURRENT — 5.X COMPLETE)"]
     CEL --> KC["Knowledge Context<br/>Generic KM Layer (CURRENT)"]
     CEL --> CC["Case Context<br/>Cases (CURRENT)"]
-    CEL --> EM["Experience Memory (FUTURE / Phase 6A)"]
+    CEL --> EM["Experience Memory (FOUNDATION CURRENT / 6A.8; producer/consumer wiring FUTURE)"]
     KC --> KM["MOP / SOP / RCA / KB<br/>(behind Generic KM — CURRENT platform, A5 real TELCO/RAN MOP content — COMPLETE)"]
 ```
 
@@ -393,8 +454,29 @@ clearly escalated.
   (canonical P10) — deterministic Teams inline-image discovery,
   retrieval, full provenance binding, multi-image delivery, visual
   source evidence, and deterministic all-image reasoning are all live.
-  **NEXT:** Phase 6A — Intelligence Architecture Foundation — not
-  started.
+  **COMPLETE / FROZEN:** Phase 6A — Intelligence Architecture Foundation
+  (6A.0 through 6A.11 — see [Roadmap](#roadmap) for full detail and the
+  bounded POST-6A corrective/foundational work that followed) —
+  6A.0 (architecture/contract freeze,
+  [`docs/INTELLIGENCE_ARCHITECTURE.md`](docs/INTELLIGENCE_ARCHITECTURE.md))
+  6A.1 (GCP physical-architecture decision record,
+  [`docs/GCP_INTELLIGENCE_RUNTIME.md`](docs/GCP_INTELLIGENCE_RUNTIME.md)),
+  6A.2 (TELCO Context & Applicability Model, `backend/context/`),
+  6A.3 (Multimodal Knowledge Ingestion & Provenance,
+  [`docs/KNOWLEDGE_CONTRACT.md`](docs/KNOWLEDGE_CONTRACT.md) §24), and
+  6A.4 (Deterministic TELCO Applicability & Knowledge Narrowing,
+  [`docs/KNOWLEDGE_CONTRACT.md`](docs/KNOWLEDGE_CONTRACT.md) §26)
+  6A.5 (Hybrid Knowledge Retrieval & Evidence Selection,
+  [`docs/KNOWLEDGE_CONTRACT.md`](docs/KNOWLEDGE_CONTRACT.md) §27),
+  6A.6 (Context Engineering & Evidence Package,
+  [`docs/KNOWLEDGE_CONTRACT.md`](docs/KNOWLEDGE_CONTRACT.md) §28), and
+  6A.7 (Skills Framework,
+  [`docs/KNOWLEDGE_CONTRACT.md`](docs/KNOWLEDGE_CONTRACT.md) §29), and
+  6A.8 (Experience Memory Foundation,
+  [`docs/KNOWLEDGE_CONTRACT.md`](docs/KNOWLEDGE_CONTRACT.md) §30) all
+  COMPLETE — real pgvector similarity search validated live, after the
+  earlier-confirmed Cloud SQL privilege denial was resolved externally,
+  never worked around.
 - **FUTURE:** Phase 6A (a Troubleshooting Manager, a Skills behavioral
   framework, an Experience Memory foundation, a bounded Context
   Engineering foundation), then Phase 4H security hardening, then
@@ -739,7 +821,35 @@ rationale):**
 ```text
 A5 (COMPLETE)
   → 5.X Teams Rich Content / Media Retrieval   COMPLETE / FROZEN
-  → Phase 6A Intelligence Architecture Foundation   ← NEXT, NOT STARTED
+  → Phase 6A Intelligence Architecture Foundation   COMPLETE / FROZEN
+       (6A.0 architecture freeze COMPLETE — docs/INTELLIGENCE_ARCHITECTURE.md;
+        6A.1 GCP runtime/tooling decision record COMPLETE — docs/GCP_INTELLIGENCE_RUNTIME.md;
+        6A.2 TELCO Context & Applicability Model COMPLETE — backend/context/;
+        6A.3 Multimodal Knowledge Ingestion & Provenance COMPLETE — docs/KNOWLEDGE_CONTRACT.md §24;
+        6A.4 Deterministic TELCO Applicability & Knowledge Narrowing COMPLETE — docs/KNOWLEDGE_CONTRACT.md §26;
+        6A.5 Hybrid Knowledge Retrieval & Evidence Selection COMPLETE — docs/KNOWLEDGE_CONTRACT.md §27,
+          real pgvector similarity search validated live, privilege denial resolved externally;
+        6A.6 Context Engineering & Evidence Package COMPLETE — docs/KNOWLEDGE_CONTRACT.md §28,
+          backend/context_engineering/, deterministic, never an agent, never an LLM call;
+        6A.7 Skills Framework COMPLETE — docs/KNOWLEDGE_CONTRACT.md §29,
+          backend/skills/, typed/declarative, never an agent, never executed or selected;
+        6A.8 Experience Memory Foundation COMPLETE — backend/experience_memory/,
+          Cloud SQL-persisted, deterministic admission, zero production writers/consumers wired;
+        6A.9 Troubleshooting Manager & Intelligence Assembly COMPLETE — backend/agents/troubleshooting_manager/,
+          a real second ADK specialist, tools=[];
+        6A.10 Dual-Specialist Orchestration COMPLETE — backend/agents/team_manager/troubleshooting_tool.py,
+          Team Manager reaches Troubleshooting Manager via a plain FunctionTool, never AgentTool;
+        6A.11 Integrated TELCO Validation & Phase 6A Freeze COMPLETE — Phase 6A / P11 is now formally FROZEN)
+  → POST-6A Canonical Closure Plan, 6A.12 → 6A.28    IN PROGRESS
+       (6A.13 COMPLETE; 6A.12/6A.14 implemented, live acceptance open;
+        6A.15 through 6A.28 PLANNED, NOT STARTED. Full milestone table,
+        done-when criteria, current status, dependency chain, and TARGET
+        end-state architecture: see
+        [`docs/MASTER_ROADMAP.md`](docs/MASTER_ROADMAP.md) §7a
+        (authoritative) and
+        [`docs/INTELLIGENCE_ARCHITECTURE.md`](docs/INTELLIGENCE_ARCHITECTURE.md)
+        §20a. Defect-by-defect record: [`docs/DEFECT_REGISTER.md`](docs/DEFECT_REGISTER.md)
+        DEF-0024 through DEF-0030.)
   → Phase 4H Security Hardening                     FUTURE
   → 5.2–5.7 Operational Integrations                FUTURE
   → Phase 6B Context Engineering Expansion          FUTURE
@@ -1706,8 +1816,9 @@ validation. (HISTORICAL, as of this milestone's own closure: **NEXT: 5.X
 — Teams Rich Content / Media Retrieval** (not started), followed by
 Phase 6A, then Phase 4H security hardening, then 5.2–5.7, then Phase 6B
 was the forward order at that point. 5.X has SINCE been completed and
-frozen — see [Roadmap](#roadmap) for the current locked order, where
-Phase 6A is now NEXT.)
+frozen, and Phase 6A has SINCE also been completed and frozen — see
+[Roadmap](#roadmap) for the current locked order, where POST-6A
+corrective/foundational work is now the current focus.)
 
 Locked Gemini/ADK multimodal construction rule (B0, proven against the
 installed `google-adk==1.33.0`/`google-genai==1.75.0` stack, both by
@@ -1935,8 +2046,39 @@ untouched governed-ingestion concern. Live-validated end to end against
 real Power Automate/Teams and real Gemini/Vertex. Full contract in
 `docs/TEAMS_TOOL_CONTRACT.md` §4b–§4c and `docs/BUILD_SEQUENCE.md` §2b.
 
-**Then — Phase 6A: Intelligence Architecture Foundation.** ← NEXT, NOT
-STARTED, after 5.X. A bounded Context Engineering foundation (Knowledge
+**Then — Phase 6A: Intelligence Architecture Foundation.** COMPLETE /
+FROZEN, after 5.X — 6A.0 (Canonical Intelligence Architecture & Contracts, an
+architecture/contract freeze with zero runtime capability — see
+[`docs/INTELLIGENCE_ARCHITECTURE.md`](docs/INTELLIGENCE_ARCHITECTURE.md))
+and 6A.1 (Existing GCP Intelligence Runtime & Tooling Extension — a
+physical-architecture decision record, see
+[`docs/GCP_INTELLIGENCE_RUNTIME.md`](docs/GCP_INTELLIGENCE_RUNTIME.md))
+6A.2 (TELCO Context & Applicability Model, `backend/context/`),
+6A.3 (Multimodal Knowledge Ingestion & Provenance — see
+[`docs/KNOWLEDGE_CONTRACT.md`](docs/KNOWLEDGE_CONTRACT.md) §24), and
+6A.4 (Deterministic TELCO Applicability & Knowledge Narrowing — see
+[`docs/KNOWLEDGE_CONTRACT.md`](docs/KNOWLEDGE_CONTRACT.md) §26),
+6A.5 (Hybrid Knowledge Retrieval & Evidence Selection —
+see [`docs/KNOWLEDGE_CONTRACT.md`](docs/KNOWLEDGE_CONTRACT.md) §27),
+6A.6 (Context Engineering & Evidence Package —
+see [`docs/KNOWLEDGE_CONTRACT.md`](docs/KNOWLEDGE_CONTRACT.md) §28), and
+6A.7 (Skills Framework —
+see [`docs/KNOWLEDGE_CONTRACT.md`](docs/KNOWLEDGE_CONTRACT.md) §29), and
+6A.8 (Experience Memory Foundation —
+see [`docs/KNOWLEDGE_CONTRACT.md`](docs/KNOWLEDGE_CONTRACT.md) §30) are
+all COMPLETE — real exact/lexical/semantic retrieval and real embedding
+generation, including a real pgvector similarity search, are all
+validated end to end against the live DEV Cloud SQL database. The
+earlier-confirmed Cloud SQL privilege denial (§27.9) was resolved
+externally mid-milestone, never worked around. `backend/context_
+engineering/` is a deterministic, in-process `ContextPackage`/
+`EvidencePackage` assembly; `backend/skills/` is a typed, declarative
+Skill contract; `backend/experience_memory/` is a typed, durably-
+persisted Experience record foundation (Cloud SQL, owner/customer-
+isolated) — none of the three is an agent, none makes an LLM call, none
+is executed/selected, none is wired into any live agent path; 6A.9 is
+next, not started. The
+implemented Context Engineering foundation (Knowledge
 Context, Case Context, Teams text + 5.X media, session context — not the
 full future Operational Context surface); a second specialist,
 Troubleshooting Manager, alongside Incident Manager; a Skills behavioral

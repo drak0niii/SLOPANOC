@@ -112,12 +112,19 @@ def test_team_manager_has_no_tools_besides_incident_manager_and_case_analysis() 
     test_conversation_target_prompt_contract.py for that structural
     proof specifically.
     """
+    # Phase 6A.10 added `troubleshooting_manager` -- a second specialist
+    # CAPABILITY (a plain FunctionTool, never an AgentTool/second agent
+    # object team_manager itself constructs), routed to by the exact same
+    # LLM-reasoning mechanism this test's own docstring already describes
+    # for Teams-vs-conversation routing -- no new classifier introduced.
     names = [getattr(t, "name", None) or getattr(t, "__name__", str(t)) for t in team_manager.tools]
     assert names == [
         "incident_manager",
         "record_case_analysis",
         "record_conversation_target",
         "record_source_requirements",
+        "record_request_contract",
+        "troubleshooting_manager",
     ]
 
 

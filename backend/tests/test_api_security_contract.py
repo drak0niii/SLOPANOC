@@ -355,6 +355,13 @@ def test_agent_topology_is_unaffected_by_the_api_layer() -> None:
     milestone) is the same kind of legitimate, deliberate addition --
     read-only, deterministic backend expansion over one message's
     already-discovered hosted_content_ids, never a model-driven loop.
+
+    `troubleshooting_manager` (Phase 6A.10, Dual-Specialist Orchestration)
+    is the same kind of legitimate, deliberate addition -- a plain
+    FunctionTool wrapper (backend/agents/team_manager/troubleshooting_
+    tool.py) calling the canonical 6A.9 `run_troubleshooting_assessment`,
+    added directly on `team_manager`'s own definition, not something the
+    API layer injected.
     """
     from backend.agents.incident_manager.agent import incident_manager
     from backend.agents.team_manager.agent import team_manager
@@ -367,6 +374,8 @@ def test_agent_topology_is_unaffected_by_the_api_layer() -> None:
         "record_case_analysis",
         "record_conversation_target",
         "record_source_requirements",
+        "record_request_contract",
+        "troubleshooting_manager",
     ]
     assert [tname(t) for t in incident_manager.tools] == [
         "teams_list_chats",

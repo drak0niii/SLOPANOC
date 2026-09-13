@@ -29,6 +29,11 @@ class KnowledgeDocumentType(str, Enum):
     TROUBLESHOOTING_GUIDE = "troubleshooting_guide"
     OPERATIONAL_PROCEDURE = "operational_procedure"
     TECHNICAL_INSTRUCTION = "technical_instruction"
+    RUNBOOK = "runbook"
+    HLD = "hld"
+    ASSESSMENT_REPORT = "assessment_report"
+    ACTION_PLAN = "action_plan"
+    CHANGE_REQUEST = "change_request"
     OTHER = "other"
 
 

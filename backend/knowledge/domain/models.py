@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.knowledge.domain._shared import require_non_blank
 from backend.knowledge.domain.artifacts import KnowledgeArtifact, validate_artifact_lineage
+from backend.knowledge.domain.asset_metadata import KnowledgeAssetMetadata
 from backend.knowledge.domain.enums import KnowledgeDocumentType, LifecycleStatus
 
 __all__ = [
@@ -208,6 +209,16 @@ class KnowledgeMetadata(BaseModel):
     attributes: dict[str, Any] = Field(
         default_factory=dict,
         description="Extensible key/value bag for future metadata dimensions not yet promoted to a named field.",
+    )
+    asset_metadata: KnowledgeAssetMetadata = Field(
+        default_factory=KnowledgeAssetMetadata,
+        description=(
+            "Phase 6A.3 corrective addendum: the canonical Knowledge Asset Metadata standard "
+            "(document identity/classification/governance/ownership/lifecycle/roles/applicability-scope/"
+            "technical-scope/audit attributes) -- see backend/knowledge/domain/asset_metadata.py and "
+            "docs/KNOWLEDGE_CONTRACT.md §25. Purely additive: defaults to an all-empty instance, so every "
+            "pre-addendum persisted KnowledgeObject deserializes unchanged."
+        ),
     )
 
     @field_validator("tags")

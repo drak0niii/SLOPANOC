@@ -41,16 +41,101 @@ variant that inherits `after_agent_callback` without overriding it and
 never sets `requires_governed_knowledge=true` in the first place
 (`_CONTINUATION_INCIDENT_MANAGER`/`_SYNTHESIS_ONLY_INCIDENT_MANAGER`,
 read_continuation_execution.py).
+
+DEF-0024 CORRECTIVE PASS (Alarm Procedure Granularity & Procedure-
+Scoped Grounding): `enforce_procedure_scoped_command_grounding` closes a
+real live defect -- a command reproduced verbatim from Approved,
+selected governed knowledge could still belong to a DIFFERENT procedure
+than the one the current turn is actually about, if that sibling
+procedure happened to be coarsely packaged into the same selected
+`KnowledgeSection`. Wired into `_capture_and_render_troubleshooting_
+guidance` (same "deterministic code, not prompt-only self-restraint"
+philosophy as the rest of this module): a command/step-command is
+trusted ONLY if it is a literal substring of THIS run's own genuinely
+selected evidence sections' real content -- identity/content-based,
+never a semantic "is this the right procedure" judgment.
+
+DEF-0027 CORRECTIVE PASS (Active-Procedure Command Grounding &
+Conditional Command Handling): DEF-0024's own rule -- "if more than one
+section is selected this turn, a command must be grounded in ALL of
+them" -- was correct as a fail-closed default but too broad for a real,
+live-observed shape: a genuinely ACTIVE procedure (e.g. "HW Partial
+Fault", explicitly named by the current question) selected ALONGSIDE a
+merely SUPPORTING sibling section (e.g. "HW Fault") whose own real
+command the active procedure never repeats. `_evaluate_command` (below)
+replaces "grounded in every selected section" with "grounded in the
+ACTIVE PROCEDURE section" -- resolved deterministically, never by model
+prose -- while still preserving DEF-0024's own universal-safe-command
+exception (a command genuinely present in every currently-selected
+section is never blocked, regardless of which one is "active", since it
+is unambiguously supported either way) and its own fail-closed default
+(when no single section can be identified as active, a command that is
+not present in every selected section is still rejected).
+
+ACTIVE PROCEDURE RESOLUTION (`resolve_active_section_id`, public since
+the 6A.14 Active Procedure Continuity Correction -- see `backend/api/
+governed_evidence_continuity.py`'s own `compute_fresh_active_procedure_
+anchor`, which reuses this exact function, unmodified, to persist a
+cross-turn active-procedure identity from this same turn-local
+resolution): a SMALL, deterministic, identity-based rule -- never NLP/
+keyword routing, never a semantic "is this relevant" judgment: exactly
+one selected section is trivially active; with more than one selected,
+the CURRENT incoming request text (`question`/`chat_topic` from THIS
+invocation's own `IncidentManagerRequest`, extracted by `_extract_
+incoming_question_text`) is checked for a verbatim, case-insensitive
+occurrence of exactly ONE candidate's own real section heading -- the
+same "compare only against real, already-retrieved governed headings,
+never a model suggestion or a fixed vocabulary" discipline `governed_evidence_
+continuity.detect_explicit_sibling_topic_override` already established
+for a related, but structurally separate, problem (cross-turn topic
+override there; same-turn active-section identification here). Zero or
+more than one heading match is reported as unresolved (never guessed),
+and the caller falls back to DEF-0024's own original all-selected-
+sections rule.
+
+TYPED FALLBACK REASON MODEL (`CommandGroundingReason`): the single,
+generic `_UNGROUNDED_COMMAND_FALLBACK_TEXT` ("The approved procedure
+does not specify a command for this step") was, before this pass,
+applied to every rejection uniformly -- including a real, live-observed
+case where the active procedure genuinely DOES specify commands, but the
+model's own proposed command was a composite/paraphrased string that
+failed exact verbatim grounding. Saying "does not specify a command" in
+that case is FALSE and actively misleading. `_evaluate_command` now also
+returns WHY a command was rejected (never inferred from the final
+rendered text -- a typed enum member, decided from the same identity/
+content signals the grounding check itself already used), and
+`_capture_and_render_troubleshooting_guidance` selects the fallback text
+that actually matches: `TRUE_ABSENCE` (the active section's own content
+shares no meaningful token overlap with what was proposed -- a generic,
+deterministic token-overlap check, never a semantic judgment, mirroring
+this codebase's own established 5.1G `TokenOverlapRelevanceScorer`
+philosophy) keeps the original wording; `GROUNDING_REJECTED` (the active
+section's content DOES share meaningful overlap with what was proposed --
+i.e. it plausibly contains a real, related command, just not the exact
+one offered) uses new wording that never claims no command exists;
+`AMBIGUOUS_PROCEDURE` (no single active section could be identified, and
+the proposed command is not universally grounded in every selected
+section) asks which governed procedure is meant. A fourth member,
+`MISSING_CONDITION`, is deliberately never assigned by this module's own
+code -- it names the SAFE, WELL-BEHAVED state where the model itself
+correctly leaves `command` unset and asks for the missing condition
+(e.g. which specific unit is affected) via `next_action`/`evidence_
+requested`, per the new CONDITIONAL COMMAND HANDLING prompt paragraph
+(incident_manager/prompts.py) -- there is nothing to strip in that case,
+so no fallback text is ever appended; the member exists purely so
+calling code and tests can name this expected outcome by the same
+typed vocabulary as the three rejection reasons.
 """
 from __future__ import annotations
 
 import json
-from typing import AbstractSet, Any, Optional
+from enum import Enum
+from typing import AbstractSet, Any, Optional, Sequence
 
 from google.genai import types
 
 from backend.agents.incident_manager.provenance_compliance import enforce_governed_knowledge_selection
-from backend.agents.incident_manager.schemas import TroubleshootingGuidance
+from backend.agents.incident_manager.schemas import TroubleshootingGuidance, TroubleshootingInteractionMode
 from backend.api.turn_context import current_run_id
 from backend.tools.teams.get_messages import read_known_message_ids
 
@@ -73,6 +158,32 @@ def _find_incoming_request_text(callback_context: Any) -> Optional[str]:
         return None
     text = "".join(part.text for part in parts if getattr(part, "text", None))
     return text or None
+
+
+def _extract_incoming_question_text(callback_context: Any) -> Optional[str]:
+    """DEF-0027 corrective pass: the trusted `chat_topic`/`question` text
+    of THIS invocation's own incoming `IncidentManagerRequest` -- used
+    ONLY for active-procedure heading resolution (`_resolve_active_
+    section_id`), never for routing/selection itself. Reuses `_find_
+    incoming_request_text`'s own proven "this invocation's real top-level
+    Content" guarantee, then parses it the same tolerant, fail-closed way
+    `capture_known_applicability_context` already does -- malformed/
+    unparseable input, or a request with neither field set, safely
+    resolves to `None` (active-procedure resolution then falls back to
+    DEF-0024's own original all-selected-sections rule, never a guess).
+    """
+    text = _find_incoming_request_text(callback_context)
+    if not text:
+        return None
+    try:
+        payload = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    parts = [payload.get("chat_topic"), payload.get("question")]
+    combined = " ".join(part for part in parts if isinstance(part, str) and part)
+    return combined or None
 
 
 async def capture_known_applicability_context(callback_context: Any) -> Optional[types.Content]:
@@ -186,7 +297,385 @@ def _strip_evidence_from_text(text: str, known_ids: AbstractSet[str]) -> Optiona
     return json.dumps(payload)
 
 
-def _capture_and_render_troubleshooting_guidance(text: str) -> Optional[str]:
+_UNGROUNDED_COMMAND_FALLBACK_TEXT = "The approved procedure does not specify a command for this step."
+"""DEF-0024 corrective pass: a FIXED, deterministic, alarm/vendor/
+document-independent fallback sentence -- never model-generated, never
+templated with any operational-content variable -- used for the
+`CommandGroundingReason.TRUE_ABSENCE` case only (DEF-0027). Matches this
+codebase's own established pattern of a fixed safe-failure string (e.g.
+`provenance_compliance.py`'s `_SAFE_FAILURE_TEXT`) rather than letting
+the model author its own explanation for why no command is being shown.
+"""
+
+_GROUNDING_REJECTED_FALLBACK_TEXT = (
+    "An exact approved command for this step could not yet be safely validated, so it has been withheld."
+)
+"""DEF-0027 corrective pass: used for `CommandGroundingReason.GROUNDING_
+REJECTED` -- deliberately never says "does not specify a command" (that
+claim would be false: the active procedure's own content plausibly DOES
+contain a real command, it is the model's specific proposal that did not
+match it exactly, e.g. a composite/paraphrased/combined string)."""
+
+_AMBIGUOUS_PROCEDURE_FALLBACK_TEXT = (
+    "I could not determine which approved procedure this step applies to, so no command is being shown. "
+    "Please confirm which governed procedure you mean."
+)
+"""DEF-0027 corrective pass: used for `CommandGroundingReason.AMBIGUOUS_
+PROCEDURE` -- more than one selected section this turn, and no single one
+could be deterministically identified as the active procedure, and the
+proposed command is not universally grounded in every selected section
+(DEF-0024's own preserved safe exception)."""
+
+_CROSS_PROCEDURE_EVIDENCE_FALLBACK_TEXT = (
+    "This request touched more than one governed procedure, and I could not safely determine a single "
+    "procedure to base operational guidance on. Please confirm which governed procedure applies."
+)
+"""DEF-0027 FINAL corrective pass: used for `CommandGroundingReason.CROSS_
+PROCEDURE_EVIDENCE` -- a WHOLE-GUIDANCE suppression (never merely a
+`command` rejection), triggered when this turn's own selected governed
+evidence spans more than one distinct `knowledge_id` (genuinely different
+governed documents) -- see `_guidance_scope_established`'s own docstring
+for the full rationale. Distinct wording from `_AMBIGUOUS_PROCEDURE_
+FALLBACK_TEXT` (which describes a narrower, single-document, command-only
+ambiguity) since the underlying condition and its scope are both
+different -- this one covers the ENTIRE response, never only a command."""
+
+
+class CommandGroundingReason(str, Enum):
+    """DEF-0027 corrective pass -- see this module's own docstring for the
+    full design. `MISSING_CONDITION` is never assigned by this module's
+    own code (see the docstring) -- included for a complete, typed
+    vocabulary callers/tests can reference by name.
+    """
+
+    TRUE_ABSENCE = "true_absence"
+    MISSING_CONDITION = "missing_condition"
+    GROUNDING_REJECTED = "grounding_rejected"
+    AMBIGUOUS_PROCEDURE = "ambiguous_procedure"
+    CROSS_PROCEDURE_EVIDENCE = "cross_procedure_evidence"
+    """DEF-0027 FINAL corrective pass -- the ENTIRE `TroubleshootingGuidance`
+    (never only `command`) was suppressed because this turn's own selected
+    governed evidence spanned more than one distinct governed document
+    (`knowledge_id`), with no deterministic way to confirm any supporting
+    document's content was legitimately authorized by the active one. See
+    `_guidance_scope_established`."""
+
+
+def _fallback_text_for_reason(reason: Optional["CommandGroundingReason"]) -> str:
+    """Deterministic reason -> fixed text mapping -- never model-authored,
+    never templated with operational content. `TRUE_ABSENCE`, `None`, and
+    any unrecognized value all fall back to the original, most
+    conservative wording (this preserves DEF-0024's own pre-existing
+    behavior exactly for every case this pass does not specifically
+    reclassify)."""
+    if reason == CommandGroundingReason.GROUNDING_REJECTED:
+        return _GROUNDING_REJECTED_FALLBACK_TEXT
+    if reason == CommandGroundingReason.AMBIGUOUS_PROCEDURE:
+        return _AMBIGUOUS_PROCEDURE_FALLBACK_TEXT
+    if reason == CommandGroundingReason.CROSS_PROCEDURE_EVIDENCE:
+        return _CROSS_PROCEDURE_EVIDENCE_FALLBACK_TEXT
+    return _UNGROUNDED_COMMAND_FALLBACK_TEXT
+
+
+def _tokenize(text: str) -> set[str]:
+    """Deterministic, generic (non-vendor-specific) whitespace tokenizer
+    with light punctuation trimming -- no `re`, no NLP/semantic
+    processing. Used ONLY to classify WHY an already-rejected command was
+    rejected (`_classify_absence_or_rejection`, below) -- never a factor
+    in the underlying safety decision itself (a command is withheld
+    either way; only the explanatory wording differs). Mirrors this
+    codebase's own established 5.1G `TokenOverlapRelevanceScorer`
+    philosophy -- deterministic token overlap, never a semantic judgment.
+    """
+    _STRIP_CHARS = ".,;:()[]{}\"'"
+    return {stripped for token in text.split() if (stripped := token.strip(_STRIP_CHARS))}
+
+
+def _classify_absence_or_rejection(proposed_command: str, active_content: str) -> "CommandGroundingReason":
+    """Distinguishes `TRUE_ABSENCE` ("this section shares nothing at all
+    with what was proposed -- the proposal was plausibly borrowed from
+    somewhere else entirely, e.g. a sibling procedure") from `GROUNDING_
+    REJECTED` ("this section shares real, meaningful content with what
+    was proposed -- it plausibly DOES contain a real command, just not
+    the exact one offered, e.g. a paraphrase or a composite of more than
+    one real command") using generic, deterministic token overlap only.
+    """
+    if _tokenize(proposed_command) & _tokenize(active_content):
+        return CommandGroundingReason.GROUNDING_REJECTED
+    return CommandGroundingReason.TRUE_ABSENCE
+
+
+_CONFIRMATION_TOKEN_DENYLIST = frozenset({"y", "n", "yes", "no", "0", "1", "ok", "true", "false"})
+"""DEF-0027 FINAL corrective pass -- a SMALL, deliberately GENERIC
+(natural-language confirmation semantics, never vendor/product-specific
+operational syntax) denylist of bare confirmation/response tokens that
+must never be trusted as an operational command, no matter how trivially
+they might satisfy a verbatim-substring grounding check. A single
+character like `"y"` is virtually guaranteed to appear as a substring
+inside any real governed section's own text (e.g. copied from a captured
+terminal/AMOS confirmation transcript reading "confirm restart? y") --
+that triviality, not any genuine grounding, is what let a real live
+defect through (`"Run:\n\ny"`). Exact match only, after trimming
+whitespace and casefolding -- NEVER a substring match against this
+denylist, so a real command that merely CONTAINS the letter "y" is never
+at risk.
+
+AUDITED AGAINST THE REAL EXISTING COMMAND/TEST CORPUS before finalizing
+this rule (per instruction): `"alt"` -- a real, legitimate 3-character
+AMOS command already relied upon by this codebase's own existing tests
+(`test_evidence_troubleshooting_guidance.py`'s `_next_step_response`
+fixture, `command: "alt"`) -- is deliberately NOT in this denylist and
+remains fully valid; this rule targets confirmation SEMANTICS (yes/no/
+ok/true/false/0/1), never mere shortness. A length-only heuristic was
+considered and rejected specifically because it would have wrongly
+rejected `"alt"` (see this module's own DEF-0027 FINAL corrective-pass
+closure report for the full audit)."""
+
+
+def _is_confirmation_token(command: str) -> bool:
+    """Whole-string check only -- see `_CONFIRMATION_TOKEN_DENYLIST`'s own
+    docstring for why this must never be a substring match."""
+    return command.strip().casefold() in _CONFIRMATION_TOKEN_DENYLIST
+
+
+def _guidance_scope_established(knowledge_ids_by_id: dict[str, "str | None"]) -> bool:
+    """DEF-0027 FINAL corrective pass -- the WHOLE-GUIDANCE active-
+    procedure boundary (never `command`-only). A real, live-observed
+    defect proved that scoping `enforce_procedure_scoped_command_
+    grounding` to `command`/`step.command` alone was insufficient: a turn
+    that selected governed evidence from TWO DIFFERENT governed documents
+    (the active "HW Partial Fault" procedure genuinely relevant to the
+    question, ALONGSIDE an unrelated Rogers Resource Timeout MOP) still
+    let the unrelated document's own operational content (SSH/AMOS steps,
+    DUS/Baseband Radio handling, wait-time/escalation instructions) reach
+    the user through `interpretation`/`next_action`/`evidence_requested`/
+    `TroubleshootingStep.action` -- none of which `command`-scoped
+    grounding ever touches, since those fields are free-form prose, not a
+    verbatim-checkable string.
+
+    Per instruction, this does NOT attempt any sentence-level/semantic
+    verification of that prose (no LLM-based check of what `action`/
+    `next_action` actually says) -- the only deterministic signal
+    available is DOCUMENT IDENTITY: whether this turn's own selected
+    governed evidence spans more than one distinct `knowledge_id` at all.
+    Returns `False` (guidance must be suppressed entirely by the caller)
+    whenever more than one distinct `knowledge_id` is represented among
+    this turn's selected sections -- regardless of whether a `command`
+    happens to be present, and regardless of whether an ACTIVE section
+    can otherwise be heading-matched via `resolve_active_section_id`
+    (heading-matching only ever disambiguates WITHIN one document; it
+    says nothing about whether a genuinely different document's own
+    content was also allowed to leak into the free-text guidance).
+
+    DELIBERATELY NARROWER than it could be: a SAME-document, multi-
+    section ambiguity (e.g. DEF-0024's own VSWR + HW Partial Fault
+    co-selection fixture) is NOT affected by this function at all -- that
+    scenario is governed entirely by the pre-existing, already-tested
+    command-only `AMBIGUOUS_PROCEDURE`/universal-safe-command logic in
+    `_evaluate_command`, unchanged by this pass. This function fires
+    ONLY on genuine CROSS-DOCUMENT evidence, the exact shape of the real,
+    reported live defect -- never widening DEF-0024's own already-
+    accepted same-document behavior.
+    """
+    distinct_knowledge_ids = {kid for kid in knowledge_ids_by_id.values() if kid is not None}
+    return len(distinct_knowledge_ids) <= 1
+
+
+def resolve_active_section_id(
+    question: Optional[str], section_ids: Sequence[str], headings_by_id: dict[str, Optional[str]]
+) -> Optional[str]:
+    """DEF-0027 corrective pass -- the smallest deterministic ACTIVE
+    PROCEDURE resolver. Never NLP/keyword routing, never a semantic
+    judgment: exactly one candidate is trivially active regardless of
+    `question`; with more than one candidate, `question` (THIS turn's
+    own trusted `chat_topic`/`question` text, see `_extract_incoming_
+    question_text`) is checked for a verbatim, case-insensitive
+    occurrence of exactly ONE candidate's own real, already-retrieved
+    section heading -- never a model suggestion, never a fixed
+    vocabulary. Returns `None` (unresolved) whenever zero or more than
+    one heading matches, or a heading is missing/blank -- the caller
+    must then fall back to a safe, non-active-specific rule, never guess.
+
+    PUBLIC since the 6A.14 Active Procedure Continuity Correction: this
+    exact function is now also reused, unmodified, by `backend/api/
+    governed_evidence_continuity.py`'s `compute_fresh_active_procedure_
+    anchor` to persist this same turn-local active-procedure resolution
+    as a durable, cross-turn continuity anchor -- never a second,
+    parallel resolver.
+    """
+    if len(section_ids) <= 1:
+        return section_ids[0] if section_ids else None
+
+    if not question:
+        return None
+
+    question_lower = question.lower()
+    matches = [
+        section_id
+        for section_id in section_ids
+        if (heading := headings_by_id.get(section_id)) and heading.lower() in question_lower
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
+def _evaluate_command(
+    command: str,
+    section_texts_by_id: dict[str, str],
+    headings_by_id: dict[str, Optional[str]],
+    question: Optional[str],
+) -> tuple[bool, Optional["CommandGroundingReason"]]:
+    """DEF-0027 corrective pass -- the core command-authorization rule,
+    replacing DEF-0024's own "grounded in every selected section" default
+    with "grounded in the ACTIVE PROCEDURE section" wherever an active
+    section can be deterministically identified, while preserving DEF-
+    0024's own fail-closed default and its own universal-safe-command
+    exception for the genuinely ambiguous case. Returns `(grounded,
+    reason_when_not_grounded)` -- `reason` is always `None` when
+    `grounded` is `True`.
+
+    DEF-0027 FINAL corrective pass (Fix #3): a bare confirmation/response
+    token (see `_is_confirmation_token`) is rejected BEFORE any substring
+    check is even attempted -- a trivially short token like `"y"` would
+    otherwise satisfy `in` against almost any real section content,
+    which is exactly how a real live defect (`"Run:\n\ny"`) got through.
+    """
+    if _is_confirmation_token(command):
+        return False, CommandGroundingReason.GROUNDING_REJECTED
+
+    if not section_texts_by_id:
+        return False, CommandGroundingReason.TRUE_ABSENCE
+
+    section_ids = list(section_texts_by_id.keys())
+    active_id = resolve_active_section_id(question, section_ids, headings_by_id)
+    if active_id is not None:
+        active_content = section_texts_by_id[active_id]
+        if command in active_content:
+            return True, None
+        return False, _classify_absence_or_rejection(command, active_content)
+
+    # DEF-0024's own original fail-closed default for a genuinely
+    # ambiguous multi-section selection: a command grounded in EVERY
+    # currently-selected section is unambiguously safe regardless of
+    # which one is "active"; anything less is rejected as AMBIGUOUS_
+    # PROCEDURE (never TRUE_ABSENCE/GROUNDING_REJECTED, since neither of
+    # those reasons can be determined without a resolved active section).
+    contained_in = [section_id for section_id, content in section_texts_by_id.items() if command in content]
+    if contained_in and len(contained_in) == len(section_ids):
+        return True, None
+    return False, CommandGroundingReason.AMBIGUOUS_PROCEDURE
+
+
+def enforce_procedure_scoped_command_grounding_with_reason(
+    guidance: TroubleshootingGuidance, run_id: Optional[str], question: Optional[str] = None
+) -> tuple[TroubleshootingGuidance, bool, Optional["CommandGroundingReason"]]:
+    """DEF-0024 corrective pass (Alarm Procedure Granularity &
+    Procedure-Scoped Grounding), extended by DEF-0027 (Active-Procedure
+    Command Grounding & Conditional Command Handling) -- see this
+    module's own docstring for the full design of both. `COMMAND TRUST
+    AND PRESERVATION`'s own prompt-level "reproduce verbatim from
+    Approved, selected governed knowledge" instruction was, until DEF-
+    0024, never CODE-enforced -- a command could be textually genuine
+    (real, Approved, unaltered, verbatim) while still belonging to a
+    DIFFERENT procedure/section than the one actually active for THIS
+    turn (e.g. a sibling alarm procedure coarsely packaged in the same
+    `KnowledgeObject`, or merely co-selected as SUPPORTING context). This
+    is the deterministic backstop that closes that gap: a command is
+    trusted ONLY if it is grounded in THIS run's own genuinely selected
+    evidence (`snapshot_selected_knowledge_evidence` -- backend-only,
+    populated exclusively by real `knowledge_select_evidence` calls,
+    never model-controllable) -- proven by real content, never merely
+    claimed. `run_id` uses the SAME trusted `current_run_id()` correlation
+    this codebase already relies on everywhere else for this exact
+    problem class (Teams evidence, governed-knowledge selection).
+
+    `question` (DEF-0027, optional, backward-compatible default `None`)
+    is THIS turn's own trusted `chat_topic`/`question` text, used ONLY
+    for active-procedure heading resolution (`_resolve_active_section_
+    id`) -- omitting it (or a `None` value) preserves DEF-0024's own
+    original behavior exactly (a `None` question can never resolve an
+    active section among more than one candidate, so the original
+    "grounded in every selected section" rule applies unchanged).
+
+    Returns `(possibly-corrected guidance, whether anything was stripped,
+    the typed reason when something was stripped)`. A turn with no
+    `command`/`step.command` populated at all (the overwhelming majority)
+    is completely unaffected and always returns `(guidance, False, None)`.
+
+    DEF-0027 FINAL corrective pass (Fix #2): BEFORE any command-level
+    check, `_guidance_scope_established` gates the ENTIRE guidance
+    object against this turn's selected evidence spanning more than one
+    distinct governed document -- see that function's own docstring.
+    When it fails, every field (`interpretation`/`next_action`/`command`/
+    `evidence_requested`/`full_procedure_steps`) is suppressed, not only
+    `command` -- closing a real live defect where unrelated operational
+    prose (never checked by the command-only grounding below) reached
+    the user even though the specific `command` string itself happened
+    to be correctly withheld or absent.
+    """
+    from backend.tools.knowledge.runtime import snapshot_selected_knowledge_evidence
+
+    selected_items = snapshot_selected_knowledge_evidence(run_id) if run_id else []
+    section_texts_by_id: dict[str, str] = {item.section.section_id: item.section.content for item in selected_items}
+    headings_by_id: dict[str, Optional[str]] = {item.section.section_id: item.section.heading for item in selected_items}
+    knowledge_ids_by_id: dict[str, Optional[str]] = {item.section.section_id: item.reference.knowledge_id for item in selected_items}
+
+    if not _guidance_scope_established(knowledge_ids_by_id):
+        suppressed = guidance.model_copy(
+            update={
+                "interpretation": None,
+                "next_action": None,
+                "command": None,
+                "evidence_requested": None,
+                "full_procedure_steps": [],
+            }
+        )
+        return suppressed, True, CommandGroundingReason.CROSS_PROCEDURE_EVIDENCE
+
+    if guidance.interaction_mode == TroubleshootingInteractionMode.FULL_PROCEDURE:
+        stripped = False
+        primary_reason: Optional[CommandGroundingReason] = None
+        new_steps = []
+        for step in guidance.full_procedure_steps:
+            if not step.command:
+                new_steps.append(step)
+                continue
+            grounded, reason = _evaluate_command(step.command, section_texts_by_id, headings_by_id, question)
+            if grounded:
+                new_steps.append(step)
+            else:
+                new_steps.append(step.model_copy(update={"command": None}))
+                stripped = True
+                if primary_reason is None:
+                    primary_reason = reason
+        if not stripped:
+            return guidance, False, None
+        return guidance.model_copy(update={"full_procedure_steps": new_steps}), True, primary_reason
+
+    if not guidance.command:
+        return guidance, False, None
+
+    grounded, reason = _evaluate_command(guidance.command, section_texts_by_id, headings_by_id, question)
+    if grounded:
+        return guidance, False, None
+    return guidance.model_copy(update={"command": None}), True, reason
+
+
+def enforce_procedure_scoped_command_grounding(
+    guidance: TroubleshootingGuidance, run_id: Optional[str], question: Optional[str] = None
+) -> tuple[TroubleshootingGuidance, bool]:
+    """Backward-compatible wrapper over `enforce_procedure_scoped_
+    command_grounding_with_reason` -- preserves the original DEF-0024
+    2-tuple return shape (every existing caller/test unpacks exactly 2
+    values) while the richer function above carries the DEF-0027 typed
+    reason for callers that need it (`_capture_and_render_troubleshooting_
+    guidance`, below)."""
+    corrected, stripped, _reason = enforce_procedure_scoped_command_grounding_with_reason(guidance, run_id, question)
+    return corrected, stripped
+
+
+def _capture_and_render_troubleshooting_guidance(text: str, question: Optional[str] = None) -> Optional[str]:
     """A5 final corrective pass: parses `text` (incident_manager's own
     final structured JSON reply) for a populated `troubleshooting_
     guidance` field, registers it into the run-scoped store (`backend.
@@ -195,6 +684,15 @@ def _capture_and_render_troubleshooting_guidance(text: str) -> Optional[str]:
     incident_manager's OWN structured output already reflects the
     bounded text even before that later override runs -- deterministically
     overwrites `payload["summary"]` with the SAME rendered text.
+
+    `question` (DEF-0027 corrective pass, optional, backward-compatible
+    default `None`) is THIS turn's own trusted `chat_topic`/`question`
+    text (see `_extract_incoming_question_text`), forwarded to
+    `enforce_procedure_scoped_command_grounding_with_reason` for active-
+    procedure resolution; the typed reason it returns selects which fixed
+    fallback sentence is appended when a command is stripped, never the
+    single generic "does not specify a command" wording used
+    unconditionally before this pass.
 
     Returns the corrected JSON text, or `None` when there is nothing to
     parse or no `troubleshooting_guidance` was populated (the overwhelming
@@ -222,9 +720,14 @@ def _capture_and_render_troubleshooting_guidance(text: str) -> Optional[str]:
     except Exception:
         return None
 
-    register_troubleshooting_guidance(current_run_id(), guidance)
+    run_id = current_run_id()
+    guidance, command_was_stripped, reason = enforce_procedure_scoped_command_grounding_with_reason(guidance, run_id, question)
+    register_troubleshooting_guidance(run_id, guidance)
 
     rendered = render_troubleshooting_guidance(guidance)
+    if command_was_stripped:
+        fallback_text = _fallback_text_for_reason(reason)
+        rendered = f"{rendered}\n\n{fallback_text}" if rendered else fallback_text
     if payload.get("summary") == rendered:
         return None
     payload["summary"] = rendered
@@ -283,7 +786,12 @@ async def enforce_incident_manager_response_integrity(callback_context: Any) -> 
     # override and, as defense in depth, deterministically rewrites
     # `summary` from it right here too. A turn with no troubleshooting_
     # guidance populated (the common case) is completely unaffected.
-    guidance_text = _capture_and_render_troubleshooting_guidance(final_text)
+    # DEF-0027 corrective pass: `_extract_incoming_question_text` reads
+    # THIS invocation's own trusted `chat_topic`/`question` for active-
+    # procedure resolution -- a `_FakeCallbackContext` (or any context
+    # with no `user_content` attribute) safely resolves to `None`,
+    # preserving every pre-existing test's behavior exactly.
+    guidance_text = _capture_and_render_troubleshooting_guidance(final_text, _extract_incoming_question_text(callback_context))
     if guidance_text is not None:
         final_text = guidance_text
 

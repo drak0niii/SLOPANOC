@@ -89,3 +89,27 @@ openpyxl==3.1.2
 # capability of any kind (no VBA/macro interpreter, no COM/automation) --
 # deliberately not a broader office-automation/forensics framework.
 olefile==0.47
+
+# 6A.5 -- pgvector's own minimal SQLAlchemy column-type binding (never a
+# concrete ML/ANN library, never a cloud SDK) -- lets `backend/knowledge/
+# hybrid_retrieval/repository.py` declare a real `Vector(768)` column
+# against PostgreSQL's own `vector` extension. No vector-index/embedding
+# LIBRARY (faiss/sentence_transformers/etc.) is introduced anywhere.
+pgvector==0.5.0
+
+# 6A.7 -- declarative Skill-definition parsing (`backend/skills/loader.py`).
+# Used EXCLUSIVELY via `yaml.safe_load` -- never `yaml.load`/a custom
+# constructor capable of arbitrary object instantiation. No YAML library
+# existed anywhere in this codebase before 6A.7 (audited); this is the
+# first, narrow, safe-parsing-only use.
+PyYAML==6.0.2
+# 6A.7 -- correct semantic-version parsing/ordering for
+# `backend/skills/versioning.py` (e.g. `1.9.0 < 1.10.0`, never naive
+# lexical string comparison). Already present in this environment only
+# as an UNPINNED TRANSITIVE dependency (pulled in by accelerate/datasets/
+# google-cloud-aiplatform/pytest/etc.) -- promoted here to an explicit,
+# pinned direct dependency, pinned to the version already installed and
+# tested against, matching this repository's own established convention
+# for pypdf/openpyxl/olefile above. No other semver/versioning library is
+# introduced.
+packaging==24.2

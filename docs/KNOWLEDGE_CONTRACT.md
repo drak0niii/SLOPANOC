@@ -22,7 +22,23 @@ applicability); §12 covers Phase 5.1C (the generic ingestion boundary);
 Phase 5.1F (knowledge repository abstraction); §16 covers Phase 5.1G
 (retrieval + ranking); §17 covers Phase 5.1H (knowledge provenance); §18
 covers Phase 5.1I (generic agent-facing knowledge tools); §19 covers
-Phase 5.1J (Incident Manager, the first reference consumer). See
+Phase 5.1J (Incident Manager, the first reference consumer); §22 covers
+the Knowledge Context / RAG / Memory target mental model; §23 covers the
+Phase 6A.2 Knowledge Applicability bridge (`ApplicabilityScopeKind`,
+additive, CURRENT); §24 covers Phase 6A.3's multimodal-ingestion
+industrialization (Layer H production wiring, XLSX range/table
+provenance, and a real, confirmed defect fix — DEF-0017 — additive,
+CURRENT — see docs/INTELLIGENCE_ARCHITECTURE.md for the full Phase 6A
+context and docs/DEFECT_REGISTER.md for DEF-0017's full record); §25
+covers the 6A.3 corrective addendum's canonical Knowledge Asset Metadata
+standard (additive, CURRENT); §26 covers Phase 6A.4's deterministic
+TELCO applicability & knowledge narrowing (`backend/knowledge/
+narrowing/`, additive, CURRENT); §27 covers Phase 6A.5's hybrid Knowledge
+retrieval & evidence selection (`backend/knowledge/hybrid_retrieval/`,
+additive, **PARTIAL** — real exact/lexical retrieval and real embedding
+generation validated against the real DEV database; real pgvector
+similarity search itself blocked by a confirmed `CREATE EXTENSION`
+privilege denial — see §27.9). See
 `docs/TROUBLESHOOTING_STRATEGY.md` for the product principle this layer
 ultimately exists to serve.
 
@@ -2157,9 +2173,12 @@ become Knowledge merely by being observed or repeated.
 
 ### 22.4 Experience → Candidate Knowledge → Approved Knowledge
 
-Target governance flow (FUTURE — Experience Memory does not exist yet;
-recorded here so a future implementation lands on this document's
-existing lifecycle model rather than inventing a parallel one):
+Target governance flow (FUTURE — this specific Experience-to-Knowledge
+PROMOTION flow does not exist yet; an Experience Memory FOUNDATION now
+does exist as of 6A.8, see §30, but deliberately implements no
+promotion path of any kind — recorded here so a future implementation
+lands on this document's existing lifecycle model rather than inventing
+a parallel one):
 
 ```text
 operational experience
@@ -2204,4 +2223,1749 @@ a Skill. See `docs/AGENT_CONTRACT.md` §3a and `docs/BUILD_SEQUENCE.md`'s
 Phase 6/7 target architecture for the Skill definition and how it is
 expected to consume Knowledge Context (this document), Experience
 Memory, Case Context, and Operational Context without owning or
-duplicating any of them.
+duplicating any of them. `docs/INTELLIGENCE_ARCHITECTURE.md` is the
+canonical Phase 6A (`P11`) document for the Skill and Experience Memory
+boundaries as they apply inside Phase 6A, the TELCO Context/
+applicability-narrowing model, and the hybrid (exact + lexical +
+semantic) retrieval boundary that extends — never replaces — this
+document's own deterministic 5.1G/5.1H retrieval and provenance rules;
+`P11-M00` (6A.0, an architecture/contract freeze) and `P11-M01` (6A.1, a
+GCP physical-architecture decision record) are both COMPLETE and
+introduced no change to any rule in this document. `P11-M02` (6A.2) and
+`P11-M03` (6A.3) each added a small, additive extension — see §23/§24
+below.
+
+---
+
+## 23. Phase 6A.2 — Knowledge Applicability bridge (additive, CURRENT)
+
+`backend/knowledge/domain/telco_applicability.py` (new file, P11-M02 /
+6A.2) adds `ApplicabilityScopeKind` (`CONSTRAINED`/`EXPLICIT_ANY`/
+`UNSPECIFIED`) and `KnowledgeApplicabilityProfile` — a bridge that closes
+a real gap §11's own `Applicability` model could not express on its own:
+a dimension ABSENT from `Applicability.dimensions` has always meant
+"unconstrained" to `evaluate_applicability` (§11.7), which is correct
+and UNCHANGED for that function's own narrow question. Phase 6A's
+TELCO/customer-isolation requirement needs a stricter, ADDITIONAL
+distinction: "this knowledge intentionally applies regardless of vendor"
+(`EXPLICIT_ANY`, a real governance decision) must never be confused with
+"vendor applicability was simply never reviewed for this document"
+(`UNSPECIFIED`, the safe default) — the latter must fail closed for a
+future 6A.4 narrowing engine, never silently broaden applicability.
+
+**Nothing in §3–§22 of this document changed.** `Applicability`,
+`ApplicabilityContext`, `evaluate_applicability`, and every existing
+5.1B/5.1E/5.1G/5.1H rule are byte-for-byte unmodified —
+`telco_applicability.py` only reads an existing, already-governed
+`KnowledgeObject`'s `applicability`/identity fields (via the explicit
+keyword-argument bridge constructor `from_knowledge_object`, never a
+live `KnowledgeObject` import) and computes a new, separate,
+purely-additive signal alongside them. `evaluate_applicability` itself
+is not called, wrapped, or modified — `dimension_scope` is not consulted
+by `knowledge_search`/`knowledge_select_evidence` or any other live tool
+path today; it exists so a future 6A.4 matching engine has this
+fail-closed signal ready when it needs it (SEARCH RESULT != EVIDENCE
+USED continues to hold unchanged — see §18/§19).
+
+**Backward compatible with every real, already-ingested A5 document by
+construction, not merely by claim:** `explicit_any_dimensions` defaults
+to an empty set, so bridging ANY existing `KnowledgeObject.applicability`
+— constrained or unconstrained — never raises and never requires
+re-ingestion or a migration; verified directly against the real A5
+corpus shape (`backend/tests/knowledge/test_telco_applicability.py`).
+`CONSTRAINED` and `EXPLICIT_ANY` are structurally mutually exclusive per
+dimension (a `ValidationError` if a caller tries to declare both), and
+dimension keys are normalized via the SAME `normalize_dimension_key`
+§11.3 already defines, so a key compares identically here and in
+`Applicability.dimensions`.
+
+---
+
+## 24. Phase 6A.3 — Multimodal Ingestion Industrialization (additive, CURRENT)
+
+P11-M03 (6A.3) audited the real, already-implemented A5 multimodal
+ingestion pipeline against a stricter bar: not "does the code exist and
+pass its own unit tests" but "does a real file, ingested through the
+real production entry point, actually produce retrieval-ready evidence
+units." The audit found A5's individual layers (DOCX/XLSX/PDF/OLE
+extraction, deduplication, lineage, image interpretation, processing-
+status modeling) were already production-ready, evidenced directly
+against the real TELCO/RAN validation corpus — but found two real,
+concrete gaps, both closed in this pass, plus one genuine defect found
+and fixed.
+
+### 24.1 Layer H production wiring (the real integration gap)
+
+`backend/knowledge/processing/compound.py` ("A5 Layer H",
+`process_compound_document`) already existed and was already unit-
+tested against synthetic fixtures — it bridges an `IngestedKnowledgeDocument`'s
+root text AND every artifact's own `extracted_text` into one
+`StructuredKnowledgeDocument`, tagging each resulting section with its
+owning `artifact_id`. The audit found, by direct `grep`, that NOTHING in
+`backend/` (excluding tests) ever called it, and that `materialize_
+candidate(` had ZERO production call sites anywhere either — the real
+local-file ingestion entry point
+(`backend/knowledge_ingestion/local_file_adapter.py`'s `ingest_local_file`)
+stopped at producing an `IngestedKnowledgeDocument` and never structured
+or governed it. The practical, verified consequence: for a PDF or XLSX
+ROOT document specifically, `extract_root_document`'s own returned "root
+text" is a short structural summary ("PDF document with N page(s).")
+never the real page/sheet content — real content exists only inside each
+`KnowledgeArtifact.extracted_text`. Without Layer H wired in, that real
+content would never reach a `KnowledgeSection` and would therefore never
+be retrievable via `knowledge_search`, even though it was already
+correctly extracted and stored.
+
+Closed with `ingest_and_structure_local_file(s)` (new functions,
+`local_file_adapter.py`) — a pure composition of the two existing,
+UNMODIFIED functions (`ingest_local_file` then `process_compound_document`),
+still stopping short of governance (the returned `StructuredKnowledgeDocument`
+is ready for an explicit, separate `materialize_candidate` call, exactly
+preserving the existing "governance is a deliberate, separate, trusted
+step" boundary — A5 instruction section 38/40, unchanged).
+
+Proven end-to-end against the real validation corpus (not merely
+synthetic fixtures): `backend/tests/test_knowledge_real_corpus_full_pipeline.py`
+extracts, structures, and governs (CANDIDATE → APPROVED) all three real
+DOCX files plus a real standalone XLSX workbook, persists them into an
+isolated in-memory repository, and runs the real, UNMODIFIED
+`KnowledgeRetrievalService`/`TokenOverlapRelevanceScorer` against them —
+proving a real query retrieves the Document1 VSWR "no restart" rule from
+an actual section (not merely `document.content`), and that a real
+embedded XLSX sheet's own content (a query token read at runtime from
+the artifact's own extracted text, never hardcoded) is independently
+retrievable via its own artifact-tagged section.
+
+### 24.2 XLSX range/table provenance hardening
+
+Audited gap: `extract_xlsx` (`backend/knowledge/ingestion/extractors/xlsx.py`)
+produced exactly one artifact per SHEET, with `locator_detail="sheet=<name>"`
+only — no range or table-level provenance, despite `KnowledgeArtifact
+.locator_detail`'s own docstring already documenting `"sheet=Q3;range=
+B2:D10"` as an intended shape. Closed additively, without removing the
+existing whole-sheet artifact: `locator_detail` now includes the sheet's
+real used range (`Worksheet.dimensions`, e.g. `"sheet=VSWR;range=A1:F32"`),
+and every NATIVE Excel Table the workbook itself already declares
+(`Worksheet.tables` — an author-defined named range with real headers,
+never a heuristically-guessed block of cells) is extracted as its own
+`kind="xlsx_table"` child artifact, nested under its owning sheet
+artifact, with `locator_detail="sheet=<name>;table=<table name>;range=<ref>"`.
+A sheet with no native Table declared produces no `xlsx_table` artifacts
+— unchanged behavior for the common case. Required switching
+`openpyxl.load_workbook`'s `read_only` flag from `True` to `False`
+(empirically verified first, not assumed: `read_only=True`'s
+`ReadOnlyWorksheet` does not expose `.tables`/`.dimensions` at all) —
+still bounded by the same pre-existing `ExtractionLimits.max_artifact_bytes`
+ceiling every XLSX artifact was already subject to.
+
+Proven against real content: the real standalone XLSX validation file
+(`Rogers_Core_Outage_Impact_Agent_Surgical_Checklist.xlsx`) contains 8
+real sheets and 7 real native Excel Tables — all 7 were correctly
+extracted as `xlsx_table` artifacts with real range provenance, live-
+verified in this milestone's own validation pass (structural counts
+only; no real cell value is asserted or reproduced in any committed test
+or document).
+
+### 24.3 DEF-0017 — a real, confirmed defect found and fixed
+
+Writing the Layer H integration tests above found a real, previously-
+undiscovered, HIGH-severity defect: `extract_xlsx`/`extract_pdf`, when
+invoked as the ROOT document (`dispatch.py`'s `extract_root_document`),
+received the literal sentinel STRING `"root"` as `container_artifact_id`
+— unlike `extract_docx`'s own already-correct `None` — producing sheet/
+page artifacts whose `parent_artifact_id="root"` pointed at an
+artifact_id that was never actually present in the resulting document's
+own `artifacts` list. `IngestedKnowledgeDocument`'s own lineage validator
+correctly rejected this as a dangling parent reference, meaning **any
+attempt to ingest a standalone/root-level XLSX or PDF file through the
+real pipeline crashed unconditionally** before a governed `KnowledgeObject`
+could ever be built. Full record: `docs/DEFECT_REGISTER.md` DEF-0017.
+Fixed by widening `container_artifact_id`'s type to `Optional[str]` in
+both extractors and passing `None` from `dispatch.py`'s root-level call
+sites — proven to change NO artifact_id/content_hash/storage key that
+may already exist from a prior real ingestion run (`deterministic_
+artifact_id`'s own basis string already treats a missing parent as the
+literal word `'root'` internally).
+
+### 24.4 Applicability inheritance — audited, unchanged
+
+6A.3 instruction section 19 requires artifact/evidence-derived content
+to inherit document-level applicability, never silently broaden it.
+Audited and found ALREADY correct by construction, requiring no code
+change: `Applicability` lives only on `KnowledgeObject` (§3/§11) —
+`KnowledgeSection`/`KnowledgeArtifact` carry no independent applicability
+field of their own, so every section (root-derived or artifact-derived
+alike) necessarily shares the exact same, single `Applicability` as its
+owning `KnowledgeObject`. There is no mechanism today for a section or
+artifact to narrow OR broaden applicability independently — full
+inheritance is the only behavior that exists, which trivially satisfies
+"never silently broaden."
+
+### 24.5 Known, deliberately-unaddressed limitations (honest, not defects)
+
+- **PDF section/heading detection beyond page number**: `pypdf`'s raw
+  page-text extraction carries no reliable font/style metadata, unlike
+  DOCX's paragraph styles — building heading detection here would require
+  heuristics/guessing, which this codebase's own deterministic-extraction
+  discipline forbids. Page-level provenance (`locator_detail="page=<n>"`)
+  remains the deterministic ceiling; not changed in 6A.3.
+- **Document-level (cross-`knowledge_id`) deduplication**: `materialize_
+  candidate` still requires an EXPLICIT `knowledge_id` from its caller —
+  nothing prevents a caller from governing the same file's content under
+  two different `knowledge_id`s. This is an existing, deliberate 5.1E
+  design choice (identity is never invented/inferred), not a 6A.3 gap —
+  only artifact-level (nested attachment) deduplication is automatic.
+- **Image-interpretation bounded context (`context_by_artifact_id`)**:
+  `apply_image_interpretation`'s own `context_by_artifact_id` parameter
+  (image + nearby section text -> better interpretation) exists but is
+  not populated by `local_file_adapter.py`'s real call site — deriving
+  genuinely reliable "nearby text" would require tracking each artifact's
+  structural proximity through extraction, a nontrivial, distinct
+  enhancement deliberately out of this milestone's own bounded scope.
+
+---
+
+## 25. Knowledge Asset Metadata Standard (6A.3 corrective addendum, additive, CURRENT)
+
+A bounded corrective/additive pass attached to 6A.3 — NOT a reopening or
+redesign of 6A.3's own multimodal ingestion architecture (§24, entirely
+unmodified by this addendum). Introduces the canonical **Knowledge Asset
+Metadata** standard every governed `KnowledgeObject` can use, and that
+6A.4 (deterministic TELCO applicability/knowledge narrowing) can rely on.
+
+### 25.1 Three distinct concepts, never collapsed
+
+This addendum is explicit that a `KnowledgeObject` now carries THREE
+structurally distinct kinds of information, linked through stable
+identities but never merged into one generic dictionary:
+
+1. **Knowledge Asset Metadata** (this section) — what is this asset, who
+   owns it, what is its lifecycle, where does it apply, is it approved
+   for AI use.
+2. **Structural provenance** (§20/A5, `KnowledgeArtifact` lineage,
+   unmodified) — exactly where inside the source this evidence
+   originated (document → artifact → section → step/table/cell/image).
+3. **Derivation provenance** (§20/A5, `KnowledgeArtifact.derived`,
+   unmodified) — is this content original source content or derived
+   through extraction/normalization/interpretation.
+
+### 25.2 The canonical model
+
+`backend/knowledge/domain/asset_metadata.py` (new file) defines
+`KnowledgeAssetMetadata`, one structured container reached via
+`KnowledgeObject.metadata.asset_metadata` — a single new, purely
+additive field on the existing, otherwise-unmodified `KnowledgeMetadata`
+model (`models.py`). Nine category groupings mirror §4's own canonical
+table: Identity, Classification, Governance, Ownership, Lifecycle,
+Process/Roles, Applicability Scope, Technical Scope, Audit.
+
+Every leaf attribute is one of four typed wrappers, never a bare string
+or an untyped dict:
+
+- `TextMetadataField` / `DateMetadataField` / `BooleanMetadataField` —
+  single-valued (`raw_value`, `normalized_value`, `source`).
+- `MultiValueMetadataField` — genuinely multi-valued attributes (Vendor/
+  OEM, Technology/Domain, Related Systems/Tools, Linked Policies/
+  Standards, Equipment/Asset, Customer/Operator, Territory/Country) —
+  a typed collection (`raw_values`, `normalized_values`, `source`),
+  never a comma-joined scalar.
+- `ReviewerMetadataField` (a list of `ReviewerEntry`) — Reviewer(s),
+  keeping person and organization structurally separate, never collapsed
+  into one string (matching `roles.approved_by`/`roles.approver_
+  organization`'s own person/organization split).
+
+`source: MetadataSource` records the provenance CHANNEL (document
+header/body, file properties, filename, repository/SharePoint metadata,
+ingestion configuration, trusted user input, existing Knowledge record,
+unknown) — deliberately has NO model-inference member; no field in this
+standard is ever populated from LLM speculation (§8's "no metadata
+guessing" is a hard architectural property here, not merely a
+convention).
+
+### 25.3 Deliberate non-duplication of existing identity fields
+
+`KnowledgeAssetIdentityMetadata` does NOT include `knowledge_object_id`/
+`document_title`/`revision`/`document_type` — each already has a single,
+authoritative home (`KnowledgeObject.knowledge_id`/`.title`/`.version
+.revision`/`.document_type`). Duplicating them would create two sources
+of truth for the same fact; the gap matrix (§25.7) documents each as
+SUPPORTED via its existing field instead. `KnowledgeDocumentType`
+(enums.py) gained five new members for TELCO/operations coverage —
+`RUNBOOK`, `HLD`, `ASSESSMENT_REPORT`, `ACTION_PLAN`, `CHANGE_REQUEST`
+— a purely additive enum extension (PROCESS/PROCEDURE already map to
+the existing `OPERATIONAL_PROCEDURE`; KB already maps to `KB_ARTICLE`).
+The pre-existing, dormant `KnowledgeMetadata.owner`/`.classification`
+fields (confirmed unused anywhere in this codebase by grep) are left
+completely untouched — new canonical fields (`ownership.business_owner`,
+`classification.confidentiality_class`, etc.) are added alongside them,
+never repurposing or migrating them.
+
+### 25.4 Raw + normalized values, never guessed
+
+`normalize_date_value` (asset_metadata.py) performs ONLY two
+deterministic conversions: ISO-8601 parsing, and a bounded Excel/
+spreadsheet serial-number interpretation (the well-defined 1899-12-30
+epoch every mainstream spreadsheet tool, including `openpyxl`, already
+uses) — verified against this addendum's own worked example (serial
+`46248` → `2026-08-14`). A deliberate 10,000 floor on the plausible
+serial range excludes a bare short number (e.g. a 4-digit year) from
+ever being misread as a date serial. Anything else (free text, an
+ambiguous format) leaves `normalized_value=None` — the raw string is
+always preserved regardless. `normalize_source_lifecycle_stage`
+similarly only matches the five canonical stage labels case-
+insensitively; an unrecognized value stays unnormalized, never
+best-guessed. Boolean flags and language-code normalization are NOT
+attempted automatically anywhere in this module — a trusted caller must
+supply `normalized_value` explicitly (e.g. there is no hardcoded
+`"Uen"` → `"en"` mapping, since no authoritative code table was
+available to this addendum — the raw value is preserved either way).
+
+### 25.5 Applicability bridge (feeds 6A.2, never duplicates it)
+
+`backend/knowledge/domain/asset_metadata_applicability_bridge.py` (new
+file) adds ONE pure function, `derive_applicability_dimensions_from_
+asset_metadata`, mapping six asset-metadata fields (Customer/Operator,
+Territory/Country, Equipment/Asset, Vendor/OEM, Technology/Domain,
+Related Systems/Tools) into an `Applicability.dimensions`-shaped dict.
+It does NOT modify, wrap, or duplicate `KnowledgeApplicabilityProfile`/
+`ApplicabilityScopeKind`/`dimension_scope` (§23, byte-for-byte
+unmodified). **The critical invariant, preserved unchanged from §23 and
+proven by test**: a dimension with zero populated asset-metadata values
+is simply ABSENT from the returned dict — never an empty-list key, never
+inferred as `EXPLICIT_ANY`. 6A.2's own `dimension_scope`, given that
+absence, already correctly resolves it to `ApplicabilityScopeKind
+.UNSPECIFIED`, the safe fail-closed default. `EXPLICIT_ANY` remains
+exactly what 6A.2 already defined it as — an explicit, separate,
+trusted-caller-supplied declaration (`explicit_any_dimensions`) — this
+bridge never infers it from a value's text (e.g. a raw value literally
+reading `"Any"` becomes an ordinary CONSTRAINED value, not a wildcard;
+see the dedicated test proving this).
+
+### 25.6 Governance/lifecycle independence and the two-lifecycle distinction
+
+`KnowledgeAssetGovernanceMetadata` (Source-of-Truth Flag, AI-Approved
+Flag, Approval Constraints, Linked Policies/Standards) and
+`KnowledgeAssetLifecycleMetadata` (source lifecycle stage, review/expiry
+dates) perform NO cross-field inference — `ai_approved_flag=true` never
+implies `source_of_truth_flag=true`; an expired `expiry_date` never
+auto-flips `ai_approved_flag`. Both facts remain independently
+representable and independently readable; deciding what to DO with the
+combination is explicitly 6A.4's future eligibility-engine concern, not
+built here.
+
+`KnowledgeAssetLifecycleMetadata.lifecycle_stage` (Draft/Under Review/
+Active/Deprecated/Archived — the SOURCE document's own self-reported
+state) is a GENUINELY DIFFERENT dimension from SLOPANOC's own governance
+`LifecycleStatus` (CANDIDATE/APPROVED/ARCHIVE, §14/enums.py) — the two
+are never blindly mapped to one another (e.g. `lifecycle_stage="Active"`
+does NOT imply `lifecycle_status=APPROVED`); `lifecycle_status` continues
+to change ONLY through `transition_lifecycle`/`approve_version`/
+`archive_version` (§14, unmodified), never derived from `lifecycle_
+stage`. A document can legitimately be source-`Active` while still
+SLOPANOC-`CANDIDATE` (not yet reviewed) — proven by test.
+
+### 25.7 Gap matrix (existing support before this addendum)
+
+| Attribute | Existing support | Source of truth after this addendum | Status |
+| --- | --- | --- | --- |
+| Knowledge Object ID | SUPPORTED | `KnowledgeObject.knowledge_id` (unchanged, not duplicated) | SUPPORTED |
+| Document Number | MISSING | `asset_metadata.identity.document_number` | SUPPORTED (structure only — no extractor populates it yet; requires header/body text parsing) |
+| Revision | PARTIAL | `KnowledgeVersion.revision`/`.label` (unchanged, not duplicated) | SUPPORTED |
+| Document Title | SUPPORTED | `KnowledgeObject.title` (unchanged, not duplicated) | SUPPORTED |
+| Document Type | SUPPORTED | `KnowledgeObject.document_type` (extended: +5 members) | SUPPORTED |
+| Date (identity, doc's own claimed update date) | MISSING | `asset_metadata.identity.date` | SUPPORTED (structure only — NOT_AVAILABLE_FROM_SOURCE via file properties; would require header/body parsing) |
+| File Format | MISSING | `asset_metadata.identity.file_format` | SUPPORTED (extractor: filename) |
+| Language Code | MISSING | `asset_metadata.identity.language_code` | SUPPORTED (structure); PARTIAL via extractor — real corpus mostly does not set this OOXML property |
+| Confidentiality Class | MISSING | `asset_metadata.classification.confidentiality_class` | SUPPORTED (structure only — NOT_AVAILABLE_FROM_SOURCE via file properties; would require banner-text heuristics, deliberately not attempted) |
+| External Confidentiality Label | MISSING | `asset_metadata.classification.external_confidentiality_label` | SUPPORTED (structure only, same caveat) |
+| Source-of-Truth Flag | MISSING | `asset_metadata.governance.source_of_truth_flag` | SUPPORTED (structure only — no source deterministically encodes this) |
+| AI-Approved Flag | MISSING | `asset_metadata.governance.ai_approved_flag` | SUPPORTED (structure only) |
+| Approval Constraints | MISSING | `asset_metadata.governance.approval_constraints` | SUPPORTED (structure only) |
+| Linked Policies / Standards | MISSING | `asset_metadata.governance.linked_policies_standards` | SUPPORTED (structure only) |
+| Business Owner | PARTIAL (dormant `metadata.owner`) | `asset_metadata.ownership.business_owner` (new, structured; `owner` untouched) | SUPPORTED (structure only) |
+| SME Team | MISSING | `asset_metadata.ownership.sme_team` | SUPPORTED (structure only) |
+| Domain / Repository of Origin | MISSING | `asset_metadata.ownership.domain_repository_of_origin` | SUPPORTED (structure only) |
+| Business Domain | MISSING | `asset_metadata.ownership.business_domain` | SUPPORTED (structure only) |
+| Lifecycle Stage | MISSING | `asset_metadata.lifecycle.lifecycle_stage` | SUPPORTED (structure + deterministic 5-value normalization) |
+| Next Review Date | MISSING | `asset_metadata.lifecycle.next_review_date` | SUPPORTED (structure + date normalization) |
+| Expiry Date | MISSING | `asset_metadata.lifecycle.expiry_date` | SUPPORTED (structure + date normalization) |
+| Prepared By | MISSING | `asset_metadata.roles.prepared_by` | SUPPORTED (extractor: DOCX `author`/XLSX `creator`) |
+| Creator Organization | MISSING | `asset_metadata.roles.creator_organization` | SUPPORTED (structure only — NOT_AVAILABLE_FROM_SOURCE via file properties) |
+| Checked By | MISSING | `asset_metadata.roles.checked_by` | SUPPORTED (structure only) |
+| Checker Organization | MISSING | `asset_metadata.roles.checker_organization` | SUPPORTED (structure only) |
+| Approved By | MISSING | `asset_metadata.roles.approved_by` | SUPPORTED (structure only) |
+| Approver Organization | MISSING | `asset_metadata.roles.approver_organization` | SUPPORTED (structure only) |
+| Reviewer(s) | MISSING | `asset_metadata.roles.reviewers` (person+org typed list) | SUPPORTED (structure only) |
+| Customer / Operator | MISSING | `asset_metadata.applicability_scope.customer_operator` | SUPPORTED (structure + applicability bridge) |
+| Territory / Country | MISSING | `asset_metadata.applicability_scope.territory_country` | SUPPORTED (structure + applicability bridge) |
+| Equipment / Asset | MISSING | `asset_metadata.technical_scope.equipment_asset` | SUPPORTED (structure + applicability bridge) |
+| Vendor / OEM | MISSING | `asset_metadata.technical_scope.vendor_oem` | SUPPORTED (structure + applicability bridge) |
+| Technology / Domain | MISSING | `asset_metadata.technical_scope.technology_domain` | SUPPORTED (structure + applicability bridge) |
+| Related Systems / Tools | MISSING | `asset_metadata.technical_scope.related_systems_tools` | SUPPORTED (structure + applicability bridge) |
+| Last Modified By | MISSING | `asset_metadata.audit.last_modified_by` | SUPPORTED (extractor: DOCX/XLSX `last_modified_by`) |
+| Last Modified Date | MISSING | `asset_metadata.audit.last_modified_date` | SUPPORTED (extractor + deterministic date normalization) |
+
+"SUPPORTED (structure only)" means the typed field/validation/
+normalization/persistence path exists and is tested, but no automatic
+extractor populates it from the real corpus yet — a future, separate
+ingestion enhancement (header/body text parsing, a repository/SharePoint
+metadata adapter, or trusted operator input) would populate it without
+any further schema change. No row was omitted from §4's canonical
+catalogue.
+
+### 25.8 Optional file-properties extractor (NOT wired into 6A.3's ingestion path)
+
+`backend/knowledge/ingestion/asset_metadata_from_file_properties.py`
+(new file) provides two read-only functions
+(`extract_asset_metadata_from_docx_properties`/`_xlsx_properties`)
+populating `file_format`/`language_code`/`roles.prepared_by`/`audit
+.last_modified_by`/`audit.last_modified_date` from a real DOCX/XLSX
+file's own OOXML core properties — deterministic, no LLM, never writes
+to the source file (proven by a before/after SHA-256 hash test).
+Deliberately does NOT read OOXML's numeric `revision` property (a
+save-count integer, not a document revision label — mapping it would
+misrepresent it; proven absent by an AST-based test, not a docstring
+claim). **Deliberately NOT wired into `local_file_adapter.py`'s default
+`ingest_local_file`/`ingest_and_structure_local_file(s)` pipeline** — per
+this addendum's own explicit instruction not to reopen/redesign 6A.3's
+ingestion architecture; both functions remain independently callable by
+a future, separate integration decision.
+
+### 25.9 Persistence and backward compatibility
+
+No schema/migration change. `slopanoc_knowledge_objects`' existing JSON
+`payload` column (§15, dialect-neutral, unchanged since A5) absorbs
+`KnowledgeAssetMetadata` transparently, exactly like every other
+optional addition to `KnowledgeObject` before it — proven by round-trip
+test (`KnowledgeObject.model_dump_json()` →
+`KnowledgeObject.model_validate_json()`). Every field in this standard
+has a safe empty default, so a REAL pre-addendum persisted payload
+(missing the `asset_metadata` key entirely inside `metadata`)
+deserializes successfully with every new field reading as
+`None`/empty — proven directly (`test_historical_payload_without_
+asset_metadata_key_deserializes_successfully`, constructed from a real
+`KnowledgeObject` with the key deleted from its own JSON, not a
+hand-written fixture guessing at the shape).
+
+### 25.10 Explicitly out of scope
+
+No MOP creation/authoring workflow, no MOP templification, no Knowledge
+admission/quality-gate, no minimum-requirement validation engine, no SME
+approval workflow, no source-document modification, no 6A.4 deterministic
+narrowing/eligibility engine, no embeddings/vector retrieval, no new
+agent. A future Knowledge creation/admission capability MAY use this
+metadata model to enforce minimum requirements on newly-created MOPs and
+other operational Knowledge before they are ingested — that capability
+remains intentionally outside this addendum.
+
+---
+
+## 26. Phase 6A.4 — Deterministic TELCO Applicability & Knowledge Narrowing (additive, CURRENT)
+
+`backend/knowledge/narrowing/` (new package: `contracts.py`,
+`eligibility.py`, `context_adapter.py`, `applicability_gate.py`,
+`service.py`) implements the deterministic filtering layer that produces
+a small, permitted, applicable Knowledge candidate set from the full
+governed corpus, BEFORE any semantic/vector retrieval (P11-M05, not yet
+built) or LLM reasoning ever sees it. Governing principle: **the LLM
+must never decide which documents to inspect from the full corpus —
+deterministic rules eliminate what is unauthorized, stale, superseded,
+customer/vendor/technology-incompatible, or otherwise not applicable,
+first.**
+
+### 26.1 Two gates, never one mixed function
+
+```text
+ALL GOVERNED KNOWLEDGE
+        |
+GATE 1 -- AUTHORITY / ELIGIBILITY      (eligibility.py)
+        |
+ELIGIBLE KNOWLEDGE
+        |
+GATE 2 -- TELCO APPLICABILITY          (applicability_gate.py)
+        |
+PERMITTED / EXCLUDED / INDETERMINATE   (all three explicit, never merged)
+```
+
+**Gate 1** reuses, never duplicates, the existing frozen 5.1E version/
+supersession authority (`governance/versioning.py`'s `resolve_current_
+version`) — it adds only the per-OBJECT reason-code mapping that
+authority does not itself provide. Governance/asset-metadata policy
+signals (AI-Approved, Expiry, Review-Due, Source-of-Truth) are ALWAYS
+computed and reported; only AI-Approved and Expiry can ever cause
+exclusion, and only when `NarrowingPolicy.enforce_ai_approved`/
+`enforce_not_expired` is explicitly set `True` (default `False` —
+OBSERVE mode). This is the OBSERVE/ENFORCE boundary §9 of the 6A.4
+instruction required: missing newly-added governance metadata never
+silently broadens access (a missing flag is never treated as `True`),
+and never silently destroys existing retrieval behavior for historical
+Knowledge (default policy never excludes on a missing signal) — proven
+by `test_narrowing_eligibility.py`'s dedicated historical-object test
+and `test_narrowing_service.py`'s policy on/off pair.
+
+**Gate 2** reuses, never wraps or duplicates, 6A.2's own `dimension_
+scope`/`ApplicabilityScopeKind` (CONSTRAINED/EXPLICIT_ANY/UNSPECIFIED,
+`telco_applicability.py`, byte-for-byte unmodified) and 5.1B's own exact,
+normalized dimension-value comparison (`normalize_dimension_value`, also
+unmodified — §26 of the 6A.4 instruction's release-matching requirement
+is satisfied by this SAME generic exact-match rule, no dimension-
+specific ordering/range logic anywhere). What is genuinely new: Gate 2
+compares a knowledge object's CONSTRAINED dimension against a FULL,
+STATE-AWARE `ContextValue` (KNOWN/UNKNOWN/CONFLICTING/NOT_APPLICABLE,
+6A.2's `backend/context/domain/`) rather than a flat "known or nothing"
+`ApplicabilityContext` — 5.1G's own `evaluate_applicability` has no way
+to express CONFLICTING or NOT_APPLICABLE context at all, so it could not
+be reused as-is for this specific comparison (it remains completely
+unmodified and is not called by this package).
+
+### 26.2 Canonical-source reconciliation (§4 of the 6A.4 instruction)
+
+A knowledge object can now have up to THREE sources bearing on TELCO
+applicability: its own frozen `Applicability.dimensions` (5.1B/A5), the
+6A.3-addendum `asset_metadata`-derived dimensions (`derive_
+applicability_dimensions_from_asset_metadata`, unmodified), and (new,
+6A.4) `asset_metadata.applicability_scope.explicit_any_dimensions`.
+`applicability_gate.py`'s `resolve_canonical_dimensions` merges the first
+two deterministically: ADDITIVE where only one source declares a
+dimension key; FAIL-CLOSED (`METADATA_SOURCE_CONFLICT`, never last-
+write-wins) where both declare the SAME key with a DIFFERENT normalized
+value set — that dimension is removed from consideration and reported as
+`indeterminate`, never silently resolved either direction. The SAME
+fail-closed treatment applies if a dimension is claimed as EXPLICIT_ANY
+by asset metadata while ALSO CONSTRAINED by the base `Applicability` (an
+authoring contradiction that would otherwise crash 6A.2's own
+`KnowledgeApplicabilityProfile` construction).
+
+`KnowledgeMetadata.attributes` (the pre-6A.3, untyped, open bag) is
+handled completely separately — `LEGACY_ATTRIBUTE_COMPATIBILITY_MAP` is
+a deterministic, currently EMPTY allow-list (no real ingested object
+populates `.attributes`, confirmed by grep during this milestone's own
+audit) — no arbitrary legacy key is ever silently trusted as narrowing
+input; adding a real mapping later is a deliberate, reviewable code
+change, never an implicit runtime behavior.
+
+### 26.3 The persisted EXPLICIT_ANY gap, closed
+
+6A.2's `KnowledgeApplicabilityProfile.explicit_any_dimensions` existed
+only as a live constructor argument with no persisted field anywhere on
+`KnowledgeObject` — audited during 6A.4's own AUDIT phase: no real,
+already-governed object could ever actually BE `EXPLICIT_ANY` for a
+dimension. Closed via ONE new, additive field: `KnowledgeAssetMetadata
+.applicability_scope.explicit_any_dimensions: list[str]` (§25's own
+model, extended per that section's own explicit permission for a future
+milestone to do so) — a list of dimension key NAMES a governance decision
+has explicitly declared wildcard, never auto-populated from a value's
+own text (a raw value literally reading `"Any"` does NOT become
+EXPLICIT_ANY automatically — proven by test).
+
+### 26.4 Result contract and explainability
+
+`KnowledgeNarrowingResult` carries three EXPLICIT, never-merged ID
+lists — `permitted_knowledge_ids` (the actual candidate set a future
+6A.5 should consume), `excluded_knowledge_ids`, `indeterminate_
+knowledge_ids` (Gate-1-eligible objects whose Gate 2 outcome could not be
+determined from current context — never silently included as applicable,
+never silently excluded either) — plus a full per-object `items` list
+(`KnowledgeNarrowingItem`, both gates' own decisions, per-dimension
+detail) and `exclusion_reason_counts` for observability. `NarrowingReason
+Code` is a small, stable, machine-readable CORE vocabulary (`MATCH`,
+`APPLICABILITY_UNSPECIFIED`, `DIMENSION_MISMATCH`, `CONTEXT_UNKNOWN`,
+`CONTEXT_CONFLICTING`, `METADATA_SOURCE_CONFLICT`, `SUPERSEDED`,
+`ARCHIVED`, `CANDIDATE_NOT_APPROVED`, `NOT_EFFECTIVE`, `AMBIGUOUS_
+VERSION_RESOLUTION`, `UNAUTHORIZED` (reserved, unreachable — see §26.5),
+`AI_APPROVAL_MISSING`, `AI_APPROVAL_FALSE`, `EXPIRED`, `REVIEW_DUE`) —
+WHICH dimension mismatched/was indeterminate lives in each item's own
+`applicability.dimension_results`, keeping the core reason vocabulary
+small while dimension names stay open (matching `applicability.py`'s own
+"dimension-agnostic by design" invariant, preserved unchanged).
+
+### 26.5 Authorization (§22 of the 6A.4 instruction)
+
+Audited before writing Gate 1: no authorization/confidentiality
+ENFORCEMENT mechanism exists anywhere in the current Governed Knowledge
+architecture (Phase 4H, which would build one, remains future/
+unimplemented). There was therefore nothing to "preserve" — `NarrowingReasonCode
+.UNAUTHORIZED` exists as a reserved, currently-unreachable code for a
+future Phase 4H gate to wire into, never a fabricated check invented
+here.
+
+### 26.6 Document Revision vs. Network/Software Release (§6, mandatory)
+
+Kept structurally separate, proven by test (`test_document_revision_and_
+network_release_are_independent`, plus a dedicated AST-based source
+proof that `applicability_gate.py` never references `.revision`
+anywhere): `KnowledgeVersion.revision`/`.label` (the DOCUMENT's own
+revision identifier, e.g. `"PA1"`) belongs to Knowledge lifecycle/
+versioning (§14, unmodified) and is NEVER read by anything in `backend/
+knowledge/narrowing/`. A network/software release value (e.g.
+`"24.Q2"`) is an ordinary, open `Applicability.dimensions["release"]`
+entry, compared via the same generic exact-match rule as every other
+dimension — no special release-ordering/range logic exists anywhere.
+
+### 26.7 Not wired into the live `knowledge_search` tool (§47, deliberate)
+
+Mirrors 6A.2's own `dimension_scope` (not consulted by the live tool-
+calling path) and 6A.3's own `ingest_and_structure_local_file` (not
+wired into any production ingestion trigger): `backend/knowledge/
+narrowing/` is a new, additive, internal service/repository-level API.
+`KnowledgeRetrievalService.retrieve()` (5.1G) is BYTE-FOR-BYTE
+UNMODIFIED by 6A.4 — verified by an empty scoped `git diff`. A future
+milestone may choose to consume `narrow_knowledge`'s output to bound
+`retrieve()`'s own corpus; that wiring decision is explicitly deferred.
+
+### 26.8 Artifact-level narrowing (§32) — not needed, audited
+
+`KnowledgeArtifact` carries no independent applicability field (§25's
+own audit, unchanged) — every artifact/section trivially inherits its
+owning `KnowledgeObject`'s single `Applicability`, already the only
+behavior that exists. 6A.4 therefore narrows at the `knowledge_id`
+level only; no artifact-level narrowing logic was added or is needed.
+
+### 26.9 Performance
+
+No model call anywhere in `backend/knowledge/narrowing/` or anything it
+calls (verified structurally by this milestone's own dependency-boundary
+extension — no `google.adk`/`google.genai` import reachable). `narrow_
+corpus` is one deterministic Python pass over the corpus (`N` objects ×
+one grouping/comparison pass, no `N × M` anything) — at this milestone's
+own measured real-corpus scale (3 real governed objects), narrowing
+completes as part of the same test process in well under a second; no
+new database index or JSONB filter was added or found necessary at this
+scale (§35), and none was added.
+
+### 26.10 Corrective pass — unspecified applicability must fail closed
+
+A bounded corrective pass, attached to 6A.4 (not a new sub-milestone),
+fixed a real defect found and reproduced before any code change: a
+Knowledge object with ZERO declared TELCO applicability intent (no
+CONSTRAINED dimension, no EXPLICIT_ANY, no conflict —
+`dimensions_of_interest` empty in `applicability_gate.py`'s
+`evaluate_telco_applicability`) previously returned `outcome="match"`
+merely because nothing was ever checked, allowing it into
+`permitted_knowledge_ids`. **Governing rule, now enforced: absence of
+applicability information is not evidence of applicability.**
+
+**Fix, minimal and surgical**: the one `if not dimensions_of_interest:`
+branch now returns `outcome="indeterminate"` (reusing the existing
+`NarrowingReasonCode.APPLICABILITY_UNSPECIFIED`, never a new reason
+code) instead of `"match"`. `service.py`'s existing bucket-assignment
+logic (`mismatch` → excluded, `indeterminate` → indeterminate, else →
+permitted) required NO change — it already routes any `indeterminate`
+outcome to `indeterminate_knowledge_ids` correctly. No other function in
+`backend/knowledge/narrowing/` was touched — `eligibility.py`
+(Gate 1), `context_adapter.py`, `service.py`, and `contracts.py` are
+byte-for-byte unmodified by this pass.
+
+**What did NOT need to change, confirmed by audit before any fix**:
+partially-constrained profiles (e.g. Vendor=Ericsson, Technology=LTE,
+everything else unspecified) and explicitly-generic profiles (any
+dimension declared EXPLICIT_ANY) already produced a non-empty
+`dimensions_of_interest` under the pre-existing implementation — both
+already correctly resolved via the normal per-dimension comparison path,
+untouched by this fix. The only genuinely broken case was the "zero
+dimensions of interest at all" branch.
+
+**EXPLICIT_ANY remains strictly distinct from UNSPECIFIED**, proven by a
+dedicated regression test (`test_unspecified_still_differs_from_
+explicit_any`): a wholly EXPLICIT_ANY profile (every dimension
+explicitly declared generic) still correctly resolves `match`
+unconditionally — only a wholly *undeclared* profile becomes
+`indeterminate`. Generic Knowledge must therefore declare its
+genericness explicitly via EXPLICIT_ANY; leaving every dimension
+unspecified is never an implicit substitute.
+
+**Real-corpus impact, honestly reported**: the same real TELCO/RAN
+corpus validated in 6A.4's own closure (3 real governed objects, none of
+which declare any TELCO applicability dimension) now correctly resolves
+`permitted=0, excluded=0, indeterminate=3` — a change from the
+pre-correction `permitted=3, excluded=0, indeterminate=0` the 6A.4
+closure report itself recorded. This is the corrected, intended
+behavior, not a regression: those three real objects genuinely have no
+declared applicability metadata yet, so they correctly cannot be
+asserted as customer/vendor/technology-applicable by 6A.5 or any future
+consumer until a real governance step populates that metadata.
+
+---
+
+## 27. Phase 6A.5 — Hybrid Knowledge Retrieval & Evidence Selection (additive, COMPLETE — see §27.9/§27.10)
+
+`backend/knowledge/hybrid_retrieval/` (new package: `contracts.py`,
+`indexable_text.py`, `embedding.py`, `repository.py`, `fusion.py`,
+`reranking.py`, `evidence_selection.py`, `indexing.py`, `service.py`)
+implements the retrieval layer that operates ONLY inside 6A.4's own
+deterministic `permitted_knowledge_ids` (`backend/knowledge/narrowing/`,
+byte-for-byte unmodified) — EXACT + LEXICAL + SEMANTIC search, fused
+deterministically (RRF), reranked deterministically, then evidence-
+selected, distinct from retrieval. The concrete embedding provider
+(`VertexTextEmbeddingProvider`, real Vertex AI `text-embedding-005`)
+lives at `backend/knowledge_hybrid_retrieval/` — OUTSIDE `backend/
+knowledge/` entirely, mirroring A5's own `gemini_image_interpreter.py`
+precedent for the identical dependency-boundary reason.
+
+### 27.1 Candidate-boundary enforcement (mandatory, query-level)
+
+Every one of the three channel methods on `EvidenceIndexRepository`
+(`exact_match`/`lexical_search`/`semantic_search`) takes `permitted_
+knowledge_ids` as a REQUIRED parameter and constrains the SQL query
+itself (`WHERE knowledge_id = ANY(:ids)`) — never a Python-side filter
+applied after an unconstrained query. An empty `permitted_knowledge_ids`
+short-circuits `hybrid_retrieve` before any channel is ever called, and
+before any database connection is used for search at all. Proven, not
+merely claimed: `test_hybrid_retrieval_repository_postgres.py`'s own
+`test_real_postgres_exact_match_respects_permitted_ids`/`test_real_
+postgres_lexical_search_respects_permitted_ids` insert an "EXCLUDED"
+row into the REAL database and assert it is never returned when queried
+with a different permitted set; `test_hybrid_retrieval_narrowing_
+integration.py` chains a REAL, unmodified `narrow_corpus` (6A.4) result
+directly into `hybrid_retrieve`, proving an excluded (vendor/technology
+mismatch) and an indeterminate (unspecified applicability) document
+never appear even as an intermediate hit from any channel.
+
+### 27.2 Retrieval granularity and provenance (§7/§8)
+
+SECTION granularity (never whole-document), mirroring 5.1G's own
+`KnowledgeRetrievalItem` — `EvidenceIndexRecord` carries `knowledge_id`/
+`version_label`/`section_id`/`artifact_id`, a durable route back to the
+governed source. `resolve_is_derived`/`build_indexable_text`
+(`indexable_text.py`) deliberately duplicate (never import) 5.1G's own
+`_resolve_is_derived` logic and A5's XLSX-table locator convention, per
+the same architectural-layer independence discipline `narrowing/
+eligibility.py` already established.
+
+### 27.3 Fusion (RRF) and deterministic reranking
+
+`fusion.py` implements Reciprocal Rank Fusion — chosen specifically
+because exact/lexical/semantic raw scores live on incomparable scales,
+and RRF needs no cross-channel normalization (operates on rank position
+only). `reranking.py` combines the RRF fusion score with an exact-match
+boost, a multi-channel-agreement bonus, and a source-over-derived tie-
+break, with a final deterministic `evidence_id` tie-breaker — proven,
+by direct source-scan test, to contain NO `google.adk`/`google.genai`
+import anywhere.
+
+### 27.4 Evidence selection, distinct from retrieval
+
+`evidence_selection.py`'s `select_evidence` is a bounded top-K budget
+filter over an ALREADY-reranked candidate list — retrieval candidates
+are never automatically evidence (the same `SEARCH RESULT != EVIDENCE
+USED` invariant §17/§19 already established for Generic KM, now
+extended to hybrid retrieval).
+
+### 27.5 Index synchronization (§24)
+
+`indexing.py`'s `index_knowledge_object` batches an entire object's
+sections into ONE embedding call, skips already-current content via a
+`content_hash` comparison performed BEFORE any embedding call (proven
+by test: the fake embedding provider is never invoked for unchanged
+content), and never lets an embedding-provider failure block exact/
+lexical indexing for the same evidence unit (the row is still upserted,
+`embedding=None`).
+
+### 27.6 Real embedding model decision (§12/§46)
+
+`text-embedding-005` (Vertex AI), 768 dimensions — verified by a REAL,
+live `embed_content` call during this milestone's own AUDIT phase
+(project `pr-msn-dev-gl-slopai-01`, location `europe-west3`) before being
+committed to, never assumed from remembered documentation. A real
+3-sentence similarity check produced the expected ordering (a
+semantically related sentence scored higher than an unrelated one),
+confirming genuine usability for TELCO-shaped operational text.
+Formalized as `test_hybrid_retrieval_embedding_real_api.py`, itself
+gated on real API reachability (skips, never fails, if unreachable).
+
+### 27.7 RESOLVED BLOCKER: pgvector extension installation
+
+EARLIER IN THIS MILESTONE, the real DEV Cloud SQL PostgreSQL instance's
+own IAM database role (`costin.ionita@ericsson.com`, at that time a
+member of `cloudsqliamuser`/`slopanoc_migrator`/`slopanoc_runtime`) was
+NOT a member of `cloudsqlsuperuser` — `CREATE EXTENSION vector` was
+probed directly (a rolled-back transaction) AND attempted through the
+real 6A.5 Alembic migration (`a1f3c9e07b21`) itself; BOTH failed
+identically:
+
+```
+asyncpg.exceptions.InsufficientPrivilegeError: permission denied to
+create extension "vector"
+HINT: Must be superuser to create this extension.
+```
+
+Per this milestone's own explicit instruction, this was NOT worked
+around by self-granting a role, switching credentials, or bypassing
+Alembic with ad-hoc DDL — the finding was reported, and the migration
+file was left as the correct, intended production schema, pending a
+`cloudsqlsuperuser`-privileged administrative action.
+
+**LATER IN THE SAME MILESTONE, that administrative action was performed
+externally** (confirmed via a fresh, independent `pg_roles` query
+showing `cloudsqlsuperuser` newly present in the role's memberships —
+not initiated, requested, or worked toward by this codebase or this
+session in any way): `CREATE EXTENSION vector` was re-probed and
+succeeded; `pg_extension` confirmed `extversion 0.8.5` genuinely
+installed. The real Alembic migration (`a1f3c9e07b21`) was then applied
+for real (`alembic upgrade head`, `9b6df6490c0e -> a1f3c9e07b21`),
+creating `slopanoc_knowledge_evidence_index` with a genuine `vector(768)`
+column (confirmed via `information_schema.columns`: `udt_name = vector`,
+not `text`). **This extension installation is a permanent, persistent
+database-level fact** — confirmed to survive independently of which role
+is later connecting (see §27.10 for the subsequent role-membership
+reversion, which does NOT re-remove the extension). The pgvector-
+specific blocker this section originally recorded is CLOSED.
+
+### 27.8 Degraded-mode fallback (§42/§43) — a real, tested capability
+
+`EvidenceIndexRepository.ensure_schema()` does NOT raise when `CREATE
+EXTENSION vector` fails — it creates a DEGRADED table (identical exact/
+lexical columns; `embedding` stored as a plain, never-searched `TEXT`
+column) and sets `vector_available = False`. `semantic_search()` then
+returns `[]` WITHOUT executing any query, and `hybrid_retrieve`'s own
+`RetrievalTelemetry.semantic_channel_mode` reports `"degraded_no_vector_
+extension"` — EXPLICITLY, never indistinguishable from "genuinely zero
+semantic matches." This let EXACT and LEXICAL channels be validated for
+real against the actual DEV database (12 real integration tests, all
+passing) despite the confirmed extension blocker — a real capability
+this milestone's own real-stack failure forced into existence and then
+tested, not merely a theoretical allowance.
+
+### 27.9 Real end-to-end pgvector similarity search: VALIDATED
+
+Once the extension was installed (§27.7) and the real migration applied,
+a real, live, end-to-end semantic-search proof was performed against the
+real DEV database: two real `KnowledgeObject`s (one about an antenna-
+feeder VSWR fault, one about an unrelated billing-portal password reset)
+were indexed via `index_knowledge_object` using the REAL
+`VertexTextEmbeddingProvider` (real Vertex `text-embedding-005` calls,
+confirmed via a real `embedding_model="text-embedding-005"` value
+recorded on the stored row); `hybrid_retrieve` was then called with a
+query worded so differently from the indexed text that the exact and
+lexical channels contributed ZERO hits (`exact_hit_count=0`,
+`lexical_hit_count=0`), isolating the semantic channel as the ONLY
+possible source of a correct ranking. Real, captured output:
+
+```
+vector_available after ensure_schema: True
+semantic_channel_mode: executed
+exact_hit_count: 0
+lexical_hit_count: 0
+semantic_hit_count: 2
+candidates (knowledge_id, fusion_score, rerank_score):
+  PGVEC-VALIDATION-RELEVANT   0.01639  0.01639
+  PGVEC-VALIDATION-UNRELATED  0.01613  0.01613
+top result: PGVEC-VALIDATION-RELEVANT
+REAL PGVECTOR SEMANTIC SEARCH VALIDATION: PASSED
+```
+
+This is the real, live proof that a genuine `<=>` cosine-distance query
+against real stored `vector(768)` embeddings correctly ranks semantically
+related content above unrelated content, using real Vertex embeddings,
+against the real DEV Cloud SQL instance — the exact capability §27.9's
+own prior PARTIAL status was blocked on. The validation rows were
+deleted afterward (self-cleaning, no residue left in the shared schema).
+`test_hybrid_retrieval_service.py::TestRealEndToEnd::test_real_semantic_
+channel_ranks_semantically_related_content_first` (new) codifies this
+exact proof as a permanent, repeatable test.
+
+### 27.10 Milestone status: COMPLETE — with an honest, current
+operational note on role-membership volatility
+
+**6A.5 is COMPLETE.** The pgvector privilege blocker this milestone's
+own exit criteria were conditioned on — "if any required real-stack
+component cannot be validated, report PARTIAL/BLOCKED" — is resolved:
+the extension is genuinely, persistently installed, the real migration
+was genuinely applied, and real pgvector similarity search was genuinely
+validated end-to-end (§27.9), all without this codebase or session ever
+requesting, granting, or working around the privilege itself.
+
+HONEST OPERATIONAL NOTE, discovered later in the SAME milestone (not a
+reopening of the blocker, a distinct, narrower, ordinary fact): shortly
+after the validation in §27.9, this session observed that the current
+developer IAM identity's role memberships had been externally reverted
+to a bare `cloudsqliamuser` (no `slopanoc_migrator`, no `slopanoc_
+runtime`, no `cloudsqlsuperuser`) — confirmed via a fresh `pg_roles`
+query showing only `cloudsqliamuser` and the identity itself. A
+concurrently-running background regression pass's own (pre-fix) test
+teardown also dropped the just-migrated `slopanoc_knowledge_evidence_
+index` table before this reversion was noticed. As a direct, live-
+observed consequence:
+
+- The pgvector EXTENSION remains installed (confirmed again after the
+  reversion: `pg_extension.extversion = 0.8.5`) — this is a permanent
+  database-level fact, independent of which role is connected.
+- The evidence-index TABLE no longer exists on the shared DEV database
+  right now, and re-creating it (re-running `alembic upgrade head`)
+  requires `slopanoc_migrator` membership to be restored to the
+  developer identity first — an ORDINARY migration precondition
+  identical to every prior milestone's migration work (e.g. 6A.2), NOT
+  a reappearance of the pgvector-specific blocker.
+- `test_hybrid_retrieval_repository_postgres.py` and `test_hybrid_
+  retrieval_service.py::TestRealEndToEnd` were made deliberately
+  environment-adaptive as a direct result of observing this fluctuation
+  within a single session: they SKIP cleanly (never fail, never
+  fabricate) whenever schema-level DDL is currently denied, and they
+  assert full real-mode behavior whenever it is available — proven to
+  do both correctly within this same session (13 passed / 14 skipped
+  when run against the reverted state; all real-mode assertions
+  previously observed passing against the elevated state, per §27.9).
+
+CARRY-FORWARD (6A.6 precondition, not a 6A.5 blocker): before any future
+milestone performs LIVE indexing/retrieval work against the real DEV
+database, restore `slopanoc_migrator` (schema) and `slopanoc_runtime`
+(DML) membership to the developer identity, then re-run `alembic upgrade
+head` once to re-create `slopanoc_knowledge_evidence_index` — a routine
+operation, already proven to work, not a design gap.
+
+**UPDATE — this carry-forward item is now CLOSED, see §27.11**: the
+user independently restored `slopanoc_migrator`/`slopanoc_runtime`
+membership, and a dedicated corrective pass repaired the resulting
+Alembic/schema drift and re-created the table for real. §27.10's own
+"table no longer exists" statement above is a HISTORICAL record of the
+state observed at THIS point in the milestone — it is superseded, not
+retroactively edited, by §27.11.
+
+### 27.11 CORRECTIVE PASS — Schema Drift Repair, Destructive-Test-
+Teardown Defect (DEF-0018), and Final Live DEV Proof
+
+A bounded corrective pass attached to 6A.5 (not 6A.6, not a redesign of
+hybrid retrieval), triggered by the user's own independent live-DEV
+query proving genuine Alembic/physical-schema drift: `alembic_version`
+recorded `a1f3c9e07b21` as applied, but `to_regclass('public.slopanoc_
+knowledge_evidence_index')` returned `NULL` — the real table §27.10
+documented as migrated no longer existed, while Alembic's own bookkeeping
+still claimed it did.
+
+ROOT CAUSE, confirmed by direct inspection, not speculation: `test_
+hybrid_retrieval_repository_postgres.py`'s `repository` pytest fixture
+tore down with `DROP TABLE IF EXISTS slopanoc_knowledge_evidence_index`
+after EVERY test — harmless when written (the table was not yet a real
+migrated object), but destructive from the moment the real
+`a1f3c9e07b21` migration was successfully applied earlier in this same
+milestone. This is now registered as **DEF-0018** (`docs/DEFECT_
+REGISTER.md`).
+
+REPAIR SEQUENCE, each step verified live before proceeding to the next:
+1. Audited `a1f3c9e07b21`'s complete owned-object set (one table, one
+   primary key, three named indexes, one idempotent `CREATE EXTENSION
+   IF NOT EXISTS vector`) and confirmed it is a direct, single-head
+   child of `9b6df6490c0e` with no unrelated newer migration.
+2. Confirmed every migration-owned object was genuinely absent (table,
+   all three named indexes) — consistent with a physical state matching
+   `9b6df6490c0e`, never partially/ambiguously migrated.
+3. `alembic stamp 9b6df6490c0e` — bookkeeping-only, no DDL — verified
+   immediately (`alembic_version` -> `9b6df6490c0e`, table still absent,
+   pgvector still `0.8.5`, untouched).
+4. `alembic upgrade head` — the REAL migration re-ran normally, no
+   ad-hoc DDL, no manual index recreation. Verified: `alembic_version`
+   -> `a1f3c9e07b21`; `embedding` column genuinely `udt_name=vector`
+   (not `text`); `text_search_vector` genuinely `tsvector`; all three
+   named indexes plus the primary key present; all ten `NOT NULL`
+   constraints present; pgvector still `0.8.5`, untouched throughout.
+5. Fixed DEF-0018: the fixture never issues table-level DDL again.
+   Every evidence_id this file inserts now goes through a new `_eid()`
+   helper applying a module-level `_TEST_EVIDENCE_ID_PREFIX` namespace;
+   teardown is now `DELETE ... WHERE evidence_id LIKE '<prefix>%'` —
+   test-owned rows only, never the table. A new dedicated regression
+   test, `test_repository_fixture_teardown_never_drops_table_or_
+   unrelated_rows`, inserts one row OUTSIDE the prefix (simulating real,
+   permanent, unrelated data already in the shared table) and one row
+   inside it, invokes the EXACT teardown statement directly, and asserts
+   the foreign row survives, the prefixed row is gone, and the table
+   itself still exists.
+6. Real retrieval re-proven against the repaired, real table: exact
+   match, lexical/FTS, and — critically — real pgvector semantic search
+   (`test_real_postgres_semantic_search_orders_by_real_cosine_distance`,
+   hand-crafted vectors; `TestRealEndToEnd::test_real_semantic_channel_
+   ranks_semantically_related_content_first`, real Vertex embeddings) —
+   both passed against the newly-real, migrated table. The full 6A.4→6A.5
+   candidate-boundary chain (`test_hybrid_retrieval_narrowing_
+   integration.py`) and the empty-permitted-set short-circuit proof were
+   both re-run and passed unchanged.
+7. Full backend regression re-run against the repaired live database:
+   **3452 passed, 1 skipped, 2 failed** — both failures
+   (`test_p4b3_source_provenance.py::test_direct_unique_source_present_
+   and_matches_teams_contract`, `test_r1_r3_correctness_regression.py::
+   test_full_ambiguous_to_resolved_flow_call_graph`) reconfirmed, by
+   direct standalone re-run, as the SAME pre-existing, order-dependent
+   flakiness already documented across the D2/6A.4/original-6A.5
+   closures (both pass cleanly alone); a scoped diff proved this
+   corrective pass touched none of their implementation paths
+   (`backend/tools/teams/`, `backend/agents/team_manager/`, `backend/
+   api/selection_service.py`, `backend/api/read_continuation_execution
+   .py` all empty-diff).
+8. MANDATORY post-test live-DEV re-verification, performed AFTER the
+   full regression suite completed (this is the check that would have
+   caught the original DEF-0018 symptom): `alembic_version =
+   a1f3c9e07b21`; table PRESENT; row count `0` (no test residue); all
+   four indexes (three named + primary key) PRESENT; pgvector `0.8.5`;
+   role memberships unchanged (`cloudsqliamuser`/`slopanoc_migrator`/
+   `slopanoc_runtime`, no `cloudsqlsuperuser`, no IAM action taken by
+   this pass at any point).
+
+NOT DONE, per explicit instruction: no `GRANT`/`ALTER ROLE`/IAM
+modification of any kind; no retrieval-architecture change; no touch to
+Team Manager/Incident Manager/Teams/frontend/approval-write/6A.2/6A.3/
+6A.4 semantics; 6A.6 not started.
+
+**STATUS: 6A.5 / P11-M05 remains COMPLETE**, now with the schema drift
+repaired, DEF-0018 fixed and regression-tested, and a final, live,
+post-test-verified proof that the real migrated schema survives a full
+backend regression run intact. **P11-M06 (6A.6 — Context Engineering &
+Evidence Package) is NEXT — not started by this corrective pass.**
+
+## 28. Phase 6A.6 — Context Engineering & Evidence Package (additive, COMPLETE)
+
+`backend/context_engineering/` (new package: `contracts.py`,
+`assembly.py`, `fingerprint.py`, `rendering.py`) implements the
+deterministic PLATFORM CAPABILITY that converts already-trusted,
+already-computed context/evidence into one versioned, auditable
+`ContextPackage` for a FUTURE specialist reasoning layer to consume.
+**Never an agent, never an LLM call, never a second Knowledge/Case/
+TELCO-Context authority** — the package performs no reasoning of its
+own (docs/INTELLIGENCE_ARCHITECTURE.md §4).
+
+### 28.1 Pure assembly, zero I/O (§25/§56/§57)
+
+`assemble_context_package(input_: ContextPackageInput) -> ContextPackage`
+is a synchronous, side-effect-free, single-parameter function. Every
+input is data the CALLER already fetched from the real, authoritative
+source — `telco_context_state` is exactly `TelcoContextService.get_
+context_state(...)`'s own return value (6A.2); `evidence_selection` is
+exactly `evidence_selection.select_evidence(...)`'s own return value
+(6A.5); `case_context` is an already-built `CaseContextSnapshot`
+(existing Case contract). The function has NO code path to fetch any of
+these itself — no database access, no `repository.list_all()`
+equivalent, no `narrow_corpus`/`hybrid_retrieve`/`select_evidence` call
+of its own. Enforced by two independent test files: `backend/tests/
+context_engineering/test_dependency_boundary.py` (AST import-prefix
+check + real fresh-subprocess standalone-import probe, mirroring 6A.2/
+6A.4/6A.5's own established pattern — forbidding `google.adk`/
+`google.genai`/`backend.agents`/`backend.tools`/`backend.knowledge.
+narrowing`/`backend.knowledge.hybrid_retrieval.{repository,service,
+indexing,embedding}`/any SQL driver, while positively proving the ONLY
+`backend.knowledge.hybrid_retrieval` import anywhere in the package is
+`.contracts`, never the retrieval service itself) and `test_no_
+knowledge_bypass.py` (a narrower, call-level AST scan proving `assembly
+.py` never CALLS `narrow_corpus`/`hybrid_retrieve`/`select_evidence`/
+`list_all`/`evaluate_applicability`, even though `.contracts` types are
+importable).
+
+### 28.2 The `ContextPackage` contract (§7/§8/§9)
+
+Versioned via `context_schema_version` (currently `"1.0"`) — a NEW
+optional field may be added without bumping this; a field removal or
+meaning change would require a bump. Identity is expressed through
+already-legitimate fields (`owner_kind`/`owner_id`/`session_id`/
+`case_id`/`request`) — never a fabricated `package_id`; the practical,
+deterministic identity for auditability is `content_fingerprint` (§28.6).
+Fields: `telco_context: list[TelcoDimensionView]`, `case_context:
+Optional[CaseContextSnapshot]`, `operational_observations: list[
+OperationalObservation]`, `evidence: EvidencePackage`, `provenance_
+manifest: list[ProvenanceManifestEntry]`, `assembly_trace:
+AssemblyTrace`, `content_fingerprint: str`, `created_at: datetime`
+(deliberately excluded from the fingerprint — see §28.6).
+
+### 28.3 TELCO Context integration — never resolved, never guessed (§11/§12/§13)
+
+`TelcoDimensionView`/`TelcoAssertionView` are package-facing projections
+of 6A.2's own `ContextValue`/`ContextAssertion` — same `state`/
+`raw_value`/`canonical_value`/`origin`/`source_reference`/`asserted_at`
+fields, never fewer. KNOWN, UNKNOWN, CONFLICTING, and NOT_APPLICABLE all
+survive verbatim: a dimension with zero assertions is simply absent
+(never fabricated as UNKNOWN); a CONFLICTING dimension keeps every
+disputed assertion, never collapsing to one value; a MULTI-cardinality
+dimension (e.g. `ALARM`) keeps every distinct concurrent value.
+Dimensions are rendered in a stable, sorted order (by `dimension.value`)
+so repeated assembly is never at the mercy of `compute_context_state`'s
+own dict-iteration order.
+
+### 28.4 Case Context integration (§14)
+
+Accepts the ALREADY-EXISTING, already-budgeted `backend.cases.schemas
+.CaseContextSnapshot` verbatim — no parallel Case model, no re-derived
+truncation logic (`context_truncated`/`total_item_count`/`included_item_
+count` all pass through exactly as `backend.cases.snapshot.build_case_
+context_snapshot` computed them). `backend.cases.service`/`.db`/
+`.snapshot` are all on the forbidden-import list — 6A.6 never fetches or
+builds a snapshot itself.
+
+### 28.5 Evidence Package integration — SEARCH RESULT != EVIDENCE USED (§18/§19/§20/§55)
+
+`EvidencePackage`/`EvidenceItemView` are built EXCLUSIVELY from
+`ContextPackageInput.evidence_selection.selected` (6A.5's own
+`EvidenceSelectionResult`) — never the raw candidate set, never a
+re-run of retrieval. `selected_rank` preserves 6A.5's own deterministic
+reranked order (never re-sorted); `channel_scores` is a deterministically
+channel-name-sorted `{channel: raw_score}` map — a retrieval/ranking
+SIGNAL only, never a correctness probability. `source_evidence_count`/
+`derived_evidence_count` are computed from each item's own `is_derived`
+flag (never re-derived independently). No embedding vector is ever
+exposed (proven structurally: `EvidenceItemView` has no field capable of
+carrying one). Proven end to end with a real chained 6A.2→6A.4→6A.5→6A.6
+pipeline (§28.9): if 5 candidates were retrieved and 2 selected, the
+package contains exactly 2 evidence items, never 5, and never a
+candidate from an excluded/indeterminate Knowledge object.
+
+### 28.6 Deterministic assembly + content fingerprint (§26/§27/§53)
+
+`fingerprint.compute_content_fingerprint` computes a SHA-256 hex digest
+over the package's canonical JSON dump (`sort_keys=True`, compact
+separators) — excluding ONLY `created_at` and `content_fingerprint`
+itself (`_EXCLUDED_FIELDS`, proven exact by a dedicated test). Given
+identical logical `ContextPackageInput`, repeated assembly always
+produces the identical fingerprint (proven across 10 repeated calls,
+and across two inputs constructed with assertions in reversed order —
+`compute_context_state`'s own dict-iteration nondeterminism is fully
+absorbed by `assembly.py`'s own stable dimension sort, see §28.3).
+
+### 28.7 Owner isolation (§10/§50)
+
+`assemble_context_package` accepts exactly ONE `(owner_kind, owner_id)`
+pair, ONE optional case, ONE optional session per call — structurally,
+there is no parameter shape that could combine two owners' data. Proven
+behaviorally: two independently-constructed packages for two different
+sessions (or two different cases) never share a TELCO value, a case
+item, or an evidence item; a CASE-owned package never silently inherits
+an unrelated session_id.
+
+### 28.8 Rendering — faithful, deterministic, never reasoning (§28/§29/§34)
+
+`rendering.render_context_package_as_text` is a SEPARATE adapter (never
+the canonical model) producing labelled REQUEST/TELCO CONTEXT/CASE
+CONTEXT/OPERATIONAL CONTEXT/KNOWLEDGE EVIDENCE/UNCERTAINTIES/SOURCE
+MANIFEST sections. Proven, by AST source-scan, to define no function
+whose name suggests answering/inferring/recommending/resolving, and to
+import nothing agent/LLM-shaped. Per-evidence-item truncation (a
+deliberately generic, non-query-tuned per-item character budget) is
+NEVER hidden — a truncated item's own identity is always fully shown,
+and the rendered text states both the rendered and the real original
+character count.
+
+### 28.9 Controlled end-to-end 6A.2→6A.6 proof
+
+`backend/tests/context_engineering/test_end_to_end_6a2_to_6a6.py`
+chains the REAL, UNMODIFIED `compute_context_state` (6A.2) →
+`narrow_corpus` (6A.4) → `hybrid_retrieve` (6A.5) → `select_evidence`
+(6A.5) → `assemble_context_package` (6A.6), using the exact controlled
+scenario this milestone's own instruction specified: Case
+`CASE-6A6-001`, Customer Vodafone, Domain RAN, Vendor Ericsson,
+Technology LTE, Alarm VSWR, one intentionally UNKNOWN dimension
+(Release), one operational observation, one case fact, one SOURCE
+evidence item (a real, structurally-extracted section) and one DERIVED
+evidence item (a real section linked to a `KnowledgeArtifact
+(derived=True)`, exercising the REAL `resolve_is_derived` resolution,
+not a hand-set flag). Plus the two other mandatory controlled proofs:
+a CONFLICTING-vendor scenario (never resolved to one vendor) and a
+no-evidence scenario (a valid, empty-evidence package, no fallback to
+excluded Knowledge). Uses the SAME `FakeIndexRepository`/
+`FakeEmbeddingProvider` pattern `test_hybrid_retrieval_narrowing_
+integration.py` (6A.5) already established — proves the 6A.4→6A.5→6A.6
+CHAINING logic; the real-Postgres/pgvector proof itself remains 6A.5's
+own closure (§27.9), not re-proven here.
+
+### 28.10 Not implemented, by design, per explicit instruction
+
+No new Cloud SQL table/persistence (`assemble_context_package` is pure,
+in-process, ephemeral — every input is already persisted elsewhere);
+no Skills (6A.7); no Experience Memory (6A.8); no Troubleshooting
+Manager (6A.9); no dual-specialist orchestration (6A.10); no Phase 7
+troubleshooting loop; no invented confidence scores; no operational-
+observation COLLECTION mechanism (the `OperationalObservation` contract
+is a generic, forward-compatible SLOT with no producer wired anywhere
+in this codebase — ITSM/Alarm/Topology/KPI/Change/Handover connectors,
+P13/5.2–5.7, remain the future sources); no live wiring into Incident
+Manager, Team Manager, or the `knowledge_search`/`knowledge_select_
+evidence` tools (that live-wiring is explicitly future specialist-
+integration scope, 6A.9/6A.10, not 6A.6's own contract-and-assembly
+scope).
+
+### 28.11 Regression and non-regression
+
+47 new tests across 9 new test files in `backend/tests/context_
+engineering/` (dependency boundary, TELCO integration, Case integration,
+evidence integration, owner isolation, determinism/fingerprint, empty
+states, rendering, no-Knowledge-bypass, end-to-end 6A.2→6A.6) — all
+passing. Full backend regression, `npm run build`, and `git diff
+--check` results are recorded in this milestone's own closure report.
+Confirmed via empty scoped `git diff`: `backend/agents/`, `backend/
+tools/`, `backend/api/`, `src/` (frontend), and every 6A.2/6A.3/6A.4/
+6A.5 file (`backend/context/domain/`, `backend/context/sqlalchemy/`,
+`backend/knowledge/narrowing/`, `backend/knowledge/hybrid_retrieval/`)
+all remain byte-for-byte untouched by this milestone.
+
+**STATUS: 6A.6 / P11-M06 is COMPLETE.** See CLAUDE.md's own 6A.6 closure
+section for the full narrative.
+
+## 29. Phase 6A.7 — Skills Framework (additive, COMPLETE)
+
+`backend/skills/` (new package: `contracts.py`, `versioning.py`,
+`fingerprint.py`, `loader.py`, `registry.py`, `readiness.py`,
+`applicability.py`, `rendering.py`) implements the canonical, typed,
+deterministic **Skill** contract: a reusable operational METHODOLOGY
+("how do I perform this operational method?") — **never an agent, never
+Knowledge, never a Tool, never memory, never a free-form prompt, never a
+workflow engine, never an autonomous executor** (restating, never
+contradicting, `docs/AGENT_CONTRACT.md` §3a and `docs/INTELLIGENCE_
+ARCHITECTURE.md` §11).
+
+### 29.1 Pure, declarative, zero I/O (enforced dependency boundary)
+
+`backend/skills/` imports ONLY `backend.context.domain.enums`
+(`ContextDimension` — a type) and `backend.context_engineering.
+contracts` (`ContextPackage` — a type, for readiness/applicability
+function signatures only) — never a service/repository/database module
+of any domain, never `google.adk`/`google.genai`, never `backend.
+agents`/`backend.tools`, never `backend.knowledge.*`, never `backend.
+cases.*`. Enforced by `backend/tests/skills/test_dependency_boundary.py`
+(AST import-prefix check + a POSITIVE proof that the only permitted
+`backend.context_engineering` import is `.contracts`, never `.assembly`
++ a real fresh-subprocess standalone-import probe) and `test_no_
+execution_no_bypass.py` (a narrower call-level AST scan proving no
+module in the package calls a Knowledge/retrieval/LLM/agent-shaped
+function, writes a file, or makes a network call).
+
+### 29.2 The canonical `SkillDefinition` contract
+
+`skill_schema_version` (the CONTRACT's own structure version, currently
+`"1.0"`) is deliberately SEPARATE from `version` (the METHODOLOGY
+revision, a semantic-version string, e.g. `"1.0.0"`) — conflating the
+two was an explicit, audited risk this milestone avoided. Fields:
+`skill_id`, `version`, `lifecycle` (`ACTIVE`/`DEPRECATED` — deliberately
+NOT Knowledge's `CANDIDATE`/`APPROVED`/`ARCHIVE`, a different governed-
+artifact type with no approval workflow implemented here), `name`,
+`description`, `objective`, `applicability` (`SkillApplicability`),
+`context_requirements` (typed 6A.2 `ContextDimension` references —
+invalid values fail validation structurally, via the enum type itself),
+`requires_case_context`, `evidence_requirement` (`minimum_selected_
+items`/`requires_source_evidence`), `capability_requirements` (minimal
+symbolic identifiers, e.g. `alarms.read`, format-validated only — no
+capability registry exists or is built), `methodology` (ordered,
+non-executable `MethodologyStep`s), `expected_output`, `guardrails`,
+`metadata`. `model_config = {"extra": "forbid"}` — an unknown field
+fails closed at the pydantic layer itself.
+
+### 29.3 Semantic versioning (§18/§19/§20)
+
+Uses the `packaging` library's `Version` (promoted from an already-
+installed transitive dependency to an explicit pinned direct one — see
+`requirements.txt`) for correct ordering (`1.9.0 < 1.10.0`, never naive
+lexical string comparison, which gets this backwards). `SkillDefinition
+.version` is validated at construction time — an invalid semantic
+version fails closed immediately, never silently coerced or compared
+lexically downstream.
+
+### 29.4 Strict, fail-closed declarative loading (§13/§14/§48)
+
+Production Skill definitions are YAML, parsed via `yaml.safe_load`
+EXCLUSIVELY (`backend/skills/loader.py`) — never `yaml.load`, never a
+custom constructor capable of arbitrary object instantiation (proven by
+a dedicated AST source-scan test asserting the module calls only
+`yaml.safe_load`, and by a live test feeding a real `!!python/object/
+apply:...` payload and confirming it fails closed rather than
+executing). `load_skill_definitions_from_directory` loads in a
+DETERMINISTIC filename-sorted order (never filesystem/glob iteration
+order) and raises immediately on the first malformed file, naming its
+exact path — it never silently skips a bad file and continues.
+
+### 29.5 Deterministic registry (§45-§49)
+
+`SkillRegistry` is immutable once constructed (no `add`/`remove`
+method) — duplicate `(skill_id, version)` identity is rejected AT
+CONSTRUCTION TIME, regardless of whether the two definitions happen to
+be content-identical (never "last-loaded wins"/"first-loaded wins").
+`list_skills()` returns a stable order (sorted by `skill_id`, then
+PARSED semantic version — never lexical/insertion/filesystem order).
+`resolve_exact(skill_id, version)` always resolves an explicit historical
+reference to exactly that version if present — never silently
+substituted with a newer one; raises `SkillNotFoundError` (never returns
+`None`) on a clean lookup failure. `resolve_latest_active(skill_id)`
+selects the highest valid version among `ACTIVE` lifecycle only —
+`DEPRECATED` versions remain exact-resolvable but are excluded from this
+discovery helper, with NO automatic fallback to a `DEPRECATED` version
+merely because no `ACTIVE` one exists.
+
+### 29.6 Deterministic content fingerprint (§21/§63)
+
+Unlike 6A.6's `ContextPackage` (which has a real, volatile `created_at`
+to exclude), `SkillDefinition` is a purely declarative, static artifact
+with no timestamp field at all — the ENTIRE canonical model is
+fingerprinted. Several list fields (`context_requirements`,
+`capability_requirements`, `guardrails`, `applicability.conditions`) are
+semantically UNORDERED sets — `fingerprint.py` explicitly re-sorts them
+before serialization so declaration-order differences never change the
+fingerprint; `methodology` is re-sorted by each step's own `sequence`
+(never by list-declaration order) for the same reason, without
+discarding the one list whose order IS semantically meaningful. Proven:
+reordered-but-equivalent input produces an identical fingerprint; a
+material methodology, version, or lifecycle change produces a different
+one. For auditability/change-detection only — never authorization.
+
+### 29.7 Readiness — `ContextPackage`-aware, never guessing (§50/§53/§65)
+
+`evaluate_skill_readiness(skill, context_package, available_
+capabilities=None)` is pure and single-`ContextPackage`-scoped — no
+code path retrieves another case/session/owner to fill in missing
+context (§53's owner-isolation invariant, proven both behaviorally and
+by a source-scan test asserting no `TelcoContextService`/`CaseService`
+reference exists in `readiness.py`). Each required `ContextDimension`
+resolves to `SATISFIED` (state `KNOWN`) or `MISSING` with an explicit,
+distinct reason string (`"required context is UNKNOWN"`/`"...
+CONFLICTING"`/`"...NOT_APPLICABLE"`/`"...absent"`) — never guessed,
+never resolved by picking one assertion or the latest one. Evidence
+requirements check `ContextPackage.evidence`'s own already-computed
+`selected_evidence_count`/`source_evidence_count` — never a fresh
+retrieval call.
+
+**Capability readiness (§35/§69)**: `available_capabilities` is an
+OPTIONAL, caller-supplied `set[str] | None` — if `None`, every
+capability requirement resolves to `NOT_EVALUATED`, never silently
+`SATISFIED` and never silently `MISSING`. The OVERALL `SkillReadinessResult
+.status` is a deliberate THIRD state, `INDETERMINATE` (distinct from
+`READY`/`NOT_READY`), reserved for exactly the case where every context/
+evidence requirement is satisfied but a capability's availability was
+never supplied — an honest design choice avoiding a false `READY` or a
+false `NOT_READY` (documented explicitly, since the milestone's own
+instruction did not mandate one specific shape here).
+
+### 29.8 Applicability — typed-only, never free text (§23-§26/§66)
+
+`evaluate_skill_applicability(skill, context_package)` answers "could
+this methodology apply to this explicitly known context?" — a SMALL,
+Skill-scoped, typed dimension-VALUE match, structurally distinct from
+6A.4's own Knowledge-narrowing applicability engine (never imported,
+never duplicated — proven by the dependency-boundary test). A Skill
+declaring NO conditions is trivially `APPLICABLE`. Per-condition
+outcomes: `APPLICABLE` (a KNOWN dimension's accepted canonical value
+intersects the declared `allowed_values`), `NOT_APPLICABLE` (KNOWN but
+no intersection, or the dimension is explicitly `NOT_APPLICABLE`), or
+`INDETERMINATE` (`UNKNOWN`/`CONFLICTING`/absent — never guessed).
+Overall outcome: an explicit `NOT_APPLICABLE` on any condition wins over
+an `INDETERMINATE` one (a known incompatibility is more informative than
+an unknown); `INDETERMINATE` wins over `APPLICABLE` (never claim
+applicability while a required condition is unresolved). Proven, by a
+dedicated signature-introspection test, that the function accepts
+exactly two parameters (`skill`, `context_package`) — no free-text input
+channel exists.
+
+### 29.9 No Skill selection, no execution, no runtime capability discovery
+
+Readiness and applicability each evaluate exactly ONE, explicitly-
+referenced Skill — there is no function anywhere in `backend/skills/`
+that accepts a list of Skills to rank/recommend/select among (proven by
+a source-scan test for `rank`/`select`/`recommend`/`route`-shaped
+function names). No function executes a Skill, a methodology step, or a
+Tool (proven by a source-scan test for `execute_*`/`run_skill`/
+`invoke_*`-shaped names); no workflow/state-machine/DAG-executor/
+scheduler class exists. Capability requirements are purely declarative
+— `available_capabilities` is caller-supplied data, never discovered by
+importing Tools, querying Team Manager/Incident Manager/MCP/Graph/BMC/
+Power Automate, or inspecting a live network.
+
+### 29.10 Production Skill decision
+
+**Production Skill count: 0.** No production `*.yaml` Skill definition
+file was created anywhere in this repository — per this milestone's own
+explicit instruction, a production Skill may be added only if canonical
+architecture already establishes it or a clearly justified, immediately-
+needed reusable methodology exists; neither condition was met. The one
+example Skill (`telco.incident_evidence_review`, §67 of this milestone's
+own instruction) exists ONLY as a test fixture (`backend/tests/skills/
+test_controlled_examples.py`), explicitly documented as such — zero
+production count is a valid, deliberate outcome, not a gap.
+
+### 29.11 Regression and non-regression
+
+94 new tests across 10 new test files in `backend/tests/skills/`
+(dependency boundary, schema validation, versioning, fingerprint,
+registry, readiness, capability readiness, applicability, rendering,
+no-execution/no-bypass, controlled examples) — all passing. Full backend
+regression, `npm run build`, and `git diff --check` results are recorded
+in this milestone's own closure report. Confirmed via a real, empty
+`grep` across every agent/tool/API file: zero references to `backend.
+skills` anywhere outside `backend/skills/`/`backend/tests/skills/`
+themselves. Confirmed via empty scoped `git diff`: `backend/agents/`,
+`backend/tools/`, `backend/api/`, `src/` (frontend), and every 6A.2-6A.6
+file all remain byte-for-byte untouched by this milestone. Live DEV
+Cloud SQL state (`alembic_version`/`pgvector`/evidence-index table and
+indexes) confirmed unchanged before and after — expected, since
+`backend/skills/` contains no database code of any kind.
+
+**STATUS: 6A.7 / P11-M07 is COMPLETE.** See CLAUDE.md's own 6A.7 closure
+section for the full narrative. (HISTORICAL, as of this section's own
+closure: Phase 6A was still IN PROGRESS with P11-M08 NEXT. **Phase 6A
+[P11] has SINCE reached COMPLETE AND FROZEN status — P11-M00 through
+P11-M11 [6A.0 through 6A.11] are all COMPLETE — see `docs/INTELLIGENCE_
+ARCHITECTURE.md` §19/§20 for 6A.9/6A.10's own canonical documentation,
+CLAUDE.md's own 6A.11 closure section for the formal freeze record, and
+§30 immediately below for 6A.8's own closure.**)
+
+## 30. Phase 6A.8 — Experience Memory Foundation (additive, COMPLETE)
+
+`backend/experience_memory/` (new peer package: `domain/{enums,models,
+admission,fingerprint}.py` — pure, zero-I/O; `sqlalchemy/{models,db,
+service}.py` — the one Cloud SQL persistence boundary) implements the
+canonical **Experience Memory** contract: durable, historical,
+provenance-rich, deterministically-admitted, owner/customer-isolated
+record of "what happened in relevant previous operational cases" —
+**never Knowledge, never current Context, never a Skill, never an
+agent, never a recommendation engine, never a learning loop**.
+
+### 30.1 Trust hierarchy (never collapsed)
+
+```
+CURRENT OPERATIONAL CONTEXT (6A.2/6A.6) = current observed/asserted truth
+GOVERNED KNOWLEDGE (5.1/6A.4/6A.5)      = authoritative procedural/factual source
+EXPERIENCE MEMORY (6A.8)                = historical supporting signal only
+```
+
+Every `ExperienceRecord` carries `source_class: Literal["EXPERIENCE"] =
+"EXPERIENCE"` — a fixed literal present on every instance, so a
+downstream consumer can distinguish Experience from Governed Knowledge
+or a current-observation representation purely by inspecting this one
+field, even out of context. No code path in this package writes to
+`TelcoContextProfile`/`ContextAssertion` (6A.2), `CaseContextItemDTO`
+(Case), `KnowledgeObject` (5.1/6A.3), or `SkillDefinition` (6A.7) — a
+historical Experience never overwrites or resolves current truth.
+
+### 30.2 Pure domain, zero I/O (enforced dependency boundary)
+
+`backend/experience_memory/domain/` imports ONLY `pydantic` and its own
+sibling `domain` modules — never a SQL driver, never `google.adk`/
+`google.genai`, never `backend.agents`/`backend.tools`/`backend.skills`/
+`backend.knowledge.*`/`backend.cases.*`/`backend.context_engineering.*`.
+`backend/experience_memory/sqlalchemy/` is the ONLY module permitted to
+import SQLAlchemy/asyncpg/aiosqlite, and even there the same
+agent/LLM/Knowledge/Skill-execution import prohibition holds. Enforced
+by `backend/tests/experience_memory/test_dependency_boundary.py` (AST
+import-prefix checks for both layers + a real fresh-subprocess
+standalone-import probe + a source-text scan proving no vector/
+embedding reference of any kind anywhere in the package) and `test_no_
+execution_no_bypass.py` (call-level AST proof: no Knowledge search, no
+Skill resolution/execution, no Tool invocation, no unscoped `list_all`-
+style method).
+
+### 30.3 Deterministic admission (§20-22 of the milestone instruction)
+
+`domain/admission.py::evaluate_admission` is a pure function switching
+on the closed `ExperienceSourceOrigin` enum: 5 ALLOWED origins (observed
+case outcome, explicit case resolution, executed action result,
+validated operator feedback, trusted external system state) may
+`ACCEPT`; 9 DENIED origins (LLM speculation, generated recommendation,
+unexecuted action, unverified RCA, assistant answer, user free-form
+statement, retrieval ranking, semantic similarity, model confidence)
+always `REJECT`; the reserved `UNSPECIFIED` origin always resolves to
+`INDETERMINATE` — never silently promoted to `ACCEPT`. No LLM call
+exists anywhere in the admission path. Only `ACCEPT`ed candidates are
+ever persisted — there is no separate "candidate" table for `REJECT`/
+`INDETERMINATE` outcomes (§63: "do not create a candidate table unless
+necessary" — none was).
+
+### 30.4 Deterministic identity and idempotency (§16/§17, identity basis
+corrected TWICE — see the 6A.8 final SOURCE-NAMESPACE corrective pass,
+which supersedes the immediately prior corrective pass's own
+`source_origin`-as-namespace basis)
+
+**`source_origin` vs. `source_namespace` — two separate contracts, never
+overloaded into one field (the central correction of this final pass):**
+
+```text
+source_origin     = trust/admission classification (ACCEPT/REJECT/INDETERMINATE input)
+source_namespace  = producer/system event-ID namespace (identity/dedup/replay/provenance input)
+```
+
+`domain/fingerprint.py::compute_experience_id(owner_id, experience_type,
+source_namespace, source_event_id)` is a deterministic SHA-256 hex
+digest — the SAME four-input basis always produces the SAME
+`experience_id`, used directly as `slopanoc_experience_records
+.experience_id`'s PRIMARY KEY. **`source_origin` is deliberately EXCLUDED
+from this basis.**
+
+**Second corrective-pass finding:** the immediately prior pass's basis
+(`owner_id`+`experience_type`+`source_origin`+`source_event_id`) was
+itself re-audited and found to conflate trust classification with
+producer identity — `source_origin` is a small, closed, trust-tier enum
+(5 allowed + 9 denied + 1 unspecified member), never designed to
+distinguish, say, "BMC" from "Alarm Platform" (two different real
+producer systems that could both legitimately be classified
+`TRUSTED_EXTERNAL_SYSTEM_STATE`, yet must never collide merely because
+they share that classification and happen to reuse the same literal
+`source_event_id`). A new field, `source_namespace: str` (§5: validated
+against `^[a-z][a-z0-9_.-]*$`, required, non-blank, e.g. `"bmc"`,
+`"teams"`, `"onefm"`, `"enm"` — illustrative only, never a hardcoded
+product taxonomy, never silently derived from `source_origin`), was
+added to `ExperienceCandidate`/`ExperienceRecord` and to the persisted
+schema (§30.10.1 below) as the genuine namespace component. Case's own
+`SourceType` was re-audited and confirmed NOT reusable (a closed,
+small, Case-specific enum describing who/what authored a Case context
+item — a different concern — and importing it would violate Experience
+Memory's own established dependency boundary, which forbids
+`backend.cases` imports). Source timestamps remain, as always, NEVER
+part of this basis (not collision-safe).
+
+**Identity deliberately tracks the producer EVENT, not the admission
+classification of any one submission:** two candidates sharing
+`owner_id`+`experience_type`+`source_namespace`+`source_event_id` but
+asserting a DIFFERENT `source_origin` resolve to the SAME
+`experience_id` — audited, no proven reason found to make trust
+classification part of identity (a later, differently-classified
+resubmission of the same real-world event is treated as the same
+event, not a second historical record).
+
+`ExperienceMemoryService.record_experience` checks for an existing row
+with that identity BEFORE inserting; a repeated write of the exact same
+source identity (owner + type + namespace + event id) returns the
+existing record (`deduplicated=True`) rather than creating a duplicate
+— no separate UNIQUE constraint is needed. Proven both at the pure-
+function level, via the real service (SQLite), and end to end against
+the live Cloud SQL DEV table:
+- Cross-namespace collision impossible: `test_corrective_pass_cross_
+  namespace_same_event_id_never_collides` / `test_corrective_pass_
+  cross_namespace_same_event_id_persists_two_records` / `test_real_
+  postgres_corrective_pass_cross_namespace_same_event_id_two_distinct_
+  records`.
+- Same-namespace idempotency: `test_corrective_pass_same_full_source_
+  identity_is_idempotent` / `test_corrective_pass_same_full_source_
+  identity_written_twice_is_idempotent` / `test_real_postgres_
+  corrective_pass_same_full_source_identity_idempotent`.
+- `source_origin` independence (same origin, different namespace, same
+  event id → still distinct): `test_corrective_pass_source_origin_
+  independence` / `test_corrective_pass_source_origin_independence_via_
+  service` / `test_real_postgres_corrective_pass_source_origin_
+  independence`.
+- Same namespace, different origin → same producer event (same
+  `experience_id`, second write deduplicated): `test_corrective_pass_
+  same_namespace_different_origin_is_same_identity` / `test_real_
+  postgres_corrective_pass_same_namespace_different_origin_is_same_
+  event`.
+- A denied origin remains denied regardless of namespace: `test_
+  corrective_pass_denied_origin_remains_denied_regardless_of_namespace`.
+
+No existing Experience rows were affected by either identity correction
+— the live DEV table held 0 rows before this pass, immediately before
+the schema change, and after (reconfirmed by direct query each time),
+so no data migration/backfill was ever needed. Because a NEW persisted
+column (`source_namespace`) was genuinely required this time (unlike
+the prior corrective pass, which changed only the application-side hash
+inputs), ONE small, direct-child Alembic migration
+(`d3f8b1c6a942`, revising `c7e2a4f9b83d`) was authored and applied for
+real against the live Cloud SQL DEV instance — see §30.10.1. A
+SEPARATE, broader `compute_experience_content_fingerprint` hashes the
+full candidate's canonical JSON (now automatically including
+`source_namespace`, a normal candidate field) for audit/dedup-support/
+change-detection only (§43) — never used as identity or authority.
+
+### 30.5 Owner/customer isolation — query-time, never post-filtered
+(§32-34/§45; terminology corrected by the 6A.8 final corrective pass §4)
+
+**Terminology correction (§4):** `owner_id` is a LOGICAL Experience
+ownership/scope key — a deterministic string the trusted calling code
+supplies to partition Experience records (in practice, expected to be a
+canonical TELCO customer/tenant value such as "Vodafone"). This
+milestone's own repository audit found **no canonical, authenticated
+tenant identity/authorization model anywhere in this codebase yet**
+(`backend/api/identity.py::UserContext` is a development-only, single-
+header, per-request `user_id` — not a customer/tenant authorization
+boundary). 6A.8 therefore does NOT itself establish authenticated
+customer/tenant authorization — it establishes the SQL-level, query-time
+ISOLATION mechanism that a future, upstream authorization layer would
+need to bind a caller's authenticated identity to a permitted `owner_id`
+scope before that scope ever reaches this service. These are two
+DISTINCT concerns, never conflated:
+
+```text
+6A.8 (implemented):        logical owner-scope isolation at the SQL query level
+future/upstream (NOT built): authenticated authorization binding
+                              caller identity -> permitted owner_id scope(s)
+```
+
+This correction does NOT weaken the SQL filtering in any way — it only
+corrects what the filtering is claimed to guarantee. `ExperienceQuery
+.owner_id` is a structurally REQUIRED field — there is
+no way to construct a valid, unscoped query. Every method on
+`ExperienceMemoryService` (`get_by_id`, `query`, `invalidate`) adds
+`ExperienceRecordTable.owner_id == owner_id` to the SQL `WHERE` clause
+itself, before the database ever executes it — never a Python
+post-filter over an unscoped result set. There is no `list_all()`
+method (§44/§80). A record belonging to a different owner is
+indistinguishable from "does not exist" (`get_by_id`/`invalidate` both
+return `None`) — anti-enumeration, matching this codebase's existing
+attachment/session lookup convention. Proven, at the real PostgreSQL
+level, by `backend/tests/experience_memory/test_experience_memory_
+postgres.py::test_real_postgres_cross_owner_exclusion_at_sql_level`,
+which issues a raw `SELECT owner_id FROM slopanoc_experience_records
+WHERE owner_id = :owner` and proves the result set for one owner never
+contains a row belonging to another, even as an intermediate result.
+
+### 30.6 Provenance without duplication (§25-29; §12 of the final
+source-namespace corrective pass)
+
+`ExperienceCandidate`/`ExperienceRecord` carry stable REFERENCES only —
+`source_namespace` (the producer/system namespace, persisted as real,
+independently inspectable provenance — never only inside the
+`experience_id` hash where it could not later be read back; proven by
+`test_real_postgres_source_namespace_survives_round_trip`), `case_id`
+(the canonical Case identifier, never a Case snapshot copy),
+`context_fingerprint` (a plain `str` pointer to a 6A.6 `ContextPackage
+.content_fingerprint`, never the full `ContextPackage`), `skill_id`/
+`skill_version`/`skill_fingerprint` (the EXACT Skill identity — a
+`model_validator` fails closed if `skill_id` is set without
+`skill_version`, so "latest Skill" can never be silently implied, per
+§28), and `evidence_references: list[ExperienceEvidenceReference]`
+(each carrying `evidence_id`/`knowledge_id`/`version_label`/
+`section_id`/`artifact_id` — plain strings, never a copy of governed
+Knowledge content; at least one identifier is required per reference).
+
+### 30.7 Minimal lifecycle (§40/§41)
+
+`ExperienceLifecycle`: `ACTIVE` | `INVALIDATED` — deliberately NOT
+Knowledge's `CANDIDATE`/`APPROVED`/`ARCHIVE` (a different governed-
+artifact concern). `ExperienceMemoryService.invalidate` sets
+`lifecycle=INVALIDATED`, `invalidated_at`, `invalidation_reason` — it
+never mutates any other field, and never physically deletes the row
+(history is not rewritten). Default `query()` retrieval excludes
+`INVALIDATED` records unless `include_invalidated=True` is explicitly
+set.
+
+### 30.8 Structured, bounded, deterministic retrieval (§36/§45/§46/§53)
+
+`ExperienceMemoryService.query` supports only justified filters (case
+ID, experience type, Skill ID/version, source-event time range) layered
+on top of the mandatory owner scope; ordering is always `recorded_at
+DESC, experience_id ASC` (`recorded_at` is never `NULL`, unlike the
+optional `source_event_at`, making it the only field that can give a
+fully deterministic, always-available primary sort); `limit` is bounded
+(`ge=1, le=200`, default 50). An empty result (`records=[]`) is a
+completely valid, ordinary outcome — never an error, never a trigger to
+broaden scope, search another owner, or fall back to Knowledge.
+
+### 30.9 Semantic/vector retrieval — explicitly deferred (§37/§75)
+
+Even though `pgvector` (v0.8.5) is already installed and used by 6A.5's
+own `slopanoc_knowledge_evidence_index` table, `slopanoc_experience_
+records` has NO vector column, NO `pgvector` operator, NO HNSW/IVFFlat
+index, and NO Vertex embedding call anywhere — proven by a dedicated
+source-text scan (`test_no_vector_or_embedding_reference_anywhere`).
+This is a deliberate, documented deferral: semantic similar-case
+retrieval may be evaluated later, once real Experience volume and a
+real 6A.9 use case justify it — foundation first (trust, provenance,
+admission, isolation, structured retrieval), never infrastructure
+merely because it happens to already exist.
+
+### 30.10 Database schema and migration
+
+One primary table, `slopanoc_experience_records` (Alembic revision
+`c7e2a4f9b83d`, revising `a1f3c9e07b21` — the correct, single, current
+head at the time this migration was authored), plus 5 indexes each
+justified against an actual retrieval pattern this milestone implements
+(`ix_experience_owner`; `ix_experience_owner_case`; `ix_experience_
+owner_type`; `ix_experience_owner_skill`; `ix_experience_owner_
+recorded_at`). No supporting/candidate table was added (§10's own
+"prefer the smallest schema" — the audit found none justified: rejected/
+indeterminate candidates are never persisted at all). Bounded, per-
+record structures (evidence references, observed facts, metadata) are
+stored as JSON text columns on the same row, consistent with this
+codebase's existing convention of a JSON payload column for bounded
+per-record structured data. `alembic/env.py`'s `target_metadata` was
+extended with `ExperienceMemoryBase.metadata` (mirroring the identical
+fix 6A.2 already made for its own new tables) — the same edit also
+corrected two pre-existing, stale docstring omissions (6A.2's and
+6A.5's own `Base.metadata` additions had never been documented in that
+docstring's own module-level comment list, despite already being wired
+into `target_metadata` since their own milestones).
+
+### 30.10.1 Corrective migration — `source_namespace` (final source-
+namespace corrective pass)
+
+`alembic/versions/d3f8b1c6a942_experience_records_source_namespace.py`
+— a single, small, direct-child migration (`down_revision =
+'c7e2a4f9b83d'`) adding exactly one column: `source_namespace VARCHAR
+NOT NULL`, no default, no new index (identity computation reads this
+column application-side, not via a database query, and no retrieval
+requirement currently justifies an index on it — §27 of that pass's
+own instruction). Safe without a backfill because the live DEV table
+was verified, by direct query, to hold **0 rows** immediately before
+this migration was authored and again immediately before it was
+applied — reconfirmed a third time immediately after, still 0.
+`c7e2a4f9b83d` itself was NOT edited (§14/§16 of that pass's own
+instruction: never silently edit an already-applied migration and
+pretend the live schema changed with it) — the live schema now sits at
+`d3f8b1c6a942`, one clean step ahead, with a single linear Alembic
+chain (`alembic heads` confirmed exactly one head both before and
+after). Applied via the corrected in-process-environment-variable
+strategy (§30.11 below) directly against the live Cloud SQL DEV
+instance — never via SQLite. Downgrade (`DROP COLUMN source_namespace`)
+was verified by direct code review of the migration's own symmetric
+`upgrade()`/`downgrade()` pair, never exercised destructively against
+shared DEV.
+
+### 30.11 Migration-test target-isolation finding (OPS-0001)
+
+An attempt to validate this migration's upgrade/downgrade behavior
+against an isolated SQLite scratch file, via `alembic.config.Config
+.set_main_option("sqlalchemy.url", ...)`, was found NOT to work:
+`alembic/env.py`'s `_resolved_database_url()` unconditionally calls
+`get_settings().resolve_database_url()`, by deliberate, pre-existing
+design — it never reads the `Config` object's own URL at all. This
+caused a migration-chain test to run, briefly and harmlessly, against
+the real local development file `./slopanoc_sessions.db` (see `docs/
+DEFECT_REGISTER.md` OPS-0001 for the full incident/recovery record — a
+byte-for-byte backup was taken and verified before a bounded,
+authorized cleanup fully restored the file to its exact prior state;
+ADK's own session data was never at risk, since Alembic never manages
+those tables). The CORRECTED strategy — used for this migration's real
+validation — sets `SLOPANOC_DATABASE_URL` in the test PROCESS's own
+environment (the one input `resolve_database_url()` actually honors),
+pointed at the real Cloud SQL DEV instance via the already-running
+Cloud SQL Auth Proxy: `alembic upgrade head` was applied for real
+(never a destructive `downgrade` against shared state), the resulting
+schema was introspected column-by-column against the migration's own
+DDL, and a dedicated real-PostgreSQL integration test suite (`backend/
+tests/experience_memory/test_experience_memory_postgres.py`, 9 tests)
+validated the full write/read/idempotency/isolation/provenance/
+retrieval contract against that real table — cleaning up only its own
+namespaced synthetic rows (`DELETE ... WHERE owner_id LIKE
+'slopanoc-test-experience-memory-%'`), never a table-level DDL
+statement, applying the DEF-0018 lesson from the very first version of
+this file rather than rediscovering it.
+
+### 30.12 Production writer/consumer decision
+
+**Production Experience writers = 0.** No current SLOPANOC event
+(Case resolution, executed write action, operator feedback) is
+automatically wired to call `record_experience` — per the milestone's
+own explicit instruction, a zero-producer foundation is a valid,
+deliberate outcome; inventing a producer merely to demonstrate
+functionality was avoided. **Production specialist consumers = 0.** No
+route from Team Manager, Incident Manager, or Context Engineering into
+`backend/experience_memory/` exists — confirmed by a real, empty `grep`
+for `backend.experience_memory`/`backend/experience_memory` anywhere
+outside the package's own two directories. 6A.9 owns wiring either a
+producer or a consumer; this milestone establishes only the reusable
+capability both would depend on.
+
+### 30.13 Regression and non-regression
+
+**Fresh, exact count after the final source-namespace corrective pass:
+115 tests across 7 test files** in `backend/tests/experience_memory/`
+(contracts 38, admission 21, fingerprint 16, dependency boundary 6,
+no-execution/no-bypass 5, service-SQLite 15 — 101 fast/isolated tests —
+plus a real PostgreSQL integration file, 14 tests) — all passing, the
+real-PostgreSQL subset run against the live Cloud SQL DEV instance
+after the corrective migration was applied. Full backend regression,
+`npm run build`, and `git diff --check` results are recorded in this
+milestone's own final closure report. Confirmed via empty scoped `git
+diff`: `backend/agents/`, `backend/tools/`, `backend/api/`, `src/`
+(frontend), and every 6A.2–6A.7 file all remain byte-for-byte untouched
+by every one of this milestone's three passes. Live DEV Cloud SQL
+state: `alembic_version` now at `d3f8b1c6a942` (the corrective
+migration's own revision, a direct child of `c7e2a4f9b83d`);
+`pgvector`/6A.5 evidence table and its 4 indexes unchanged throughout.
+
+**STATUS: 6A.8 / P11-M08 is COMPLETE.** See CLAUDE.md's own 6A.8
+closure sections for the full narrative, including the migration-test
+incident/recovery record and both identity corrective passes.
+(HISTORICAL, as of this section's own closure: Phase 6A was still IN
+PROGRESS with P11-M09 NEXT. **Phase 6A [P11] has SINCE reached COMPLETE
+AND FROZEN status — P11-M00 through P11-M11 [6A.0 through 6A.11] are
+all COMPLETE, including 6A.9 [Troubleshooting Manager & Intelligence
+Assembly] and 6A.10 [Dual-Specialist Orchestration] — see
+`docs/INTELLIGENCE_ARCHITECTURE.md` §19/§20 for their own canonical
+documentation, and CLAUDE.md's own 6A.11 closure section for the formal
+freeze record.**)

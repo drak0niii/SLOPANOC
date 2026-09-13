@@ -79,10 +79,15 @@ def extract_root_document(data: bytes, *, budget: ExtractionBudget, display_name
 
         return extract_docx(data, container_artifact_id=None, depth=0, budget=budget)
     if kind == "xlsx":
-        return extract_xlsx(data, container_artifact_id="root", depth=0, budget=budget)
+        # container_artifact_id=None -- this XLSX IS the root document
+        # (mirrors the DOCX branch above). 6A.3 / P11-M03 FIX: this
+        # previously passed the literal string "root", which is not a
+        # real artifact_id -- see extract_xlsx's own docstring.
+        return extract_xlsx(data, container_artifact_id=None, depth=0, budget=budget)
     if kind == "pdf":
         try:
-            return extract_pdf(data, container_artifact_id="root", depth=0, budget=budget)
+            # Same fix as the XLSX branch above -- see extract_pdf's own docstring.
+            return extract_pdf(data, container_artifact_id=None, depth=0, budget=budget)
         except EncryptedPdfError as exc:
             raise EncryptedDocumentError(str(exc)) from exc
 

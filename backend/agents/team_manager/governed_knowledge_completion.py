@@ -76,6 +76,63 @@ Content, exactly mirroring `MultimodalAgentTool`'s own "text part first,
 then trusted image parts, in order" construction. A text-only turn passes
 an empty sequence and this remediation's `Content` is byte-identical to
 before this pass -- zero behavior change for the non-multimodal case.
+
+6A.14 ACTIVE PROCEDURE CONTINUITY CORRECTION -- a real, live-observed
+follow-up-question failure DIFFERENT from (and downstream of) DEF-0026's
+own fix below: "how do i handle HW Partial Fault?" correctly selected
+both the active "HW Partial Fault" section and a merely SUPPORTING
+sibling "HW Fault" section; the follow-ups "it's an RRU" and, more
+strikingly, the exact repeated heading "HW Partial Fault" both still
+produced "Do you mean the HW Partial Fault or HW Fault procedure?" --
+DEF-0026's own `len(effective_candidates) > 1` ambiguity short-circuit
+below fired unconditionally, without ever checking whether the CURRENT
+turn's own text, the CURRENT validated `RequestContract.subject`, or an
+already-established prior active-procedure anchor could deterministically
+narrow the SAME two candidates down to one. This function now accepts two
+further parameters -- `active_anchor` (an unrevalidated, previously
+persisted `KnowledgeEvidenceSelectionKey`, revalidated here exactly like
+`prior_governed_evidence` already is) and `request_contract_subject` (the
+CURRENT turn's own already-provenance-verified 6A.13 `RequestContract
+.subject`, never a raw/unverified model claim) -- and, ONLY when more than
+one candidate survives the pre-existing revalidation/override logic below,
+attempts `governed_evidence_continuity.resolve_active_candidate_among_
+ambiguous` BEFORE falling back to the ambiguous clarification. See that
+function's own docstring, and `governed_evidence_continuity.py`'s own
+module-level "6A.14 ACTIVE PROCEDURE CONTINUITY CORRECTION" section, for
+the full precedence design. DEF-0026's own revalidation/override/
+ambiguity-clarification machinery is otherwise completely unmodified.
+
+DEF-0026 CORRECTIVE PASS -- GOVERNED KNOWLEDGE FOLLOW-UP IDENTITY
+CONTINUITY: a real, live-observed follow-up-question failure
+(`"give me the first cmd"` after a genuinely successful VSWR-scoped
+turn) traced to exactly this function's own `question` argument, which
+`chat_service.py`'s `_remediation_question` always built from the raw
+current-turn text alone -- with no way to recover which governed
+procedure the conversation had just been discussing. See `backend/api/
+governed_evidence_continuity.py`'s own module docstring for the full
+design (revalidation, deduplication/ambiguity, the structural "explicit
+topic change must win" check). This function now accepts `prior_
+governed_evidence` -- zero or more previously-selected `KnowledgeEvidence
+SelectionKey`s the CALLER already read from durable session state (this
+module never reads session state itself). When exactly one of them
+survives real-time revalidation AND the current `question` does not
+itself name a different, real sibling procedure, the underlying
+incident_manager call is scoped with a deterministic, identity-derived
+question augmentation instead of the bare original text -- still a REAL
+`knowledge_search`/`knowledge_select_evidence` round trip, SEARCH RESULT
+!= EVIDENCE USED unchanged. More than one surviving, DISTINCT prior
+identity is genuinely ambiguous and short-circuits to a deterministic
+clarification WITHOUT ever invoking incident_manager. Zero valid prior
+identity (the pre-existing, still-supported case) runs the exact same
+unscoped path this function already had -- the only difference is a
+more useful, still 100%-deterministic failure clarification in place of
+the flat `SAFE_COMPLETION_FAILURE_TEXT` whenever the underlying problem
+may be a missing procedure identity, per instruction. `enforce_
+procedure_scoped_command_grounding` (DEF-0024, incident_manager/
+evidence.py) is completely unmodified and untouched by this pass -- the
+two safeguards are complementary: this one keeps the CORRECT procedure
+selected; that one keeps any COMMAND grounded in whatever procedure was
+actually selected.
 """
 from __future__ import annotations
 
@@ -88,10 +145,23 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 from backend.agents.incident_manager.schemas import IncidentManagerOutcome, IncidentManagerResponse
+from backend.api.governed_evidence_continuity import (
+    GENERIC_MISSING_PROCEDURE_CLARIFICATION,
+    build_ambiguous_procedure_clarification,
+    build_scoped_failure_clarification,
+    build_scoped_remediation_question,
+    detect_explicit_sibling_topic_override,
+    resolve_active_candidate_among_ambiguous,
+    revalidate_prior_governed_evidence,
+)
 from backend.api.session_service import APP_NAME
 from backend.api.turn_context import bind_run_id, reset_run_id
-from backend.knowledge.provenance.contracts import KnowledgeEvidenceItem
-from backend.tools.knowledge.runtime import discard_knowledge_run_evidence_state, snapshot_selected_knowledge_evidence
+from backend.knowledge.provenance.contracts import KnowledgeEvidenceItem, KnowledgeEvidenceSelectionKey
+from backend.tools.knowledge.runtime import (
+    discard_knowledge_run_evidence_state,
+    get_knowledge_repository,
+    snapshot_selected_knowledge_evidence,
+)
 
 _logger = logging.getLogger(__name__)
 _perf_logger = logging.getLogger("backend.perf")
@@ -117,12 +187,21 @@ never derived from team_manager's own discarded, unproven answer text.
 
 
 async def enforce_governed_knowledge_at_completion(
-    *, question: str, chat_topic: Optional[str], run_id: str, image_parts: Sequence[types.Part] = ()
+    *,
+    question: str,
+    chat_topic: Optional[str],
+    run_id: str,
+    image_parts: Sequence[types.Part] = (),
+    prior_governed_evidence: Sequence[KnowledgeEvidenceSelectionKey] = (),
+    active_anchor: Optional[KnowledgeEvidenceSelectionKey] = None,
+    request_contract_subject: Optional[str] = None,
 ) -> tuple[str, list[KnowledgeEvidenceItem]]:
     """Runs the real `incident_manager` (full toolset, unmodified) exactly
     once, deterministically, with `requires_governed_knowledge=True` --
-    see this module's own docstring for the full rationale. Returns
-    `(final_text, selected_evidence)`:
+    see this module's own docstring for the full rationale, and `backend/
+    api/governed_evidence_continuity.py`'s own docstring for the DEF-0026
+    scoping/ambiguity/revalidation design this function now applies
+    BEFORE that one real call. Returns `(final_text, selected_evidence)`:
 
       - `outcome in ("ok", "no_result")`: `final_text` is incident_
         manager's own validated `summary` (schema-checked prose,
@@ -131,11 +210,18 @@ async def enforce_governed_knowledge_at_completion(
         outcomes here), `selected_evidence` is whatever this call's own
         run genuinely selected (may legitimately be empty for a
         zero-evidence "not found" case).
+      - Genuinely ambiguous prior governed evidence (DEF-0026): a
+        deterministic clarification listing only real, governed section
+        headings/titles is returned WITHOUT incident_manager ever being
+        invoked for this call -- `selected_evidence` is `[]`.
       - Anything else (a genuine gateway/validation failure, or
         incident_manager's OWN compliance retry exhausting itself and
-        returning `outcome="error"`): `final_text` is `SAFE_COMPLETION_
-        FAILURE_TEXT`, `selected_evidence` is `[]` -- deterministic safe
-        failure (Section C), never team_manager's own discarded answer.
+        returning `outcome="error"`): `final_text` is a deterministic
+        failure clarification (DEF-0026: naming the real procedure this
+        attempt was scoped to, when one existed, else `GENERIC_MISSING_
+        PROCEDURE_CLARIFICATION`), `selected_evidence` is `[]` --
+        deterministic safe failure (Section C), never team_manager's own
+        discarded answer.
 
     `image_parts` -- B7 corrective pass: the SAME trusted `file_data`
     Part(s) this turn's original delegation already had (see this module's
@@ -147,10 +233,112 @@ async def enforce_governed_knowledge_at_completion(
     for a text-only turn -- `content` is then byte-identical to before
     this pass.
 
+    `prior_governed_evidence` -- DEF-0026: zero or more previously-
+    selected `KnowledgeEvidenceSelectionKey`s the caller already read from
+    durable session state (`LAST_SELECTED_GOVERNED_EVIDENCE_STATE_KEY`).
+    This function revalidates them in real time before using any of them
+    for anything -- see `revalidate_prior_governed_evidence`.
+
+    `active_anchor` -- 6A.14: the single, previously-persisted
+    `ACTIVE_GOVERNED_PROCEDURE_STATE_KEY` identity, if any, the caller
+    already read from durable session state. Revalidated here exactly
+    like `prior_governed_evidence` before being trusted for anything.
+    Used ONLY (a) to narrow a genuinely ambiguous multi-candidate set down
+    to one, as the lowest-precedence of three deterministic narrowing
+    signals (see `governed_evidence_continuity.resolve_active_candidate_
+    among_ambiguous`), and (b) as the sole scoping candidate when the
+    ordinary `prior_governed_evidence` list revalidates to zero surviving
+    candidates but this anchor is still independently valid.
+
+    `request_contract_subject` -- 6A.14: the CURRENT turn's own already
+    provenance-verified 6A.13 `RequestContract.subject` (never a raw,
+    unverified model claim -- the caller is responsible for having already
+    run it through `validate_and_persist_request_contract`'s own
+    provenance re-verification and for confirming its `run_id` matches
+    the CURRENT run before passing it here). Used only as the second of
+    three deterministic narrowing signals, per the same function.
+
     Never raises for an expected failure shape -- an unexpected exception
     from the nested Runner itself is allowed to propagate, exactly like
     every other nested-Runner call in this codebase (the caller,
     chat_service.py, already has its own top-level safe-error handling).
+    """
+    revalidated = await revalidate_prior_governed_evidence(prior_governed_evidence, get_knowledge_repository())
+    override_heading = detect_explicit_sibling_topic_override(question, revalidated)
+    effective_candidates = [] if override_heading is not None else revalidated
+    if override_heading is not None:
+        _logger.info(
+            "governed_knowledge_completion: explicit sibling topic override detected (%r) -- "
+            "ignoring prior governed evidence identity for this remediation run_id=%s",
+            override_heading,
+            run_id,
+        )
+
+    # 6A.14 Active Procedure Continuity Correction: only consulted when an
+    # explicit sibling-topic override did NOT already fire above (a real
+    # topic change must still win outright, exactly as before this pass)
+    # and the pre-existing candidate set itself needs help -- either it is
+    # genuinely ambiguous (more than one candidate), or it revalidated to
+    # nothing at all but a separately-tracked active anchor may still be
+    # usable. Revalidating a single-key list reuses `revalidate_prior_
+    # governed_evidence` verbatim -- no second revalidation algorithm.
+    active_candidate = None
+    if override_heading is None and len(effective_candidates) != 1 and active_anchor is not None:
+        revalidated_active = await revalidate_prior_governed_evidence([active_anchor], get_knowledge_repository())
+        active_candidate = revalidated_active[0] if revalidated_active else None
+
+    if override_heading is None and len(effective_candidates) > 1:
+        resolved = resolve_active_candidate_among_ambiguous(
+            question=question,
+            request_contract_subject=request_contract_subject,
+            candidates=effective_candidates,
+            active_anchor=active_candidate,
+        )
+        if resolved is not None:
+            _logger.info(
+                "governed_knowledge_completion: deterministically narrowed an ambiguous prior-evidence "
+                "candidate set to one active procedure run_id=%s",
+                run_id,
+            )
+            effective_candidates = [resolved]
+        else:
+            _perf_logger.info("perf stage=governed_knowledge_completion_remediation_ambiguous_prior_evidence run_id=%s", run_id)
+            return build_ambiguous_procedure_clarification(effective_candidates), []
+    elif override_heading is None and len(effective_candidates) == 0 and active_candidate is not None:
+        effective_candidates = [active_candidate]
+
+    scoped_procedure = effective_candidates[0] if len(effective_candidates) == 1 else None
+    effective_question = build_scoped_remediation_question(question, scoped_procedure) if scoped_procedure is not None else question
+
+    validated, selected_evidence = await _run_incident_manager_remediation_once(
+        question=effective_question, chat_topic=chat_topic, run_id=run_id, image_parts=image_parts
+    )
+
+    if validated is not None and validated.get("outcome") in (IncidentManagerOutcome.OK.value, IncidentManagerOutcome.NO_RESULT.value):
+        summary = validated.get("summary") or validated.get("detail")
+        if summary:
+            _perf_logger.info("perf stage=governed_knowledge_completion_remediation_ok run_id=%s", run_id)
+            return summary, selected_evidence
+
+    _logger.warning(
+        "governed_knowledge_completion: remediation did not produce a usable governed answer run_id=%s", run_id
+    )
+    _perf_logger.info("perf stage=governed_knowledge_completion_remediation_failed run_id=%s", run_id)
+    if scoped_procedure is not None:
+        return build_scoped_failure_clarification(scoped_procedure), []
+    return GENERIC_MISSING_PROCEDURE_CLARIFICATION, []
+
+
+async def _run_incident_manager_remediation_once(
+    *, question: str, chat_topic: Optional[str], run_id: str, image_parts: Sequence[types.Part]
+) -> tuple[Optional[dict[str, Any]], list[KnowledgeEvidenceItem]]:
+    """The exact, unmodified-in-substance Runner-invocation mechanism this
+    module has always used -- extracted verbatim (DEF-0026) so the outer
+    function above can apply its scoping/ambiguity decision BEFORE
+    deciding whether, and with what question text, to make this one real
+    call. Returns `(validated_response_dict_or_None, selected_evidence)`
+    -- never raises for an expected failure shape (schema-validation
+    failure becomes `None`, exactly as before).
     """
     from backend.agents.incident_manager.agent import incident_manager
     from backend.agents.incident_manager.schemas import IncidentManagerRequest
@@ -194,18 +382,7 @@ async def enforce_governed_knowledge_at_completion(
                 validated = None
 
         selected_evidence = snapshot_selected_knowledge_evidence(run_id)
-
-        if validated is not None and validated.get("outcome") in (IncidentManagerOutcome.OK.value, IncidentManagerOutcome.NO_RESULT.value):
-            summary = validated.get("summary") or validated.get("detail")
-            if summary:
-                _perf_logger.info("perf stage=governed_knowledge_completion_remediation_ok run_id=%s", run_id)
-                return summary, selected_evidence
-
-        _logger.warning(
-            "governed_knowledge_completion: remediation did not produce a usable governed answer run_id=%s", run_id
-        )
-        _perf_logger.info("perf stage=governed_knowledge_completion_remediation_failed run_id=%s", run_id)
-        return SAFE_COMPLETION_FAILURE_TEXT, []
+        return validated, selected_evidence
     finally:
         discard_knowledge_run_evidence_state(run_id)
         reset_run_id(run_id_token)

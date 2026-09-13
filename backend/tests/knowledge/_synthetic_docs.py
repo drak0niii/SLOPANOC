@@ -74,6 +74,34 @@ def make_minimal_xlsx(sheets: dict[str, list[list[object]]]) -> bytes:
     return buffer.getvalue()
 
 
+def make_minimal_xlsx_with_table(sheet_name: str, header: list[object], rows: list[list[object]], *, table_name: str = "SyntheticTable") -> bytes:
+    """A workbook with exactly one sheet declaring one real, native Excel
+    Table (openpyxl's own `Table`/`TableStyleInfo`, the same object a
+    real "Insert > Table" in Excel produces) covering `header` + `rows`.
+    Distinct from `make_minimal_xlsx`, which never declares a Table --
+    used to test 6A.3's native-table extraction path specifically.
+    """
+    import openpyxl
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.table import Table, TableStyleInfo
+
+    workbook = openpyxl.Workbook()
+    workbook.remove(workbook.active)
+    worksheet = workbook.create_sheet(sheet_name)
+    worksheet.append(header)
+    for row in rows:
+        worksheet.append(row)
+    last_column_letter = get_column_letter(len(header))
+    last_row = 1 + len(rows)
+    table_ref = f"A1:{last_column_letter}{last_row}"
+    table = Table(displayName=table_name, ref=table_ref)
+    table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True)
+    worksheet.add_table(table)
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
 def make_minimal_docx(
     *,
     heading: str = "Synthetic Procedure",
