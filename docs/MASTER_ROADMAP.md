@@ -659,23 +659,154 @@ point where THIS POST-6A body of work can itself be declared frozen
 
 | Milestone | Scope | Done when | Status |
 | --- | --- | --- | --- |
-| **6A.12 — Conditional Command Safety** | Active-procedure command grounding, conditional commands, truthful fallbacks; DEF-0024/DEF-0026/DEF-0027 corrective work | Exact commands only, condition-aware, no wrong-procedure leakage | **IMPLEMENTED — final live closure still open** |
-| **6A.13 — Request Contract Foundation** | Typed `RequestContract`: intent, subject/procedure, requested output, knowledge/context needs, continuation, action/approval, ambiguity | Every request gets one validated structured interpretation | **COMPLETE** |
-| **6A.14 — Deterministic Request Execution** | Validate Request Contract and constrain INFORMATION / PROCEDURE / COMMAND / TROUBLESHOOTING / INVENTORY / ACTION behavior; DEF-0028/DEF-0029/DEF-0030 corrective work | Downstream execution cannot override validated request meaning or safety constraints | **IMPLEMENTED — live acceptance still open** |
-| **6A.15 — Support Classification Contract** | Deterministic SUPPORTED / PARTIALLY_SUPPORTED / UNSUPPORTED / AMBIGUOUS handling | System clearly states what is supported, partial, unsupported, or requires clarification | **NOT STARTED** |
-| **6A.16 — Hybrid Evidence Production Path** | Close DEF-0023: production population/reconciliation of Troubleshooting Manager's Evidence index | Approved Knowledge → sparse lexical + dense vector → fusion → deterministic reranking → live evidence | **NOT STARTED — DEF-0023 OPEN** |
-| **6A.17 — Specialist Routing Alignment** | Route from Request Contract: Incident Manager vs. Troubleshooting Manager vs. Action path | "how do I troubleshoot X?" reliably reaches Troubleshooting Manager when its evidence path is production-ready | **NOT STARTED** |
-| **6A.18 — Knowledge Inventory / Catalog** | Close DEF-0025 with deterministic governed Knowledge enumeration | "what MOPs do you have?" returns catalog/inventory rather than semantic-search results | **NOT STARTED — DEF-0025 OPEN** |
+| **6A.12 — Conditional Command Safety** | Active-procedure command grounding, conditional commands, truthful fallbacks; **DEF-0024, DEF-0026, and DEF-0027** corrective work (never described as closing only DEF-0027) | Exact commands only, condition-aware, no wrong-procedure leakage | **IMPLEMENTED — final live closure still open**; LIVE-CORR-1 attached three further confirmed gaps at this same boundary without reopening this status, subsequently addressed by LIVE-CORR-3: DEF-0040 **FIXED** (embedded-operational-content detection + response-mode compatibility enforcement — see `docs/DEFECT_REGISTER.md`), DEF-0041 **instrumentation added, STATUS REMAINS OPEN** (safe, non-behavior-changing logging now traces every grounding decision; the live runtime discrepancy itself was not isolated in this pass), DEF-0042 unchanged/OPEN (skipped prerequisite steps + a factually incorrect "no command specified" claim — a model-reasoning/source-fidelity capability gap, explicitly out of LIVE-CORR-3's own scope) |
+| **6A.13 — Request Contract Foundation** | Typed `RequestContract`: intent, subject/procedure, requested output, knowledge/context needs, continuation, action/approval, ambiguity | Every request gets one **validated** (deterministically provenance-checked, never merely model-produced) typed structured interpretation | **COMPLETE** — real, confirmed corrective defects are attached to this boundary without reopening this COMPLETE status, the same relationship DEF-0024/0026/0027 have to 6A.12: DEF-0034 (negation-blind provided_context verification, still OPEN), and DEF-0038 (`required_target_parameter_gaps` non-monotonicity — LIVE-CORR-2 implemented a bounded, fail-closed interim fix; **PARTIALLY FIXED**, full step-aware precision remains a later milestone's scope, see `docs/DEFECT_REGISTER.md`) |
+| **6A.14 — Deterministic Request Execution** | Validate Request Contract and constrain INFORMATION / PROCEDURE / COMMAND / TROUBLESHOOTING / INVENTORY / ACTION behavior; DEF-0028/DEF-0029/DEF-0030 corrective work | Downstream execution cannot override validated request meaning or safety constraints | **IMPLEMENTED — live acceptance still open**; LIVE-CORR-2 (Request & Context Policy Correction) implemented and regression-tested three defects LIVE-CORR-1 confirmed at this boundary, WITHOUT reopening this status (live browser acceptance remains open regardless): DEF-0037 **FIXED** (an ordinary conversational INFORMATION request with no subject, e.g. "hello," no longer forced through the operational "no resolved subject/procedure" gate — `INFORMATION` removed from `TARGET_SPECIFIC_INTENTS`, replaced by a two-factor `is_operationally_shaped_request` test), DEF-0039 **FIXED** (`chat_service.py` now clears `selected_knowledge_evidence` in the same place the KNOWLEDGE_INVENTORY `UNSUPPORTED_CAPABILITY` override replaces `final_text`, so no stale source/continuity-anchor survives), DEF-0043 **FIXED** (`command_suppression_fallback_text` now renders the specific, already-known `missing_context` for AMBIGUOUS status too, through a new safe-label mapping that never exposes a raw internal key name) |
+| **6A.14A — Canonical Turn Result & Projection** | Close DEF-0031: establish ONE authoritative typed turn result after all deterministic policies/guards/corrections; persist it BEFORE announcing completion; derive live SSE, refreshed history, provenance, and approved outbound handoffs from that SAME canonical result. A hardening pass additionally closed a fail-open history edge case (double persistence failure) with a positive, durable, session-level enforcement marker, and widened conflict detection from text-only to the complete normalized canonical payload | Live and refreshed assistant responses are byte-equivalent; a backend restart does not change the visible response; a policy-replaced model response cannot reappear from raw ADK history; a canonical-required turn with no valid result fails closed, never falls back to raw text; rewind removes the canonical response and its provenance together; live SSE/history/external handoffs never independently reconstruct or paraphrase protected output; focused regression + real browser acceptance pass | **IMPLEMENTED — live browser acceptance open (DEF-0031 code-fixed + hardened + regression-tested; see `docs/DEFECT_REGISTER.md`)**; LIVE-CORR-1 confirmed a DISTINCT, upstream gap this milestone's own canonical-result mechanism could not itself close, subsequently **FIXED by LIVE-CORR-3** — DEF-0044 (raw `message.delta` text no longer emitted for any turn, at all; assistant text is buffered internally and reaches the client exactly once, via `message.completed`, only after canonical persistence succeeds — see `docs/DEFECT_REGISTER.md`) |
+| **6A.15 — Capability + Evidence Support Classification** | TWO distinct, never-merged classifications: (1) CAPABILITY classification — does SLOPANOC have a supported handler/catalog/specialist/tool/action for this request at all; (2) EVIDENCE SUPPORT classification — is the SELECTED evidence sufficient for the requested conclusion/procedure/command (SUPPORTED / PARTIALLY_SUPPORTED / UNSUPPORTED / AMBIGUOUS) | System clearly states, as two separate signals, whether it CAN handle the request and whether its evidence SUPPORTS the specific answer — never one conflated post-retrieval status | **NOT STARTED** |
+| **6A.16 — Version-Safe Hybrid Evidence Production & Reconciliation** | Close DEF-0023 (production population/reconciliation of Troubleshooting Manager's Evidence index); close DEF-0032 (exact `(knowledge_id, version_label)` identity must survive narrowing → retrieval → fusion → reranking → evidence selection → provenance, never bare `knowledge_id`); close DEF-0033 (embedding freshness must be tracked independently of content-hash — retry a previously-failed embedding on unchanged content, never retain a stale vector when changed content fails to re-embed, reconcile on embedding-model/version change) | Approved Knowledge, at its exact approved version, → sparse lexical + dense vector → fusion → deterministic reranking → live evidence; an unapproved/superseded version can never re-enter merely because another version of the same `knowledge_id` is approved; missing/stale embeddings are retried/reconciled, never silently permanent; lexical-only degradation is visible, never silently presented as fully hybrid; tests cover multiple versions of the same asset | **NOT STARTED — DEF-0023, DEF-0032, DEF-0033 all OPEN** |
+| **6A.17 — Specialist Routing Alignment** | Route from Request Contract: Incident Manager vs. Troubleshooting Manager vs. Action path | "how do I troubleshoot X?" reliably reaches Troubleshooting Manager when its evidence path is production-ready AND every declared output path (including Knowledge Inventory) has a real handler | **NOT STARTED — depends on 6A.16 (evidence path) and 6A.18 (inventory path) both landing first; see the dependency-order rationale below** |
+| **6A.18 — Knowledge Inventory / Catalog** | Close DEF-0025 with deterministic governed Knowledge enumeration | "what MOPs do you have?" returns catalog/inventory rather than semantic-search results presented as though complete | **NOT STARTED — DEF-0025 OPEN** |
 | **6A.19 — Semantic Grounding Precision** | Prevent unsupported semantic qualification or meaning upgrades | Source meaning preserved exactly; no "expected," "threshold," etc. unless the governed evidence supports it | **NOT STARTED** (a distinct, not-yet-defect-numbered future concern — see the explicit DEF-0028 non-collision note below) |
-| **6A.20 — Multimodal Evidence Contract** | Images/screenshots/artifacts become first-class evidence with provenance separation | System distinguishes observed image facts from governed Knowledge assertions | **NOT STARTED** |
-| **6A.21 — Tool / Action Contract** | Standardize READ vs. WRITE vs. ACTION requests, parameters, preconditions, results | Tools execute only when Request Contract + evidence + context permit | **NOT STARTED** |
-| **6A.22 — Approval & Write Safety** | Validate Teams sends, ticket changes, and future state-changing operations | No write/action without correct approval and validated target/payload | **NOT STARTED** |
-| **6A.23 — Teams / External Handoff Fidelity** | Ensure selected findings/summaries become the actual outbound payload | What the user approves is what is sent; no dropped or altered findings | **NOT STARTED** |
-| **6A.24 — Session Continuity & Isolation** | Follow-ups, rehydration, refresh, new chats, topic changes, multi-tab/concurrency | Context continues correctly within a session and never leaks across sessions | **NOT STARTED** |
-| **6A.25 — Observability & Audit** | Trace Request Contract → route → retrieval → evidence → model → tool/action → result | Every important runtime decision is explainable and auditable | **NOT STARTED** |
-| **6A.26 — Failure / Degradation Contract** | Standardize safe failures for no evidence, missing context, tool/model failures, ambiguity | No vague generic failure when a useful deterministic explanation is possible | **NOT STARTED** |
-| **6A.27 — 6A Security & Non-Regression Gate** | Validate trust boundaries, provenance, secrets, auth, action safety, regression | No new HIGH trust/security regressions; explicitly NOT a replacement for the later Phase 4H (P12) security-hardening phase | **NOT STARTED** |
-| **6A.28 — Full End-to-End Live Stress & Freeze** | Real UI campaign across all paths | No HIGH defects, all contracts proven live, docs current, this POST-6A plan committed/frozen | **NOT STARTED** |
+| **6A.20 — Unified Multimodal Evidence Contract** | SLOPANOC already has real, live-validated user-uploaded (B5/B6) and Teams-hosted (5.X) visual evidence capability — this milestone UNIFIES those with governed-document visual evidence under one typed evidence + provenance contract; it is NOT invention from zero | "observed in an image" is kept structurally separate from "supported by governed Knowledge"; origin, asset identity, extraction/interpretation, and confidence are all traceable; visual evidence survives live/history projection consistently (depends on 6A.14A); visual observations alone can never authorize a governed command or action | **NOT STARTED** |
+| **6A.21 — Read / Write / Action Contracts** | SLOPANOC already has real Teams read tools, write/approval tools, and Knowledge read tools — this milestone STANDARDIZES and COMPLETES one contract shape across ALL operation classes (parameters, preconditions, results); it is NOT invention from zero. Explicitly separates READ tools (produce observations/context/evidence only) from WRITE/ACTION tools (change external state, require validated parameters + approval + idempotency + truthful result handling) | Tools execute only when Request Contract + evidence + context permit; no single undifferentiated "Tools" block conflates the two trust models | **NOT STARTED** |
+| **6A.22 — Approval, Idempotency & Durable Write-Outcome Safety** | Close DEF-0035 (a transport-success HTTP 200 carrying an application-level `{"success": false}` must never be reported as an executed write) and DEF-0036 (a retry of the same approved proposal must reuse a durable, proposal-bound idempotency identity, never a fresh random ID per attempt); validate Teams sends, ticket changes, and future state-changing operations generally | Exact operation, exact target, exact payload; immutable approval binding to one action identity; durable per-approval attempt identity; idempotent retry behavior; transport success is distinct from application success; unknown/ambiguous outcomes are reported as unknown, never as success; no write/action without correct approval and validated target/payload | **NOT STARTED — DEF-0035, DEF-0036 both OPEN (HIGH severity, confirmed by code audit)** |
+| **6A.23 — Teams / External Handoff Fidelity** | Ensure selected findings/summaries become the actual outbound payload (depends on 6A.14A's canonical result existing to hand off from) | What the user approves is what is sent; no dropped or altered findings | **NOT STARTED** |
+| **6A.24 — Session Continuity & Isolation** | Follow-ups, rehydration, refresh, new chats, topic changes, multi-tab/concurrency — the REMAINING session-isolation/concurrency scope not already closed by 6A.14A (6A.14A owns the live-vs-refreshed response-identity defect specifically; 6A.24 owns the broader continuity/isolation surface) | Context continues correctly within a session and never leaks across sessions | **NOT STARTED** |
+| **6A.25 — Observability & Audit Completeness Gate** | Every milestone from 6A.14A onward adds its OWN trace/audit events as it lands (observability is cross-cutting, implemented incrementally throughout — it does not first appear here). 6A.25 is the COMPLETENESS and AUDITABILITY gate across the whole chain, not the first implementation of tracing | Every important runtime decision, across Request Contract → route → retrieval → evidence → model → tool/action → result, is explainable and auditable end to end | **NOT STARTED** |
+| **6A.26 — Failure / Degradation Consistency Gate** | Each preceding milestone implements its OWN deterministic failure behavior as it lands (failure handling is cross-cutting, implemented incrementally throughout). 6A.26 VALIDATES and STANDARDIZES the complete failure taxonomy across all paths, not the first implementation of any one path's failure handling | No vague generic failure when a useful deterministic explanation is possible, consistently across every path | **NOT STARTED** |
+| **6A.27 — 6A Security & Non-Regression Gate** | 6A trust-boundary verification, provenance, secret handling, request/action safety, regression across everything 6A.12–6A.26 built; documentation of residual security prerequisites for Phase 4H. Security/non-regression tests are added alongside each milestone as it lands, same cross-cutting discipline as 6A.25/6A.26 — 6A.27 is the gate, not the first test | No new HIGH trust/security regressions. **Explicitly NOT a replacement for Phase 4H (P12)** — production identity, authentication, authorization, tenant isolation, and enterprise hardening remain Phase 4H prerequisites unless the current repository proves otherwise; 6A.27 must never imply broad production auth/authz is complete if it is not implemented | **NOT STARTED** |
+| **6A.28 — Full End-to-End Live Stress & POST-6A Freeze** | Real UI campaign across all paths | No HIGH defects, all contracts proven live, docs current, this POST-6A plan committed/frozen. **6A.28 closes and freezes the POST-6A intelligence, evidence, interaction, and action-contract work ONLY — it does NOT declare SLOPANOC broadly enterprise-production-ready**; broad production authentication, enterprise authorization, HA/DR, operational SLOs, deployment hardening, and controlled autonomy are never pulled into 6A merely to make 6A.28 look comprehensive — they remain Phase 4H/5.2–5.7/6B/7/8 scope | **NOT STARTED** |
+
+**LIVE-CORR-1 — Controlled Diagnostic Milestone (evidence-and-defect-
+registration pass only; NO runtime fix applied):** a combined live
+acceptance campaign for 6A.12/6A.14/6A.14A surfaced six distinct
+scenario-level UI failures. Five real Cloud SQL DEV sessions (`32c5a4a5-
+4243-4139-904e-c6b49c54d66a` greeting, `abe35bdc-e974-4fc7-a287-
+6733fd736faf` Knowledge inventory, `216ad690-a397-4b82-9dd6-bd1481e4ea64`
+ambiguous command, `38dbd231-a704-4734-9488-80db882a5b7e` procedure
+continuity/topic switch, `a6bbf7cf-258a-4ba1-a0b7-75c80fd94644`
+conditional command) were inspected read-only, event-by-event, via the
+Cloud SQL Auth Proxy — no session was mutated, rewound, replayed, or
+written to. Eight distinct, independently root-caused defects were
+confirmed and registered (**DEF-0037 through DEF-0044** — see `docs/
+DEFECT_REGISTER.md` for the full per-defect record: live reproduction,
+deterministic reproduction, exact code citation, required correction,
+and required tests). One scenario (`216ad690-...`, a genuinely ambiguous
+command request) was confirmed as CORRECT, EXPECTED, SAFE behavior — no
+defect. Deterministic, `xfail(strict=True)` regression tests for six of
+the eight (DEF-0037, DEF-0038, DEF-0039, DEF-0040, DEF-0043, DEF-0044)
+plus one PASSING confirmatory test narrowing DEF-0041's own scope were
+added in `backend/tests/test_livecorr1_diagnostics.py`; DEF-0042 (a
+model-reasoning/source-fidelity capability gap, not a deterministic-code
+defect) was documented without a fixture, per this pass's own explicit
+instruction never to fabricate real governed document content into the
+repository. **This pass changed no production/runtime file** — every
+finding above is attached to its existing owning milestone row (6A.12,
+6A.13, 6A.14, 6A.14A) exactly as DEF-0034 was already attached to 6A.13,
+without reopening any of those rows' own status. **Net effect on this
+plan's status: unchanged — 6A.12/6A.14/6A.14A remain IMPLEMENTED with
+live acceptance/browser acceptance still open (now additionally
+INCOMPLETE, not failed, pending the eight corrections above); 6A.13
+remains COMPLETE; 6A.15 remains NOT STARTED.** The recommended next
+bounded implementation milestone (not started by this pass) is a
+**"Request & Context Policy Correction"** pass scoped to DEF-0037/0038/
+0039/0043 (all four are small, localized, already-precisely-diagnosed
+fixes inside `request_contract.py`/`request_execution_policy.py`/
+`chat_service.py`'s KNOWLEDGE_INVENTORY override), tracked separately
+from the larger, already-planned 6A.16 (DEF-0032/0033), 6A.18
+(DEF-0025/DEF-0042's source-fidelity angle), and the architectural
+streaming-design decision DEF-0044 requires before it can be closed.
+
+**LIVE-CORR-2 — Request & Context Policy Correction (implemented).** The
+recommended follow-up above was carried out: DEF-0037, DEF-0039, and
+DEF-0043 are **FIXED**, and DEF-0038 is **PARTIALLY FIXED** (a bounded,
+fail-closed interim foundation only, deliberately not claimed complete —
+see `docs/DEFECT_REGISTER.md` for the full per-defect corrective-pass
+record). A real, distinct regression was found and fixed DURING this
+pass' own regression run (not itself a LIVE-CORR-1 finding): the first
+version of the missing-context gate would have let a real, command-
+bearing `TroubleshootingGuidance` through unvalidated whenever the model
+classified the request `intent=information, requested_output=fact` —
+caught by a pre-existing test, fixed by widening that ONE gate to also
+fire whenever the contract's own `missing_context` is non-empty,
+independent of intent/output classification. DEF-0040, DEF-0041,
+DEF-0042, and DEF-0044 remain completely untouched and OPEN — explicitly
+out of this pass' scope, per its own instruction. **Net effect on this
+plan's status: 6A.13 remains COMPLETE (DEF-0038 attached, partially
+fixed, does not reopen it); 6A.14 remains IMPLEMENTED with live
+acceptance still open (DEF-0037/0039/0043 now fixed and regression-
+tested, narrowing but not closing that open acceptance item); 6A.12 and
+6A.14A remain IMPLEMENTED with live/browser acceptance still open,
+unaffected by this pass; 6A.15 remains NOT STARTED.** No production file
+outside `backend/agents/team_manager/request_contract.py`, `backend/
+agents/team_manager/request_execution_policy.py`, and `backend/api/
+chat_service.py` (one small, targeted edit) was touched. Focused
+regression (the two LIVE-CORR test files plus every 6A.12/13/14/14A/
+DEF-0024/0026/0027/canonical-turn-result/security-contract-focused
+suite, 21 files): 433 passed, 2 xfailed (DEF-0040/DEF-0044, unaffected),
+0 failures; full backend suite re-run for final confirmation (see this
+pass' own closure report for exact counts). Live browser acceptance was
+NOT separately re-performed
+in this pass (no interactive browser access in this session) — every fix
+is automated-test-verified only. The next recommended bounded milestone
+remains **"Operational Guidance & Streaming Safety Correction"** (DEF-
+0040 and DEF-0044, with instrumentation to isolate DEF-0041) — not
+started by this pass.
+
+**LIVE-CORR-3 — Operational Guidance & Streaming Safety (implemented).**
+The recommended follow-up above was carried out: DEF-0040 and DEF-0044
+are **FIXED**; DEF-0041 gained safe, non-behavior-changing instrumentation
+but **remains OPEN** (its own live runtime discrepancy was not isolated
+in this pass, per its own explicit "instrumentation alone must not close
+DEF-0041" constraint). DEF-0042 and DEF-0025/6A.18 remain completely
+untouched and OPEN — explicitly out of this pass' scope. DEF-0040 was
+closed via two mechanisms, both extending the existing `Troubleshooting
+Guidance`/grounding architecture rather than building a parallel one: (1)
+a deterministic, non-regex, verbatim-substring "embedded operational
+content" detector (`evidence.py`), and (2) response-mode compatibility
+enforcement driven by the validated `RequestContract.requested_output`
+(`request_execution_policy.py`, wired into `chat_service.py`'s completion
+boundary) — a `FULL_PROCEDURE`-shaped response is now discarded whenever
+the validated contract did not authorize `PROCEDURE_STEPS` output,
+closing the exact live defect shape (both RRU and AAS commands shown
+together, branch unresolved). DEF-0044 was closed by adopting the
+milestone's own mandatory, unconditional buffering policy: `message.
+delta` never carries raw assistant/specialist text, for any turn, ever
+again — the pre-existing, narrower governed-knowledge-specific buffer/
+release/discard mechanism became entirely redundant under this broader
+policy and was deleted outright (a net simplification, not a parallel
+mechanism). Deliberately NOT implemented, per the milestone's own
+explicit scope boundary: a new 5-value response-mode enum or 4-value
+operational-effect enum (audited and found unnecessary — the existing
+`RequestedOutput` values already cover the needed distinctions); a
+model-declared per-step `target_required` field (would require trusting
+the model's own safety-relevant self-report, or deterministically
+deriving it from Knowledge-selection state, both out of this pass' own
+scope); DEF-0042/6A.18's Knowledge catalog; 6A.15. **Net effect on this
+plan's status: 6A.12 remains IMPLEMENTED with final live closure still
+open (DEF-0040 now fixed and regression-tested, narrowing but not
+closing that open item; DEF-0041 instrumented but still open; DEF-0042
+unchanged); 6A.14A remains IMPLEMENTED with live browser acceptance
+still open (DEF-0044 now fixed and regression-tested, narrowing but not
+closing that open item); 6A.13/6A.14 unaffected by this pass; 6A.15
+remains NOT STARTED.** Focused regression (the new LIVE-CORR-3 test file
+plus every affected streaming/grounding/6A.12/13/14/14A-focused suite):
+all green, 0 failures, 0 unexpected xfail/xpass. Full backend suite:
+4212 passed, 36 skipped, 3 failed — all 3 confirmed pre-existing,
+order-dependent/real-model-output-variance flakiness (`test_r1_r3_
+correctness_regression.py::test_full_ambiguous_to_resolved_flow_call_
+graph`, `troubleshooting_manager/test_6a11_pass2_stress_matrix.py::
+test_knowledge_injection_treated_as_data_never_an_instruction`/
+`test_specialist_output_injection_never_triggers_a_tool_call`), all
+pass standalone, all in files this pass never touched (confirmed via
+empty scoped `git diff`). Live browser acceptance was NOT separately re-performed
+in this pass (no interactive browser access in this session) — every fix
+is automated-test-verified only. The next recommended bounded milestone
+is **DEF-0041 live isolation** (re-run the exact live Scenario 4
+conversation with the new instrumentation active, compare the resulting
+`troubleshooting_command_grounding` log line against the observed
+defective outcome) — not started by this pass.
 
 **DEF-0028 non-collision note (explicit, per repeated audit request):**
 DEF-0028 is already assigned, in `docs/DEFECT_REGISTER.md`, to a real,
@@ -692,43 +823,74 @@ in this document set.)
 
 ### Dependency order (canonical; also restated, never re-derived, in `docs/BUILD_SEQUENCE.md`)
 
+**Not a strict waterfall** — independent work within this plan may be
+safely parallelized (e.g. 6A.19's semantic-precision work does not
+strictly require 6A.18's inventory work to be finished first) — but
+this single, controlled sequence is the canonical CLOSURE order the
+plan is tracked against, and `6A.18 is deliberately sequenced BEFORE
+6A.17's own final closure` (not simply in ascending numeric order):
+specialist/capability ROUTING cannot be genuinely, fully complete until
+EVERY declared output path has a real handler behind it — Knowledge
+Inventory requests must route to deterministic catalog enumeration
+(6A.18), and troubleshooting-shaped routing depends on the production
+evidence path (6A.16) — so 6A.17's own closure depends on BOTH 6A.16
+and 6A.18 landing first, even though 6A.17 is numbered before 6A.18.
+Observability (6A.25), failure/degradation consistency (6A.26), and
+security/non-regression (6A.27) are cross-cutting — each milestone from
+6A.14A onward adds its own trace/audit events and its own deterministic
+failure behavior AS IT LANDS; 6A.25/6A.26/6A.27 are completeness GATES
+over that already-incrementally-built work, never the first
+implementation of any of it.
+
 ```text
-6A.12  Conditional Command Safety
+6A.12   Conditional Command Safety
    ↓
-6A.13  Request Contract Foundation
+6A.13   Request Contract Foundation
    ↓
-6A.14  Deterministic Request Execution
+6A.14   Deterministic Request Execution
    ↓
-6A.15  Support Classification Contract
+6A.14A  Canonical Turn Result & Projection
    ↓
-6A.16  Hybrid Evidence Production Path
+6A.15   Capability + Evidence Support Classification
    ↓
-6A.17  Specialist Routing Alignment
+6A.16   Version-Safe Hybrid Evidence Production & Reconciliation
    ↓
-6A.18  Knowledge Inventory / Catalog
+6A.18   Knowledge Inventory / Catalog  (sequenced before 6A.17's own closure -- see rationale above)
    ↓
-6A.19  Semantic Grounding Precision
+6A.17   Specialist Routing Alignment  (closes only once 6A.16 AND 6A.18 have both landed)
    ↓
-6A.20  Multimodal Evidence Contract
+6A.19   Semantic Grounding Precision
    ↓
-6A.21  Tool / Action Contract
+6A.20   Unified Multimodal Evidence Contract
    ↓
-6A.22  Approval & Write Safety
+6A.21   Read / Write / Action Contracts
    ↓
-6A.23  Teams / External Handoff Fidelity
+6A.22   Approval, Idempotency & Durable Write-Outcome Safety
    ↓
-6A.24  Session Continuity & Isolation
+6A.23   Teams / External Handoff Fidelity
    ↓
-6A.25  Observability & Audit
+6A.24   Session Continuity & Isolation
    ↓
-6A.26  Failure / Degradation Contract
+6A.25   Observability & Audit Completeness Gate  (cross-cutting; incremental throughout, gated here)
    ↓
-6A.27  6A Security & Non-Regression Gate
+6A.26   Failure / Degradation Consistency Gate  (cross-cutting; incremental throughout, gated here)
    ↓
-6A.28  Full End-to-End Live Stress & Freeze
+6A.27   6A Security & Non-Regression Gate  (cross-cutting; incremental throughout, gated here --
+          explicitly NOT a replacement for Phase 4H)
+   ↓
+6A.28   Full End-to-End Live Stress & POST-6A Freeze  (freezes THIS POST-6A work only --
+          never a claim of broad enterprise-production readiness)
 ```
 
 ### Larger roadmap order (unchanged, preserved exactly)
+
+> **6A.28 closes and freezes the POST-6A intelligence, evidence,
+> interaction, and action-contract work. It does NOT declare SLOPANOC
+> broadly enterprise-production-ready.** Broad production authentication,
+> enterprise authorization, tenant isolation, HA/DR, operational SLOs,
+> deployment hardening, and controlled autonomy are Phase 4H/5.2–5.7/
+> 6B/7/8 scope — never pulled into this POST-6A plan merely to make
+> 6A.28 appear comprehensive.
 
 ```text
 Phase 6A (P11 — COMPLETE/FROZEN)
@@ -747,6 +909,9 @@ Phase 8 — Controlled Autonomy (beyond the current locked roadmap —
   see CLAUDE.md's own explicit "not scheduled" note; not reordered or
   implied by its presence in this list)
 ```
+
+This order is UNCHANGED by this milestone — no formally approved change
+to it exists in this repository.
 
 ===================================================================
 8. AUTHORITY MAP

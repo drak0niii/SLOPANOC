@@ -129,15 +129,18 @@ typed vocabulary as the three rejection reasons.
 from __future__ import annotations
 
 import json
+import logging
 from enum import Enum
 from typing import AbstractSet, Any, Optional, Sequence
 
 from google.genai import types
 
 from backend.agents.incident_manager.provenance_compliance import enforce_governed_knowledge_selection
-from backend.agents.incident_manager.schemas import TroubleshootingGuidance, TroubleshootingInteractionMode
+from backend.agents.incident_manager.schemas import TroubleshootingGuidance, TroubleshootingInteractionMode, TroubleshootingOperationalEffect
 from backend.api.turn_context import current_run_id
 from backend.tools.teams.get_messages import read_known_message_ids
+
+_logger = logging.getLogger(__name__)
 
 _INCOMING_REQUEST_AUTHOR = "user"
 
@@ -340,6 +343,21 @@ FALLBACK_TEXT` (which describes a narrower, single-document, command-only
 ambiguity) since the underlying condition and its scope are both
 different -- this one covers the ENTIRE response, never only a command."""
 
+_UNSTRUCTURED_STATE_CHANGE_FALLBACK_TEXT = (
+    "This step described an operational recommendation without a verified command to back it, so it has been "
+    "withheld for safety. Please ask again."
+)
+"""LIVE-CORR-3A -- DEF-0040 corrective pass (SUPERSEDES the removed,
+substring-scanning LIVE-CORR-3 mechanism): used for `CommandGroundingReason
+.UNSTRUCTURED_STATE_CHANGE` -- a WHOLE-GUIDANCE suppression (mirrors
+`CROSS_PROCEDURE_EVIDENCE`'s own scope exactly), triggered when a step/
+guidance is classified (or defaults to, per `TroubleshootingOperationalEffect`'s
+own "unset means strictest" rule) `STATE_CHANGE_RECOMMENDATION` but
+carries no real, grounded `command`/`step.command` -- see `enforce_
+structural_operational_integrity`'s own docstring. Per explicit
+instruction, operational safety now comes from this TYPED classification
+alone, never from scanning free text for embedded command-like content."""
+
 
 class CommandGroundingReason(str, Enum):
     """DEF-0027 corrective pass -- see this module's own docstring for the
@@ -359,6 +377,13 @@ class CommandGroundingReason(str, Enum):
     (`knowledge_id`), with no deterministic way to confirm any supporting
     document's content was legitimately authorized by the active one. See
     `_guidance_scope_established`."""
+    UNSTRUCTURED_STATE_CHANGE = "unstructured_state_change"
+    """LIVE-CORR-3A -- DEF-0040 corrective pass -- the ENTIRE
+    `TroubleshootingGuidance` was suppressed because a step/guidance
+    classified (or defaulting to) `STATE_CHANGE_RECOMMENDATION` carried
+    no real, grounded `command`/`step.command` -- a state-changing
+    "recommendation" conveyed ONLY through free text is structurally
+    rejected. See `enforce_structural_operational_integrity`."""
 
 
 def _fallback_text_for_reason(reason: Optional["CommandGroundingReason"]) -> str:
@@ -372,6 +397,8 @@ def _fallback_text_for_reason(reason: Optional["CommandGroundingReason"]) -> str
         return _GROUNDING_REJECTED_FALLBACK_TEXT
     if reason == CommandGroundingReason.AMBIGUOUS_PROCEDURE:
         return _AMBIGUOUS_PROCEDURE_FALLBACK_TEXT
+    if reason == CommandGroundingReason.UNSTRUCTURED_STATE_CHANGE:
+        return _UNSTRUCTURED_STATE_CHANGE_FALLBACK_TEXT
     if reason == CommandGroundingReason.CROSS_PROCEDURE_EVIDENCE:
         return _CROSS_PROCEDURE_EVIDENCE_FALLBACK_TEXT
     return _UNGROUNDED_COMMAND_FALLBACK_TEXT
@@ -481,6 +508,81 @@ def _guidance_scope_established(knowledge_ids_by_id: dict[str, "str | None"]) ->
     return len(distinct_knowledge_ids) <= 1
 
 
+def _effective_operational_effect(
+    raw: Optional["TroubleshootingOperationalEffect"],
+) -> "TroubleshootingOperationalEffect":
+    """LIVE-CORR-3A -- `None` (unclassified) always resolves to
+    `STATE_CHANGE_RECOMMENDATION`, the strictest, safest interpretation,
+    never the most permissive one -- per `TroubleshootingOperationalEffect`
+    's own docstring ("fail closed on missing/malformed guidance")."""
+    return raw if raw is not None else TroubleshootingOperationalEffect.STATE_CHANGE_RECOMMENDATION
+
+
+def enforce_structural_operational_integrity(
+    guidance: TroubleshootingGuidance,
+) -> tuple[TroubleshootingGuidance, bool, Optional["CommandGroundingReason"]]:
+    """LIVE-CORR-3A -- DEF-0040 corrective pass, REPLACING the removed,
+    substring-scanning `_detect_embedded_operational_content` (LIVE-CORR-3)
+    outright, per explicit instruction ("operational safety must come from
+    typed structure... do not replace it with regex, keyword matching or
+    free-text command detection").
+
+    THE STRUCTURAL RULE: any step/guidance whose `operational_effect` IS
+    (or, being unset, DEFAULTS TO -- see `_effective_operational_effect`)
+    `STATE_CHANGE_RECOMMENDATION` MUST carry a real `command`/`step
+    .command` -- a state-changing "recommendation" conveyed ONLY through
+    free text (`action`/`next_action`/`interpretation`/`evidence_
+    requested`), with no structured command backing it, is a STRUCTURAL
+    INTEGRITY FAILURE: the ENTIRE guidance is suppressed (mirrors
+    `_guidance_scope_established`'s own whole-guidance scope exactly),
+    never rendered. This closes the exact confirmed live DEF-0040 shape
+    (a real command embedded in `action` prose, `command` itself left
+    `None`) WITHOUT inspecting the free text's own CONTENT at all -- the
+    decision is made entirely from the TYPED `operational_effect` field
+    and whether `command` is populated, never from what the prose says.
+
+    `DIAGNOSTIC_READ`/`OBSERVATION`/`REFERENCE_DESCRIPTION`-classified
+    steps/guidance are UNAFFECTED by this rule (no command required) --
+    they carry no operational authority requiring one. This function does
+    NOT itself verify that a present `command` is grounded/verbatim --
+    that remains the EXISTING, separate, unchanged `_evaluate_command`/
+    `enforce_procedure_scoped_command_grounding_with_reason` job, called
+    afterward.
+
+    Returns `(possibly-suppressed guidance, whether anything was
+    suppressed, the typed reason when suppressed)` -- the SAME 3-tuple
+    shape `enforce_procedure_scoped_command_grounding_with_reason` uses,
+    so callers compose the two checks identically.
+    """
+    if guidance.interaction_mode == TroubleshootingInteractionMode.FULL_PROCEDURE:
+        for step in guidance.full_procedure_steps:
+            if _effective_operational_effect(step.operational_effect) == TroubleshootingOperationalEffect.STATE_CHANGE_RECOMMENDATION and not step.command:
+                suppressed = guidance.model_copy(
+                    update={
+                        "interpretation": None,
+                        "next_action": None,
+                        "command": None,
+                        "evidence_requested": None,
+                        "full_procedure_steps": [],
+                    }
+                )
+                return suppressed, True, CommandGroundingReason.UNSTRUCTURED_STATE_CHANGE
+        return guidance, False, None
+
+    if _effective_operational_effect(guidance.operational_effect) == TroubleshootingOperationalEffect.STATE_CHANGE_RECOMMENDATION and not guidance.command:
+        suppressed = guidance.model_copy(
+            update={
+                "interpretation": None,
+                "next_action": None,
+                "command": None,
+                "evidence_requested": None,
+                "full_procedure_steps": [],
+            }
+        )
+        return suppressed, True, CommandGroundingReason.UNSTRUCTURED_STATE_CHANGE
+    return guidance, False, None
+
+
 def resolve_active_section_id(
     question: Optional[str], section_ids: Sequence[str], headings_by_id: dict[str, Optional[str]]
 ) -> Optional[str]:
@@ -567,6 +669,42 @@ def _evaluate_command(
     return False, CommandGroundingReason.AMBIGUOUS_PROCEDURE
 
 
+def _log_grounding_decision(
+    run_id: Optional[str],
+    guidance: TroubleshootingGuidance,
+    selected_items: Sequence[Any],
+    active_id: Optional[str],
+    stripped: bool,
+    reason: Optional["CommandGroundingReason"],
+) -> None:
+    """LIVE-CORR-3 -- DEF-0041 instrumentation (section 16's own explicit
+    field list). Purely observational -- never changes any answer,
+    routing, retrieval, or source selection; wrapped in a bare `except`
+    so a logging failure can never affect the turn. Logs ONLY safe
+    identifiers/counts/typed enum values -- never section/command
+    CONTENT, never a governed document body, never a secret/URL/credential.
+    `selected_identities` is `(knowledge_id, version_label, section_id)`
+    triples only -- the exact same identity shape this codebase's own
+    provenance/continuity machinery already treats as safe to log
+    elsewhere (e.g. `governed_evidence_continuity.py`).
+    """
+    try:
+        _logger.info(
+            "troubleshooting_command_grounding run_id=%s interaction_mode=%s selected_count=%d "
+            "selected_identities=%s active_section_id=%s command_present=%s stripped=%s reason=%s",
+            run_id,
+            guidance.interaction_mode.value,
+            len(selected_items),
+            [(item.reference.knowledge_id, item.reference.version_label, item.section.section_id) for item in selected_items],
+            active_id,
+            bool(guidance.command) or any(step.command for step in guidance.full_procedure_steps),
+            stripped,
+            reason.value if reason is not None else None,
+        )
+    except Exception:
+        pass
+
+
 def enforce_procedure_scoped_command_grounding_with_reason(
     guidance: TroubleshootingGuidance, run_id: Optional[str], question: Optional[str] = None
 ) -> tuple[TroubleshootingGuidance, bool, Optional["CommandGroundingReason"]]:
@@ -620,6 +758,13 @@ def enforce_procedure_scoped_command_grounding_with_reason(
     section_texts_by_id: dict[str, str] = {item.section.section_id: item.section.content for item in selected_items}
     headings_by_id: dict[str, Optional[str]] = {item.section.section_id: item.section.heading for item in selected_items}
     knowledge_ids_by_id: dict[str, Optional[str]] = {item.section.section_id: item.reference.knowledge_id for item in selected_items}
+    # LIVE-CORR-3 -- DEF-0041 instrumentation: a second, pure, side-
+    # effect-free call to the SAME active-section resolver `_evaluate_
+    # command` uses internally -- purely for logging visibility into
+    # exactly what THIS function saw when it ran (candidate for isolating
+    # DEF-0041's own still-unresolved live discrepancy), never a second
+    # source of truth for any actual grounding decision below.
+    active_id_for_logging = resolve_active_section_id(question, list(section_texts_by_id.keys()), headings_by_id)
 
     if not _guidance_scope_established(knowledge_ids_by_id):
         suppressed = guidance.model_copy(
@@ -631,7 +776,20 @@ def enforce_procedure_scoped_command_grounding_with_reason(
                 "full_procedure_steps": [],
             }
         )
+        _log_grounding_decision(run_id, guidance, selected_items, active_id_for_logging, True, CommandGroundingReason.CROSS_PROCEDURE_EVIDENCE)
         return suppressed, True, CommandGroundingReason.CROSS_PROCEDURE_EVIDENCE
+
+    # LIVE-CORR-3A -- DEF-0040 corrective pass: BEFORE the per-command
+    # checks below (which only ever inspect `command`/`step.command`),
+    # enforce the TYPED structural-integrity rule -- see `enforce_
+    # structural_operational_integrity`'s own docstring. REPLACES the
+    # removed, substring-scanning LIVE-CORR-3 mechanism outright: safety
+    # now comes from the `operational_effect` classification + whether
+    # `command` is populated, never from inspecting free-text content.
+    guidance, structurally_stripped, structural_reason = enforce_structural_operational_integrity(guidance)
+    if structurally_stripped:
+        _log_grounding_decision(run_id, guidance, selected_items, active_id_for_logging, True, structural_reason)
+        return guidance, True, structural_reason
 
     if guidance.interaction_mode == TroubleshootingInteractionMode.FULL_PROCEDURE:
         stripped = False
@@ -649,14 +807,17 @@ def enforce_procedure_scoped_command_grounding_with_reason(
                 stripped = True
                 if primary_reason is None:
                     primary_reason = reason
+        _log_grounding_decision(run_id, guidance, selected_items, active_id_for_logging, stripped, primary_reason)
         if not stripped:
             return guidance, False, None
         return guidance.model_copy(update={"full_procedure_steps": new_steps}), True, primary_reason
 
     if not guidance.command:
+        _log_grounding_decision(run_id, guidance, selected_items, active_id_for_logging, False, None)
         return guidance, False, None
 
     grounded, reason = _evaluate_command(guidance.command, section_texts_by_id, headings_by_id, question)
+    _log_grounding_decision(run_id, guidance, selected_items, active_id_for_logging, not grounded, None if grounded else reason)
     if grounded:
         return guidance, False, None
     return guidance.model_copy(update={"command": None}), True, reason

@@ -78,11 +78,16 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, ValidationError
 
-from backend.agents.incident_manager.schemas import TroubleshootingGuidance
+from backend.agents.incident_manager.schemas import (
+    TroubleshootingGuidance,
+    TroubleshootingInteractionMode,
+    TroubleshootingOperationalEffect,
+)
 from backend.agents.team_manager.request_contract import (
-    TARGET_SPECIFIC_INTENTS,
     RequestContract,
+    RequestedOutput,
     RequestIntent,
+    is_operationally_shaped_request,
     required_target_parameter_gaps,
 )
 
@@ -113,31 +118,39 @@ _VALID_STATUSES = frozenset(
     }
 )
 
-# Intents whose output can carry a live, target-specific operational
-# command -- the missing-context/no-subject gates apply to ALL of these
-# (6A.14 FINAL corrective pass -- ROOT CAUSE B: the first version of this
-# policy scoped the gate to COMMAND/TROUBLESHOOTING only, reasoning that
-# PROCEDURE/INFORMATION "never carry a live command." A real live defect
-# proved that reasoning wrong: "how do i handle HW Partial Fault?" -- a
-# request just as plausibly classified PROCEDURE or INFORMATION as
-# TROUBLESHOOTING -- produced a governed, multi-branch answer containing
-# BOTH the real RRU-9 and real AAS-1 commands, with neither unit
-# confirmed by the user. Section 3's own governing principle: "Intent
-# controls desired response shape. Intent must NOT be usable as a bypass
-# around command/target safety." KNOWLEDGE_INVENTORY and ACTION are
-# deliberately EXCLUDED -- they are governed by their own, separate,
-# earlier-checked branches in `derive_execution_decision` (ACTION always
-# forces REQUIRES_APPROVAL before this set is ever consulted;
-# KNOWLEDGE_INVENTORY always forces UNSUPPORTED_CAPABILITY the same way).
+# 6A.14 FINAL corrective pass -- ROOT CAUSE B: the first version of this
+# policy scoped the missing-context/no-subject gates to COMMAND/
+# TROUBLESHOOTING only, reasoning that PROCEDURE/INFORMATION "never carry
+# a live command." A real live defect proved that reasoning wrong: "how
+# do i handle HW Partial Fault?" -- a request just as plausibly
+# classified PROCEDURE or INFORMATION as TROUBLESHOOTING -- produced a
+# governed, multi-branch answer containing BOTH the real RRU-9 and real
+# AAS-1 commands, with neither unit confirmed by the user. Section 3's
+# own governing principle: "Intent controls desired response shape.
+# Intent must NOT be usable as a bypass around command/target safety."
+# KNOWLEDGE_INVENTORY and ACTION are deliberately EXCLUDED -- they are
+# governed by their own, separate, earlier-checked branches in `derive_
+# execution_decision` (ACTION always forces REQUIRES_APPROVAL before
+# either gate below is ever consulted; KNOWLEDGE_INVENTORY always forces
+# UNSUPPORTED_CAPABILITY the same way).
 #
-# 6A.14 Request Parameter Consistency & Identifier Normalization: this
-# set now lives in `request_contract.py` as the public `TARGET_SPECIFIC_
-# INTENTS` (imported above) -- ONE definition, reused by both that
-# module's own `required_target_parameter_gaps` reconciliation and this
-# module's own gate below, never two independently-drifting copies. Kept
-# as a local alias so every existing reference in this file needs no
-# further change.
-_TARGET_SPECIFIC_INTENTS = TARGET_SPECIFIC_INTENTS
+# LIVE-CORR-2 -- DEF-0037 CORRECTIVE PASS: that widened set (`TARGET_
+# SPECIFIC_INTENTS`, `request_contract.py`) itself went on to become the
+# root cause of a DIFFERENT, equally real defect -- it then also included
+# `INFORMATION`, so an ordinary conversational request (e.g. "hello,"
+# `intent=information, requested_output=fact, subject=None`) was forced
+# through the SAME "no resolved subject/procedure" gate as a genuine
+# operational request, purely because of its intent label (live evidence,
+# session `32c5a4a5-...`). Both gates below now use `is_operationally_
+# shaped_request` (request_contract.py) instead of `TARGET_SPECIFIC_
+# INTENTS` directly -- a two-factor test (intent in the now-narrower
+# `TARGET_SPECIFIC_INTENTS`, OR `requested_output` is itself one of the
+# operational answer shapes) that closes DEF-0037 (`INFORMATION` alone no
+# longer forces the gate) WITHOUT reopening the original ROOT CAUSE B
+# defect (`requested_output=exact_command`/`procedure_steps`/
+# `troubleshooting_next_step` still forces the gate regardless of
+# intent label -- see that function's own docstring for the full "intent
+# labels cannot bypass safety" argument).
 
 
 class RequestExecutionDecision(BaseModel):
@@ -220,7 +233,7 @@ def derive_execution_decision(contract: Optional[RequestContract], current_run_i
             reason="deterministic Knowledge catalog enumeration is not yet implemented (a future milestone)",
         )
 
-    if contract.intent in _TARGET_SPECIFIC_INTENTS and not contract.subject:
+    if is_operationally_shaped_request(contract.intent, contract.requested_output) and not contract.subject:
         return RequestExecutionDecision(
             status=RequestExecutionStatus.AMBIGUOUS,
             intent=contract.intent,
@@ -235,7 +248,27 @@ def derive_execution_decision(contract: Optional[RequestContract], current_run_i
             reason="no resolved subject/procedure for a command-shaped request",
         )
 
-    if contract.intent in _TARGET_SPECIFIC_INTENTS:
+    # LIVE-CORR-2 -- DEF-0037 CORRECTIVE PASS (regression fix, found by
+    # this pass's own regression suite, section 9's own explicit "a
+    # command-bearing answer must not become safe merely because the
+    # request was labelled INFORMATION" warning): this gate must NOT use
+    # `is_operationally_shaped_request` alone -- a request the model
+    # itself already declared a non-empty `missing_context` for (e.g.
+    # `intent=information, requested_output=fact, missing_context=
+    # ["unit_type", "unit_id"]`, a real reproduced live shape: the model
+    # correctly recognized unresolved target context despite classifying
+    # intent/output non-operationally) must still be evaluated here --
+    # otherwise a genuinely dangerous, ALREADY-DECLARED gap would be
+    # silently discarded purely because of how loosely intent/
+    # requested_output happened to be classified, reopening exactly the
+    # class of defect DEF-0037's own fix exists to close (never trust the
+    # model's OWN classification alone to decide safety). `contract.
+    # missing_context` is ALWAYS enough on its own to enter this branch,
+    # regardless of `is_operationally_shaped_request`'s own result --
+    # this is a strict OR, never an AND, so DEF-0037's own fix (an
+    # ordinary "hello," `missing_context=[]`, correctly skips this branch
+    # entirely) remains completely unaffected.
+    if is_operationally_shaped_request(contract.intent, contract.requested_output) or contract.missing_context:
         # 6A.14 Request Parameter Consistency -- Section 7's own explicit
         # "defense in depth" requirement: do NOT rely on the validator's
         # own already-reconciled `contract.missing_context` alone.
@@ -314,6 +347,25 @@ _NO_SUBJECT_FALLBACK_TEXT = "I need to know which specific alarm or governed pro
 
 _GENERIC_WITHHELD_COMMAND_TEXT = "An exact command cannot yet be safely provided for this step. Please confirm the missing details."
 
+_SAFE_MISSING_CONTEXT_LABELS: dict[str, str] = {
+    # LIVE-CORR-2 -- DEF-0043 CORRECTIVE PASS: a small, closed mapping
+    # from this module's own DETERMINISTIC internal key names (currently
+    # only the two `required_target_parameter_gaps` can add) to a safe,
+    # generic, human-readable phrase -- never a raw internal key name
+    # rendered directly to the user, and never anything sourced from
+    # Knowledge/an example. A model-declared `missing_context` entry
+    # (e.g. "equipment identifier") is never looked up here -- it is
+    # already the model's own human phrasing (validated non-blank by
+    # `RequestContract`) and passes through unchanged via `.get(key,
+    # key)`'s own fallback.
+    "unit_id": "the affected unit identifier (for example the exact RRU or AAS identifier)",
+    "unit_type": "the affected unit type (for example RRU or AAS)",
+}
+
+
+def _safe_missing_context_label(key: str) -> str:
+    return _SAFE_MISSING_CONTEXT_LABELS.get(key, key)
+
 KNOWLEDGE_INVENTORY_UNSUPPORTED_TEXT = (
     "I don't yet have a way to enumerate the full list of governed Knowledge documents. "
     "Ask about a specific alarm, procedure, or topic instead."
@@ -328,14 +380,131 @@ future milestone."""
 def command_suppression_fallback_text(decision: RequestExecutionDecision) -> str:
     """Deterministic reason -> fixed clarification text -- mirrors
     `evidence.py`'s own `_fallback_text_for_reason` mapping exactly, one
-    layer up. Never model-authored."""
-    if decision.status == RequestExecutionStatus.NEEDS_INFORMATION and decision.missing_context:
-        return _MISSING_CONTEXT_FALLBACK_TEXT_TEMPLATE.format(items=", ".join(decision.missing_context))
+    layer up. Never model-authored.
+
+    LIVE-CORR-2 -- DEF-0043 CORRECTIVE PASS: previously, the specific,
+    already-known `missing_context` template was used ONLY for `NEEDS_
+    INFORMATION` status -- an `AMBIGUOUS` decision that ALSO carried a
+    non-empty, already-known `missing_context` (live evidence, session
+    `a6bbf7cf-...`: `subject="HW Partial Fault procedure"`, `missing_
+    context=["equipment identifier", "missing condition"]`) fell through
+    to the fully generic `_GENERIC_WITHHELD_COMMAND_TEXT`, silently
+    discarding a specific, already-computed answer in favor of a vaguer
+    one. The check is now `decision.missing_context` alone, independent
+    of `status` -- `NEEDS_INFORMATION` always carries a non-empty
+    `missing_context` by construction (see `derive_execution_decision`),
+    so its own behavior is completely unchanged; `AMBIGUOUS` now uses the
+    SAME specific template whenever it, too, has something specific to
+    say, falling back to the no-subject/generic text only when it
+    genuinely does not (e.g. a resolved subject with an otherwise
+    unresolvable procedure ambiguity, DEF-0029's own case, where no
+    specific missing fact was ever declared). Each key is rendered
+    through `_safe_missing_context_label` -- a raw internal key name
+    (`"unit_id"`) is never shown verbatim; a model-declared, already-safe
+    phrase (e.g. `"equipment identifier"`) passes through unchanged.
+    """
+    if decision.missing_context:
+        labels = ", ".join(_safe_missing_context_label(key) for key in decision.missing_context)
+        return _MISSING_CONTEXT_FALLBACK_TEXT_TEMPLATE.format(items=labels)
     if decision.status == RequestExecutionStatus.AMBIGUOUS and not decision.subject:
         return _NO_SUBJECT_FALLBACK_TEXT
     if decision.status == RequestExecutionStatus.INVALID_CONTRACT:
         return _NO_SUBJECT_FALLBACK_TEXT
     return _GENERIC_WITHHELD_COMMAND_TEXT
+
+
+FULL_PROCEDURE_NOT_PERMITTED_FALLBACK_TEXT = (
+    "A complete procedure was generated, but this request was validated as needing only the next "
+    "diagnostic step. Ask for the complete approved procedure explicitly if that is what you need."
+)
+"""LIVE-CORR-3 -- DEF-0040 corrective pass: deterministic, Python-authored
+fallback -- never model-generated. Used whenever `enforce_response_mode_
+compatibility` discards a response for failing the compatibility matrix."""
+
+
+def is_full_procedure_response_permitted(decision: RequestExecutionDecision) -> bool:
+    """LIVE-CORR-3A -- the complete, 4-field FULL_PROCEDURE authorization:
+    `intent=PROCEDURE`, `requested_output=PROCEDURE_STEPS`, `ambiguity=
+    False`, and a genuinely RESOLVED `subject` -- ALL FOUR, never a subset.
+    Uses ONLY already-validated, already-freshness-checked `RequestExecutionDecision`
+    fields (never re-reads the raw contract) -- never phrase/keyword/regex
+    matching of any kind."""
+    return (
+        decision.intent == RequestIntent.PROCEDURE
+        and decision.requested_output == RequestedOutput.PROCEDURE_STEPS
+        and decision.ambiguity is False
+        and bool(decision.subject)
+    )
+
+
+def is_next_step_response_permitted(decision: RequestExecutionDecision) -> bool:
+    """LIVE-CORR-3A -- `intent=TROUBLESHOOTING`, `requested_output=
+    TROUBLESHOOTING_NEXT_STEP` -- the validated shape for an ordinary,
+    one-diagnostic-action troubleshooting answer."""
+    return decision.intent == RequestIntent.TROUBLESHOOTING and decision.requested_output == RequestedOutput.TROUBLESHOOTING_NEXT_STEP
+
+
+def is_exact_command_response_permitted(decision: RequestExecutionDecision) -> bool:
+    """LIVE-CORR-3A -- `intent=COMMAND`, `requested_output=EXACT_COMMAND`
+    -- the validated shape for a request asking for one specific command."""
+    return decision.intent == RequestIntent.COMMAND and decision.requested_output == RequestedOutput.EXACT_COMMAND
+
+
+def enforce_response_mode_compatibility(
+    guidance: Optional[TroubleshootingGuidance], decision: RequestExecutionDecision
+) -> tuple[Optional[TroubleshootingGuidance], bool]:
+    """LIVE-CORR-3A -- DEF-0040 corrective pass (section 3's own "complete
+    response-mode matrix" requirement). The validated `RequestExecutionDecision`
+    -- never `TroubleshootingGuidance.interaction_mode` itself, which is
+    chosen by incident_manager without ever seeing team_manager's own
+    validated contract, and never phrase/keyword/regex matching of any
+    kind -- is the sole authority for whether a response may render.
+
+    THE COMPLETE MATRIX (never a subset):
+      FULL_PROCEDURE  -- permitted ONLY when `is_full_procedure_response_
+                         permitted` (all 4 fields) holds.
+      NEXT_STEP       -- `TroubleshootingInteractionMode` has exactly TWO
+                         values (`NEXT_STEP`/`FULL_PROCEDURE`), never a
+                         separate third `EXACT_COMMAND` value -- per this
+                         pass' own explicit, documented mapping decision
+                         (extending the EXISTING schema rather than
+                         creating a parallel one), a `NEXT_STEP`-shaped
+                         response (at most one action + at most one
+                         command) is exactly what BOTH the instruction's
+                         own "NEXT_STEP" row (`TROUBLESHOOTING` +
+                         `TROUBLESHOOTING_NEXT_STEP`) AND "EXACT_COMMAND"
+                         row (`COMMAND` + `EXACT_COMMAND`) need -- so
+                         `NEXT_STEP` guidance is permitted when EITHER
+                         `is_next_step_response_permitted` OR `is_exact_
+                         command_response_permitted` holds.
+
+    STRICT, per explicit instruction ("NEXT_STEP only for validated
+    TROUBLESHOOTING + TROUBLESHOOTING_NEXT_STEP"): a `NEXT_STEP` response
+    for a `PROCEDURE`+`PROCEDURE_STEPS`-validated request (showing LESS
+    than requested) is now ALSO discarded, not merely the FULL_PROCEDURE-
+    for-less-than-requested direction LIVE-CORR-3's own first pass left
+    unconstrained -- "incompatible combinations fail closed" applies to
+    the WHOLE matrix, not only the dangerous-widening direction.
+
+    A missing/unresolved contract (`INVALID_CONTRACT` status -- `intent`/
+    `requested_output`/`subject` all unset) satisfies NONE of the three
+    permission functions above, so it fails closed identically to any
+    other incompatible combination -- no special-casing needed.
+
+    Returns `(possibly-discarded guidance, whether it was discarded)`.
+    `guidance=None` is a complete no-op. A discarded guidance returns
+    `(None, True)` -- the caller substitutes `FULL_PROCEDURE_NOT_
+    PERMITTED_FALLBACK_TEXT`.
+    """
+    if guidance is None:
+        return None, False
+    if guidance.interaction_mode == TroubleshootingInteractionMode.FULL_PROCEDURE:
+        if is_full_procedure_response_permitted(decision):
+            return guidance, False
+        return None, True
+    if is_next_step_response_permitted(decision) or is_exact_command_response_permitted(decision):
+        return guidance, False
+    return None, True
 
 
 def enforce_execution_decision_on_guidance(
@@ -348,26 +517,48 @@ def enforce_execution_decision_on_guidance(
     `False`, the ENTIRE guidance is suppressed -- `interpretation`,
     `next_action`, `command`, `evidence_requested`, and every
     `TroubleshootingStep.action`/`.command` -- never `command`/`step
-    .command` alone. The first version of this function stripped only
-    the two structured command fields, leaving narrative fields
-    untouched; nothing in this codebase can verify, without the
-    explicitly-forbidden broad text parser, that a command string was
-    not ALSO embedded in `next_action`/`interpretation`/a step's own
-    `action` while `command` itself was correctly left unset -- e.g. "Use
-    the command accn FieldReplaceableUnit=RRU-9 restartunit 1 1 1" typed
-    directly into `next_action`. Rather than selectively trust some
-    fields and not others, the whole guidance is replaced with a single,
-    fixed, deterministic clarification (the caller substitutes
-    `command_suppression_fallback_text(decision)` once `render_
-    troubleshooting_guidance` renders the now-empty guidance to `""`) --
-    mirrors the SAME "suppress the entire guidance, not just one field"
-    philosophy DEF-0027's own `_guidance_scope_established` (evidence.py)
-    already established for the cross-document case, applied here for a
-    different, execution-policy-driven reason.
+    .command` alone. Rather than selectively trust some fields and not
+    others, the whole guidance is replaced with a single, fixed,
+    deterministic clarification (the caller substitutes `command_
+    suppression_fallback_text(decision)` once `render_troubleshooting_
+    guidance` renders the now-empty guidance to `""`) -- mirrors the SAME
+    "suppress the entire guidance, not just one field" philosophy DEF-0027
+    's own `_guidance_scope_established` (evidence.py) already established
+    for the cross-document case, applied here for a different,
+    execution-policy-driven reason.
+
+    LIVE-CORR-3A -- DEF-0038/section-4 "step-aware target safety": the ONE
+    exemption from the blanket suppression above -- a step (FULL_PROCEDURE
+    mode) or the guidance itself (NEXT_STEP mode) explicitly, structurally
+    classified `TroubleshootingOperationalEffect.DIAGNOSTIC_READ` AND
+    carrying a real `command`/`step.command` is TARGET-INDEPENDENT BY
+    DECLARATION -- a proven, grounded read-only lookup remains safe to
+    show even when target confirmation is otherwise unresolved. This
+    exemption NEVER applies to `STATE_CHANGE_RECOMMENDATION` (or
+    unclassified -- see `evidence.py`'s own `_effective_operational_
+    effect`, "unset defaults to the strictest interpretation") -- a
+    state-changing command remains subject to the FULL target-
+    confirmation gate unconditionally, no exemption, ever. The command
+    STRING itself is NOT re-verified here -- it already passed the
+    EXISTING, separate, unchanged `_evaluate_command`/grounding check
+    before this function ever runs; this function only decides WHETHER
+    the (already-grounded) command may be shown given the CURRENT
+    target-confirmation state.
+
+    RESIDUAL RISK, honestly documented (see `TroubleshootingOperationalEffect`
+    's own docstring, and DEF-0038's own PARTIALLY FIXED status, not
+    upgraded to FIXED by this exemption): `operational_effect` remains
+    model-populated -- a model that mislabels a target-specific, state-
+    changing command as `DIAGNOSTIC_READ` could bypass target
+    confirmation for it. Bounded by the fact the command STRING itself
+    must still be genuinely grounded (verbatim, from THIS turn's own
+    selected Approved evidence) regardless of this exemption -- an
+    attacker/model cannot fabricate a command, only mis-classify a real,
+    governed one.
 
     Both this layer AND `evidence.py`'s own, separate, still-fully-active
-    DEF-0024/0027 grounding must agree before a command reaches the user
-    -- neither replaces the other.
+    DEF-0024/0027/LIVE-CORR-3A grounding must agree before a command
+    reaches the user -- neither replaces the other.
 
     Returns `(possibly-corrected guidance, whether anything was
     suppressed)`. `guidance=None` (no troubleshooting_guidance this turn
@@ -378,6 +569,23 @@ def enforce_execution_decision_on_guidance(
     if guidance is None:
         return None, False
     if decision.may_emit_command:
+        return guidance, False
+
+    if guidance.interaction_mode == TroubleshootingInteractionMode.FULL_PROCEDURE:
+        stripped = False
+        new_steps = []
+        for step in guidance.full_procedure_steps:
+            if step.operational_effect == TroubleshootingOperationalEffect.DIAGNOSTIC_READ and step.command:
+                new_steps.append(step)
+                continue
+            if step.command is not None:
+                stripped = True
+            new_steps.append(step.model_copy(update={"command": None}))
+        if not stripped:
+            return guidance, False
+        return guidance.model_copy(update={"full_procedure_steps": new_steps}), True
+
+    if guidance.operational_effect == TroubleshootingOperationalEffect.DIAGNOSTIC_READ and guidance.command:
         return guidance, False
 
     suppressed = guidance.model_copy(

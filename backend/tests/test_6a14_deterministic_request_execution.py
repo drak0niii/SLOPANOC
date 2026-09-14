@@ -166,7 +166,10 @@ def test_rru_unit_type_without_unit_id_asks_for_unit_id() -> None:
     )
     decision = derive_execution_decision(contract, _RUN_ID)
     fallback = command_suppression_fallback_text(decision)
-    assert "unit_id" in fallback
+    # LIVE-CORR-2 -- DEF-0043: a raw internal key name ("unit_id") is
+    # never shown verbatim -- rendered instead as a safe, generic label.
+    assert "unit_id" not in fallback
+    assert "unit identifier" in fallback
 
 
 def test_rru9_supplied_by_user_permits_grounded_rru9_command() -> None:
@@ -219,7 +222,11 @@ def test_aas_unit_type_without_unit_id_asks_for_unit_id() -> None:
         missing_context=["unit_id"],
     )
     decision = derive_execution_decision(contract, _RUN_ID)
-    assert "unit_id" in command_suppression_fallback_text(decision)
+    fallback = command_suppression_fallback_text(decision)
+    # LIVE-CORR-2 -- DEF-0043: a raw internal key name ("unit_id") is
+    # never shown verbatim -- rendered instead as a safe, generic label.
+    assert "unit_id" not in fallback
+    assert "unit identifier" in fallback
 
 
 def test_aas1_user_supplied_permits_grounded_aas1_command() -> None:
@@ -378,10 +385,14 @@ def test_two_independent_runs_never_influence_each_other() -> None:
 
 
 def test_full_procedure_mode_all_commands_suppressed_when_missing_context() -> None:
-    """6A.14 FINAL corrective pass: the ENTIRE guidance is suppressed --
-    `full_procedure_steps` becomes empty, not merely each step's own
-    `command` field -- since a step's own `action` text could otherwise
-    still carry an unverified command in free-form prose (section 5)."""
+    """LIVE-CORR-3A -- updated for the per-step-aware redesign (see
+    `enforce_execution_decision_on_guidance`'s own DEF-0038/section-4
+    docstring): each NON-exempt step's own `command` is individually
+    stripped (never a blanket `full_procedure_steps = []` wipe anymore --
+    that whole-list wipe is now reserved for `enforce_structural_
+    operational_integrity`'s own, separate structural-integrity failure
+    case). Neither step here is classified `DIAGNOSTIC_READ`, so neither
+    is exempt -- both survive in the list with `command=None`."""
     contract = _contract(missing_context=["unit_id"])
     decision = derive_execution_decision(contract, _RUN_ID)
     guidance = TroubleshootingGuidance(
@@ -393,7 +404,8 @@ def test_full_procedure_mode_all_commands_suppressed_when_missing_context() -> N
     )
     corrected, stripped = enforce_execution_decision_on_guidance(guidance, decision)
     assert stripped is True
-    assert corrected.full_procedure_steps == []
+    assert [step.command for step in corrected.full_procedure_steps] == [None, None]
+    assert len(corrected.full_procedure_steps) == 2
 
 
 def test_guidance_none_is_a_complete_noop() -> None:

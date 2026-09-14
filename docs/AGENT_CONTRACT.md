@@ -691,6 +691,88 @@ permitted to contain.
 
 ---
 
+## 6b. Canonical Turn Result, protected output, and specialist-routing dependencies (6A.14A IMPLEMENTED — live browser acceptance open; 6A.17 TARGET, documentation-only, NOT implemented today)
+
+This section records the Canonical Turn Result contract (6A.14A,
+IMPLEMENTED) and remaining target-architecture obligations (protected
+output; the 6A.17 specialist-routing dependency, still TARGET) for the
+POST-6A closure plan (`docs/MASTER_ROADMAP.md` §7a); none of it reopens
+6A.0–6A.14's own COMPLETE/FROZEN status.
+
+**Canonical Turn Result ownership (6A.14A — IMPLEMENTED).** A real,
+live-observed defect (DEF-0031, `docs/DEFECT_REGISTER.md`) proved that
+`chat_service.py`'s deterministic post-hoc corrections to a turn's final
+text (e.g. the `command_suppression_fallback_text`/DEF-0026/0027/0028
+overrides described in §6a) were applied only to the in-memory value fed
+to the live SSE `message.completed` event — `backend/api/session_
+history_service.py`'s own `_extract_final_text`/`_active_events`
+(imported verbatim from `chat_service.py`, per its own existing "reuse,
+never a second implementation" discipline) reconstructed a turn's text
+independently, from the raw, pre-correction ADK-persisted event. A user
+could therefore see one answer live and a materially different one after
+a refresh or a reopened saved chat. **Fixed:** `backend/api/turn_source_
+references.py`'s `CanonicalTurnResult` is now the ONE typed, persisted
+result per turn — the same durable, ADK-session-state-backed, rewind-
+correct entry B7 already used for Teams/governed-KM provenance, widened
+to also carry `final_text` — that both the live SSE path
+(`chat_service.py`) and `session_history_service.py`'s history
+projection read from, computed only after every existing deterministic
+correction has run and persisted BEFORE `MESSAGE_COMPLETED` is emitted
+(a persistence failure or same-turn conflict fails the turn closed,
+never announcing an unpersisted response). A HARDENING PASS closed a
+fail-open gap: absence of a persisted result for a turn is fail-closed
+history ONLY when that turn is positively proven canonical-required (a
+durable, session-level marker established before any Runner call, plus
+real event-order classification) — never inferred from absence alone,
+which would have been indistinguishable from a genuinely legacy turn.
+The SAME pass also widened conflict detection from `final_text` alone to
+the complete normalized canonical payload (text, Teams source, every
+Knowledge source's full identity, schema version). Regression-tested;
+real browser acceptance (hard refresh, backend restart, rewind through
+the actual UI) has not yet been performed — DEF-0031 is CODE-FIXED, not
+CLOSED. Every later milestone that produces user-visible or audited
+output (provenance/audit records, an approved external write's own
+recorded payload/result) should read from this SAME canonical result
+rather than re-deriving its own projection — that fan-out beyond text/
+provenance (e.g. an approved external write payload) remains 6A.22/
+6A.23's own future scope, not yet implemented.
+
+**Protected output (target invariant, enforcement mechanism not yet
+assigned to a milestone).** Once a specialist/tool/deterministic policy
+produces one of the following, `team_manager`'s own presentation layer
+must pass it through verbatim (or a structurally-preserving rendering),
+never paraphrase, summarize-and-recompose, or otherwise rewrite it:
+- an exact, grounded governed command (protects DEF-0024/0027's own
+  verbatim-grounding discipline from being silently defeated one layer
+  up, at presentation time);
+- a deterministic safety fallback/clarification (`command_suppression_
+  fallback_text`, or any DEF-0026/0027/0028-class continuity override);
+- an already-approved write action's own payload (§7 below);
+- an external system's own real execution result (success/failure,
+  error text — see DEF-0035/0036, §7 below);
+- canonical provenance (source/evidence references, §9).
+
+This is a documentation-only target invariant introduced by this pass —
+it has no current enforcement mechanism in `team_manager`'s presentation
+path, and is not claimed as implemented. A future milestone (most
+naturally 6A.14A, 6A.21, or 6A.25) must decide exactly where it is
+enforced before this bullet can be marked implemented.
+
+**Specialist-routing dependency (6A.17).** `RequestContract`-driven
+deterministic specialist routing depends on BOTH 6A.16 (Version-Safe
+Hybrid Evidence Production & Reconciliation) and 6A.18 (Knowledge
+Inventory/Catalog) having landed first — routing cannot be considered
+fully aligned while one of its own declared output paths
+(`KNOWLEDGE_INVENTORY`) still has no real handler, and while the
+evidence a routed specialist would consume is not yet version-safe. See
+`docs/MASTER_ROADMAP.md` §7a for the full dependency ordering rationale.
+Until 6A.17 lands, `team_manager`'s own ordinary model reasoning —
+never a deterministic router — continues to decide whether to call
+`incident_manager`, `troubleshooting_manager`, both, or neither; §6a's
+own "routing itself is UNCHANGED" statement remains accurate.
+
+---
+
 ## 7. Write-action approval (enforced outside the model)
 
 Approval is a **deterministic backend control**, not a prompt instruction.

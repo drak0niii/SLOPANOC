@@ -258,17 +258,24 @@ consistent target.
   [`docs/TEAMS_TOOL_CONTRACT.md`](docs/TEAMS_TOOL_CONTRACT.md) §4b/§4c
   and [`docs/MASTER_ROADMAP.md`](docs/MASTER_ROADMAP.md) for the full
   contract and defect history.
-- **NEXT / FUTURE:** deterministic support classification (does the
-  system clearly say when something is supported, partial, unsupported,
-  or ambiguous?), specialist routing alignment (does a
+- **CURRENT (implemented, live browser acceptance open):** a canonical,
+  single, persisted turn result (`backend/api/turn_source_references.py`
+  `CanonicalTurnResult`) so a live answer and its refreshed/history-
+  reconstructed rendering can no longer diverge (DEF-0031, 6A.14A —
+  code-fixed and regression-tested; real browser acceptance not yet
+  performed).
+- **NEXT / FUTURE:** deterministic support classification
+  (does the system clearly say when something is supported, partial,
+  unsupported, or ambiguous?), specialist routing alignment (does a
   troubleshooting-shaped request actually reach Troubleshooting Manager
-  automatically?), hybrid-Evidence production for Troubleshooting
-  Manager (DEF-0023), a Knowledge inventory/catalog capability
-  (DEF-0025), and semantic-precision retrieval-quality work are all
-  planned but not started (see [Roadmap](#roadmap) and
+  automatically?), version-safe hybrid-Evidence production and
+  reconciliation for Troubleshooting Manager (DEF-0023, DEF-0032,
+  DEF-0033), a Knowledge inventory/catalog capability (DEF-0025), and
+  semantic-precision retrieval-quality work are all planned but not
+  started (see [Roadmap](#roadmap) and
   [`docs/MASTER_ROADMAP.md`](docs/MASTER_ROADMAP.md) §7a for the full
-  canonical 6A.15–6A.28 closure plan). Phase 4H (security hardening)
-  follows this POST-6A work. A supervisory Head of Automated Operations agent remains
+  canonical 6A.14A/6A.15–6A.28 closure plan). Phase 4H (security
+  hardening) follows this POST-6A work. A supervisory Head of Automated Operations agent remains
   optional future architecture. Phase 6B later expands Context
   Engineering against the full Operational Context surface (ITSM,
   alarms, topology, KPIs, change, handover — 5.2–5.7, see
@@ -841,8 +848,9 @@ A5 (COMPLETE)
           Team Manager reaches Troubleshooting Manager via a plain FunctionTool, never AgentTool;
         6A.11 Integrated TELCO Validation & Phase 6A Freeze COMPLETE — Phase 6A / P11 is now formally FROZEN)
   → POST-6A Canonical Closure Plan, 6A.12 → 6A.28    IN PROGRESS
-       (6A.13 COMPLETE; 6A.12/6A.14 implemented, live acceptance open;
-        6A.15 through 6A.28 PLANNED, NOT STARTED. Full milestone table,
+       (6A.13 COMPLETE (validated); 6A.12/6A.14/6A.14A implemented, live
+        browser acceptance open; 6A.15 through 6A.28 PLANNED, NOT
+        STARTED. Full milestone table,
         done-when criteria, current status, dependency chain, and TARGET
         end-state architecture: see
         [`docs/MASTER_ROADMAP.md`](docs/MASTER_ROADMAP.md) §7a

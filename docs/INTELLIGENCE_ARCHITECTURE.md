@@ -1292,6 +1292,22 @@ implemented by none of 6A.15 through 6A.28 today.**
                      FINAL RESPONSE / ACTION
                               |
                               v
+      CANONICAL TURN RESULT (IMPLEMENTED, 6A.14A -- text/
+      provenance only; APPROVED EXTERNAL PAYLOAD fan-out TARGET)
+           one typed, persisted result — never re-derived
+                  differently for two different readers
+                              |
+         +--------------------+--------------------+--------+
+         v                    v                     v        v
+  PERSISTENT HISTORY     LIVE SSE STREAM      PROVENANCE /   APPROVED
+  (session_history_       (chat_service.py    AUDIT RECORD   EXTERNAL
+   service.py reads        message.completed)  (source        PAYLOAD /
+   the canonical result,                        references,    RESULT
+   never the raw ADK                            evidence used) (Teams
+   event, TARGET)                                              write, etc.)
+         |                    |                     |          |
+         +--------------------+--------------------+--------+
+                              v
                          TEAM MANAGER
                               |
                               v
@@ -1333,11 +1349,162 @@ introduce a different term for the same mechanism):
   DEF-0030's own real, read-only Cloud SQL source validation found the
   governed "HW Partial Fault" source does not currently authorize it
   (see `docs/DEFECT_REGISTER.md` DEF-0030).
+- The Canonical Turn Result described above and in §20b.7 is now
+  IMPLEMENTED (6A.14A): `backend/api/turn_source_references.py`'s
+  `CanonicalTurnResult`/`build_turn_source_references_delta(...,
+  final_text=...)`/`resolve_canonical_turn_result` persist a turn's
+  already-fully-corrected text in the SAME durable per-turn entry as its
+  Teams/governed-KM provenance, written BEFORE `MESSAGE_COMPLETED` is
+  emitted (failing the turn closed, never announcing an unpersisted
+  response, if that write itself fails or conflicts);
+  `session_history_service.py` now reads this canonical result first,
+  falling back to the exact pre-6A.14A raw-ADK-event behavior only for a
+  genuinely legacy (pre-6A.14A) turn. Regression-tested end to end
+  (`backend/tests/test_p6a14a_canonical_turn_result.py`); real browser
+  acceptance (hard refresh, backend restart, rewind, through the actual
+  UI) has NOT been performed yet — DEF-0031 is CODE-FIXED, not CLOSED
+  (see `docs/DEFECT_REGISTER.md`).
+- Knowledge eligibility/applicability narrowing (6A.4) already reasons
+  at `(knowledge_id, version_label)` granularity internally, but the
+  narrowed candidate set it hands onward, and the hybrid-retrieval
+  channels built on top of it (6A.5), currently key only by bare
+  `knowledge_id` — a superseded/non-current version of an object can
+  in principle still surface as retrievable evidence
+  (DEF-0032, OPEN, 6A.16, NOT STARTED).
+- Evidence-index embedding population/reconciliation (6A.5's own
+  `index_knowledge_object`) is gated purely on content-hash change — a
+  prior failed embedding is never retried for otherwise-unchanged
+  content, a changed-content-plus-failed-embedding row keeps a stale
+  vector, and there is no reconciliation trigger for an embedding
+  model/version change (DEF-0033, OPEN, 6A.16, NOT STARTED).
+- `RequestContract`'s deterministic provided-context verification
+  (6A.13) confirms a claimed value is a literal substring of the
+  current turn's real text, but does not yet check for an adjacent
+  negation — a statement like "this is Ericsson equipment, not Nokia"
+  can currently verify `vendor=Nokia` (DEF-0034, OPEN, attached to the
+  6A.13 verification boundary; does not reopen 6A.13's own COMPLETE
+  status, since the rest of 6A.13's contract is unaffected).
+- Teams write execution (`teams_send_message`/`teams_create_chat`)
+  currently discards the Power Automate gateway's own returned payload
+  after a transport-level HTTP success, so an application-level
+  `{"success": false}` body is not yet distinguished from a genuine
+  successful write (DEF-0035, OPEN, 6A.22, NOT STARTED), and a retried
+  write generates a fresh `requestId` with no linkage back to the
+  originating `ActionProposal.proposal_id`, so a network-level timeout
+  followed by a retry is not yet provably idempotent
+  (DEF-0036, OPEN, 6A.22, NOT STARTED).
 - **This POST-6A closure plan is therefore NOT yet frozen** — only
-  6A.13 is COMPLETE; 6A.12/6A.14 are implemented with live acceptance
-  still open; 6A.15 through 6A.28 have not started. Phase 6A itself
-  (P11, 6A.0–6A.11) remains separately COMPLETE AND FROZEN — do not
-  confuse the two.
+  6A.13 is COMPLETE (validated, with DEF-0034 attached to its
+  verification boundary without reopening the milestone itself);
+  6A.12/6A.14/6A.14A are implemented with live browser acceptance still
+  open; 6A.15 through 6A.28 have not started. Phase 6A itself (P11,
+  6A.0–6A.11) remains separately COMPLETE AND FROZEN — do not confuse
+  the two. Reaching 6A.28 will freeze this POST-6A closure plan only —
+  it is never, by itself, a claim that SLOPANOC is broadly
+  enterprise-production-ready (see §2a and `docs/MASTER_ROADMAP.md`
+  §7a).
+
+### 20b. Architecture corrections carried forward into the POST-6A target design (documentation-only, precede any 6A.15+ implementation)
+
+These seven points correct/sharpen the target diagram above; none of
+them is implemented by any milestone before 6A.15, and none reopens
+Phase 6A's own COMPLETE/FROZEN status. Each is binding on the 6A.15+
+implementation passes that eventually build the node it describes.
+
+**7.1 Capability classification vs. evidence support classification are
+two distinct axes, never one merged status.** "Can this specialist/tool
+even attempt this kind of request at all?" (capability — e.g.
+`RequestExecutionDecision.status` such as `UNSUPPORTED_CAPABILITY`) is
+answered BEFORE and INDEPENDENTLY of "given the governed evidence
+actually retrieved for this specific request, how well is the answer
+supported?" (evidence support — 6A.15's own SUPPORTED / PARTIALLY_
+SUPPORTED / UNSUPPORTED / AMBIGUOUS). A capability-unsupported request
+(e.g. `KNOWLEDGE_INVENTORY` today) must never be represented using an
+evidence-support value, and a capability-supported request with zero
+matching evidence must never be represented as a capability failure.
+6A.15 must expose these as two separate fields, never one collapsed
+enum.
+
+**7.2 Governed Knowledge is an authoritative INPUT only — never a write
+destination for ordinary specialist output or Experience Memory.**
+Nothing in the target architecture (Intelligence Assembly, Experience
+Memory, Troubleshooting Manager, Incident Manager) may write, promote,
+or otherwise turn an ordinary answer, an Experience record, or a
+troubleshooting assessment into governed Knowledge content. The only
+path into governed Knowledge remains the existing, unmodified
+CANDIDATE→APPROVED human-gated governance transition
+(`docs/KNOWLEDGE_CONTRACT.md` §5/§14/§22.4) — this is unchanged by
+Phase 6A and must remain unchanged by every 6A.15+ pass.
+
+**7.3 `KNOWLEDGE_INVENTORY`-shaped requests bypass semantic/hybrid
+retrieval entirely.** Enumerating "what governed knowledge exists" is a
+CATALOG operation over `KnowledgeRepository.list_all()`-shaped
+metadata, never a similarity/relevance search — 6A.18 must implement it
+as a direct, deterministic listing/filtering capability, never by
+issuing a synthetic query into the hybrid-retrieval pipeline and
+presenting the results as though they were a complete catalog.
+
+**7.4 READ tools and WRITE/ACTION tools remain two structurally
+distinct contracts, never unified into one generic "Tool" shape.** A
+READ tool (`teams_get_messages`, `knowledge_search`, a future inventory
+tool) has no approval boundary and no write-outcome/idempotency
+concern. A WRITE/ACTION tool (`teams_send_message`, `teams_create_
+chat`, any future write) always carries the existing ActionProposal/
+approval boundary (`docs/AGENT_CONTRACT.md` §7) plus, once 6A.22 lands,
+an explicit durable-outcome/idempotency contract. 6A.21's "Tool / Action
+Contract" work must formalize this as two related-but-distinct
+contracts, never one generic `Tool` interface that a future author could
+accidentally apply uniformly to both.
+
+**7.5 Experience Memory is advisory, lower-authority, and never
+auto-promoted.** Restated from §12/§13, made explicit for 6A.15+:
+whenever Experience Memory (6A.8) and governed Knowledge disagree, or
+Experience Memory and current TELCO Context disagree, governed Knowledge
+and current Context both outrank Experience Memory — this is not a
+ranking to be tuned, it is a fixed authority order. No 6A.15+ milestone
+may introduce a scoring/weighting mechanism that lets a sufficiently
+strong Experience signal override an explicit governed prohibition or a
+known current-Context fact.
+
+**7.6 Protected output — Team Manager must not paraphrase certain
+categories of content.** Once a specialist/tool/deterministic policy
+produces one of the following, Team Manager's own presentation layer
+must pass it through verbatim (or a structurally-preserving rendering),
+never paraphrase, summarize-and-recompose, or "clean up" its exact
+wording: (a) an exact, grounded governed command (DEF-0024/0027's own
+verbatim-grounding discipline would otherwise be defeated one layer up);
+(b) a deterministic safety fallback/clarification produced by
+`command_suppression_fallback_text`, DEF-0026/0027/0028's continuity
+overrides, or any future equivalent; (c) an already-approved write
+action's own payload; (d) an external system's own real execution
+result (success/failure, error text); (e) canonical provenance
+(source/evidence references). This is a NEW invariant this
+documentation pass introduces for the 6A.15+ target design — it has no
+current enforcement mechanism and is not claimed as implemented; a
+future milestone (most naturally 6A.14A/6A.21/6A.25) must decide exactly
+where it is enforced.
+
+**7.7 One Canonical Turn Result, fanned out to every reader — never
+independently re-derived per consumer.** See the diagram above: a
+turn's live SSE payload, its persisted/refreshable history, its
+provenance/audit record, and any approved external write payload/result
+must all trace back to ONE typed, persisted result object for that turn
+— never four independent derivations that can silently diverge (the
+exact DEF-0031 failure mode). **IMPLEMENTED (6A.14A)** for the live-SSE-
+vs-history text/provenance divergence specifically — `CanonicalTurnResult`
+(`backend/api/turn_source_references.py`) is that one typed, persisted
+object today, consumed by both `chat_service.py`'s live `MESSAGE_
+COMPLETED` event and `session_history_service.py`'s history projection;
+a future approved-external-write payload/result consumer (6A.22/6A.23)
+should read from this SAME object rather than inventing its own
+projection. A HARDENING PASS additionally closed a fail-open gap where
+the ABSENCE of this object for a turn could not, on its own, be
+distinguished from a genuinely pre-6A.14A (legacy) turn — a positive,
+durable, session-level marker (`CANONICAL_RESULT_ENFORCEMENT_STATE_KEY`,
+established before any Runner call) plus real event-order classification
+(`resolve_canonical_turn_state`) now makes that distinction structural,
+never inferred from absence alone; see `docs/DEFECT_REGISTER.md`'s
+DEF-0031 hardening-pass addendum for the full record.
 
 ## 21. Change log
 
@@ -1367,3 +1534,53 @@ introduce a different term for the same mechanism):
   before/after proof. No orchestration/topology decision from the
   original 6A.10 pass was reopened. See `docs/DEFECT_REGISTER.md`
   DEF-0020 and `CLAUDE.md` for the full closure record.
+- **Controlled documentation pass — POST-6A closure roadmap correction
+  and freeze prep (documentation-only, no code/schema/migration/
+  infrastructure changed).** Inserted §20b (7.1–7.7 architecture
+  corrections: capability-vs-evidence-support split, governed-Knowledge-
+  as-input-only, `KNOWLEDGE_INVENTORY` retrieval bypass, READ vs.
+  WRITE/ACTION tool-contract separation, Experience Memory authority
+  order, protected-output boundary, and the Canonical Turn Result
+  fan-out) and added the Canonical Turn Result node to §20a's target
+  diagram. Six new, independently verified defects registered in
+  `docs/DEFECT_REGISTER.md`: DEF-0031 (canonical-response divergence
+  between live SSE and refreshed/history-reconstructed text — new
+  milestone **6A.14A — Canonical Turn Result & Projection** added
+  immediately after 6A.14 in `docs/MASTER_ROADMAP.md` §7a and `docs/
+  BUILD_SEQUENCE.md`), DEF-0032 (Knowledge version-identity narrowing to
+  bare `knowledge_id` — 6A.16), DEF-0033 (embedding/index reconciliation
+  gaps — 6A.16), DEF-0034 (negation-blind `RequestContract` provided-
+  context verification — attached to 6A.13's verification boundary,
+  6A.13 itself remains COMPLETE), DEF-0035 (Teams write-result
+  truthfulness — 6A.22), DEF-0036 (Teams write idempotency/retry
+  identity — 6A.22). See `docs/MASTER_ROADMAP.md` §7a and `docs/
+  DEFECT_REGISTER.md` for the full record.
+- **Controlled implementation pass — 6A.14A (Canonical Turn Result &
+  Projection), closing DEF-0031.** `backend/api/turn_source_references
+  .py` widened, additively, to persist a turn's already-fully-corrected
+  `final_text` in the SAME durable per-turn entry as its existing Teams/
+  governed-KM provenance (`CanonicalTurnResult`, `build_turn_source_
+  references_delta(..., final_text=...)`, `resolve_canonical_turn_
+  result`) — one canonical object per turn, reusing the SAME already-
+  proven ADK-session-state/rewind-correct mechanism B7 introduced, no
+  new table/migration. `chat_service.py`'s existing end-of-turn
+  persistence call site (already writing BEFORE `MESSAGE_COMPLETED`) now
+  includes `final_text`; a persistence failure or same-turn conflict
+  (`CanonicalTurnResultConflictError`) fails the turn closed
+  (`ERROR`/`RUN_COMPLETED(outcome=error)`, `MESSAGE_COMPLETED` never
+  emitted), with a best-effort failure marker preventing the ADK
+  Runner's own already-durably-appended raw event from resurfacing via
+  history's legacy fallback. `session_history_service.py` now reads the
+  canonical result first, falling back to the exact pre-6A.14A raw-ADK-
+  event behavior only for a genuinely legacy turn. A real test-fixture
+  inaccuracy was found and fixed during this pass' own regression run
+  (`backend/tests/_api_fakes.py`'s `FakeRunner` reused one fixed
+  `invocation_id` across different turns, unlike real ADK) — corrected
+  to generate a genuinely unique id per call, affecting 7 pre-existing
+  tests, none of which asserted on a specific literal id value.
+  Regression-tested end to end (`backend/tests/test_p6a14a_canonical_
+  turn_result.py`, 18 new tests, plus the full backend suite). Real
+  browser acceptance (hard refresh, backend restart, rewind, through the
+  actual UI) was NOT performed in this pass — DEF-0031 is CODE-FIXED,
+  not CLOSED. **6A.14A status: IMPLEMENTED — live browser acceptance
+  open.** See `docs/DEFECT_REGISTER.md` DEF-0031 for the full record.

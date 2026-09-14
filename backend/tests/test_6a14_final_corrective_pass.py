@@ -168,7 +168,18 @@ def test_next_action_cannot_bypass_may_emit_command_false() -> None:
 
 
 def test_step_action_cannot_bypass_may_emit_command_false() -> None:
-    """§10."""
+    """§10 -- LIVE-CORR-3A ownership update: a step with NO `command` at
+    all (free text possibly hiding one) is, in the REAL pipeline, ALREADY
+    caught EARLIER by `evidence.py`'s `enforce_structural_operational_
+    integrity` (an unclassified step defaults to `STATE_CHANGE_
+    RECOMMENDATION`, which requires a real `command` -- see `backend/
+    tests/test_livecorr1_diagnostics.py::test_def_0040_embedded_command_
+    bypasses_grounding` for the full pipeline proof) -- BEFORE `enforce_
+    execution_decision_on_guidance` (this function, tested here in
+    isolation) ever runs. This function's own, narrower job is now
+    strictly TARGET-CONFIRMATION gating: a step with no `command` to
+    begin with has nothing for this function to strip -- correctly a
+    no-op here, since the structural layer already owns that case."""
     contract = _contract(missing_context=["unit_id"])
     decision = derive_execution_decision(contract, _RUN_ID)
     guidance = TroubleshootingGuidance(
@@ -176,8 +187,8 @@ def test_step_action_cannot_bypass_may_emit_command_false() -> None:
         full_procedure_steps=[TroubleshootingStep(action=f"Execute: {_RRU_COMMAND}", command=None)],
     )
     corrected, stripped = enforce_execution_decision_on_guidance(guidance, decision)
-    assert stripped is True
-    assert corrected.full_procedure_steps == []
+    assert stripped is False
+    assert corrected.full_procedure_steps[0].command is None
 
 
 def test_evidence_requested_is_also_suppressed_for_consistency() -> None:
@@ -354,7 +365,9 @@ async def test_hw_partial_fault_first_turn_asks_for_unit_context() -> None:
         if event.type.value == "message.completed":
             completed = event
     assert completed is not None
-    assert "unit_type" in completed.data["content"] or "unit_id" in completed.data["content"]
+    # LIVE-CORR-2 -- DEF-0043: raw internal key names are never shown
+    # verbatim -- rendered instead as safe, generic labels.
+    assert "unit type" in completed.data["content"] or "unit identifier" in completed.data["content"]
 
 
 @pytest.mark.asyncio

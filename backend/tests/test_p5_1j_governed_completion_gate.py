@@ -417,6 +417,26 @@ async def test_part10d_already_selected_current_run_evidence_is_accepted_unchang
 # a turn. An ordinary turn (no governed-knowledge declaration, or declared
 # false) must stream completely unaffected -- this is a targeted gate, not
 # a global streaming change.
+#
+# LIVE-CORR-3 -- DEF-0044 SUPERSEDING NOTE: the paragraph above described
+# this Part 21 mechanism's own ORIGINAL, targeted scope -- accurate at the
+# time it was written, no longer the full picture. DEF-0044 (a SEPARATE,
+# systemic, later-discovered gap: raw `message.delta` text reaching the
+# client before ANY deterministic completion-boundary correction runs, not
+# only the governed-knowledge one) generalized this exact "never stream
+# raw text live" principle to EVERY turn, unconditionally -- see chat_
+# service.py's own DEF-0044 corrective-pass comment above `run_config`.
+# The governed-knowledge-specific buffer/release/discard mechanism these
+# tests originally exercised (buffer while `source_requirements_capture`
+# is UNKNOWN; discard if EXPLICIT GOVERNED; release live if EXPLICIT NON-
+# GOVERNED) was REMOVED, not merely subsumed -- there is no "release live"
+# outcome left for ANY classification to produce. 21a/21c/21e/21f/21g/21h
+# below already asserted `delta_events == []` for their own governed/
+# still-classifying scenarios and therefore remain byte-for-byte correct,
+# unmodified proof of the (now-broader) no-raw-text invariant. 21b/21d
+# specifically asserted the OPPOSITE, now-incorrect behavior (live
+# streaming for an explicitly non-governed turn) and were rewritten below
+# to assert the corrected invariant instead.
 
 
 @pytest.mark.asyncio
@@ -471,11 +491,15 @@ async def test_part21a_governed_knowledge_turn_never_streams_untrusted_delta(mon
 
 
 @pytest.mark.asyncio
-async def test_part21b_ordinary_turn_still_streams_deltas_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Non-regression: a turn that declares BOTH requirements false (no
-    governed-knowledge gate applies at all) must stream its deltas exactly
-    as before this pass -- the fix must not become a global streaming
-    change.
+async def test_part21b_ordinary_turn_never_streams_raw_deltas_either(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LIVE-CORR-3 -- DEF-0044 CORRECTED: renamed from its own pre-DEF-
+    0044 name (`test_part21b_ordinary_turn_still_streams_deltas_
+    unchanged`), which asserted the OPPOSITE, now-incorrect invariant. A
+    turn that declares BOTH requirements false (no governed-knowledge
+    gate applies at all) NO LONGER streams live deltas either -- DEF-0044
+    made "never stream raw assistant text" unconditional, not scoped to
+    governed-knowledge turns. `message.completed` is the sole carrier of
+    the answer, exactly as for every other turn shape.
     """
     from backend.api.chat_service import ChatService
     from backend.api.session_service import ApiSessionService
@@ -503,7 +527,7 @@ async def test_part21b_ordinary_turn_still_streams_deltas_unchanged(monkeypatch:
         elif event.type.value == "message.completed":
             completed = event
 
-    assert delta_events == ["Hello", " there!"], "an ordinary turn's deltas must stream live, unchanged"
+    assert delta_events == [], "DEF-0044: no turn -- governed or ordinary -- may stream raw deltas live"
     assert completed is not None
     assert completed.data["content"] == "Hello there!"
 
@@ -561,13 +585,15 @@ async def test_part21c_unknown_state_buffers_until_classified_governed(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_part21d_unknown_state_releases_buffer_when_classified_non_governed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Required case B: provisional partial text arrives BEFORE `record_
-    source_requirements`. Declaration then says governed=False. The
-    buffered text must be released, in original order, the instant
-    classification resolves, and subsequent deltas must stream normally
-    afterward -- the completed text must match the concatenated deltas
-    exactly (never more, never less, never reordered).
+async def test_part21d_unknown_state_stays_buffered_even_when_classified_non_governed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LIVE-CORR-3 -- DEF-0044 CORRECTED: renamed from its own pre-DEF-
+    0044 name (`test_part21d_unknown_state_releases_buffer_when_
+    classified_non_governed`), which asserted the buffer gets released
+    live once classification resolves to non-governed. That "release"
+    outcome no longer exists -- provisional text arriving while UNKNOWN,
+    and any further text arriving after resolving to non-governed, both
+    now stay buffered permanently; `message.completed` alone carries the
+    final, complete text.
     """
     from backend.api.chat_service import ChatService
     from backend.api.session_service import ApiSessionService
@@ -595,13 +621,9 @@ async def test_part21d_unknown_state_releases_buffer_when_classified_non_governe
         elif event.type.value == "message.completed":
             completed = event
 
-    assert delta_events == ["Hello", " there!"], (
-        "the buffered chunk must be released first, in order, followed by live streaming -- "
-        f"got {delta_events!r}"
-    )
+    assert delta_events == [], f"DEF-0044: no delta is ever released live, regardless of classification, got {delta_events!r}"
     assert completed is not None
     assert completed.data["content"] == "Hello there!"
-    assert "".join(delta_events) == completed.data["content"]
 
 
 @pytest.mark.asyncio

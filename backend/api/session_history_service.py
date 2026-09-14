@@ -22,11 +22,24 @@ THREE OPERATIONS, mirroring the B4A/B4B-correction-pass design exactly:
     touches `CHAT_ACTIVITY_AT_STATE_KEY` (B4B correction pass) -- a
     rename must never reorder the saved-chat sidebar.
 
-TRANSCRIPT AUTHORITY (locked, B4A/B4B): text comes from ADK's active
-event history; attachment OWNERSHIP comes from `slopanoc_chat_attachments`
-(never derived by parsing a `gs://` URI out of an ADK event); attachment
-BINARY is never touched here at all (the frontend fetches content
-separately, by `attachment_id`, from the existing B2 endpoint).
+TRANSCRIPT AUTHORITY (B4A/B4B, corrected by 6A.14A/DEF-0031, HARDENED by
+the 6A.14A hardening pass): user-turn text still comes from ADK's active
+event history. Assistant-turn text for a CANONICAL-REQUIRED turn (any
+turn whose own first event was observed AFTER the durable, session-level
+`CANONICAL_RESULT_ENFORCEMENT_STATE_KEY` marker -- see `_project_turns`/
+`_Turn.canonical_required`) comes EXCLUSIVELY from `backend/api/turn_
+source_references.py::resolve_canonical_turn_state` -- the SAME, already
+fully corrected result the live `MESSAGE_COMPLETED` SSE event carried.
+Raw ADK event text (`turn.final_text`) is used ONLY for a turn positively
+classified as GENUINELY LEGACY (pre-6A.14A, `canonical_required is
+False`) -- never merely because a canonical result happens to be absent,
+which for a canonical-required turn is instead a fail-closed exclusion
+(this is the hardening pass's own core invariant: absence of proof is
+never treated as proof of legacy status). Attachment OWNERSHIP comes
+from `slopanoc_chat_attachments` (never derived by parsing a `gs://` URI
+out of an ADK event); attachment BINARY is never touched here at all
+(the frontend fetches content separately, by `attachment_id`, from the
+existing B2 endpoint).
 
 SIDEBAR ORDERING (B4B correction pass): `SessionSummaryDTO.updated_at` is
 `CHAT_ACTIVITY_AT_STATE_KEY` -- the real timestamp of the latest GENUINE
@@ -67,7 +80,12 @@ from backend.api.session_state_keys import (
     derive_chat_title,
     is_genuine_user_content_event,
 )
-from backend.api.turn_source_references import resolve_turn_source_references
+from backend.api.turn_source_references import (
+    CanonicalTurnStatus,
+    is_canonical_result_enforcement_marker_event,
+    resolve_canonical_turn_state,
+    resolve_turn_source_references,
+)
 from backend.attachments.models import ChatAttachmentStatus
 from backend.attachments.service import AttachmentService
 from backend.gateway.safe_error import validation_error
@@ -103,16 +121,28 @@ class _Turn:
     """In-memory-only accumulator while walking one session's active
     events -- never serialized itself; `SessionHistoryMessageDTO`s are
     built from it once the walk is done.
+
+    `canonical_required` (6A.14A HARDENING PASS) -- `True` iff this
+    turn's own FIRST event was observed AFTER the durable, session-level
+    `CANONICAL_RESULT_ENFORCEMENT_STATE_KEY` marker event, in this SAME
+    walk's real, ADK-durable event ORDER (never a timestamp). A turn with
+    `canonical_required=True` and no valid persisted canonical result
+    must fail closed in history -- never fall back to `final_text`
+    (below), which for such a turn is only ever the RAW, pre-correction
+    ADK text. A turn with `canonical_required=False` is genuinely legacy
+    (pre-6A.14A) and `final_text` remains the correct, safe source for
+    it, exactly as before this hardening pass.
     """
 
-    __slots__ = ("turn_id", "user_text", "user_timestamp", "final_text", "final_timestamp")
+    __slots__ = ("turn_id", "user_text", "user_timestamp", "final_text", "final_timestamp", "canonical_required")
 
-    def __init__(self, turn_id: str) -> None:
+    def __init__(self, turn_id: str, canonical_required: bool) -> None:
         self.turn_id = turn_id
         self.user_text: Optional[str] = None
         self.user_timestamp: Optional[float] = None
         self.final_text: Optional[str] = None
         self.final_timestamp: Optional[float] = None
+        self.canonical_required = canonical_required
 
 
 def _project_turns(events: list[Any]) -> list[_Turn]:
@@ -129,6 +159,13 @@ def _project_turns(events: list[Any]) -> list[_Turn]:
     `final_text=None` -- the caller renders the user message alone,
     never a fabricated assistant reply (B4A instruction section 12).
 
+    6A.14A HARDENING PASS -- also tracks, during this SAME single walk,
+    whether the durable canonical-result-enforcement marker event
+    (`is_canonical_result_enforcement_marker_event`) has been observed
+    yet; every turn is stamped with `canonical_required` at the moment
+    it is FIRST created (`_get`), reflecting real event order, never a
+    timestamp -- see `_Turn`'s own docstring.
+
     Turns with NO genuine user event at all (a rewind marker would have
     already been stripped by `_active_events` before this function ever
     sees it; a `persist_state_delta`-only event has `content=None` and
@@ -137,14 +174,19 @@ def _project_turns(events: list[Any]) -> list[_Turn]:
     """
     order: list[str] = []
     turns: dict[str, _Turn] = {}
+    canonical_enforcement_active = False
 
     def _get(turn_id: str) -> _Turn:
         if turn_id not in turns:
-            turns[turn_id] = _Turn(turn_id)
+            turns[turn_id] = _Turn(turn_id, canonical_enforcement_active)
             order.append(turn_id)
         return turns[turn_id]
 
     for event in events:
+        if is_canonical_result_enforcement_marker_event(event):
+            canonical_enforcement_active = True
+            continue
+
         if is_genuine_user_content_event(event):
             # POST-5.1 B5 fix: an image-only user turn (Content with only
             # file_data/URI parts, no text part at all) has `_user_text(
@@ -237,23 +279,78 @@ async def get_session_history(
             )
         )
         if turn.final_text is not None:
-            # B7 corrective pass -- re-projects this turn's own durably
-            # persisted Teams/governed-KM provenance (backend/api/turn_
-            # source_references.py), keyed by the SAME `turn.turn_id`
-            # (ADK invocation_id) this message already carries. `session
-            # .state` here is ALREADY the active-branch-consistent value
-            # ADK's own rewind mechanism maintains -- a discarded branch's
-            # own entry was already removed from state by rewind itself
-            # (see that module's own docstring); no separate filtering is
-            # needed here beyond what `_active_events`/`projected_turns`
-            # already do for the message list itself.
-            source, knowledge_sources = resolve_turn_source_references(session.state, turn.turn_id)
+            # 6A.14A/DEF-0031, HARDENED: `turn.canonical_required` (set
+            # by `_project_turns` from real, durable event ORDER -- never
+            # a timestamp, never process-local memory) is the ONLY thing
+            # that decides whether raw ADK text (`turn.final_text`) may
+            # ever be used. A GENUINELY LEGACY turn (pre-6A.14A --
+            # `canonical_required is False`) keeps the exact pre-6A.14A
+            # behavior below, completely unaffected by this hardening
+            # pass. A CANONICAL-REQUIRED turn NEVER falls back to raw
+            # text for ANY reason -- `resolve_canonical_turn_state`
+            # (backend/api/turn_source_references.py) is consulted
+            # instead, and only its `VALID` outcome renders anything;
+            # every other outcome (`FAILED`/`ABSENT`/`MALFORMED`/
+            # `CONFLICTING`) excludes this turn's assistant message
+            # entirely -- this is what closes the fail-open gap where a
+            # canonical-result write AND its own best-effort failure
+            # marker could both fail, previously leaving nothing to
+            # distinguish that double failure from a genuinely legacy
+            # turn. `session.state` here is ALREADY the active-branch-
+            # consistent value ADK's own rewind mechanism maintains -- a
+            # discarded branch's own entry was already removed from state
+            # by rewind itself (see that module's own docstring); no
+            # separate filtering is needed here beyond what `_active_
+            # events`/`_project_turns` already do for the message list
+            # itself.
+            if turn.canonical_required:
+                state = resolve_canonical_turn_state(session.state, turn.turn_id)
+                if state.status != CanonicalTurnStatus.VALID:
+                    # 6A.14A HARDENING PASS -- safe, structured logging,
+                    # session/turn identity only, never response text or
+                    # provenance content. FAILED is the ordinary, already-
+                    # logged-at-write-time outcome (chat_service.py's own
+                    # fail-closed path, `_logger.warning`/`_logger.error`
+                    # there) -- logged again here only at DEBUG, since
+                    # this read-time confirmation is routine, not a new
+                    # finding. ABSENT/MALFORMED/CONFLICTING are the
+                    # genuinely unexpected cases this hardening pass
+                    # exists to catch and report at WARNING.
+                    if state.status == CanonicalTurnStatus.FAILED:
+                        _logger.debug(
+                            "session_history_service: raw fallback rejected -- turn_id=%s is "
+                            "canonical-required and explicitly marked failed session_id=%s",
+                            turn.turn_id,
+                            session_id,
+                        )
+                    else:
+                        _logger.warning(
+                            "session_history_service: raw fallback rejected -- canonical-required "
+                            "turn_id=%s has neither a valid canonical result nor an explicit failure "
+                            "marker (status=%s); failing closed session_id=%s",
+                            turn.turn_id,
+                            state.status,
+                            session_id,
+                        )
+                    continue
+                assistant_text = state.result.text
+                source = state.result.source
+                knowledge_sources = state.result.knowledge_sources
+            else:
+                _logger.debug(
+                    "session_history_service: raw fallback accepted -- turn_id=%s is positively "
+                    "classified as genuinely legacy (pre-6A.14A) session_id=%s",
+                    turn.turn_id,
+                    session_id,
+                )
+                assistant_text = turn.final_text
+                source, knowledge_sources = resolve_turn_source_references(session.state, turn.turn_id)
             messages.append(
                 SessionHistoryMessageDTO(
                     message_id=f"{turn.turn_id}:assistant",
                     turn_id=turn.turn_id,
                     role="assistant",
-                    text=turn.final_text,
+                    text=assistant_text,
                     created_at=_iso(turn.final_timestamp or 0.0),
                     attachments=[],
                     source=source,

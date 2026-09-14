@@ -77,7 +77,12 @@ from backend.agents.incident_manager.evidence import (
     enforce_procedure_scoped_command_grounding,
     enforce_procedure_scoped_command_grounding_with_reason,
 )
-from backend.agents.incident_manager.schemas import TroubleshootingGuidance, TroubleshootingInteractionMode, TroubleshootingStep
+from backend.agents.incident_manager.schemas import (
+    TroubleshootingGuidance,
+    TroubleshootingInteractionMode,
+    TroubleshootingOperationalEffect,
+    TroubleshootingStep,
+)
 from backend.api.governed_evidence_continuity import RevalidatedGovernedProcedure, detect_governed_evidence_anchor_mismatch
 from backend.api.turn_context import bind_run_id, reset_run_id
 from backend.knowledge.domain.enums import KnowledgeDocumentType, LifecycleStatus
@@ -125,12 +130,20 @@ def _select(run_id: str, *items: KnowledgeEvidenceItem) -> None:
 
 
 def _next_step_guidance(command, next_action: str = "Do the next thing.", evidence_requested: str = "Provide the output.", interpretation: str = "Interpretation.") -> TroubleshootingGuidance:
+    # LIVE-CORR-3A: a `None` command here is always the SAFE, well-behaved
+    # "no command needed" case these fixtures represent (calls that also
+    # exercise CROSS_PROCEDURE_EVIDENCE suppression return before this
+    # default is ever consulted, since that check runs first and returns
+    # early) -- see test_def_0024_procedure_grounding.py's own identical
+    # fix.
+    operational_effect = None if command else TroubleshootingOperationalEffect.OBSERVATION
     return TroubleshootingGuidance(
         interaction_mode=TroubleshootingInteractionMode.NEXT_STEP,
         interpretation=interpretation,
         next_action=next_action,
         command=command,
         evidence_requested=evidence_requested,
+        operational_effect=operational_effect,
     )
 
 

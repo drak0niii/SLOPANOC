@@ -127,11 +127,13 @@ from backend.agents.team_manager.request_contract import (
     safe_request_contract_observability_fields,
 )
 from backend.agents.team_manager.request_execution_policy import (
+    FULL_PROCEDURE_NOT_PERMITTED_FALLBACK_TEXT,
     KNOWLEDGE_INVENTORY_UNSUPPORTED_TEXT,
     RequestExecutionStatus,
     command_suppression_fallback_text,
     derive_execution_decision,
     enforce_execution_decision_on_guidance,
+    enforce_response_mode_compatibility,
     load_current_turn_contract,
     requires_unstructured_response_backstop,
 )
@@ -200,7 +202,13 @@ from backend.api.troubleshooting_guidance_context import (
     render_troubleshooting_guidance,
 )
 from backend.api.turn_context import bind_run_id, pop_message_texts, reset_run_id
-from backend.api.turn_source_references import TURN_SOURCE_REFERENCES_STATE_KEY, build_turn_source_references_delta
+from backend.api.turn_source_references import (
+    CANONICAL_RESULT_ENFORCEMENT_STATE_KEY,
+    TURN_SOURCE_REFERENCES_STATE_KEY,
+    CanonicalTurnResultConflictError,
+    build_turn_failure_marker_delta,
+    build_turn_source_references_delta,
+)
 from backend.attachments.repository import AttachmentRepository
 from backend.attachments.service import AttachmentService, get_attachment_service
 from backend.attachments.storage import ChatAttachmentStorage, get_attachment_storage
@@ -909,6 +917,45 @@ class ChatService:
         session = await self._session_service.get_session(session_id, user_id)
         perf.mark("session_loaded")
 
+        # 6A.14A HARDENING PASS -- positive, durable canonical-result
+        # ENFORCEMENT marker, established BEFORE any Runner call for this
+        # turn (never during -- see CANONICAL_RESULT_ENFORCEMENT_STATE_
+        # KEY's own docstring for why writing state DURING an active
+        # Runner call is a proven-unsafe pattern in this codebase, and why
+        # this marker is deliberately session-level rather than keyed by
+        # the turn's own ADK invocation_id, which is not yet known here).
+        # Idempotent: only written once per session, ever. If this ONE
+        # write itself fails, the turn fails closed HERE, before any
+        # specialist/model call of any kind -- so no raw assistant
+        # final-response event can ever be appended for this attempt,
+        # closing the fail-open history gap structurally rather than
+        # relying on a second best-effort write after the fact.
+        if session.state.get(CANONICAL_RESULT_ENFORCEMENT_STATE_KEY) is not True:
+            try:
+                await self._session_service.persist_state_delta(
+                    session, {CANONICAL_RESULT_ENFORCEMENT_STATE_KEY: True}
+                )
+            except Exception:
+                _logger.error(
+                    "chat_service: canonical-result enforcement marker could not be established -- "
+                    "failing the turn closed before any specialist/model execution run_id=%s",
+                    sequencer.run_id,
+                )
+                yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
+                yield sequencer.build(
+                    StreamEventType.ERROR,
+                    {
+                        "code": "run_failure",
+                        "message": "The assistant could not start this request. Please try again.",
+                    },
+                )
+                failed_trace = trace_recorder.record(**response_failed_trace_step())
+                if failed_trace is not None:
+                    yield failed_trace
+                yield sequencer.build(StreamEventType.RUN_COMPLETED, {"outcome": "error"})
+                perf.log_duration("total_run", perf.elapsed_seconds())
+                return
+
         # Production-hardening pass: consume (single-use) whatever
         # `ResolvedReadContinuation` a prior turn's `selection_service
         # .choose()` may have stored for a resumed SelectionCard read.
@@ -1079,18 +1126,51 @@ class ChatService:
         final_text: Optional[str] = None
         status_cleared = False
         first_event_seen = False
-        # A5 live UI corrective pass -- FINAL trust-gate closure: turn-
-        # local only (never session state, never Case context, never a
-        # source reference -- see the delta-emission block below for the
-        # full three-state rationale). Holds team_manager's own text
-        # chunks for exactly as long as this turn's source-requirements
-        # classification (`source_requirements_capture`) is UNKNOWN
-        # (`declared is False`) -- released verbatim, in order, the
-        # instant classification resolves to explicitly non-governed;
-        # discarded, never emitted, the instant it resolves to explicitly
-        # governed. Goes out of scope (and is never inspected again) the
-        # moment this generator returns, on every exit path.
-        buffered_delta_texts: list[str] = []
+        # LIVE-CORR-3 -- DEF-0044 CORRECTIVE PASS -- FIXED, MANDATORY
+        # BUFFERING POLICY (never a conditional/per-turn choice):
+        #
+        #   status/progress events  -> may stream immediately
+        #   assistant/specialist text -> NEVER streamed raw, at all
+        #   validated canonical response -> emitted ONCE, via
+        #     `message.completed`, only after every deterministic
+        #     correction/validation below AND durable canonical
+        #     persistence have both succeeded
+        #
+        # Root cause this closes: `RunConfig(streaming_mode=StreamingMode
+        # .SSE)` (above) makes the Runner yield real, incremental partial
+        # events as the model produces them -- `_extract_delta_text`
+        # previously turned each one into a live `message.delta` SSE
+        # event, entirely INSIDE this loop, well BEFORE any of the
+        # deterministic corrections further down this method run
+        # (`derive_execution_decision`/`enforce_execution_decision_on_
+        # guidance`/`command_suppression_fallback_text`/the KNOWLEDGE_
+        # INVENTORY override/6A.14A canonical persistence) -- so even a
+        # turn whose FINAL answer is later, correctly, replaced could
+        # already have shown the raw, uncorrected text on screen. This
+        # was a SYSTEMIC gap sitting upstream of every one of those
+        # mechanisms; none of them can retroactively un-stream text
+        # already rendered. Superseded by this pass: the ONLY per-turn
+        # conditional streaming mechanism this method used to have (a
+        # governed-knowledge-classification-gated buffer/release/discard
+        # dance) is removed below, not merely bypassed -- it existed
+        # purely to decide whether ALREADY-BUFFERED text should be
+        # revealed live, a question that no longer has a "yes" answer
+        # for ANY classification now that no turn ever reveals raw text
+        # live. `_extract_delta_text`'s own return value is still
+        # consulted below, ONLY to know a chunk has arrived (to clear
+        # the "thinking" status indicator once) -- its TEXT is never
+        # retained, buffered, or emitted. The turn's real, final text
+        # is never derived from these per-chunk deltas at all (`final_
+        # text` comes from `_extract_final_text`'s own separate,
+        # complete/non-partial event, unchanged) -- so there is nothing
+        # to lose by never accumulating them.
+        #
+        # Deliberately NOT optimized into conditional/partial streaming
+        # in this pass (explicit instruction: "no conditional
+        # conversational token streaming in this milestone") -- a real,
+        # intentional, documented loss of progressive assistant-token
+        # streaming, left for a later milestone's own separate, approved
+        # design.
         # POST-5.1 B4B DEFECT FIX -- captured (in-memory only, no session
         # I/O) the moment the first event of a real turn is observed; the
         # ACTUAL saved-chat bookkeeping write is deferred until this
@@ -1459,66 +1539,22 @@ class ChatService:
                         conversation_target_capture.observe(event)
                         source_requirements_capture.observe(event)
 
-                        # A5 live UI corrective pass -- FINAL trust-gate
-                        # closure. `SourceRequirementsCapture` has THREE
-                        # semantic states, not two, even though it is stored
-                        # as two booleans:
-                        #   UNKNOWN               -- declared is False
-                        #   EXPLICIT NON-GOVERNED -- declared True, requires_governed_knowledge False
-                        #   EXPLICIT GOVERNED     -- declared True, requires_governed_knowledge True
-                        # The prior pass's fix only gated the THIRD state --
-                        # `declared is False` (UNKNOWN, the state every turn
-                        # starts in, before team_manager's own `record_
-                        # source_requirements` call is observed) was
-                        # silently treated the same as explicit-False, so a
-                        # turn that never declares at all during the main
-                        # loop (caught only by the EXISTING post-loop
-                        # declaration-remediation further below) could still
-                        # stream team_manager's own untrusted prose live
-                        # during the loop, before that remediation ever ran.
-                        #
-                        # This check runs on EVERY event (not only ones that
-                        # themselves carry text) and reacts the INSTANT
-                        # classification resolves -- required because the
-                        # declaration itself arrives as a text-less function-
-                        # response event; if classification resolved to
-                        # non-governed with no FURTHER delta event ever
-                        # following in the same turn, gating only inside the
-                        # delta-handling block below would leave the
-                        # buffered text released nowhere, corrupting
-                        # `message.delta`'s own promise to carry the full
-                        # answer for a turn with no other exposure path.
-                        if buffered_delta_texts and source_requirements_capture.declared:
-                            if source_requirements_capture.requires_governed_knowledge:
-                                # EXPLICIT GOVERNED -- permanently discard
-                                # everything buffered while still UNKNOWN.
-                                # `final_text` for this turn is decided later
-                                # in this method (troubleshooting_guidance
-                                # override / governed-knowledge completion
-                                # remediation) from TRUSTED state, never from
-                                # team_manager's own live prose -- live-
-                                # reproduced proof (VSWR follow-up turn):
-                                # team_manager streamed "...within the
-                                # acceptable range..." while the trusted,
-                                # remediated `message.completed` carried a
-                                # materially different, correctly-grounded
-                                # answer. Never emitted, never held onto past
-                                # this point.
-                                buffered_delta_texts = []
-                            else:
-                                # EXPLICIT NON-GOVERNED -- release everything
-                                # buffered while UNKNOWN, in original order,
-                                # immediately -- a single coherent reveal,
-                                # regardless of whether THIS event itself
-                                # carries any further text.
-                                pending_texts = buffered_delta_texts
-                                buffered_delta_texts = []
-                                for pending_text in pending_texts:
-                                    if not status_cleared:
-                                        yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
-                                        status_cleared = True
-                                        perf.mark("first_message_delta")
-                                    yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": pending_text})
+                        # LIVE-CORR-3 -- DEF-0044: the buffer/release/
+                        # discard reconciliation that previously lived here
+                        # (gated on `source_requirements_capture`'s
+                        # UNKNOWN/EXPLICIT-GOVERNED/EXPLICIT-NON-GOVERNED
+                        # states) is REMOVED, not merely bypassed -- it
+                        # existed only to decide whether text buffered
+                        # while classification was still UNKNOWN should be
+                        # revealed live once resolved. Under this pass' own
+                        # fixed, unconditional buffering policy, text is
+                        # NEVER revealed live regardless of classification,
+                        # so that question has no "yes" answer left to
+                        # compute -- `source_requirements_capture` itself,
+                        # and every OTHER use of it later in this method
+                        # (e.g. the governed-knowledge completion gate),
+                        # is completely unaffected; only its former role in
+                        # THIS streaming-presentation decision is gone.
 
                         # Contributor-accuracy fix + performance pass: start
                         # (or restart, for a superseded chat_id) the
@@ -1541,39 +1577,26 @@ class ChatService:
                             )
 
                         delta_text = _extract_delta_text(event)
-                        if delta_text is not None:
-                            # By this point in the loop iteration, the
-                            # buffer-reconciliation check above has already
-                            # resolved any classification THIS event itself
-                            # carried, so only three cases remain for this
-                            # event's OWN delta text specifically:
-                            if not source_requirements_capture.declared:
-                                # Still UNKNOWN -- buffer verbatim, turn-
-                                # local only (never session state/Case
-                                # context/a source reference -- goes out of
-                                # scope with this generator on every exit
-                                # path). See the buffer-reconciliation
-                                # check above for the full three-state
-                                # rationale and what happens once
-                                # classification resolves.
-                                buffered_delta_texts.append(delta_text)
-                            elif source_requirements_capture.requires_governed_knowledge:
-                                # EXPLICIT GOVERNED -- discard; never
-                                # emitted, never held onto past this point.
-                                pass
-                            else:
-                                # EXPLICIT NON-GOVERNED -- the buffer is
-                                # already empty (flushed above the instant
-                                # classification resolved), so this is
-                                # simply live streaming, byte-identical to
-                                # before this pass for a turn whose
-                                # declaration arrives before its first delta
-                                # (the common case).
-                                if not status_cleared:
-                                    yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
-                                    status_cleared = True
-                                    perf.mark("first_message_delta")
-                                yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": delta_text})
+                        if delta_text is not None and not status_cleared:
+                            # LIVE-CORR-3 -- DEF-0044: a chunk has arrived,
+                            # so the model/specialist has genuinely started
+                            # producing output -- clear the "thinking"
+                            # status indicator (a status/progress signal,
+                            # explicitly permitted to stream immediately),
+                            # but `delta_text` itself is discarded here,
+                            # never buffered, never emitted as `message.
+                            # delta`. This turn's real, fully-validated
+                            # final text reaches the user exactly once, via
+                            # `message.completed`, further down this
+                            # method, only after canonical persistence
+                            # succeeds. `final_text` is never derived from
+                            # these per-chunk deltas either way -- see
+                            # `text = _extract_final_text(event)` just
+                            # below, which reads a SEPARATE, complete/
+                            # non-partial event.
+                            yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
+                            status_cleared = True
+                            perf.mark("first_message_delta")
 
                         text = _extract_final_text(event)
                         if text is not None:
@@ -1608,7 +1631,10 @@ class ChatService:
                         user_content=content,
                     )
                     if retry_text:
-                        yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": retry_text})
+                        # LIVE-CORR-3 -- DEF-0044: no raw delta emission
+                        # here either -- `final_text` still reaches the
+                        # user exactly once, already validated, via
+                        # `message.completed` further down this method.
                         final_text = retry_text
                     else:
                         _logger.warning(
@@ -2084,6 +2110,35 @@ class ChatService:
             # uses). The real, deterministic catalog capability is a
             # future milestone.
             final_text = KNOWLEDGE_INVENTORY_UNSUPPORTED_TEXT
+            # LIVE-CORR-2 -- DEF-0039 CORRECTIVE PASS: `selected_knowledge_
+            # evidence` may already hold real, genuinely-selected Knowledge
+            # items from earlier in THIS turn (a real `knowledge_search`/
+            # `knowledge_select_evidence` call made before this
+            # capability decision was known) -- live evidence (session
+            # `abe35bdc-...`) proved those items otherwise still reached
+            # the user as `knowledge_sources` chips beside a message that
+            # explicitly disclaims the ability to enumerate documents,
+            # misleadingly appearing to support a fallback they never
+            # informed. Cleared here, in the SAME place/turn `final_text`
+            # is overridden, so every later consumer of this variable --
+            # the live `knowledge_sources` SSE field (below), the
+            # persisted canonical result (below, built from the SAME
+            # `knowledge_sources`), AND the end-of-turn `LAST_SELECTED_
+            # GOVERNED_EVIDENCE_STATE_KEY`/`ACTIVE_GOVERNED_PROCEDURE_
+            # STATE_KEY` continuity-anchor writes (both also read from
+            # THIS SAME variable, further down) -- all stay consistent
+            # for free, never a second, independently-maintained cleanup.
+            # `build_last_selected_governed_evidence_state_update([])`/
+            # `compute_fresh_active_procedure_anchor([], ...)` both
+            # already treat an empty list as "no change" (their own
+            # documented contract), so a PRIOR turn's real continuity
+            # anchor is correctly left untouched -- only the DISCARDED
+            # inventory-turn evidence is prevented from ever becoming a
+            # new one. Internal retrieval/selection activity already
+            # emitted via this turn's own activity-channel events is
+            # unaffected -- only this end-of-turn, user-facing/persisted
+            # variable is cleared.
+            selected_knowledge_evidence = []
 
         if error is None and final_text is not None:
             # A5 final corrective pass -- the HARD, deterministic one-
@@ -2114,6 +2169,25 @@ class ChatService:
             # must agree before a command reaches the user. A turn whose
             # execution decision permits commands (the overwhelming
             # majority) is completely unaffected.
+            # LIVE-CORR-3 -- DEF-0040 corrective pass (section 9's own
+            # "RequestContract and output-mode enforcement" requirement):
+            # BEFORE the existing may-emit-command gate below, confirm the
+            # guidance's own `interaction_mode` is even PERMITTED for the
+            # validated contract's `requested_output` (`execution_
+            # decision.requested_output` -- the SAME already-freshness-
+            # checked value `derive_execution_decision` itself populated,
+            # never a second, redundant read of `current_turn_request_
+            # contract`). A `FULL_PROCEDURE`-shaped response for a
+            # request validated as needing only `TROUBLESHOOTING_NEXT_
+            # STEP`/`EXACT_COMMAND` output is discarded here -- the exact
+            # live DEF-0040 defect shape (multiple conditional branches/
+            # commands shown together as though all currently
+            # executable). A turn whose contract genuinely permits
+            # `PROCEDURE_STEPS` (or has no guidance to check in the first
+            # place) is completely unaffected.
+            captured_troubleshooting_guidance, response_mode_incompatible = enforce_response_mode_compatibility(
+                captured_troubleshooting_guidance, execution_decision
+            )
             if captured_troubleshooting_guidance is not None:
                 corrected_guidance, command_suppressed_by_policy = enforce_execution_decision_on_guidance(
                     captured_troubleshooting_guidance, execution_decision
@@ -2122,6 +2196,14 @@ class ChatService:
                 if command_suppressed_by_policy:
                     fallback_text = command_suppression_fallback_text(execution_decision)
                     final_text = f"{final_text}\n\n{fallback_text}" if final_text else fallback_text
+            elif response_mode_incompatible:
+                _logger.warning(
+                    "chat_service: FULL_PROCEDURE guidance discarded -- validated contract requested_output=%s "
+                    "does not permit full-procedure output run_id=%s",
+                    execution_decision.requested_output,
+                    sequencer.run_id,
+                )
+                final_text = FULL_PROCEDURE_NOT_PERMITTED_FALLBACK_TEXT
             elif requires_unstructured_response_backstop(execution_decision, troubleshooting_guidance_present=False):
                 # Phase 6A.14 FINAL corrective pass -- ROOT CAUSE A
                 # backstop: no `troubleshooting_guidance` exists for this
@@ -2319,31 +2401,52 @@ class ChatService:
                 reference.model_dump(mode="json") for reference in knowledge_sources
             ]
 
-        # B7 corrective pass -- durably persists the SAME already-safe
-        # `source_reference`/`knowledge_sources` this turn just built for
-        # the live SSE event above, keyed by this turn's own real ADK
-        # `invocation_id` (`turn_invocation_id`, captured earlier from the
-        # Runner's first event -- the same identity `session_history_
+        # B7 corrective pass, widened by 6A.14A -- durably persists the
+        # SAME already-safe `source_reference`/`knowledge_sources` this
+        # turn just built for the live SSE event above, AND (6A.14A,
+        # DEF-0031) this turn's own already fully corrected `final_text`
+        # -- ONE canonical per-turn entry, keyed by this turn's own real
+        # ADK `invocation_id` (`turn_invocation_id`, captured earlier from
+        # the Runner's first event -- the same identity `session_history_
         # service.py`'s `turn_id` already uses). See turn_source_
         # references.py's own module docstring for why plain ADK session
-        # state (never a new table/migration) is sufficient, and why this
+        # state (never a new table/migration) is sufficient, why this
         # correctly disappears again if the turn is later rewound away
         # (ADK's own event-order-based state-delta reversal, not a new
-        # mechanism). Written BEFORE the MESSAGE_COMPLETED event that
-        # announces it, matching this method's own "persist before
-        # announcing" discipline elsewhere. A turn with neither a Teams
-        # nor a governed-KM source has nothing to persist -- `build_turn_
-        # source_references_delta` returns `None` for that case, and no
-        # write happens at all.
+        # mechanism), and why `final_text` belongs in this SAME entry
+        # rather than a second, independently-persisted structure. Written
+        # BEFORE the MESSAGE_COMPLETED event that announces it, matching
+        # this method's own "persist before announcing" discipline
+        # elsewhere -- PERSIST BEFORE ANNOUNCE: if this write fails, the
+        # turn fails closed below and MESSAGE_COMPLETED is NEVER emitted,
+        # so the live response and what history can later reproduce can
+        # never diverge merely because persistence itself failed. A turn
+        # with neither a Teams/governed-KM source nor any text to persist
+        # has nothing to write -- `build_turn_source_references_delta`
+        # returns `None` for that case (never reachable for a genuinely
+        # completed turn, since `final_text` is always a real string by
+        # this point -- see the `error is None and final_text is None`
+        # guard earlier in this method).
+        canonical_persistence_failed = False
         if turn_invocation_id is not None:
             end_of_turn_state_delta: dict[str, Any] = {}
-            turn_source_references_delta = build_turn_source_references_delta(
-                refreshed_session.state.get(TURN_SOURCE_REFERENCES_STATE_KEY),
-                turn_invocation_id,
-                source_reference,
-                knowledge_sources,
-                visual_evidence_internal,
-            )
+            try:
+                turn_source_references_delta = build_turn_source_references_delta(
+                    refreshed_session.state.get(TURN_SOURCE_REFERENCES_STATE_KEY),
+                    turn_invocation_id,
+                    source_reference,
+                    knowledge_sources,
+                    visual_evidence_internal,
+                    final_text=final_text,
+                )
+            except CanonicalTurnResultConflictError:
+                _logger.error(
+                    "chat_service: canonical turn result conflict for an already-persisted turn -- "
+                    "failing closed rather than overwriting a prior authoritative answer run_id=%s",
+                    sequencer.run_id,
+                )
+                canonical_persistence_failed = True
+                turn_source_references_delta = None
             if turn_source_references_delta is not None:
                 end_of_turn_state_delta[TURN_SOURCE_REFERENCES_STATE_KEY] = turn_source_references_delta
 
@@ -2355,8 +2458,8 @@ class ChatService:
             # governed_evidence_state_update`'s own "empty means no
             # change" contract), never blanking out a previously valid
             # continuity anchor. Combined into the SAME single session-
-            # state write as the provenance persistence above, avoiding a
-            # second round trip.
+            # state write as the provenance/canonical-result persistence
+            # above, avoiding a second round trip.
             end_of_turn_state_delta.update(
                 build_last_selected_governed_evidence_state_update(selected_knowledge_evidence)
             )
@@ -2375,8 +2478,56 @@ class ChatService:
                 )
             )
 
-            if end_of_turn_state_delta:
-                await self._session_service.persist_state_delta(refreshed_session, end_of_turn_state_delta)
+            # 6A.14A -- PERSIST BEFORE ANNOUNCE: a failure here (including
+            # the conflict case detected above) must never let a live
+            # response reach the user that a refresh/reopen could not
+            # reproduce identically (DEF-0031) -- fail the turn closed,
+            # using the SAME safe ERROR/RUN_COMPLETED(outcome=error) shape
+            # this method already uses for every other unrecoverable
+            # failure, rather than letting an exception propagate uncaught
+            # (which would leave the SSE stream ending with no completion
+            # signal at all -- see `_drive`'s own "`_run_turn_events`
+            # never raises in the normal case" invariant in this same
+            # module). `asyncio.CancelledError` is a `BaseException`,
+            # deliberately NOT caught here -- cancellation must continue to
+            # propagate and unwind normally (mirrors the D2 corrective
+            # pass's own `except Exception`, never `except BaseException`,
+            # discipline).
+            if not canonical_persistence_failed and end_of_turn_state_delta:
+                try:
+                    await self._session_service.persist_state_delta(refreshed_session, end_of_turn_state_delta)
+                except Exception:
+                    _logger.warning(
+                        "chat_service: end-of-turn canonical result persistence failed -- failing the turn "
+                        "closed rather than announcing a response history could not reproduce run_id=%s",
+                        sequencer.run_id,
+                    )
+                    canonical_persistence_failed = True
+
+            if canonical_persistence_failed:
+                # See `_best_effort_mark_turn_failed`'s own docstring --
+                # the ADK Runner's own raw final-response event for this
+                # turn is already durably appended regardless of whether
+                # THIS write succeeded; without this marker a later
+                # refresh would fall back to displaying that raw,
+                # uncorrected text (DEF-0031's own "no contradictory
+                # history" requirement).
+                await self._best_effort_mark_turn_failed(session_id, user_id, turn_invocation_id)
+                if contributors_task is not None and not contributors_task.done():
+                    contributors_task.cancel()
+                yield sequencer.build(
+                    StreamEventType.ERROR,
+                    {
+                        "code": "run_failure",
+                        "message": "The assistant's response could not be saved. Please try again.",
+                    },
+                )
+                failed_trace = trace_recorder.record(**response_failed_trace_step())
+                if failed_trace is not None:
+                    yield failed_trace
+                yield sequencer.build(StreamEventType.RUN_COMPLETED, {"outcome": "error"})
+                perf.log_duration("total_run", perf.elapsed_seconds())
+                return
 
         yield sequencer.build(StreamEventType.MESSAGE_COMPLETED, message_completed_data)
 
@@ -2467,6 +2618,46 @@ class ChatService:
                 "chat_service: cleanup persist_state_delta failed after session reload "
                 "(session_id=%s) -- relying on next turn's crash-recovery sweep",
                 session_id,
+            )
+
+    async def _best_effort_mark_turn_failed(self, session_id: str, user_id: str, turn_id: str) -> None:
+        """6A.14A/DEF-0031 -- when a turn's OWN canonical-result
+        persistence attempt itself fails (or conflicts), the ADK Runner's
+        own raw final-response event is nonetheless ALREADY durably
+        appended (a separate, earlier `append_event` call this method
+        does not control) -- so without this marker, `session_history_
+        service.py`'s legacy fallback would display that raw,
+        uncorrected text as though it were a real completed answer on the
+        next refresh, reintroducing exactly the live/refreshed divergence
+        this milestone exists to close. Best-effort, mirroring `_reload_
+        and_persist_cleanup_delta`'s own "always re-fetch a fresh session,
+        never raise" discipline exactly (the session object this method's
+        own failed write just used may itself now be storage-revision-
+        stale, per that method's own docstring) -- a failure here is
+        logged and swallowed, never turning an already-reported failure
+        into a second, different one. RESIDUAL RISK, honestly documented:
+        if this best-effort write ALSO fails (e.g. a sustained database
+        outage), history falls back to displaying this turn's raw,
+        uncorrected text until a later successful turn overwrites this
+        key's session state -- an accepted, narrow edge case, not solved
+        by this milestone (see the 6A.14A closure report's own residual-
+        risks section).
+        """
+        try:
+            fresh_session = await self._session_service.get_session(session_id, user_id)
+            delta = {
+                TURN_SOURCE_REFERENCES_STATE_KEY: build_turn_failure_marker_delta(
+                    fresh_session.state.get(TURN_SOURCE_REFERENCES_STATE_KEY), turn_id
+                )
+            }
+            await self._session_service.persist_state_delta(fresh_session, delta)
+        except Exception:
+            _logger.warning(
+                "chat_service: best-effort canonical-turn-failure marker persistence also failed "
+                "(session_id=%s, turn_id=%s) -- history may show this turn's raw, uncorrected text "
+                "until a future successful turn overwrites this session's state",
+                session_id,
+                turn_id,
             )
 
     async def _finalize_user_turn_activity(

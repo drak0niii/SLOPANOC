@@ -293,13 +293,73 @@ class RequestContract(BaseModel):
 # policy.py`'s own former private `_TARGET_SPECIFIC_INTENTS` -- ONE
 # definition, reused by both this module's own reconciliation and that
 # module's own execution-decision gate, never two independently-drifting
-# copies): intents whose output can carry a live, target-specific
-# operational command. KNOWLEDGE_INVENTORY and ACTION are deliberately
-# excluded -- both are governed by their own, separate, earlier-checked
-# branches in `derive_execution_decision`.
-TARGET_SPECIFIC_INTENTS = frozenset(
-    {RequestIntent.COMMAND, RequestIntent.TROUBLESHOOTING, RequestIntent.PROCEDURE, RequestIntent.INFORMATION}
+# copies): intents whose PURPOSE is inherently target/procedure-specific.
+# KNOWLEDGE_INVENTORY and ACTION are deliberately excluded -- both are
+# governed by their own, separate, earlier-checked branches in `derive_
+# execution_decision`.
+#
+# LIVE-CORR-2 -- DEF-0037 CORRECTIVE PASS: `INFORMATION` REMOVED from
+# this set -- audited and found to be the direct root cause of DEF-0037.
+# One broad, intent-only set was previously used to decide THREE
+# conceptually different questions at once: (1) what shape of answer is
+# being produced, (2) whether a subject/procedure is required, (3)
+# whether operational output may be emitted. `INFORMATION` alone does
+# NOT inherently signal target-specific/operational purpose (a plain
+# "hello," `intent=information, requested_output=fact, subject=None`,
+# was blanket-classified target-specific purely by this label, forcing
+# the same "no resolved subject/procedure" clarification an operational
+# command request gets -- session `32c5a4a5-...`, live evidence).
+# `INFORMATION` remains a fully valid REQUEST_INTENT value; it simply no
+# longer, on its own, triggers the subject/target-context gates below.
+# This does NOT create a bypass: a request that IS actually operationally
+# SHAPED (e.g. `intent=information, requested_output=exact_command`) is
+# still caught by the SEPARATE, second factor, `_OPERATIONAL_OUTPUT_
+# SHAPES`, below -- see `is_operationally_shaped_request`'s own docstring
+# for the full "intent labels cannot bypass safety" argument.
+TARGET_SPECIFIC_INTENTS = frozenset({RequestIntent.COMMAND, RequestIntent.TROUBLESHOOTING, RequestIntent.PROCEDURE})
+
+# LIVE-CORR-2 -- DEF-0037 CORRECTIVE PASS: the SECOND, independent factor.
+# `RequestedOutput` shapes that can structurally carry a live operational
+# command/procedure step -- `FACT`/`KNOWLEDGE_LIST` never can (per the
+# schema, neither `TroubleshootingGuidance.command` nor `full_procedure_
+# steps` is populated for a plain factual/inventory answer); `ACTION` is
+# governed by its own separate, earlier-checked branch. Kept deliberately
+# narrow and closed, mirroring `_IDENTIFIER_CLASS_PREFIXES`'s own "a
+# deliberate code change here, never inferred from free text" discipline.
+_OPERATIONAL_OUTPUT_SHAPES = frozenset(
+    {RequestedOutput.EXACT_COMMAND, RequestedOutput.PROCEDURE_STEPS, RequestedOutput.TROUBLESHOOTING_NEXT_STEP}
 )
+
+
+def is_operationally_shaped_request(intent: str, requested_output: str) -> bool:
+    """LIVE-CORR-2 -- DEF-0037 CORRECTIVE PASS: the single, shared
+    replacement for "is this request target-specific" -- consulted by
+    BOTH the "no resolved subject/procedure" gate (`request_execution_
+    policy.derive_execution_decision`) and `required_target_parameter_
+    gaps` below, so the two can never independently drift.
+
+    TRUE whenever EITHER factor signals operational purpose: `intent` is
+    one of `TARGET_SPECIFIC_INTENTS` (COMMAND/TROUBLESHOOTING/PROCEDURE --
+    the model's own semantic classification of PURPOSE; `INFORMATION` is
+    deliberately excluded, see that frozenset's own DEF-0037 docstring),
+    OR `requested_output` is one of `_OPERATIONAL_OUTPUT_SHAPES` (the
+    ANSWER SHAPE actually being produced). This is a deliberate OR, not
+    an AND: instruction section 5's own explicit non-negotiable is that
+    "intent labels cannot be used to bypass operational safety" --
+    `intent=information, requested_output=exact_command` (a mislabeled-
+    but-still-command-shaped request) and `intent=command, requested_
+    output=fact` (an operational intent that happened to declare a
+    factual answer shape) must BOTH remain restrictively gated; only a
+    request that is NEITHER operationally-INTENDED nor operationally-
+    SHAPED (the ordinary "hello"/"what can you do?" case) is exempt.
+    `KNOWLEDGE_INVENTORY`/`ACTION` are excluded from `TARGET_SPECIFIC_
+    INTENTS` and never appear in `_OPERATIONAL_OUTPUT_SHAPES` either --
+    both remain governed exclusively by their own, separate, earlier-
+    checked branches in `derive_execution_decision`, unaffected by this
+    function.
+    """
+    return intent in TARGET_SPECIFIC_INTENTS or requested_output in _OPERATIONAL_OUTPUT_SHAPES
+
 
 _TARGET_TYPE_PARAMETER_NAME = "unit_type"
 _TARGET_IDENTIFIER_PARAMETER_NAME = "unit_id"
@@ -315,9 +375,9 @@ code change here, never an inference from free text."""
 def required_target_parameter_gaps(
     intent: str, requested_output: str, provided_context: Sequence[RequestParameter]
 ) -> list[str]:
-    """Section 4/5's own deterministic target-parameter rule: for a
-    target-specific request (`intent` in `TARGET_SPECIFIC_INTENTS`) whose
-    own VERIFIED `provided_context` establishes a target TYPE
+    """Section 4/5's own deterministic target-parameter rule: for an
+    operationally-shaped request (`is_operationally_shaped_request`)
+    whose own VERIFIED `provided_context` establishes a target TYPE
     (`unit_type`) that itself requires an IDENTIFIER before a live
     command can concern one specific unit -- but no `unit_id` is yet
     present -- the identifier is deterministically required, REGARDLESS
@@ -329,17 +389,39 @@ def required_target_parameter_gaps(
     AAS) -- a `unit_type` value OUTSIDE that set (e.g. a real governed
     `"SupportUnit"` branch, whose own real content is "No restart" with
     no per-unit command at all) never triggers this rule; there is
-    nothing to identify. Returns `[]` whenever this rule does not apply
-    (a non-target-specific intent, no `unit_type` established at all,
-    `unit_id` already present, or `unit_type`'s own value does not name a
-    recognized identifier-bearing class). `requested_output` is accepted
-    for API-shape symmetry with `reconcile_missing_context` and potential
-    future refinement, but the CURRENT rule is gated solely on `intent`
-    -- the SAME boundary `derive_execution_decision` already uses, never
-    a second, subtly different classification.
+    nothing to identify -- that is a real, VERIFIED fact, not an
+    unresolved gap.
+
+    LIVE-CORR-2 -- DEF-0038 CORRECTIVE PASS (bounded foundation, NOT a
+    full/final fix -- see `docs/DEFECT_REGISTER.md`'s own DEF-0038 entry
+    for why): live evidence proved this rule was NON-MONOTONIC --
+    supplying NO information about the target (`unit_type` entirely
+    absent) previously returned `[]` (fully permissive), while supplying
+    PARTIAL information (`unit_type="RRU"`, no `unit_id`) correctly
+    returned `["unit_id"]` (restricted) -- the opposite of the required
+    "less context must never grant MORE permission than partial context"
+    invariant. This function has NO deterministic signal, within this
+    milestone's own strict scope, for whether the specific governed
+    operation actually selected this turn requires a target at all (that
+    would require coupling this policy to Knowledge-evidence selection
+    state -- explicitly DEF-0040/6A.20 scope, not this pass's). Rather
+    than guess, the bounded, fail-closed interim rule below treats
+    "`unit_type` never even stated" AT LEAST as restrictively as
+    "`unit_type` stated but `unit_id` missing" -- but ONLY for
+    `RequestedOutput.EXACT_COMMAND` (the confirmed shape of the live
+    DEF-0038 defect, and the one output shape that can carry a raw,
+    ready-to-run command string) -- never for `PROCEDURE_STEPS`/
+    `TROUBLESHOOTING_NEXT_STEP`, which can legitimately describe a
+    procedure's branches conceptually without yet committing to one
+    target (see `test_procedure_can_still_describe_branches_when_fully_
+    resolved`, unchanged). A future milestone with access to the
+    selected governed operation's own target-cardinality classification
+    (whether it is genuinely target-independent, e.g. a read-only
+    discovery lookup) can safely relax this -- until then, DEF-0038
+    remains open at the step-aware precision layer even though this
+    monotonicity gap is closed.
     """
-    del requested_output  # reserved for a future, more granular rule; unused today, kept for API symmetry
-    if intent not in TARGET_SPECIFIC_INTENTS:
+    if not is_operationally_shaped_request(intent, requested_output):
         return []
     provided_names = {param.name for param in provided_context}
     if _TARGET_IDENTIFIER_PARAMETER_NAME in provided_names:
@@ -347,8 +429,15 @@ def required_target_parameter_gaps(
     unit_type_value = next(
         (param.value for param in provided_context if param.name == _TARGET_TYPE_PARAMETER_NAME), None
     )
-    if unit_type_value is not None and unit_type_value.strip().upper() in _IDENTIFIER_CLASS_PREFIXES:
-        return [_TARGET_IDENTIFIER_PARAMETER_NAME]
+    if unit_type_value is not None:
+        if unit_type_value.strip().upper() in _IDENTIFIER_CLASS_PREFIXES:
+            return [_TARGET_IDENTIFIER_PARAMETER_NAME]
+        # A confirmed unit_type OUTSIDE the identifier-bearing class (e.g.
+        # "SupportUnit") is a real, verified fact establishing no
+        # identifier is needed -- not a gap.
+        return []
+    if requested_output == RequestedOutput.EXACT_COMMAND:
+        return sorted([_TARGET_TYPE_PARAMETER_NAME, _TARGET_IDENTIFIER_PARAMETER_NAME])
     return []
 
 

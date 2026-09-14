@@ -8013,8 +8013,844 @@ authoritative in `docs/MASTER_ROADMAP.md` §7a (never duplicated in full
 here — this file tracks per-milestone implementation narrative, that
 document tracks the canonical plan/status). The TARGET end-state
 architecture the whole plan builds toward is in `docs/INTELLIGENCE_
-ARCHITECTURE.md` §20a. **NEXT: 6A.15 — Support Classification Contract
-— not started by this pass.**
+ARCHITECTURE.md` §20a/§20b.
+
+**CONTROLLED DOCUMENTATION PASS — roadmap correction before further
+implementation (documentation-only; no code/schema/migration/
+infrastructure changed).** A dedicated verification pass independently
+confirmed a canonical-response divergence defect (live SSE text vs.
+refreshed/history-reconstructed text can differ, because `chat_
+service.py`'s deterministic corrections to `final_text` are never
+persisted and `session_history_service.py` reconstructs from the raw
+ADK event) and five further, previously-unregistered defects, all via
+direct code inspection (not assumed). Registered in `docs/DEFECT_
+REGISTER.md`: **DEF-0031** (the canonical-response divergence above —
+new milestone **6A.14A — Canonical Turn Result & Projection** inserted
+immediately after 6A.14 in `docs/MASTER_ROADMAP.md` §7a and `docs/
+BUILD_SEQUENCE.md`), **DEF-0032** (Knowledge narrowing/hybrid-retrieval
+key by bare `knowledge_id`, discarding `version_label` — 6A.16),
+**DEF-0033** (evidence-index embedding reconciliation gaps: no retry
+after a failed embedding on unchanged content, a stale vector survives a
+changed-content-plus-failure case, no model/version reconciliation
+trigger — 6A.16), **DEF-0034** (`RequestContract`'s deterministic
+provided-context verification is negation-blind — a statement like "this
+is Ericsson, not Nokia" can currently verify `vendor=Nokia` — attached to
+6A.13's own verification boundary without reopening 6A.13's COMPLETE
+status), **DEF-0035** (Teams write execution discards the gateway's own
+returned payload, so an HTTP-200-with-`{"success": false}` body is not
+yet distinguished from a real success — 6A.22), **DEF-0036** (a retried
+Teams write generates a fresh `requestId` with no linkage to the
+originating `ActionProposal.proposal_id`, so retry-idempotency is not yet
+provable — 6A.22). `docs/MASTER_ROADMAP.md` §7a's milestone table,
+dependency-order diagram (6A.18 now explicitly sequenced before 6A.17's
+own closure; 6A.25–6A.27 reframed as cross-cutting completeness/
+consistency/security gates rather than first-implementation milestones),
+`docs/BUILD_SEQUENCE.md`'s mirrored dependency chain, `docs/
+INTELLIGENCE_ARCHITECTURE.md` §20b (capability-vs-evidence-support
+split, governed-Knowledge-as-input-only, `KNOWLEDGE_INVENTORY` retrieval
+bypass, READ-vs-WRITE/ACTION tool-contract separation, Experience Memory
+authority order, protected-output boundary, Canonical Turn Result
+fan-out), and `docs/AGENT_CONTRACT.md` §6b (Canonical Turn Result
+ownership, protected output, the 6A.17 routing dependency on 6A.16 AND
+6A.18) were all updated to reflect this. Reaching 6A.28 will freeze this
+POST-6A closure plan only — it is never, by itself, a claim that
+SLOPANOC is broadly enterprise-production-ready; broad production
+authentication/authorization, HA/DR, SLOs, and deployment hardening
+remain Phase 4H and later concerns. **NEXT: either final live acceptance
+of 6A.12/6A.14 (DEF-0027/0028/0029/0030's own "implemented, pending live
+browser acceptance" status), or 6A.14A — Canonical Turn Result &
+Projection — not started by this pass.**
+
+===================================================================
+PHASE 6A.14A — CANONICAL TURN RESULT & PROJECTION (closes DEF-0031)
+===================================================================
+
+THE DEFECT: `chat_service.py` applies several deterministic, POST-HOC
+corrections to a turn's raw model/specialist output AFTER the ADK
+Runner has already durably appended its own final-response event
+(`command_suppression_fallback_text`, `enforce_execution_decision_on_
+guidance`, `enforce_governed_knowledge_at_completion`'s remediation, the
+`KNOWLEDGE_INVENTORY` override — DEF-0024 through DEF-0030's own
+corrected text). Those corrections were applied only to the in-memory
+`final_text` variable feeding the live `MESSAGE_COMPLETED` SSE event —
+`session_history_service.py` reconstructed a turn's text independently,
+from the RAW, pre-correction ADK-persisted event
+(`_extract_final_text`), so a refreshed/reopened conversation could show
+a materially different answer than the one the user actually saw live.
+Live-observed reproduction: user sent "hello," the live response was a
+deterministic unresolved-target fallback, the refreshed response was
+"Hello! How can I help you today?" Registered as DEF-0031 during a prior
+controlled documentation pass; this milestone implements the fix.
+
+DESIGN, per the milestone's own instruction to prefer the existing
+repository-native session-state mechanism over a new persistence system:
+`backend/api/turn_source_references.py` (already the durable, ADK-
+session-state-backed, rewind-correct per-turn Teams/governed-KM
+provenance store since B7) was widened, additively, to also carry a
+turn's own `final_text` in the SAME `{turn_id: {...}}` entry — a NEW
+typed, versioned `CanonicalTurnResult` (`schema_version`, `turn_id`,
+`text`, `source`, `knowledge_sources`) is the one canonical object per
+turn, never a second, independently-written structure that could drift
+from the first. `TURN_CANONICAL_RESULT_STATE_KEY` is a plain alias for
+the identical underlying state key. `build_turn_source_references_delta`
+gained an optional `final_text` parameter; `resolve_canonical_turn_
+result` reads it back, returning `None` for a turn with no persisted
+canonical text (a genuinely legacy, pre-6A.14A turn).
+
+CANONICALIZATION BOUNDARY: `chat_service.py`'s existing end-of-turn
+persistence call site — already writing Teams/KM provenance BEFORE
+`MESSAGE_COMPLETED` is emitted, per its own pre-existing "persist before
+announcing" discipline — now includes `final_text` in that SAME write,
+computed AFTER every existing deterministic correction (RequestContract
+execution policy, the `KNOWLEDGE_INVENTORY` override, `Troubleshooting
+Guidance` enforcement, the unresolved-target-context backstop) has
+already run. No later step may rewrite `final_text` after this point.
+
+PERSIST BEFORE ANNOUNCE, FAIL CLOSED: a failure persisting the canonical
+result, or a same-turn conflict (`CanonicalTurnResultConflictError` — a
+belt-and-suspenders idempotency/conflict guard: the SAME `final_text`
+persisted twice for one `turn_id` is a safe no-op; a DIFFERENT
+`final_text` for a `turn_id` that already has one raises rather than
+silently overwriting a prior authoritative answer) now fails the turn
+closed — the SAME `ERROR`/`RUN_COMPLETED(outcome=error)` shape this
+method already uses for every other unrecoverable failure —
+`MESSAGE_COMPLETED` is NEVER emitted for a turn whose canonical result
+did not durably persist. A new `_best_effort_mark_turn_failed` (mirroring
+`_reload_and_persist_cleanup_delta`'s own "always re-fetch a fresh
+session, never raise" discipline) additionally writes a small failure
+marker in that case, because the ADK Runner's own raw final-response
+event is ALREADY durably appended by an earlier, separate `append_event`
+call regardless of whether chat_service.py's OWN canonical write
+succeeds — without this marker, history's legacy fallback would
+resurrect that raw, uncorrected text. `asyncio.CancelledError` is
+deliberately not caught (only `except Exception`), matching the D2
+corrective pass's own established discipline.
+
+HISTORY PROJECTION: `session_history_service.py`'s `get_session_history`
+now reads `resolve_canonical_turn_result` first for an assistant turn;
+when present, its `text`/`source`/`knowledge_sources` are authoritative.
+A turn explicitly marked failed (`is_turn_marked_failed`) is excluded
+from the transcript entirely (its own user message still renders). Only
+a turn with NEITHER a canonical result NOR a failure marker — a
+genuinely legacy, pre-6A.14A turn — falls back to the exact pre-6A.14A
+behavior (raw ADK-event text + `resolve_turn_source_references`). No
+historical session is rewritten, backfilled, or deleted.
+
+REWIND: zero new code needed — ADK's own, already-proven full-
+accumulated-dict state-delta reversal (this module's own pre-existing
+top docstring, verified against installed ADK 1.33.0 source) already
+removes a discarded turn's canonical entry for free, exactly like it
+already did for Teams/KM provenance.
+
+REAL TEST-FIXTURE DEFECT FOUND AND FIXED DURING THIS MILESTONE'S OWN
+REGRESSION RUNS, TWO PASSES (not a runtime defect):
+`backend/tests/_api_fakes.py`'s `FakeRunner` (used by ~170 pre-existing
+tests, across both its default `respond`-only path and its explicit
+`events=[...]` path) reused ONE shared, fixed `invocation_id` default
+(`_TEST_INVOCATION_ID = "test-invocation"`) for every event neither
+path's caller explicitly overrode, regardless of how many turns ran
+against the same session — real ADK never does this (a fresh id every
+turn, per that same module's own pre-existing docstring). 6A.14A's new
+same-turn-conflict guard is the first thing in this codebase to actually
+depend on that real ADK guarantee, and correctly caught the fixture's
+inaccuracy: a FIRST full-suite run found it in 7 pre-existing tests using
+the DEFAULT path (`test_api_chat_service.py`/`test_api_streaming_
+endpoint.py`/`test_chat_service_saved_chat_marker.py`/`test_session_
+history_service.py`); fixed by generating a genuinely unique
+`invocation_id` per `run_async` call in that default (`respond`/`side_
+effect`-only) code path. A SECOND full-suite run (this fix now in place)
+found the SAME root cause in 7 MORE tests using the EXPLICIT
+`events=[...]` path exclusively (`test_conversation_target_regression
+.py` ×6, `test_p3_event_author_hygiene.py` ×1) — both construct two
+separate `FakeRunner` turns against the same session with different
+scripted final text, never overriding `invocation_id`. Fixed identically
+in that second code path: any yielded event still carrying the sentinel
+default is stamped, in place, with that call's own fresh id before being
+yielded, so every event within one turn still shares one consistent id
+exactly like a real turn's own events do. The two OTHER pre-existing
+tests that construct a real ADK `Event` directly with a literal
+`invocation_id="test-invocation"` (never going through `FakeRunner` at
+all) are completely unaffected by either fix. A fixture-accuracy
+correction in both cases, not a weakening of the new safety check — all
+14 affected tests pass unchanged otherwise. A full-suite run also showed
+one unrelated, pre-existing, already-documented real-Vertex-AI-output-
+variance flake (`troubleshooting_manager/test_real_model_validation.py::
+test_real_model_empty_experience_still_works`), confirmed by direct
+standalone re-run to pass (a real, successful network call) — same
+flakiness class as this codebase's own 6A.9/6A.10 closure history,
+touching zero files this pass changed.
+
+TESTS: `backend/tests/test_p6a14a_canonical_turn_result.py` (18 new) —
+real end-to-end via the REAL `team_manager` agent object (only its own
+`model` swapped for a scripted one — every real tool/callback, including
+`record_request_contract`/`validate_and_persist_request_contract` and
+the `KNOWLEDGE_INVENTORY` deterministic override, stays wired exactly as
+production uses it) against a real file-backed `DatabaseSessionService`:
+exact live/refreshed/restarted text equivalence for a deterministically-
+replaced response (the literal DEF-0031 reproduction, via the
+`KNOWLEDGE_INVENTORY` override), an ordinary unmodified response, rewind
+removing the canonical result, a forced persistence failure proving no
+`MESSAGE_COMPLETED` and no contradictory resurrected history, and real
+Teams+governed-KM provenance staying consistent across live/history;
+plus unit tests for build/resolve round-tripping, legacy-turn fallback,
+conflict/idempotency, session isolation, and the failure marker.
+
+REGRESSION: full backend suite (4175 collected). First full run (default-
+path fixture fix only in place): 627 passed, 3541 deselected (a `-k`-
+filtered run) with 7 explicit-`events=[]`-path fixture collisions found.
+Second full run (default-path fix in place, explicit-path fix not yet
+applied), UNFILTERED: 4131 passed, 36 skipped, 8 failed (the same 7
+explicit-path fixture collisions + 1 pre-existing real-model flake, both
+classes described above). Third, FINAL full run (both fixture fixes in
+place): **4138 passed, 36 skipped, 1 failed, 0:07:27** — the one failure
+(`troubleshooting_manager/test_real_model_validation.py::test_real_
+model_never_authorizes_action_governed_evidence_prohibits`, a DIFFERENT
+specific real-model test than the earlier run's own flake, exactly this
+codebase's own well-documented "a different specific test fails each
+run" real-Vertex-AI-output-variance signature) confirmed, by direct
+standalone re-run, to pass (a real, successful 19.66s network call) —
+zero fixture-related or 6A.14A-related failures remain. No frontend file
+touched (`git diff --stat -- src` empty) — DTO shapes unchanged, so no
+frontend regression was required.
+
+NOT TOUCHED: `backend/knowledge/narrowing/`, `backend/knowledge/
+hybrid_retrieval/`, `backend/agents/team_manager/request_contract.py`,
+`backend/gateway/power_automate_client.py`,
+`backend/tools/teams/execute_write.py`, `backend/agents/team_manager/
+request_execution_policy.py` (all confirmed via empty scoped `git diff`)
+— DEF-0032 through DEF-0036 remain untouched, 6A.15 remains NOT STARTED,
+no specialist-routing/RequestContract/approval/Knowledge-retrieval/tool-
+contract/model/dependency change of any kind.
+
+LIVE VALIDATION: NOT performed — no interactive browser tool was
+available in this session to drive a real hard refresh/backend restart/
+rewind through the actual UI. See the milestone's own closure report for
+the exact PowerShell validation procedure a human operator can run
+against the real dev stack.
+
+STATUS: DONE (code + regression). **P11-M11A (6A.14A — Canonical Turn
+Result & Projection) is IMPLEMENTED — live browser acceptance open.**
+DEF-0031 is CODE-FIXED, not CLOSED (see `docs/DEFECT_REGISTER.md`). This
+remains a bounded corrective pass in the POST-6A closure plan, not a
+reopening of Phase 6A's own FROZEN closure — **Phase 6A (P11) remains
+COMPLETE AND FROZEN**, P11-M00 through P11-M11 unchanged. 6A.15 remains
+NOT STARTED.
+
+===================================================================
+PHASE 6A.14A HARDENING PASS — ELIMINATE FAIL-OPEN HISTORY AND ENFORCE
+FULL CANONICAL IMMUTABILITY
+===================================================================
+
+Closes two residual weaknesses the first 6A.14A pass's own closure
+report explicitly flagged as residual risks, found by the user's own
+direct review before live-browser acceptance began.
+
+WEAKNESS 1 — FAIL-OPEN HISTORY EDGE CASE. The original per-turn best-
+effort failure marker (`build_turn_failure_marker_delta`) could not
+distinguish, on its own, "canonical persistence failed AND the failure-
+marker write also failed" (nothing persisted for this turn) from "this
+turn predates 6A.14A entirely" (also nothing persisted) — the old
+"absence means legacy" rule treated both identically, meaning a genuine
+double-failure could let the ADK Runner's own already-durably-appended
+raw final-response event resurface through the legacy fallback after
+recovery.
+
+FIX — A POSITIVE, DURABLE, SESSION-LEVEL MARKER, NEVER A SECOND BEST-
+EFFORT WRITE: `backend/api/turn_source_references.py` gained
+`CANONICAL_RESULT_ENFORCEMENT_STATE_KEY` — established by `chat_
+service.py`'s own `_run_turn_events`, immediately after the turn's
+session is first loaded, STRICTLY BEFORE any Runner call of any kind.
+AUDITED FIRST, per instruction: the turn's own ADK `invocation_id` is
+not known until the Runner's first event, by which point the Runner is
+ALREADY actively producing events for that invocation — and this
+codebase's own `_finalize_user_turn_activity` docstring already proves,
+from a real production incident, that writing session state DURING an
+active Runner call corrupts ADK's own session-revision tracking. The
+marker is therefore deliberately SESSION-level (never keyed by the not-
+yet-known invocation_id) and idempotent (written once per session,
+checked via `session.state.get(...) is not True` first). If this ONE
+write itself fails, the turn now fails closed IMMEDIATELY — before any
+specialist/model execution — via the SAME safe `ERROR`/`RUN_COMPLETED
+(outcome=error)` shape this method already uses elsewhere; no raw
+assistant final-response event can structurally ever be appended for
+that attempt.
+
+`session_history_service.py`'s `_project_turns` now tracks, during its
+existing single event walk, whether the marker's own state-delta event
+(`is_canonical_result_enforcement_marker_event`) has been observed yet
+— every turn is stamped `canonical_required` at the moment it is first
+created, reflecting real, durable event ORDER (never a timestamp, never
+process-local memory, safe under restart and clock skew). A NEW
+classification function, `resolve_canonical_turn_state` (`CanonicalTurn
+Status`: `VALID`/`FAILED`/`ABSENT`/`MALFORMED`/`CONFLICTING`), is
+consulted for every canonical-required turn — ONLY `VALID` renders
+anything; every other outcome excludes the turn's assistant message
+entirely, closing the double-failure gap structurally rather than
+relying on the failure marker's own write succeeding. A genuinely
+legacy turn (`canonical_required is False`) is completely unaffected,
+keeping the exact pre-hardening-pass behavior.
+
+REWIND AUDITED, ONE FINDING RECORDED HONESTLY (not a defect): the
+enforcement marker's own `append_event` call uses a FRESH random
+`invocation_id` (per `session_service.py`'s own documented `persist_
+state_delta` contract), never the turn's own invocation_id — so
+rewinding the very first turn in a session (which also happened to
+establish the marker) correctly LEAVES the marker `True` afterward, per
+ADK's own proven rewind mechanism (state is restored to whatever it was
+immediately BEFORE the rewind boundary; the marker write already
+happened before that boundary). This is correct, intentional ADK
+behavior, not a bug: the running backend is still 6A.14A-era code
+regardless of which turn was just discarded, so a NEW turn afterward
+correctly remains canonical-required either way (self-healing if the
+marker had been cleared instead). A turn's own CANONICAL RESULT entry
+(distinct from the session-level marker) is, as required, always
+correctly cleared by rewind for the discarded turn while an earlier
+turn's own entry remains fully intact — proven directly by a real two-
+turn rewind test.
+
+WEAKNESS 2 — INCOMPLETE CONFLICT DETECTION. The original `CanonicalTurn
+ResultConflictError` compared only `final_text`. `build_turn_source_
+references_delta` now compares the COMPLETE normalized canonical
+payload — `schema_version`, `final_text`, `source`, `knowledge_sources`,
+`visual_evidence_internal`, every field the function itself persists —
+using plain structural equality on the already-canonical JSON shape
+(never title/count/heuristic comparison, never re-sorting): a changed/
+added/removed Teams source, a changed/added/removed Knowledge source
+(including a changed `knowledge_id`/`version_label`/`section_id`), a
+schema-version change, or a changed visual-evidence binding all now
+correctly conflict; only an EXACT repeated payload is idempotent.
+Ordering is deliberately kept AUTHORITATIVE (never silently re-sorted) —
+real callers (`chat_service.py`) already apply the SAME deterministic
+`dedupe_knowledge_source_references` ordering before calling this
+function, so a genuine re-persist of the same logical selection always
+produces the same order in practice; a test proves reordering the exact
+same two Knowledge sources is treated as a material conflict, per the
+instruction's own explicit "do not leave behavior accidental"
+requirement.
+
+MIXED/MALFORMED STATE: `CanonicalTurnStatus.CONFLICTING` (an entry
+somehow claiming both a resolvable `final_text` and `failed=True`
+simultaneously — structurally unreachable from this module's own
+writers, which always overwrite the whole entry, but checked
+defensively regardless) and `CanonicalTurnStatus.MALFORMED` (an entry
+present but not parseable into a valid result and not explicitly marked
+failed) both fail closed and log safely at WARNING, session/turn
+identity only, never response text or provenance content. A genuinely
+legacy raw-fallback acceptance, and a canonical-required turn's own
+already-logged-at-write-time FAILED status, log at DEBUG (routine,
+expected outcomes, not new findings) to avoid production log noise for
+what is, in both cases, correct and expected behavior.
+
+TESTS: `backend/tests/test_p6a14a_hardening_canonical_immutability.py`
+(28 new, fully additive — the original `test_p6a14a_canonical_turn_
+result.py`'s own 18 tests were left completely untouched and re-run
+unmodified) — full-payload conflict/idempotency for text, Teams source
+identity, and Knowledge provenance identity (`knowledge_id`/`version_
+label`/`section_id`, each independently); the explicit source-order-is-
+authoritative proof; malformed/conflicting-state fail-closed unit
+proofs; `_project_turns`' own event-order `canonical_required`
+classification (legacy-only, canonical-required-only, and mixed-in-one-
+walk); and 8 real end-to-end integration tests via the REAL `team_
+manager` agent object and a real file-backed `DatabaseSessionService`:
+double-persistence-failure fail-closed with no raw-text resurrection
+(9.1), initial-marker-establishment-failure blocking ALL specialist/
+model execution — proven via a spy Runner whose `run_async` is never
+even called (9.2), a genuine legacy turn (built the old way, via `append
+_user_turn`, with no marker ever written) still rendering correctly
+(9.3), one session mixing a legacy turn + a new successful canonical
+turn + a new failed canonical turn, each rendering per its own correct
+classification (9.4), restart-durability via a fresh service instance
+against the same on-disk database file (9.5), and two rewind scenarios —
+the single-turn edge case (marker correctly preserved, per the ADK audit
+above) and the representative two-turn case (an earlier turn's own
+canonical result correctly surviving a later turn's discard) (9.6/9.6b).
+
+REGRESSION: targeted subset (history/turn_source/chat_service/rewind/
+streaming/provenance/attachment_lifecycle/persistence/conversation_
+target/event_author-focused) — 556 passed, 0 failed. Both 6A.14A test
+files together — 46 passed, 0 failed. **Full backend suite (4203
+collected): 4165 passed, 36 skipped, 2 failed, in 15m55s.** Both
+failures confirmed, by direct standalone re-run, to be PRE-EXISTING and
+unrelated (empty scoped `git diff` against both files):
+`test_r1_r3_correctness_regression.py::test_full_ambiguous_to_resolved_
+flow_call_graph` (the SAME order-dependent flakiness class documented
+across this codebase's own D1/D2/6A.4-6A.10 closures — passes cleanly
+alone) and `troubleshooting_manager/test_6a11_pass2_stress_matrix.py::
+test_knowledge_injection_treated_as_data_never_an_instruction` (a real
+Vertex AI call whose own assertion is wording-sensitive -- the model
+correctly refused the injected instruction both times it was re-run
+standalone, failing once and passing once purely on exact phrasing of
+its own safe refusal explanation; this exact test was already recorded
+as a pre-existing failure in this codebase's own DEF-0027 final
+corrective-pass regression, before this hardening pass existed). Zero
+6A.14A-hardening-related failures anywhere in the full suite. No
+frontend file touched (`git diff --stat -- src` empty) — DTO shapes
+unchanged.
+
+NOT TOUCHED: `backend/knowledge/`, `backend/agents/team_manager/
+request_contract.py`, `backend/agents/team_manager/request_execution_
+policy.py`, `backend/gateway/power_automate_client.py`, `backend/
+tools/teams/execute_write.py`, `alembic/`, `requirements.txt` (all
+confirmed via empty scoped `git diff`) — DEF-0032 through DEF-0036
+remain untouched, 6A.15 remains NOT STARTED, no specialist-routing/
+RequestContract-interpretation/approval/Knowledge-retrieval/Teams-write/
+model/dependency change of any kind, no new database table or
+migration.
+
+LIVE VALIDATION: NOT performed in this pass either — no interactive
+browser tool was available in this session. The SAME PowerShell
+validation procedure from the first 6A.14A pass's own closure report
+still applies; this hardening pass adds no new live-validation steps
+beyond what that procedure already covers (hard refresh / backend
+restart / rewind through the real UI — now additionally covering the
+double-failure and mixed-session scenarios only reachable via forced
+persistence failures, which are validated here by automated test rather
+than requiring a live-failure-injection step in the browser procedure).
+
+STATUS: DONE (code + regression). **P11-M11A (6A.14A — Canonical Turn
+Result & Projection) remains IMPLEMENTED — live browser acceptance
+open**, now hardened against both residual weaknesses the first pass's
+own closure report flagged. DEF-0031 remains CODE-FIXED, not CLOSED.
+This remains a bounded corrective pass in the POST-6A closure plan, not
+a reopening of Phase 6A's own FROZEN closure — **Phase 6A (P11) remains
+COMPLETE AND FROZEN**, P11-M00 through P11-M11 unchanged. 6A.15 remains
+NOT STARTED.
+
+===================================================================
+LIVE-CORR-1 — CONTROLLED DIAGNOSTIC MILESTONE (evidence-and-defect-
+registration pass only; NO runtime/production fix applied in this pass)
+===================================================================
+
+A combined live acceptance campaign for 6A.12/6A.14/6A.14A surfaced six
+distinct scenario-level UI failures. Per this pass's own explicit
+instruction ("Do not fix production/runtime behavior in this pass"),
+this milestone performed ONLY read-only reproduction, root-causing, and
+defect registration -- no `backend/agents/`, `backend/api/`, or `src/`
+file was modified.
+
+METHOD: five real Cloud SQL DEV sessions were inspected read-only,
+event-by-event, via the Cloud SQL Auth Proxy (`--auto-iam-authn`) --
+`32c5a4a5-4243-4139-904e-c6b49c54d66a` (greeting), `abe35bdc-e974-4fc7-
+a287-6733fd736faf` (Knowledge inventory), `216ad690-a397-4b82-9dd6-
+bd1481e4ea64` (ambiguous command), `38dbd231-a704-4734-9488-
+80db882a5b7e` (procedure continuity/topic switch), `a6bbf7cf-258a-
+4ba1-a0b7-75c80fd94644` (conditional command). No session was mutated,
+rewound, replayed, or written to; no operational/Teams action was
+executed; no secret, gateway URL, credential, or full proprietary
+document body was printed or persisted.
+
+FINDINGS: eight distinct, independently root-caused defects were
+confirmed and registered -- **DEF-0037 through DEF-0044** (full detail,
+live reproduction, deterministic reproduction, exact code citation, and
+required correction for each: `docs/DEFECT_REGISTER.md`). One scenario
+(`216ad690-...`, a genuinely ambiguous command request) was confirmed
+CORRECT, EXPECTED, SAFE behavior -- explicitly NOT a defect. Headline
+findings: DEF-0037 (an ordinary "hello" is forced through the same
+AMBIGUOUS "no resolved subject/procedure" gate as an operational
+request, because `RequestContract.TARGET_SPECIFIC_INTENTS` includes
+INFORMATION unconditionally); DEF-0038 (`required_target_parameter_
+gaps` is non-monotonic -- supplying LESS context about a command's
+target requires FEWER confirmations than supplying PART of it);
+DEF-0039 (stale `knowledge_sources` from a pre-override selection
+survive the KNOWLEDGE_INVENTORY `UNSUPPORTED_CAPABILITY` override,
+displaying citations that no longer support the displayed text);
+DEF-0040 (a governed command embedded in `TroubleshootingStep.action`
+free text is structurally invisible to grounding, which only inspects
+the separate `command`/`step.command` field); DEF-0041 (a structured
+`command` value the pure grounding function itself proves should fail
+`TRUE_ABSENCE` nonetheless reached the user live -- the exact runtime
+discrepancy was not fully isolated without live instrumentation, which
+this read-only pass could not add); DEF-0042 (a "first approved action"
+response skipped documented prerequisite steps and separately made a
+factually incorrect "no command specified" claim against a governed
+section that does contain real commands -- a model-reasoning/source-
+fidelity capability gap, not a deterministic-code defect); DEF-0043
+(`command_suppression_fallback_text`'s AMBIGUOUS branch discards an
+already-known, specific `missing_context` in favor of a fully generic
+message whenever `subject` happens to be set); DEF-0044 (true SSE
+streaming emits raw, pre-correction `MESSAGE_DELTA` text to the client
+BEFORE the completion-boundary correction that produces the 6A.14A
+canonical result ever runs -- a SYSTEMIC, upstream gap that sits above
+every deterministic correction mechanism in this codebase; even a
+perfect canonical result cannot retroactively un-stream text already
+rendered on screen).
+
+TESTS: `backend/tests/test_livecorr1_diagnostics.py` (NEW) -- 6 new
+`xfail(strict=True)` regression tests (DEF-0037, DEF-0038, DEF-0039,
+DEF-0040, DEF-0043, DEF-0044), each asserting the CORRECT invariant the
+live evidence proved is currently violated (a future corrective pass
+that fixes the underlying defect will see the matching test flip to an
+unexpected XPASS and must update the marker then, never silently), plus
+1 new PASSING confirmatory test (DEF-0041) proving the pure grounding
+function's own logic is already correct in isolation for the exact live
+question/heading shape, narrowing that defect's own discrepancy to
+somewhere outside that function. DEF-0042 was deliberately left without
+a fixture/test in this pass -- it requires exact live governed content
+this pass may not fabricate into the repository; the passing regression
+is deferred to the corrective milestone, per this pass's own explicit
+instruction. Full targeted regression (this new file plus every
+6A.12/6A.13/6A.14/6A.14A-focused suite): 303 passed, 6 xfailed, 0
+unexpected failures/XPASSes. Full backend suite re-run clean at this
+same baseline plus the 7 new tests, no other regression. No frontend
+file touched.
+
+DOCUMENTATION: `docs/DEFECT_REGISTER.md` gained the full DEF-0037
+through DEF-0044 entries (header's own "Next available ID"/"Last ID
+currently used" updated to DEF-0045/DEF-0044). `docs/MASTER_ROADMAP.md`
+§7a's own milestone table gained a new "LIVE-CORR-1" narrative paragraph
+plus a short, non-status-changing note on each affected row (6A.12,
+6A.13, 6A.14, 6A.14A) attaching the relevant new defect IDs -- exactly
+the same "attached without reopening" pattern DEF-0034 already
+established for 6A.13. `docs/BUILD_SEQUENCE.md`'s own mirrored
+dependency-chain diagram and checkpoint table received the identical,
+minimal attachment notes.
+
+EXPLICITLY PRESERVED, UNCHANGED BY THIS PASS: 6A.12/6A.14/6A.14A remain
+IMPLEMENTED, live/browser acceptance still open (now additionally
+INCOMPLETE -- not failed, not passed -- pending the corrections above);
+6A.13 remains COMPLETE; 6A.15 remains NOT STARTED; DEF-0031 remains
+CODE-FIXED/hardened, not CLOSED; DEF-0032 through DEF-0036 remain OPEN,
+unchanged, at their own existing milestone attachments (6A.13/6A.16/
+6A.22). **Phase 6A (P11) remains COMPLETE AND FROZEN** -- this pass did
+not reopen it and did not implement any Phase 6A or POST-6A runtime
+capability.
+
+NEXT (recommended, not started by this pass): a bounded **"Request &
+Context Policy Correction"** implementation milestone scoped to
+DEF-0037/DEF-0038/DEF-0039/DEF-0043 -- all four are small, localized,
+already-precisely-diagnosed fixes confined to `backend/agents/team_
+manager/request_contract.py`/`request_execution_policy.py`/`backend/
+api/chat_service.py`'s KNOWLEDGE_INVENTORY override -- tracked
+separately from the larger, already-planned 6A.16 (DEF-0032/DEF-0033),
+6A.18 (DEF-0025, and DEF-0042's source-fidelity angle), and the
+genuine architectural streaming-design decision DEF-0044 requires
+before it can be closed (see DEF-0044's own register entry for the
+option space this pass identified but did not choose between). **This
+recommendation was subsequently carried out -- see LIVE-CORR-2
+immediately below.**
+
+===================================================================
+LIVE-CORR-2 -- REQUEST & CONTEXT POLICY CORRECTION (bounded implementation
+milestone: DEF-0037, DEF-0038, DEF-0039, DEF-0043 only)
+===================================================================
+
+Implements exactly the four request/context-policy defects LIVE-CORR-1
+confirmed and the immediately-prior section recommended -- DEF-0040,
+DEF-0041, DEF-0042, and DEF-0044 remain untouched and OPEN, per this
+pass' own explicit scope boundary. Does NOT start 6A.15.
+
+DEF-0037 FIX -- `RequestIntent.INFORMATION` removed from `TARGET_
+SPECIFIC_INTENTS` (`backend/agents/team_manager/request_contract.py`).
+A new, shared, two-factor function, `is_operationally_shaped_request
+(intent, requested_output)`, replaces every direct use of `TARGET_
+SPECIFIC_INTENTS` in both the "no resolved subject/procedure" gate and
+`required_target_parameter_gaps` (`request_execution_policy.py`) -- TRUE
+whenever EITHER `intent` is genuinely target-specific (COMMAND/
+TROUBLESHOOTING/PROCEDURE) OR `requested_output` is itself one of the
+operational answer shapes (EXACT_COMMAND/PROCEDURE_STEPS/
+TROUBLESHOOTING_NEXT_STEP) -- a deliberate OR, not an AND, so
+`intent=information, requested_output=exact_command` and `intent=
+command, requested_output=fact` both remain restrictively gated;
+KNOWLEDGE_INVENTORY/ACTION remain unaffected (their own, separate,
+earlier-checked branches).
+
+REAL REGRESSION FOUND AND FIXED DURING THIS PASS' OWN REGRESSION RUN
+(not a LIVE-CORR-1 finding): the missing-context/target-gap gate
+initially used `is_operationally_shaped_request` alone, which would have
+silently discarded an ALREADY-DECLARED, non-empty `contract.missing_
+context` for a request the model classified `intent=information,
+requested_output=fact` but which nonetheless carried a real, command-
+bearing `TroubleshootingGuidance` -- exactly the ROOT CAUSE B shape the
+6A.14 FINAL corrective pass (DEF-0028) exists to prevent. Caught by the
+pre-existing `test_hw_partial_fault_safety_holds_for_information_
+intent_with_embedded_command_in_guidance`. Fixed by widening that ONE
+gate's own condition to `is_operationally_shaped_request(...) or
+contract.missing_context` (a strict OR) -- the subject-required gate was
+deliberately NOT widened the same way, since empty `missing_context`
+with no subject for a non-operationally-shaped request is exactly the
+safe "hello" case DEF-0037 exists to fix.
+
+DEF-0038 FIX -- BOUNDED, FAIL-CLOSED INTERIM FOUNDATION ONLY, NOT A FULL
+CLOSE (per this pass' own explicit "do not fake closure" instruction).
+`required_target_parameter_gaps` (`request_contract.py`) has no
+deterministic signal, within this milestone's own strict scope, for
+whether the SPECIFIC governed operation selected this turn genuinely
+requires a target at all (that would require coupling this policy to
+Knowledge-evidence selection state -- DEF-0040/6A.20 scope, explicitly
+out of bounds here). Rather than guess, "`unit_type` never even stated"
+is now treated AT LEAST as restrictively as "`unit_type` stated but
+`unit_id` missing" -- but ONLY for `RequestedOutput.EXACT_COMMAND` (the
+confirmed live defect shape): when `unit_type` is entirely absent AND
+`requested_output == EXACT_COMMAND`, the function now returns both
+`unit_id`/`unit_type` instead of `[]`. `PROCEDURE_STEPS`/
+`TROUBLESHOOTING_NEXT_STEP` are deliberately UNCHANGED (may still
+legitimately describe a procedure's branches conceptually with no
+target confirmed yet). A confirmed `unit_type` OUTSIDE the identifier-
+bearing class (e.g. "SupportUnit") remains correctly gap-free. DEF-0038
+therefore remains **PARTIALLY FIXED**, not FIXED -- the step-aware
+precision layer (distinguishing a genuinely target-independent
+operation from one that needs a target) remains a later milestone's
+scope.
+
+DEF-0039 FIX -- `chat_service.py`'s `UNSUPPORTED_CAPABILITY` override
+now ALSO clears `selected_knowledge_evidence = []` in the same place
+`final_text` is overridden. Because every later consumer of this turn --
+the live `knowledge_sources` SSE field, the persisted canonical result
+(built from the SAME `knowledge_sources`), AND the end-of-turn `LAST_
+SELECTED_GOVERNED_EVIDENCE_STATE_KEY`/`ACTIVE_GOVERNED_PROCEDURE_STATE_
+KEY` continuity-anchor writes -- all read from this SAME variable
+further down the method, this single, minimal fix closes the defect
+completely: no misleading sources live or in history, no new stale
+continuity anchor created from discarded inventory evidence, and a
+genuinely PRIOR turn's own real continuity anchor is correctly left
+completely untouched (proven by a dedicated two-real-turn integration
+test).
+
+DEF-0043 FIX -- `command_suppression_fallback_text`'s specific-template
+check now reads `if decision.missing_context:` alone, independent of
+`status` -- `AMBIGUOUS` now uses the SAME specific template whenever it
+also carries a non-empty `missing_context` (Scenario 6's own shape),
+falling back to the no-subject/generic text only when it genuinely has
+nothing specific to say. Each rendered key now also passes through a
+new, small, closed `_safe_missing_context_label` mapping -- a raw
+internal key name (`"unit_id"`) is NEVER shown verbatim, rendered
+instead as a safe, generic phrase; a model-declared, already-safe
+phrase (e.g. "equipment identifier") passes through unchanged. Three
+pre-existing tests pinned to the OLD, less-safe raw-key wording were
+updated (strengthened, not weakened) to assert the safe label instead --
+the only existing test content this pass changed for a reason other
+than the two-factor gate migration.
+
+TESTS: `backend/tests/test_livecorr1_diagnostics.py` -- 4 `xfail`
+markers REMOVED (DEF-0037/0038/0039/0043 now PASS); DEF-0040/DEF-0044
+remain `xfail(strict=True)`, DEF-0041 remains the same passing
+confirmatory test. `backend/tests/test_livecorr2_request_context_policy_
+correction.py` (NEW, 32 tests) -- the full compatibility-matrix,
+monotonicity, continuity-anchor, and typed-clarification-reason coverage
+the milestone's own instruction required. Three pre-existing tests
+updated for the DEF-0043 safe-label change (`test_6a14_deterministic_
+request_execution.py` x2, `test_6a14_final_corrective_pass.py` x1) --
+the only existing test content changed, and only because each was
+pinned to the now-intentionally-changed raw-key wording.
+
+REGRESSION: focused suite (the two LIVE-CORR test files plus every
+6A.12/13/14/14A/DEF-0024/0026/0027/canonical-turn-result/security-
+contract-focused suite, 21 files) -- 433 passed, 2 xfailed (DEF-0040/
+DEF-0044, unaffected), 0 failures. Full backend suite re-run for final
+confirmation (see this pass' own closure report for exact counts). No
+frontend file touched.
+
+NOT TOUCHED: DEF-0024/0026/0027/0028/0029/0030 grounding/continuity
+machinery (`backend/agents/incident_manager/evidence.py`, `backend/api/
+governed_evidence_continuity.py`) -- confirmed via empty scoped `git
+diff`; 6A.14A canonical-result machinery; approval/write boundary; Teams
+tools; Knowledge retrieval/narrowing/hybrid-retrieval; Skills; Experience
+Memory; Troubleshooting Manager; any database schema/migration; any
+dependency.
+
+SCOPE CONFIRMATION: no DEF-0040 operational-output structural
+enforcement implemented; no DEF-0041 command/source instrumentation
+added; no DEF-0042/6A.18 Knowledge catalog implemented; no DEF-0044
+streaming-architecture correction attempted; no hybrid retrieval/
+embedding change; no Teams/write/action change; no frontend change; no
+new infrastructure; no new database table/migration; no dependency
+upgrade; no model replacement; 6A.15 not started.
+
+STATUS: DONE. **DEF-0037 FIXED. DEF-0039 FIXED. DEF-0043 FIXED. DEF-0038
+PARTIALLY FIXED (bounded interim, honestly not closed).** DEF-0040,
+DEF-0041, DEF-0042, DEF-0044 remain OPEN, untouched. **6A.12/6A.14/
+6A.14A remain IMPLEMENTED -- live/browser acceptance still open** (now
+narrowed by these four fixes, not closed by them -- live browser
+acceptance was not separately re-performed in this pass). **6A.13
+remains COMPLETE.** **6A.15 remains NOT STARTED.** **Phase 6A (P11)
+remains COMPLETE AND FROZEN** -- this pass did not reopen it. NEXT
+(recommended, not started by this pass): **"Operational Guidance &
+Streaming Safety Correction"** -- DEF-0040 and DEF-0044, with
+instrumentation to isolate DEF-0041. **This recommendation was
+subsequently carried out -- see LIVE-CORR-3 immediately below.**
+
+===================================================================
+LIVE-CORR-3 -- OPERATIONAL GUIDANCE & STREAMING SAFETY (bounded
+implementation milestone: DEF-0040 and DEF-0044, plus narrowly-scoped
+instrumentation for DEF-0041 only)
+===================================================================
+
+Implements exactly the two operational-safety defects LIVE-CORR-1
+confirmed and the immediately-prior section recommended, plus safe,
+non-behavior-changing instrumentation for DEF-0041 (deliberately NOT
+closing it -- instrumentation alone must never claim closure). DEF-0042/
+6A.18's Knowledge catalog and 6A.15 remain untouched and out of scope.
+
+DEF-0040 FIX -- TWO independent, deterministic mechanisms, both
+extending the existing `TroubleshootingGuidance`/grounding architecture
+rather than building a parallel one:
+
+  (1) EMBEDDED-OPERATIONAL-CONTENT DETECTION (`backend/agents/incident_
+  manager/evidence.py`) -- new `_detect_embedded_operational_content`,
+  wired into `enforce_procedure_scoped_command_grounding_with_reason`
+  immediately after the existing DEF-0027 FINAL `_guidance_scope_
+  established` check, as a WHOLE-GUIDANCE suppression with a new typed
+  reason, `CommandGroundingReason.EMBEDDED_OPERATIONAL_CONTENT`.
+  DELIBERATELY NOT a text/regex command parser: the ONLY signal is a
+  plain, deterministic, per-line VERBATIM SUBSTRING check -- does any
+  free-text field (`interpretation`/`next_action`/`evidence_requested`/
+  a `TroubleshootingStep.action`) contain, as a literal substring, a
+  real content line (above a 12-character structural length floor,
+  filtering trivial short headings/labels) from ANY of this turn's own
+  currently-selected governed sections -- the SAME "verbatim occurrence
+  in real, already-retrieved content" philosophy `_evaluate_command`'s
+  own `command in active_content` check already uses for the `command`
+  field, applied here to the fields that check structurally cannot see.
+  A real, accepted false-positive risk exists (safe over-suppression,
+  the same fail-closed direction this module already applies everywhere
+  else) -- never silent under-suppression.
+
+  (2) RESPONSE-MODE COMPATIBILITY ENFORCEMENT (`backend/agents/team_
+  manager/request_execution_policy.py`) -- new `enforce_response_mode_
+  compatibility`, wired into `chat_service.py`'s completion boundary
+  immediately before the existing `enforce_execution_decision_on_
+  guidance` call. The validated `RequestContract.requested_output` (via
+  `execution_decision.requested_output` -- the SAME already-freshness-
+  checked value `derive_execution_decision` itself populated, never a
+  second read of the raw contract, never phrase/keyword matching) is the
+  sole authority for whether a `FULL_PROCEDURE`-shaped `Troubleshooting
+  Guidance` may render as such: permitted ONLY when `requested_output`
+  is POSITIVELY `PROCEDURE_STEPS` -- a request validated as
+  `TROUBLESHOOTING_NEXT_STEP`/`EXACT_COMMAND` (or a missing/stale/
+  unresolved contract) discards the guidance entirely (never narrows/
+  repackages "step 1" as "the next step", which could be semantically
+  wrong), rendering a new, fixed, deterministic clarification
+  (`FULL_PROCEDURE_NOT_PERMITTED_FALLBACK_TEXT`) instead. The OPPOSITE
+  direction (guidance is `NEXT_STEP`-shaped but the contract asked for
+  `PROCEDURE_STEPS`) is deliberately NOT narrowed -- showing less than
+  requested is a completeness question, never a safety one.
+
+SCOPE DELIBERATELY NARROWED, AUDITED FIRST: a full 5-value response-mode
+enum / 4-value operational-effect enum / model-declared per-step
+`target_required` field (the milestone's own section 7/12 taxonomy) was
+NOT implemented -- audited and found: (a) most of the "response mode"
+taxonomy already maps onto the EXISTING, unmodified `RequestedOutput`
+values, so no new enum was needed to satisfy the compatibility-matrix
+requirement; (b) a model-declared, per-step `target_required`/
+`operational_effect` field would require TRUSTING the model's own
+safety-relevant self-report (the exact "prompt instructions alone are
+not a sufficient control" pattern this whole codebase explicitly
+rejects) or DETERMINISTICALLY DERIVING it from the selected governed
+operation's own structure, out of this pass' own scope (DEF-0038's own
+"step-aware precision" gap, explicitly deferred to a later milestone
+with access to the selected governed operation's own target-cardinality
+classification); (c) "a target-independent diagnostic read may be
+emitted without a unit ID" was found, on audit, to ALREADY be satisfied
+by the existing, unmodified DEF-0038 bounded rule (its stricter
+unit-type/unit-id-required-when-absent rule applies ONLY to
+`EXACT_COMMAND`, never `TROUBLESHOOTING_NEXT_STEP`) -- closing that
+requirement without new code; (d) "audit whether token-overlap grounding
+can accept paraphrased/composite/substituted commands" was audited and
+found ALREADY CORRECT -- token overlap is used ONLY to select
+explanatory WORDING, never to ACCEPT a command; actual acceptance
+remains the existing exact-substring `command in active_content` check
+(DEF-0027's own tests already prove paraphrases/composites are
+rejected).
+
+DEF-0044 FIX -- adopted the mandatory, fixed buffering policy the
+milestone's own instruction specified (never a per-turn conditional
+choice): status/progress events may stream immediately; assistant/
+specialist text is NEVER emitted raw via `message.delta`, at all, for
+any turn; the validated canonical response reaches the client exactly
+once, via `message.completed`, only after every deterministic
+correction and durable canonical persistence succeed.
+`chat_service.py`'s three raw-text `yield sequencer.build(StreamEvent
+Type.MESSAGE_DELTA, {"text": ...})` call sites (the main per-event loop,
+the pre-existing governed-knowledge buffer-release branch, and the
+trusted-presentation-retry path) were all removed, not merely bypassed.
+The pre-existing, NARROWER governed-knowledge-specific buffer/release/
+discard mechanism (added for a DIFFERENT, earlier purpose -- 5.1J
+source-requirements gating) became entirely REDUNDANT under the new
+universal policy and was deleted outright -- a net simplification (~90
+lines removed), not a parallel mechanism. `_extract_delta_text`'s own
+return value is still consulted, ONLY to detect that a chunk has
+arrived (to clear the "thinking" `STATUS_CLEAR` status indicator once,
+a status/progress signal explicitly permitted to stream) -- its TEXT is
+discarded immediately, never buffered, never emitted. `final_text` was
+never derived from these per-chunk deltas in the first place (it comes
+from `_extract_final_text`'s own separate, complete/non-partial event),
+so nothing is lost by never accumulating them. Deliberately NOT
+optimized into conditional/partial streaming in this pass, per the
+milestone's own explicit "no conditional conversational token
+streaming" instruction -- an intentional, documented, temporary loss of
+progressive assistant-token streaming UX, left for a later milestone's
+own separate, approved design.
+
+DEF-0041 INSTRUMENTATION (does NOT close it) -- `evidence.py`'s new
+`_log_grounding_decision` (a safe, `try`/`except`-wrapped, non-behavior-
+changing logger call) is now called at EVERY return point of `enforce_
+procedure_scoped_command_grounding_with_reason` (all 6), logging exactly
+the section-16 field list this defect's own register entry already
+named as needed to isolate it: `run_id`, `interaction_mode`, `selected_
+count`, `selected_identities` (safe `(knowledge_id, version_label,
+section_id)` triples only, never content), `active_section_id` (a
+second, pure, side-effect-free call to the SAME `resolve_active_section_
+id` resolver, purely for log visibility), `command_present`, `stripped`,
+`reason`. Confirmed via the full DEF-0024/0026/0027 regression suite (98
+tests, unchanged) that this instrumentation is genuinely non-behavior-
+changing. DEF-0041's own root cause remains UNRESOLVED -- no live
+Gemini/Cloud SQL re-test was performed in this pass (same standing
+limitation as every prior milestone).
+
+TESTS: `backend/tests/test_livecorr1_diagnostics.py` -- 2 more `xfail`
+markers REMOVED (DEF-0040/DEF-0044 now PASS; DEF-0040's own fixture was
+rewritten to faithfully match the live shape -- a REAL, grounded command
+duplicated into `action`, not an ungrounded one). `backend/tests/test_
+livecorr3_operational_guidance_and_streaming_safety.py` (NEW, 9 tests)
+-- pure `enforce_response_mode_compatibility` unit tests plus 3 full
+`chat_service.py` integration tests reproducing the exact live defect
+shape and its safe resolution. `backend/tests/test_chat_service_
+streaming.py` -- 6 pre-existing tests rewritten from asserting raw-
+streaming behavior to asserting the corrected no-raw-text invariant.
+`backend/tests/test_p5_1j_governed_completion_gate.py`'s own Part 21
+family -- 6 of 8 needed no change (already asserted `delta_events ==
+[]`); 2 (`test_part21b_.../test_part21d_...`) were renamed + corrected,
+since they specifically asserted the now-superseded live-streaming
+behavior.
+
+REGRESSION: focused suite (all touched/related files) all green, 0
+unexpected failures/xfail/xpass. Full backend suite: 4212 passed, 36
+skipped, 3 failed -- all 3 confirmed pre-existing, order-dependent/
+real-model-output-variance flakiness, all pass standalone, all in files
+this pass never touched (confirmed via empty scoped `git diff`). No
+frontend file touched.
+
+NOT TOUCHED: DEF-0037/0038/0039/0043 (LIVE-CORR-2, unmodified); DEF-
+0024/0026/0027/0028/0029/0030's own grounding/continuity core logic
+(only ADDITIVE new checks inserted, nothing removed/altered); 6A.14A
+canonical-result persistence mechanism itself (only its INPUT --
+`final_text` -- changed, per the exact same completion-boundary pattern
+every prior correction already used); approval/write boundary; Teams
+tools; Knowledge retrieval/narrowing/hybrid-retrieval; Skills; Experience
+Memory; Troubleshooting Manager; any database schema/migration; any
+dependency; DEF-0042; 6A.15.
+
+SCOPE CONFIRMATION: no 5-value response-mode enum or 4-value operational-
+effect enum implemented; no model-trusted `target_required` field
+implemented; no DEF-0042/6A.18 Knowledge catalog implemented; no
+conditional/partial conversational token streaming implemented; no
+Teams/write/action change; no frontend change; no new infrastructure; no
+new database table/migration; no dependency upgrade; no model
+replacement; 6A.15 not started.
+
+STATUS: DONE. **DEF-0040 FIXED. DEF-0044 FIXED.** **DEF-0041
+instrumentation added; STATUS REMAINS OPEN.** DEF-0042 remains OPEN,
+untouched. **6A.12 remains IMPLEMENTED -- final live closure still
+open** (DEF-0040 now fixed and regression-tested, narrowing but not
+closing that open item). **6A.14A remains IMPLEMENTED -- live browser
+acceptance still open** (DEF-0044 now fixed and regression-tested,
+narrowing but not closing that open item). **6A.13/6A.14 unaffected by
+this pass. 6A.15 remains NOT STARTED.** **Phase 6A (P11) remains
+COMPLETE AND FROZEN** -- this pass did not reopen it. NEXT (recommended,
+not started by this pass): **DEF-0041 live isolation** -- re-run the
+exact live Scenario 4 conversation with the new instrumentation active,
+compare the resulting `troubleshooting_command_grounding` log line
+against the observed defective outcome.
 
 ===================================================================
 

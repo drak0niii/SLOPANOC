@@ -154,6 +154,51 @@ class TroubleshootingInteractionMode(str, Enum):
     FULL_PROCEDURE = "full_procedure"
 
 
+class TroubleshootingOperationalEffect(str, Enum):
+    """LIVE-CORR-3A -- the closed, typed classification that REPLACES the
+    removed, substring-scanning `_detect_embedded_operational_content`
+    (LIVE-CORR-3) as the mechanism closing DEF-0040. Per explicit
+    instruction ("operational safety must come from typed structure...
+    do not replace it with regex, keyword matching or free-text command
+    detection"), safety no longer depends on INSPECTING free-text content
+    at all -- it depends on this REQUIRED-to-consider, model-populated
+    (schema-guided, the SAME "more reliable than free-prose self-
+    restraint" mechanism A5's own `TroubleshootingInteractionMode`
+    already established) classification, combined with a deterministic
+    STRUCTURAL rule (`backend/agents/incident_manager/evidence.py`'s
+    `enforce_structural_operational_integrity`): any step/guidance
+    classified `STATE_CHANGE_RECOMMENDATION` (or left unclassified --
+    `None` defaults to this SAME strictest interpretation, never the most
+    permissive one) MUST carry a real, grounded `command`/`step.command`
+    -- a "recommendation" conveyed ONLY through free text (`action`/
+    `next_action`/`interpretation`), with no structured command backing
+    it, is REJECTED outright as a structural integrity failure, never
+    rendered. `DIAGNOSTIC_READ` is the ONE classification eligible for
+    the target-independent exemption (`request_execution_policy.py`'s
+    `enforce_execution_decision_on_guidance`) -- a proven, grounded
+    read-only lookup may be shown even when target confirmation is
+    otherwise unresolved; `STATE_CHANGE_RECOMMENDATION` never receives
+    that exemption. `REFERENCE_DESCRIPTION`/`OBSERVATION` carry no
+    operational authority at all -- their own free text is rendered as
+    ordinary descriptive content, exactly as before this field existed.
+
+    RESIDUAL RISK, honestly documented (see DEF-0038's own PARTIALLY
+    FIXED status, not upgraded to FIXED by this pass): this classification
+    is still model-populated -- a model that deliberately or mistakenly
+    mislabels a real state-changing recommendation as `REFERENCE_
+    DESCRIPTION`/`OBSERVATION` could still have its own free text
+    rendered verbatim. This is treated as a bounded, monitorable prompt-
+    compliance risk (the SAME class of risk this codebase already accepts
+    for `TroubleshootingInteractionMode`'s own self-classification),
+    never claimed to be unconditionally bypass-proof.
+    """
+
+    REFERENCE_DESCRIPTION = "reference_description"
+    OBSERVATION = "observation"
+    DIAGNOSTIC_READ = "diagnostic_read"
+    STATE_CHANGE_RECOMMENDATION = "state_change_recommendation"
+
+
 class TroubleshootingStep(BaseModel):
     """One grounded step, used only inside `full_procedure_steps` (never
     for `NEXT_STEP` mode, which uses `next_action`/`command` directly).
@@ -164,6 +209,18 @@ class TroubleshootingStep(BaseModel):
 
     action: str
     command: Optional[str] = None
+    operational_effect: Optional[TroubleshootingOperationalEffect] = Field(
+        default=None,
+        description=(
+            "Classify this step's own nature: REFERENCE_DESCRIPTION (describes the procedure/document, no action "
+            "implied), OBSERVATION (states a fact/current condition), DIAGNOSTIC_READ (a safe, read-only check -- "
+            "may be target-independent), or STATE_CHANGE_RECOMMENDATION (recommends an action that changes "
+            "operational state, e.g. a restart -- ALWAYS requires the exact target/branch/prerequisites to be "
+            "confirmed before its command may be shown). Leave unset only if genuinely uncertain -- an unset value "
+            "is treated as STATE_CHANGE_RECOMMENDATION, the strictest, safest interpretation, never the most "
+            "permissive one."
+        ),
+    )
 
 
 class TroubleshootingGuidance(BaseModel):
@@ -217,6 +274,14 @@ class TroubleshootingGuidance(BaseModel):
     full_procedure_steps: list[TroubleshootingStep] = Field(
         default_factory=list,
         description="Populated ONLY when interaction_mode is FULL_PROCEDURE -- every grounded step/command from the applicable Approved procedure, in source order.",
+    )
+    operational_effect: Optional[TroubleshootingOperationalEffect] = Field(
+        default=None,
+        description=(
+            "LIVE-CORR-3A -- classifies `next_action`/`command` (NEXT_STEP mode only; ignored for FULL_PROCEDURE, "
+            "which uses each `TroubleshootingStep.operational_effect` instead). Same meaning/consequence as "
+            "`TroubleshootingStep.operational_effect` -- see that field's own description."
+        ),
     )
 
 

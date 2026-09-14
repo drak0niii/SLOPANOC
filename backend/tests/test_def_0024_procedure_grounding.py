@@ -31,7 +31,12 @@ from __future__ import annotations
 import pytest
 
 from backend.agents.incident_manager.evidence import enforce_procedure_scoped_command_grounding
-from backend.agents.incident_manager.schemas import TroubleshootingGuidance, TroubleshootingInteractionMode, TroubleshootingStep
+from backend.agents.incident_manager.schemas import (
+    TroubleshootingGuidance,
+    TroubleshootingInteractionMode,
+    TroubleshootingOperationalEffect,
+    TroubleshootingStep,
+)
 from backend.api.turn_context import bind_run_id, reset_run_id
 from backend.knowledge.domain.enums import KnowledgeDocumentType, LifecycleStatus
 from backend.knowledge.domain.models import KnowledgeSection, KnowledgeSource
@@ -163,7 +168,21 @@ def _select(run_id: str, *items: KnowledgeEvidenceItem) -> None:
 
 
 def _next_step_guidance(command) -> TroubleshootingGuidance:
-    return TroubleshootingGuidance(interaction_mode=TroubleshootingInteractionMode.NEXT_STEP, interpretation="Interpretation.", next_action="Do the next thing.", command=command, evidence_requested="Provide the output.")
+    # LIVE-CORR-3A: a `None` command here is always the SAFE, well-behaved
+    # "no command needed" case these fixtures represent -- explicitly
+    # classified OBSERVATION so `enforce_structural_operational_integrity`
+    # 's "unset defaults to STATE_CHANGE_RECOMMENDATION" fail-closed rule
+    # (correctly reserved for a REAL, unclassified state-change lacking a
+    # command) does not misfire on it.
+    operational_effect = None if command else TroubleshootingOperationalEffect.OBSERVATION
+    return TroubleshootingGuidance(
+        interaction_mode=TroubleshootingInteractionMode.NEXT_STEP,
+        interpretation="Interpretation.",
+        next_action="Do the next thing.",
+        command=command,
+        evidence_requested="Provide the output.",
+        operational_effect=operational_effect,
+    )
 
 
 # --- 6/7: independent selectability ----------------------------------------

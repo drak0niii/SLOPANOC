@@ -21,6 +21,7 @@ production code relies on, not a shortcut that happens to look similar.
 """
 from __future__ import annotations
 
+import uuid
 from typing import Any, Awaitable, Callable, Optional
 
 from google.adk.events import Event, EventActions
@@ -179,7 +180,27 @@ class FakeRunner:
             await self._side_effect(self._session_service, session, text)
         await self._session_service.persist_state_delta(session, {})
         if self._events is not None:
+            # 6A.14A -- an explicitly-authored `events=[...]` list almost
+            # always leaves every `FakeEvent` at its own default
+            # `invocation_id` (the shared `_TEST_INVOCATION_ID` sentinel);
+            # a test running a SECOND turn against the SAME session this
+            # way (e.g. to exercise conversation-target/history behavior
+            # across turns) would otherwise have that second turn's own
+            # DIFFERENT final text collide, as a same-turn conflict,
+            # against the first turn's already-persisted canonical result
+            # -- something real ADK structurally cannot do (a fresh
+            # invocation_id every call). Any event still carrying the
+            # sentinel default is stamped with ONE fresh, per-call-unique
+            # id here (mutated in place, before yielding) so every event
+            # THIS call yields still shares one consistent id, exactly
+            # like a real turn's own events do. An event whose author
+            # explicitly set a DIFFERENT, deliberate `invocation_id` (the
+            # two tests that assert on a specific literal value) is left
+            # completely untouched.
+            call_invocation_id = str(uuid.uuid4())
             for event in self._events:
+                if getattr(event, "invocation_id", None) == _TEST_INVOCATION_ID:
+                    event.invocation_id = call_invocation_id
                 yield event
             return
         # FIFTH pre-4H correction pass: chat_service.py now requires an
@@ -196,14 +217,31 @@ class FakeRunner:
         # other branch, above) is explicitly opting into full control over
         # the event stream and must include its own `record_source_
         # requirements` response if it wants the ordinary, non-gated path.
+        #
+        # 6A.14A -- a per-call, genuinely unique `invocation_id` (never
+        # the shared `_TEST_INVOCATION_ID` default) for BOTH auto-
+        # generated events, mirroring real ADK's own guarantee (this
+        # module's own top docstring: a real `Runner` invocation always
+        # gets "a fresh random uuid4 each time") -- chat_service.py
+        # captures `turn_invocation_id` from the FIRST event of a turn
+        # (`first_event_seen`) and now persists a canonical result keyed
+        # by it; two DIFFERENT turns on the SAME session sharing the
+        # fixture's old fixed default would collide as a same-turn-twice
+        # conflict, which never happens for a real ADK turn. A test that
+        # constructs its OWN `FakeEvent` with an explicit, non-sentinel
+        # `invocation_id=` is completely unaffected. The OTHER branch
+        # (explicit `events=[...]`, above) gets the identical treatment
+        # for the identical reason -- see its own comment.
+        call_invocation_id = str(uuid.uuid4())
         yield FakeEvent(
             text=None,
             final=False,
             function_responses=[
                 FakeFunctionResponse("record_source_requirements", {"requires_teams": False, "requires_governed_knowledge": False})
             ],
+            invocation_id=call_invocation_id,
         )
-        yield FakeEvent(text=self._respond(text))
+        yield FakeEvent(text=self._respond(text), invocation_id=call_invocation_id)
 
 
 class NoFinalTextRunner:

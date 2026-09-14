@@ -59,21 +59,26 @@ async def _empty_contributors() -> list:
     return []
 
 
-# --- True message streaming (instruction section 48) -----------------------
+# --- LIVE-CORR-3 DEF-0044: buffered (never raw-streamed) message text ------
+#
+# Instruction fixed policy: status/progress events may stream immediately;
+# assistant/model text is NEVER emitted raw via `message.delta` -- the
+# validated, canonical response reaches the client exactly once, via
+# `message.completed`, only after every deterministic correction and
+# durable canonical persistence have succeeded. These tests previously
+# asserted the OPPOSITE (raw incremental text streaming live) -- rewritten
+# here to assert the CORRECTED invariant; see `docs/DEFECT_REGISTER.md`'s
+# DEF-0044 entry for the full root-cause/live-evidence record.
 
 
 @pytest.mark.asyncio
-async def test_incremental_partials_become_message_delta_events() -> None:
+async def test_incremental_partials_never_become_message_delta_text() -> None:
+    """DEF-0044's own direct proof: real incremental partial events from
+    the Runner must never surface as live, raw `message.delta` text --
+    the answer reaches the client exactly once, via `message.completed`."""
     service = ApiSessionService()
     session_id = await service.create_session()
     events = [
-        # A5 live UI FINAL trust-gate closure: a governed-knowledge
-        # declaration is now required before ANY delta streams live (see
-        # test_p5_1j_governed_completion_gate.py's own Part 21 tests for
-        # the full UNKNOWN-state rationale) -- an explicit, upfront
-        # both-false declaration here is this test's own intentional
-        # opt-in to the ordinary, non-gated path, restoring its original
-        # focus on pure delta-chunking mechanics.
         FakeEvent(
             final=False,
             function_responses=[
@@ -90,16 +95,18 @@ async def test_incremental_partials_become_message_delta_events() -> None:
     collected = await _collect(chat_service, session_id, "why?")
 
     deltas = [e for e in collected if e.type == StreamEventType.MESSAGE_DELTA]
-    assert [d.data["text"] for d in deltas] == ["The likely", " cause", " is X."]
+    assert deltas == []  # no message.delta event carries any text at all
+    completed = next(e for e in collected if e.type == StreamEventType.MESSAGE_COMPLETED)
+    assert completed.data["content"] == "The likely cause is X."
 
 
 @pytest.mark.asyncio
-async def test_delta_order_is_preserved() -> None:
+async def test_status_and_completed_event_order_is_preserved() -> None:
+    """Non-`message.delta` event ordering (status/progress -> completion)
+    remains correct even though no delta text is ever emitted."""
     service = ApiSessionService()
     session_id = await service.create_session()
     events = [
-        # A5 live UI FINAL trust-gate closure -- see the comment on
-        # test_incremental_partials_become_message_delta_events above.
         FakeEvent(
             final=False,
             function_responses=[
@@ -115,18 +122,20 @@ async def test_delta_order_is_preserved() -> None:
 
     collected = await _collect(chat_service, session_id, "count")
 
-    deltas = [e for e in collected if e.type == StreamEventType.MESSAGE_DELTA]
-    assert [d.data["text"] for d in deltas] == ["1", "2", "3"]
-    assert [d.sequence for d in deltas] == sorted(d.sequence for d in deltas)
+    assert [e for e in collected if e.type == StreamEventType.MESSAGE_DELTA] == []
+    types_in_order = [e.type for e in collected]
+    assert types_in_order.index(StreamEventType.STATUS_CLEAR) < types_in_order.index(StreamEventType.MESSAGE_COMPLETED)
+    assert [e.sequence for e in collected] == sorted(e.sequence for e in collected)
 
 
 @pytest.mark.asyncio
-async def test_delta_contains_only_new_text_never_cumulative() -> None:
+async def test_no_delta_event_ever_carries_any_text() -> None:
+    """Direct regression for the exact live defect shape: multiple
+    incremental chunks arrive, none may ever surface as raw text in ANY
+    emitted event before `message.completed`."""
     service = ApiSessionService()
     session_id = await service.create_session()
     events = [
-        # A5 live UI FINAL trust-gate closure -- see the comment on
-        # test_incremental_partials_become_message_delta_events above.
         FakeEvent(
             final=False,
             function_responses=[
@@ -141,19 +150,22 @@ async def test_delta_contains_only_new_text_never_cumulative() -> None:
 
     collected = await _collect(chat_service, session_id, "hi")
 
-    deltas = [e.data["text"] for e in collected if e.type == StreamEventType.MESSAGE_DELTA]
-    for delta in deltas:
-        assert "Hello world" not in delta or delta == "Hello world"  # no delta re-sends the accumulated string
-    assert deltas == ["Hello", " world"]
+    for event in collected:
+        if event.type != StreamEventType.MESSAGE_COMPLETED:
+            assert "Hello" not in str(event.data) and "world" not in str(event.data)
+    completed = next(e for e in collected if e.type == StreamEventType.MESSAGE_COMPLETED)
+    assert completed.data["content"] == "Hello world"
 
 
 @pytest.mark.asyncio
-async def test_status_cleared_before_first_delta() -> None:
+async def test_status_cleared_before_message_completed() -> None:
+    """The "thinking" indicator still clears once generation genuinely
+    starts (a status/progress signal, explicitly permitted to stream) --
+    but there is no longer a "first delta" to clear it before; it must
+    clear strictly before `message.completed` instead."""
     service = ApiSessionService()
     session_id = await service.create_session()
     events = [
-        # A5 live UI FINAL trust-gate closure -- see the comment on
-        # test_incremental_partials_become_message_delta_events above.
         FakeEvent(
             final=False,
             function_responses=[
@@ -169,8 +181,8 @@ async def test_status_cleared_before_first_delta() -> None:
     types_in_order = [e.type for e in collected]
 
     clear_index = types_in_order.index(StreamEventType.STATUS_CLEAR)
-    first_delta_index = types_in_order.index(StreamEventType.MESSAGE_DELTA)
-    assert clear_index < first_delta_index
+    completed_index = types_in_order.index(StreamEventType.MESSAGE_COMPLETED)
+    assert clear_index < completed_index
 
 
 @pytest.mark.asyncio
@@ -191,7 +203,12 @@ async def test_final_content_emitted_once() -> None:
 
 
 @pytest.mark.asyncio
-async def test_accumulated_deltas_equal_message_completed_content() -> None:
+async def test_no_deltas_carry_the_answer_only_completed_does() -> None:
+    """THE direct DEF-0044 proof, renamed from its own pre-fix name
+    (`test_accumulated_deltas_equal_message_completed_content`, which
+    asserted the opposite, now-incorrect invariant): zero `message.delta`
+    events carry any text at all -- `message.completed` is the SOLE
+    carrier of the turn's real answer."""
     service = ApiSessionService()
     session_id = await service.create_session()
     events = [
@@ -211,17 +228,22 @@ async def test_accumulated_deltas_equal_message_completed_content() -> None:
     collected = await _collect(chat_service, session_id, "hi")
 
     deltas = [e.data["text"] for e in collected if e.type == StreamEventType.MESSAGE_DELTA]
+    assert deltas == []
     completed = next(e for e in collected if e.type == StreamEventType.MESSAGE_COMPLETED)
-    assert "".join(deltas) == completed.data["content"]
+    assert completed.data["content"] == "The quick fox."
 
 
 @pytest.mark.asyncio
-async def test_thought_parts_never_become_deltas() -> None:
+async def test_thought_parts_never_reach_any_emitted_event() -> None:
+    """Thought-part text never leaked into `message.delta` before this
+    pass (unchanged, still true -- `_extract_delta_text` already excludes
+    thought parts); this pass strengthens the invariant further: NO
+    partial text -- thought or otherwise -- reaches ANY emitted event
+    before `message.completed`, which alone carries the real, final
+    answer."""
     service = ApiSessionService()
     session_id = await service.create_session()
     events = [
-        # A5 live UI FINAL trust-gate closure -- see the comment on
-        # test_incremental_partials_become_message_delta_events above.
         FakeEvent(
             final=False,
             function_responses=[
@@ -236,9 +258,13 @@ async def test_thought_parts_never_become_deltas() -> None:
 
     collected = await _collect(chat_service, session_id, "hi")
 
-    deltas = [e.data["text"] for e in collected if e.type == StreamEventType.MESSAGE_DELTA]
-    assert "private reasoning" not in deltas
-    assert deltas == ["the answer"]
+    for event in collected:
+        if event.type != StreamEventType.MESSAGE_COMPLETED:
+            assert "private reasoning" not in str(event.data)
+            assert "the answer" not in str(event.data)
+    completed = next(e for e in collected if e.type == StreamEventType.MESSAGE_COMPLETED)
+    assert completed.data["content"] == "the answer"
+    assert "private reasoning" not in completed.data["content"]
 
 
 # --- No fake streaming (instruction section 49) -----------------------------

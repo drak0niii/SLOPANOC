@@ -50,7 +50,7 @@ not that the code is wrong.
 | A5 — Knowledge Island Ingestion Foundation + Real TELCO/RAN Compound Knowledge Validation | ✅ COMPLETE |
 | 5.X — Teams Rich Content / Media Retrieval | ✅ COMPLETE / FROZEN |
 | Phase 6A — Intelligence Architecture Foundation | **COMPLETE / FROZEN** — 6A.0 (architecture/contract freeze) ✅ COMPLETE; 6A.1 (GCP runtime/tooling decision record) ✅ COMPLETE; 6A.2 (TELCO Context & Applicability Model, `backend/context/`) ✅ COMPLETE; 6A.3 (Multimodal Knowledge Ingestion & Provenance, DEF-0017 fixed) ✅ COMPLETE; 6A.4 (Deterministic TELCO Applicability & Knowledge Narrowing, `backend/knowledge/narrowing/`) ✅ COMPLETE; 6A.5 (Hybrid Knowledge Retrieval & Evidence Selection, `backend/knowledge/hybrid_retrieval/`) ✅ **COMPLETE** — real exact/lexical/semantic retrieval + real Vertex embedding generation + real pgvector similarity search all validated live (the `CREATE EXTENSION vector` privilege denial this row previously recorded was resolved externally mid-milestone, never worked around; DEF-0018 destructive-test-teardown defect also fixed); 6A.6 (Context Engineering & Evidence Package, `backend/context_engineering/`) ✅ **COMPLETE** — deterministic ContextPackage/EvidencePackage assembly, never an agent, never an LLM call, never an independent path to Knowledge; 6A.7 (Skills Framework, `backend/skills/`) ✅ **COMPLETE** — typed, declarative SkillDefinition contract, never an agent, never Knowledge, never a Tool, never memory, never executed/selected; 6A.8 (Experience Memory Foundation, `backend/experience_memory/`) ✅ **COMPLETE** — typed, durably-persisted ExperienceRecord foundation (Cloud SQL, Alembic `c7e2a4f9b83d`), deterministic ACCEPT/REJECT/INDETERMINATE admission, owner/customer-isolated structured retrieval, semantic/vector retrieval explicitly deferred, zero production writers/consumers wired (a migration-test target-isolation incident, OPS-0001, occurred and was fully, safely recovered with zero data loss); 6A.9 (Troubleshooting Manager & Intelligence Assembly, `backend/troubleshooting_intelligence/` + `backend/agents/troubleshooting_manager/`) ✅ **COMPLETE** — a real second ADK specialist (`tools=[]`, structurally incapable of capability execution), deterministic (never model-driven) Skill resolution over one production Skill, bounded/owner-scoped Experience consumption, fail-closed grounding validation, and real Vertex AI validation proving Governed Knowledge outranks conflicting Experience and prompt injection is never followed (DEF-0019 found and fixed); 6A.10 (Dual-Specialist Orchestration, `backend/agents/team_manager/troubleshooting_tool.py`) ✅ **COMPLETE** — `team_manager` now reaches `troubleshooting_manager` as a sibling of `incident_manager` via a plain FunctionTool (never an AgentTool); real Vertex AI validation through the actual `team_manager` object proved incident-only/troubleshooting-only/dual-specialist routing, no-execution, and Experience-read-only behavior live, plus two corrective passes (6A.10.1, 6A.10.2, DEF-0020/DEF-0021 fixed); 6A.11 (Integrated TELCO Validation & Phase 6A Freeze) ✅ **COMPLETE** — a two-pass validation milestone (no new production capability) proving the full 6A.0-6A.10 foundation holds end to end against real Cloud SQL/pgvector/Vertex/Gemini, a materially different second TELCO scenario, insufficient/conflicting-context behavior, a full prompt-injection stress matrix, and provider-failure fail-closed behavior (DEF-0022 found/fixed/reclassified as validation-only). **Phase 6A / P11 is now COMPLETE AND FROZEN** |
-| POST-6A Canonical Closure Plan — 6A.12 through 6A.28 (see `docs/MASTER_ROADMAP.md` §7a, authoritative) | 6A.13 ✅ COMPLETE; 6A.12/6A.14 implemented, live acceptance still open (DEF-0024/0026/0027/0028/0029/0030, see `docs/DEFECT_REGISTER.md`); 6A.15 through 6A.28 PLANNED, NOT STARTED |
+| POST-6A Canonical Closure Plan — 6A.12 through 6A.28 (see `docs/MASTER_ROADMAP.md` §7a, authoritative) | 6A.13 ✅ COMPLETE (validated); 6A.12/6A.14/6A.14A implemented, live browser acceptance still open (DEF-0024/0026/0027/0028/0029/0030/0031). LIVE-CORR-1 registered DEF-0037 through DEF-0044 (evidence-and-defect-registration pass, no runtime fix). LIVE-CORR-2 (Request & Context Policy Correction) then FIXED DEF-0037/0039/0043 and PARTIALLY FIXED DEF-0038 (bounded interim). LIVE-CORR-3 (Operational Guidance & Streaming Safety) then FIXED DEF-0040 and DEF-0044, and added non-behavior-changing instrumentation for DEF-0041 (status remains OPEN — mechanism not isolated). DEF-0042 remains OPEN, untouched. All fixes code + regression-tested, live browser acceptance not separately re-performed. See `docs/DEFECT_REGISTER.md` and `docs/MASTER_ROADMAP.md` §7a for the full record; 6A.15 through 6A.28 PLANNED, NOT STARTED |
 | Phase 4H — Security Hardening | FUTURE — after POST-6A work concludes |
 | 5.2–5.7 — Operational Integrations | FUTURE — after 4H |
 | Phase 6B — Context Engineering Expansion | FUTURE — after 5.2–5.7 |
@@ -713,43 +713,73 @@ drift between two copies:**
 
 ```text
 6A.12  Conditional Command Safety              IMPLEMENTED — final live closure open
+                                                (+ DEF-0040 FIXED, DEF-0041 instrumented/OPEN,
+                                                 DEF-0042 OPEN -- LIVE-CORR-3)
    ↓
-6A.13  Request Contract Foundation             COMPLETE
+6A.13  Request Contract Foundation             COMPLETE (validated) — DEF-0034 attached, does not reopen
+                                                (+ DEF-0038, LIVE-CORR-2, PARTIALLY FIXED, bounded interim)
    ↓
 6A.14  Deterministic Request Execution         IMPLEMENTED — live acceptance open
+                                                (+ DEF-0037/0039/0043, LIVE-CORR-2, FIXED, regression-tested)
    ↓
-6A.15  Support Classification Contract         NOT STARTED
+6A.14A Canonical Turn Result & Projection       IMPLEMENTED — live acceptance open (DEF-0031)
+                                                (+ DEF-0044 FIXED -- LIVE-CORR-3, buffered streaming)
    ↓
-6A.16  Hybrid Evidence Production Path         NOT STARTED — DEF-0023 OPEN
+6A.15  Capability + Evidence Support           NOT STARTED
+       Classification
    ↓
-6A.17  Specialist Routing Alignment            NOT STARTED
+6A.16  Version-Safe Hybrid Evidence            NOT STARTED — DEF-0023, DEF-0032,
+       Production & Reconciliation                          DEF-0033 OPEN
    ↓
 6A.18  Knowledge Inventory / Catalog           NOT STARTED — DEF-0025 OPEN
+       (sequenced before 6A.17's own closure — see rationale below)
+   ↓
+6A.17  Specialist Routing Alignment            NOT STARTED
+       (closes only once 6A.16 AND 6A.18 have both landed)
    ↓
 6A.19  Semantic Grounding Precision            NOT STARTED
    ↓
-6A.20  Multimodal Evidence Contract            NOT STARTED
+6A.20  Unified Multimodal Evidence Contract    NOT STARTED
    ↓
-6A.21  Tool / Action Contract                  NOT STARTED
+6A.21  Read / Write / Action Contracts         NOT STARTED
    ↓
-6A.22  Approval & Write Safety                 NOT STARTED
+6A.22  Approval, Idempotency & Durable         NOT STARTED — DEF-0035, DEF-0036 OPEN
+       Write-Outcome Safety
    ↓
 6A.23  Teams / External Handoff Fidelity       NOT STARTED
    ↓
 6A.24  Session Continuity & Isolation          NOT STARTED
    ↓
-6A.25  Observability & Audit                   NOT STARTED
+6A.25  Observability & Audit                   NOT STARTED (cross-cutting gate —
+       Completeness Gate                       incremental throughout 6A.14A–6A.24)
    ↓
-6A.26  Failure / Degradation Contract          NOT STARTED
+6A.26  Failure / Degradation                   NOT STARTED (cross-cutting gate —
+       Consistency Gate                        incremental throughout 6A.14A–6A.24)
    ↓
-6A.27  6A Security & Non-Regression Gate       NOT STARTED
+6A.27  6A Security & Non-Regression Gate       NOT STARTED (NOT a Phase 4H
+                                                replacement — see §2a)
    ↓
-6A.28  Full End-to-End Live Stress & Freeze    NOT STARTED
+6A.28  Full End-to-End Live Stress & Freeze    NOT STARTED (freezes THIS POST-6A
+                                                work only — not a claim of broad
+                                                enterprise-production readiness)
 ```
+
+`docs/MASTER_ROADMAP.md` §7a explains why 6A.18 is sequenced before
+6A.17's own closure (routing cannot be considered fully aligned until
+every declared output path, including the Knowledge Inventory path, has
+a real handler) and why 6A.25–6A.27 are framed as cross-cutting
+completeness/consistency/security gates rather than first-implementation
+milestones — this section restates the resulting order only, it does not
+re-derive the rationale a second time.
 
 Phase 4H, 5.2–5.7, Phase 6B, and Phase 7 all remain
 FUTURE, in that order, after this POST-6A closure plan concludes at
-6A.28 — see §2a for the realignment rationale.
+6A.28 — see §2a for the realignment rationale. Reaching 6A.28 closes and
+freezes this POST-6A closure plan only; it is never itself a claim that
+SLOPANOC is broadly enterprise-production-ready — broad production
+authentication/authorization, high-availability/disaster-recovery,
+SLA/SLO commitments, and deployment hardening remain Phase 4H and later
+concerns, unchanged by this plan.
 
 ---
 
