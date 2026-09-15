@@ -3609,6 +3609,37 @@ genuinely target-independent operation with no target info at all will
 be (safely, but not perfectly precisely) over-blocked rather than
 allowed. Live acceptance: NOT separately re-performed in this pass.
 
+**LIVE-CORR-3B — Operational Authority Boundary CORRECTIVE PASS — STILL
+PARTIALLY FIXED (a second, independent gap closed; step-aware precision
+remains the same, still-open limitation).** A SEPARATE gap in the SAME
+function, found during a fresh audit (section 4's own explicit "do not
+limit target safety to RRU/AAS; an unknown or other unit type must not
+become permissive" requirement): `required_target_parameter_gaps`
+treated EVERY `unit_type` value OUTSIDE the small `RRU`/`AAS`
+identifier-bearing class as equally verified-safe — a model that declared
+ANY other string at all (a typo, a hallucinated label, or a genuinely
+unrecognized equipment family), not only the real, DEF-0030-verified
+`"SupportUnit"` case, silently satisfied the gate with zero governed
+proof. Fixed by introducing a small, closed, documented
+`_TARGET_INDEPENDENT_UNIT_TYPES` allowlist (currently exactly
+`{"SUPPORTUNIT"}`, the same real, Cloud SQL-verified fact DEF-0030
+already established) — only a `unit_type` in this allowlist is gap-free;
+every other value, known or unknown, now conservatively requires
+`unit_id`. Separately, this pass also removed the LIVE-CORR-3A
+`TroubleshootingOperationalEffect.DIAGNOSTIC_READ` target-independent
+permission bypass (`request_execution_policy.py`'s
+`enforce_execution_decision_on_guidance`) outright — a model-mislabeled
+REFERENCE_DESCRIPTION/OBSERVATION/DIAGNOSTIC_READ command no longer
+escapes target confirmation. Remaining limitation, unchanged from the
+LIVE-CORR-2 pass above: this policy still has no deterministic signal for
+whether the SPECIFIC governed operation selected this turn is genuinely
+target-independent (would require coupling to Knowledge-evidence
+selection state) — DEF-0038 therefore remains PARTIALLY FIXED, not FIXED,
+at that precision layer. Tests: `backend/tests/
+test_livecorr3b_operational_authority_boundary.py` (unknown-unit-type
+gap proof, SupportUnit-allowlist non-regression, DIAGNOSTIC_READ-no-
+longer-bypasses proofs).
+
 ===================================================================
 DEF-0039 — Stale, pre-override Knowledge source chips are attached to a
 final answer that no longer depends on them (KNOWLEDGE_INVENTORY
@@ -3879,14 +3910,72 @@ shape closed, the EXACT_COMMAND variant also closed, and the PROCEDURE_
 STEPS non-regression case still rendering the full procedure normally).
 Live acceptance: NOT separately re-performed in this pass.
 
+**UNDOCUMENTED INTERIM PASS, "LIVE-CORR-3A" (found during LIVE-CORR-3B's
+own audit, recorded here for the first time since no prior entry existed
+in this register):** the substring-scanning `_detect_embedded_
+operational_content` mechanism described immediately above was, at some
+point before LIVE-CORR-3B began, REPLACED outright by a typed
+`TroubleshootingOperationalEffect` classification
+(`REFERENCE_DESCRIPTION`/`OBSERVATION`/`DIAGNOSTIC_READ`/`STATE_CHANGE_
+RECOMMENDATION`, on both `TroubleshootingStep` and `TroubleshootingGuidance`)
+plus a deterministic structural rule (`evidence.py`'s
+`enforce_structural_operational_integrity`: any step/guidance classified
+— or defaulting, when unset, to — `STATE_CHANGE_RECOMMENDATION` must
+carry a real `command`/`step.command`, or the whole guidance is
+suppressed). This is a STRICTLY STRONGER mechanism than the substring
+scanner it replaced (typed structure instead of text inspection,
+consistent with this codebase's own repeated "no regex/keyword command
+detection" instruction) and was already live in the codebase at LIVE-
+CORR-3B's own starting commit (`ba172d9`) — current source is
+authoritative; the LIVE-CORR-3 text above describing the substring
+scanner is HISTORICAL only.
+
+**LIVE-CORR-3B — Operational Authority Boundary CORRECTIVE PASS — FIXED
+(closes the one remaining model-controlled exemption LIVE-CORR-3A's own
+mechanism still carried).** LIVE-CORR-3A's own `DIAGNOSTIC_READ`
+target-independent permission exemption (`request_execution_policy.py`'s
+`enforce_execution_decision_on_guidance`) is REMOVED outright, per
+section 3's own explicit "remove the DIAGNOSTIC_READ target-independent
+permission bypass" requirement — that exemption's own "RESIDUAL RISK"
+note (`TroubleshootingOperationalEffect`'s docstring) already named the
+exact gap: `operational_effect` is model-populated, never governed step
+metadata, so a model that mislabels a real state-changing recommendation
+as `DIAGNOSTIC_READ` could bypass target confirmation for it. Until
+governed step metadata positively proves an operation target-independent
+(not yet available anywhere in the Knowledge model), every command is now
+treated as target-dependent by this gate, unconditionally. Separately,
+`derive_execution_decision`'s ALLOW branch no longer implicitly sets
+`may_emit_command=True` for every fully-resolved request (only a
+validated `intent=COMMAND, requested_output=EXACT_COMMAND` request grants
+it), and `requires_unstructured_response_backstop` now also fires for an
+operationally-shaped ALLOW decision with no `TroubleshootingGuidance` at
+all — closing the remaining fail-open paths named in this pass's own
+milestone objective. `INVALID_CONTRACT` was audited for the same
+backstop widening and deliberately NOT extended — see that function's
+own docstring for the two candidate designs measured directly against
+this repository's real test suite and rejected on concrete evidence
+(unconditional firing broke ~66 unrelated pre-existing tests spanning
+streaming/governed-completion-gate/Teams-read-resume suites; gating on
+the turn's own `record_source_requirements` declaration was unsafe in the
+opposite direction, since a `requires_governed_knowledge=True` turn is
+already fully covered by the pre-existing governed-knowledge completion
+gate). Tests: `backend/tests/
+test_livecorr3b_operational_authority_boundary.py` (21 tests: execution-
+permission unit tests, DIAGNOSTIC_READ-removal proofs, source-section-
+reference verification, and the milestone's own 8 required end-to-end
+`ChatService`+`FakeRunner` pipeline scenarios). Live acceptance: NOT
+separately re-performed in this pass (no browser access).
+
 ===================================================================
 DEF-0041 — A structured `step.command` value that direct, deterministic
 testing proves should fail grounding (`TRUE_ABSENCE`) nonetheless
 reached the user unstripped
 ===================================================================
 
-- **Status:** OPEN.
-- **Severity:** HIGH — same class of trust-boundary violation as
+- **Status:** CLOSED — NOT REPRODUCIBLE AFTER CURRENT CORRECTIVE STACK
+  (confirmed by a real live re-test; see "DEF-0041 FINAL LIVE ISOLATION"
+  below, after the deterministic-isolation-pass note).
+- **Severity (historical):** HIGH — same class of trust-boundary violation as
   DEF-0040, but for the STRUCTURED field the enforcement machinery is
   specifically designed to validate — if confirmed to be a live gap
   (rather than a test-environment artifact), this means even the
@@ -3997,6 +4086,189 @@ milestone can directly compare against the live, observed (defective)
 outcome to determine definitively whether the function was invoked with
 the expected `run_id`/selected evidence, or whether the discrepancy
 originates elsewhere entirely.
+
+**DEF-0041 ISOLATION PASS (this milestone) — STILL OPEN; no code change
+made; new evidence recorded.** Per this milestone's own explicit scope
+("trace the runtime path... identify the first point where live behavior
+diverges... apply the smallest deterministic correction if and only if
+the evidence supports one — no speculative fix"), this pass built the
+deepest reproduction available without live Gemini/Cloud SQL access: a
+direct drive of the REAL `enforce_incident_manager_response_integrity`
+`after_agent_callback` (not the already-known-correct isolated pure
+functions) with run-scoped selected Knowledge evidence populated the same
+way the real `knowledge_search`/`knowledge_select_evidence` tools
+populate it, and — the one thing genuinely new here — a real
+`callback_context.user_content` carrying the incoming question text, the
+exact field `_extract_incoming_question_text` reads in production. Every
+PRE-EXISTING evidence.py test (`test_evidence_troubleshooting_guidance
+.py`) omits `user_content` entirely, so none of them had ever exercised
+DEF-0027's own active-section heading-resolution path at all — only its
+`question=None` fallback. See `backend/tests/test_def_0041_full_pipeline_
+grounding.py` (new, 4 tests, all passing) for the reconstruction and its
+own full rationale.
+
+**Result: no discrepancy found.** Reconstructing DEF-0041's own
+documented shape exactly (two selected sections of the SAME governed
+document — an active "HW Partial Fault" section and a merely supporting
+"HW Fault" sibling whose real content alone contains the disputed
+command — with a question containing the active heading verbatim) through
+the REAL callback correctly strips the command, correctly rewrites the
+defense-in-depth `summary` field, and correctly registers the CORRECTED
+(command-stripped) `TroubleshootingGuidance` into `troubleshooting_
+guidance_context` for `chat_service.py`'s own later `pop_troubleshooting_
+guidance` read — the exact object `chat_service.py`'s hard completion-
+boundary override (section 14/17's own canonical-result invariant) would
+then render. Every one of the register's own named unconfirmed
+candidates was independently exercised and found to fail CLOSED, never
+open: (a) `user_content` absent entirely (`question=None`) — falls back
+to DEF-0024's original "grounded in every selected section" rule, still
+withheld; (b) `user_content` present but its question text does not
+contain either candidate heading verbatim — active-section resolution
+unresolved, same fail-closed fallback, still withheld; (c) a simulated
+total `run_id` correlation gap (the bound run_id under which the callback
+runs never had ANY evidence selected against it at all, standing in for
+candidate root cause (1) from the original register entry) — `_evaluate_
+command`'s own empty-evidence branch (`TRUE_ABSENCE`) withholds it. No
+combination this pass could construct reproduces the live, observed
+"reached the user unstripped" outcome.
+
+**What this does and does not prove.** It does NOT prove DEF-0041 is
+fixed, and this pass does not claim that — `enforce_procedure_scoped_
+command_grounding_with_reason`'s own core logic (DEF-0027) and its
+wiring into `after_agent_callback` (A5) both predate DEF-0041's own
+discovery and are UNCHANGED by this pass, so this is confirmation of
+already-existing behavior under a newly-realistic test shape, not a new
+fix landing. What it DOES establish: the specific "was grounding even
+invoked with the right run_id/evidence/question" question the register's
+own root-cause note left open is now answered, deterministically, for
+every input shape this offline environment can construct — invoked, with
+correct data, it behaves correctly. The remaining, unclosed possibility
+is a genuinely LIVE-only condition this deterministic harness cannot
+express (a live ADK/runtime behavior around `after_agent_callback`
+timing or `user_content` population this pass did not find evidence of
+but also cannot positively rule out without live access; a live-runtime
+race/threading condition; or the original live discovery itself capturing
+the wrong layer of the pipeline) — none of which meets this milestone's
+own bar for a deterministic correction. Per the milestone's own STOP
+CONDITIONS ("the defect cannot be reproduced," "root cause cannot be
+deterministically identified"), no production code was changed.
+**Status remains OPEN, now downgraded from "root cause unknown, mechanism
+unverified" to "mechanism verified correct under every deterministic
+reconstruction attempted; live re-test with the existing `troubleshooting_
+command_grounding` instrumentation (LIVE-CORR-3) is the only remaining
+path to further isolation."**
+
+**DEF-0041 FINAL LIVE ISOLATION — CLOSED, NOT REPRODUCIBLE AFTER CURRENT
+CORRECTIVE STACK.** A genuine live re-test was performed against the real
+application: real FastAPI backend (`uvicorn backend.api.app:app`), real
+Cloud SQL Auth Proxy v2 + IAM DB auth against the actual DEV instance
+(`pr-msn-dev-gl-slopai-01:europe-west4:sloc-anoc-sandbox01`), real Gemini
+2.5 Flash via Vertex AI, driven through the real `/api/sessions` /
+`/api/sessions/{id}/messages` HTTP endpoints (the same endpoints the
+React UI calls). The prior isolation pass's own missing piece — the
+LIVE-CORR-3 `troubleshooting_command_grounding` instrumentation
+(`_log_grounding_decision`, `_logger.info(...)`) had never actually been
+OBSERVABLE in any real run, historical or otherwise: this codebase never
+raises the root/module logging level above Python's own default
+(`WARNING`) anywhere (verified: no `logging.basicConfig`/`dictConfig`
+call exists anywhere under `backend/`; uvicorn's own default
+`LOGGING_CONFIG` only sets levels for its own `uvicorn`/`uvicorn.error`/
+`uvicorn.access` loggers, never the root logger; Python's "handler of
+last resort" only emits `WARNING`+), so every `_logger.info(...)`/
+`_perf_logger.info(...)` call in this codebase — including the exact
+instrumentation LIVE-CORR-3 added specifically to isolate this defect —
+has been silently dropped in every real run to date, including the
+original live sessions that first exposed DEF-0041. This pass worked
+around that gap for its own diagnostic run only, via a
+`logging.basicConfig(level=logging.INFO)` call in a throwaway launcher
+script kept entirely OUTSIDE the repository (never a repository file
+change) — **this observability gap itself is a real, confirmed, still-
+unfixed finding, recorded here for a future milestone since a repository-
+level logging-configuration fix was out of this pass' own explicit
+"do not refactor" scope.**
+
+The original DEF-0041 session (`38dbd231-a704-4734-9488-80db882a5b7e`)
+still existed in the live DEV database; its persisted history was read
+directly and shows the PRECISE reproduction shape was a two-turn
+follow-up, not a single FULL_PROCEDURE response: turn 1 ("How do I
+troubleshoot HW Partial Fault using the approved procedure?") correctly
+rendered its 15-step FULL_PROCEDURE response with NO command shown for
+the step whose governed source was the supporting "HW Fault" sibling
+section — grounding worked correctly for that turn, historically, too.
+Turn 2, a plain follow-up ("Give me the first approved command for that
+procedure.") is where the live defect actually manifested: the persisted
+assistant reply is the bare, unqualified sentence `"The first approved
+command for that procedure is: `hget near Rfportref`"` — the exact
+non-active-section command, with no fallback wording, no withholding
+language, nothing indicating any safety mechanism intervened at all. This
+is a materially more precise reconstruction of the original defect than
+the register's own original entry (which pointed at `full_procedure_
+steps[5]`) — the true live shape was a NEXT_STEP-mode follow-up turn.
+
+Reproducing this exact two-turn conversation fresh, twice, in new
+sessions against the real live stack, both times produced SAFE behavior
+throughout — the model's own real `knowledge_search`/`knowledge_select_
+evidence` tool calls this time selected only ONE section (the active
+"HW Partial Fault" section) for both turns, so the cross-section shape
+never even arose; genuine model-output variance, not a code change,
+explains the difference from the original run — and even so, both
+attempts' `TroubleshootingGuidance` carried no `command` at all, and the
+`exact_command`-requesting follow-up turn was independently blocked by
+`derive_execution_decision` (`missing_context_keys=['unit_id',
+'unit_type']` → `may_emit_command=False`), a second, independent gate
+that would have withheld any command regardless.
+
+A THIRD live scenario, explicitly requesting "the complete approved
+procedure... all steps, do not wait for confirmation" (chosen specifically
+to force the same multi-section evidence selection the original defect
+needed), reproduced the exact cross-section shape TWICE, independently,
+in two separate fresh sessions: real `knowledge_select_evidence` calls
+selected THREE sections this time (including both "HW Partial Fault" and
+the supporting "HW Fault" sibling), the model DID propose a structured
+`command` for the disputed step, and the real, live
+`troubleshooting_command_grounding` log line — now actually observable —
+confirmed grounding correctly intervened both times:
+`interaction_mode=full_procedure selected_count=3 ... command_present=True
+stripped=True reason=unverified_section_reference`. The rendered,
+persisted, canonical user-visible text for that step contained no
+structured command at all — only the fixed, deterministic fallback
+sentence — and canonical live/history equality held byte-for-byte in every
+case checked. The positive exact-command control (a fully-specified,
+correctly-grounded `RRU-9` restart request) was independently confirmed
+ALLOWED through, unaffected: `may_emit_command=True`,
+`command_present=True stripped=False reason=None`, live text ==
+refreshed history text, byte-for-byte — proving the corrective stack has
+not simply disabled commands globally.
+
+**Conclusion: DEF-0041's own precise mechanism — a `command`/`step.
+command` structured field value that deterministic grounding rejects
+nonetheless reaching the user unstripped — does not reproduce against the
+real live stack as it exists today.** The historical observation was
+real (confirmed via the original session's own persisted history, read
+directly from the live database); its precise original root cause was
+never isolated at the code level (the missing observability, above,
+made that structurally impossible at the time); but the cumulative
+corrective stack already in place (DEF-0024/0026/0027's original
+grounding, LIVE-CORR-3A's structural-integrity rule, and — decisively —
+LIVE-CORR-3B's `_verify_source_section_reference` `source_section_id`
+check) closes it, live-proven, twice, independently. No new production-
+code correction was required or made by this pass.
+
+**IMPORTANT — a DIFFERENT, NEW, live-confirmed gap was found and recorded
+as DEF-0045 (not DEF-0041, not implemented, per this milestone's own
+explicit scope): in BOTH of the successful cross-section reproductions
+above, the verbatim disputed command string ("hget near Rfportref")
+still reached the user — not via the structured `command` field (correctly
+stripped both times) but embedded directly in the free-text `action`
+prose of an unrelated step** (e.g. `"Execute \`hget near Rfportref\` to
+fetch the associated RRU. Then, restart the identified RRU."`), which no
+existing mechanism inspects — `_evaluate_command`/`_verify_source_
+section_reference` only ever validate the `command`/`step.command` field,
+never `action`/`interpretation`/`next_action` free text; `enforce_
+structural_operational_integrity` only fires when `operational_effect ==
+STATE_CHANGE_RECOMMENDATION` AND `command` is unset, which this step did
+not trigger. See DEF-0045 below for the full record — this is explicitly
+OUT OF SCOPE for this pass and was not investigated further or acted on.
 
 ===================================================================
 DEF-0042 — ESS "first approved troubleshooting action" response skipped
@@ -4311,6 +4583,103 @@ without deleting the original, historically-accurate narrative.
 Live acceptance: NOT separately re-performed in this pass (no
 interactive browser tool available in this session) — every fix is
 automated-test-verified only.
+
+===================================================================
+DEF-0045 — A governed command string reproduced verbatim in a
+`TroubleshootingStep.action`/free-text field is never validated by any
+existing mechanism, even when the SAME step's structured `command` field
+is correctly grounded/stripped
+===================================================================
+
+- **Status:** OPEN. Found and recorded during the DEF-0041 final live
+  isolation pass; NOT investigated further and NOT implemented, per that
+  pass' own explicit scope boundary ("If DEF-0041 investigation uncovers
+  evidence relevant to DEF-0042 [or an adjacent concern]: record it; do
+  not implement it").
+- **Severity:** MEDIUM-HIGH — the same class of "a governed operational
+  string reaches the user without going through the trusted grounding
+  boundary" concern DEF-0040/DEF-0041 both address for the `command`
+  field specifically, but for a field (`TroubleshootingStep.action`, and
+  by the same reasoning `interpretation`/`next_action`/`evidence_
+  requested`) no existing mechanism inspects at all — the STRUCTURED
+  safety net can be working perfectly (as confirmed live, twice, in the
+  DEF-0041 closure evidence below) while the exact same disputed command
+  string still reaches the user through the step directly next to it.
+- **Live reproduction:** confirmed directly, twice, independently, in
+  two fresh sessions against the real application (real FastAPI backend,
+  real Cloud SQL DEV instance, real Gemini 2.5 Flash via Vertex AI) —
+  see the DEF-0041 entry's own "DEF-0041 FINAL LIVE ISOLATION" note for
+  the full session/turn detail. Prompt: "Give me the complete approved
+  procedure for HW Partial Fault, all steps, do not wait for
+  confirmation." Both times, `knowledge_select_evidence` selected three
+  sections including the "HW Fault" supporting sibling (whose only real
+  command is `hget near Rfportref`); both times the structured `command`
+  field for the affected step was correctly grounded/stripped
+  (`troubleshooting_command_grounding ... command_present=True
+  stripped=True reason=unverified_section_reference`); both times the
+  PERSISTED, CANONICAL, user-visible text nonetheless contained the
+  verbatim string `hget near Rfportref` embedded in that step's own
+  `action` prose, e.g.: `"Execute \`hget near Rfportref\` to fetch the
+  associated RRU. Then, restart the identified RRU."` Canonical live/
+  history equality held (the leak is not a streaming/correction-timing
+  artifact — it is genuinely part of the persisted canonical text).
+- **Confirmed root cause:** deterministic, by direct code inspection,
+  not merely inferred from the live symptom. `_evaluate_command` and
+  `_verify_source_section_reference` (`backend/agents/incident_manager/
+  evidence.py`) are invoked ONLY against `TroubleshootingStep.command`/
+  `TroubleshootingGuidance.command` — neither is ever called against
+  `action`/`interpretation`/`next_action`/`evidence_requested`, which
+  are free-form prose fields the model populates independently and which
+  this codebase has consistently, deliberately never parsed for embedded
+  operational content (per the LIVE-CORR-3A "operational safety must come
+  from typed structure... do not replace it with regex/keyword/free-text
+  command detection" instruction this codebase already follows).
+  `enforce_structural_operational_integrity` (LIVE-CORR-3A/DEF-0040) is
+  the one existing mechanism that DOES inspect a step holistically, but
+  it fires ONLY when `operational_effect == STATE_CHANGE_RECOMMENDATION`
+  AND `command` is unset — the reproduced step's own `operational_effect`
+  classification (whatever the model assigned it) did not satisfy that
+  condition, so it never fired. This is therefore a genuine, confirmed
+  CAPABILITY GAP (no mechanism exists for this field), not a bug in an
+  existing mechanism — the same category DEF-0042's own register entry
+  already uses this exact phrase for.
+- **Affected trust boundary:** the same DEF-0024/0027/DEF-0041 "a command
+  is trusted only if grounded in THIS turn's own genuinely selected,
+  ACTIVE-procedure evidence" guarantee — but for a field the existing
+  enforcement was never designed to reach.
+- **Code locations:** `backend/agents/incident_manager/evidence.py`
+  (`_evaluate_command`, `_verify_source_section_reference`, `enforce_
+  structural_operational_integrity` — none of the three inspect
+  `action`/free-text fields); `backend/agents/incident_manager/schemas.py`
+  (`TroubleshootingStep.action` — a plain, unvalidated `str`).
+- **Relationship to existing DEF entries:** distinct from DEF-0040
+  (embedded operational content with NO structured `command` at all —
+  closed by the typed `operational_effect` structural rule) and DEF-0041
+  (a `command` field value bypassing grounding — closed, see that entry's
+  own live isolation). Overlaps in SPIRIT with DEF-0042 (free-text
+  fidelity/source-accuracy gap) but is a narrower, more precise,
+  independently live-reproducible mechanism: a VERBATIM governed string
+  (not a paraphrase, not a factual claim) appearing in prose no
+  mechanism ever checks.
+- **Required correction (NOT implemented — explicitly out of scope for
+  the pass that found this):** a genuine design decision for a future,
+  properly-scoped milestone, not a small patch — options to evaluate
+  include extending typed classification/verification to `action` text
+  (risk: drifts toward free-text parsing, which this codebase has
+  consistently and deliberately avoided) or a stricter structural rule
+  requiring any step whose `action` text contains a real command-shaped
+  token to also carry a grounded `command` field (needs careful,
+  deterministic definition of "command-shaped" that does not become a
+  regex/keyword detector by another name). Do not implement without a
+  dedicated milestone.
+- **Required tests:** none written yet — this is a recorded finding
+  only, per the pass' own explicit scope boundary.
+- **Live acceptance requirements:** a corrective pass must show, via
+  real live re-test, that a verbatim non-active-section command string
+  can no longer reach the user through ANY field of `TroubleshootingGuidance`/
+  `TroubleshootingStep`, not merely `command`.
+- **Explicit statement:** the pass that found this did NOT implement any
+  fix — no production code was changed as a result of this finding.
 
 ===================================================================
 MAINTENANCE

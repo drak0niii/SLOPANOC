@@ -81,7 +81,6 @@ from pydantic import BaseModel, Field, ValidationError
 from backend.agents.incident_manager.schemas import (
     TroubleshootingGuidance,
     TroubleshootingInteractionMode,
-    TroubleshootingOperationalEffect,
 )
 from backend.agents.team_manager.request_contract import (
     RequestContract,
@@ -299,18 +298,40 @@ def derive_execution_decision(contract: Optional[RequestContract], current_run_i
                 reason=f"required context not yet confirmed by the user: {', '.join(effective_missing_context)}",
             )
 
+    # LIVE-CORR-3B -- Operational Authority Boundary, section 1's own
+    # explicit "ALLOW must not automatically mean may_emit_command=True"
+    # requirement. Command permission is a SEPARATE, NARROWER grant than
+    # "this request is fully resolved and safe to answer at all" --
+    # possible ONLY for a request VALIDATED as `intent=COMMAND,
+    # requested_output=EXACT_COMMAND` (mirrors `is_exact_command_response_
+    # permitted`'s own established definition, applied here one layer
+    # earlier). A PROCEDURE_STEPS/TROUBLESHOOTING_NEXT_STEP-shaped ALLOW
+    # decision never implicitly inherits command permission merely because
+    # the overall request is otherwise fully resolved -- closes the exact
+    # fail-open path where a fully-parameterized "next step" answer showed
+    # a raw command with no EXACT_COMMAND validation at all.
+    #
+    # `may_emit_operational_steps` remains the separate, broader signal
+    # (unchanged in meaning) for whether NON-COMMAND operational/diagnostic
+    # narrative is in scope at all for this request shape -- never on its
+    # own sufficient to authorize a command.
+    allow_command = contract.intent == RequestIntent.COMMAND and contract.requested_output == RequestedOutput.EXACT_COMMAND
     return RequestExecutionDecision(
         status=RequestExecutionStatus.ALLOW,
         intent=contract.intent,
         requested_output=contract.requested_output,
         subject=contract.subject,
-        may_emit_command=True,
+        may_emit_command=allow_command,
         may_execute_action=False,  # never this policy's job to authorize an actual write
-        may_emit_operational_steps=True,
+        may_emit_operational_steps=is_operationally_shaped_request(contract.intent, contract.requested_output),
         missing_context=list(contract.missing_context),
         ambiguity=False,
         approval_required=contract.approval_required,
-        reason="request contract satisfied -- command/operational output permitted, subject to existing grounding",
+        reason=(
+            "request contract satisfied -- exact-command output permitted, subject to existing grounding"
+            if allow_command
+            else "request contract satisfied -- non-command operational output permitted; no exact-command grant"
+        ),
     )
 
 
@@ -527,38 +548,26 @@ def enforce_execution_decision_on_guidance(
     for the cross-document case, applied here for a different,
     execution-policy-driven reason.
 
-    LIVE-CORR-3A -- DEF-0038/section-4 "step-aware target safety": the ONE
-    exemption from the blanket suppression above -- a step (FULL_PROCEDURE
-    mode) or the guidance itself (NEXT_STEP mode) explicitly, structurally
-    classified `TroubleshootingOperationalEffect.DIAGNOSTIC_READ` AND
-    carrying a real `command`/`step.command` is TARGET-INDEPENDENT BY
-    DECLARATION -- a proven, grounded read-only lookup remains safe to
-    show even when target confirmation is otherwise unresolved. This
-    exemption NEVER applies to `STATE_CHANGE_RECOMMENDATION` (or
-    unclassified -- see `evidence.py`'s own `_effective_operational_
-    effect`, "unset defaults to the strictest interpretation") -- a
-    state-changing command remains subject to the FULL target-
-    confirmation gate unconditionally, no exemption, ever. The command
-    STRING itself is NOT re-verified here -- it already passed the
-    EXISTING, separate, unchanged `_evaluate_command`/grounding check
-    before this function ever runs; this function only decides WHETHER
-    the (already-grounded) command may be shown given the CURRENT
-    target-confirmation state.
-
-    RESIDUAL RISK, honestly documented (see `TroubleshootingOperationalEffect`
-    's own docstring, and DEF-0038's own PARTIALLY FIXED status, not
-    upgraded to FIXED by this exemption): `operational_effect` remains
-    model-populated -- a model that mislabels a target-specific, state-
-    changing command as `DIAGNOSTIC_READ` could bypass target
-    confirmation for it. Bounded by the fact the command STRING itself
-    must still be genuinely grounded (verbatim, from THIS turn's own
-    selected Approved evidence) regardless of this exemption -- an
-    attacker/model cannot fabricate a command, only mis-classify a real,
-    governed one.
-
-    Both this layer AND `evidence.py`'s own, separate, still-fully-active
-    DEF-0024/0027/LIVE-CORR-3A grounding must agree before a command
-    reaches the user -- neither replaces the other.
+    LIVE-CORR-3B -- Operational Authority Boundary, section 3's own
+    explicit "remove the DIAGNOSTIC_READ target-independent permission
+    bypass" requirement: LIVE-CORR-3A's own per-step/per-guidance
+    `TroubleshootingOperationalEffect.DIAGNOSTIC_READ` exemption from
+    target confirmation has been REMOVED outright, not narrowed. Its own
+    "RESIDUAL RISK" note (kept in `TroubleshootingOperationalEffect`'s own
+    docstring for history) already named exactly why: `operational_effect`
+    is model-populated, never governed step metadata -- a model that
+    mislabels a real, target-specific, state-changing recommendation as
+    `DIAGNOSTIC_READ` (or `OBSERVATION`/`REFERENCE_DESCRIPTION`) could
+    bypass target confirmation for it. Until governed step metadata
+    positively proves a specific operation is genuinely target-
+    independent (not yet available anywhere in the Knowledge model --
+    a real gap, not invented here), EVERY command -- regardless of its own
+    self-declared `operational_effect` -- is treated as target-dependent
+    for the purpose of THIS gate: `may_emit_command=False` withholds it
+    unconditionally, no exemption, ever. `evidence.py`'s own, separate,
+    unchanged `_evaluate_command`/grounding layer is completely unaffected
+    (it never consulted `operational_effect` for this purpose either);
+    both layers must still agree before a command reaches the user.
 
     Returns `(possibly-corrected guidance, whether anything was
     suppressed)`. `guidance=None` (no troubleshooting_guidance this turn
@@ -575,18 +584,12 @@ def enforce_execution_decision_on_guidance(
         stripped = False
         new_steps = []
         for step in guidance.full_procedure_steps:
-            if step.operational_effect == TroubleshootingOperationalEffect.DIAGNOSTIC_READ and step.command:
-                new_steps.append(step)
-                continue
             if step.command is not None:
                 stripped = True
             new_steps.append(step.model_copy(update={"command": None}))
         if not stripped:
             return guidance, False
         return guidance.model_copy(update={"full_procedure_steps": new_steps}), True
-
-    if guidance.operational_effect == TroubleshootingOperationalEffect.DIAGNOSTIC_READ and guidance.command:
-        return guidance, False
 
     suppressed = guidance.model_copy(
         update={
@@ -643,19 +646,82 @@ def requires_unstructured_response_backstop(decision: RequestExecutionDecision, 
     DELIBERATELY NARROW, to avoid over-blocking the common case: returns
     `False` whenever `troubleshooting_guidance_present` is `True` (the
     EXISTING, already-precise `enforce_execution_decision_on_guidance`
-    mechanism already handles that case, field-by-field); `False`
-    whenever `decision.status` is `ALLOW` (the ordinary, fully-resolved
-    case -- e.g. "what is VSWR?" with `missing_context=[]` -- is
-    completely unaffected, regardless of whether a contract exists at
-    all); `False` for `INVALID_CONTRACT` (a turn with NO contract at all
-    is a materially different, lower-confidence signal than a turn with a
-    contract that POSITIVELY shows unresolved context -- deliberately not
-    conflated, to avoid this NEW backstop firing on every ordinary
-    governed-knowledge turn merely because `record_request_contract`
-    was not called); `False` for `REQUIRES_APPROVAL`/`UNSUPPORTED_
-    CAPABILITY` (both already have their own, separate, unconditional
-    handling elsewhere).
+    mechanism already handles that case, field-by-field); `False` for
+    `REQUIRES_APPROVAL`/`UNSUPPORTED_CAPABILITY` (both already have their
+    own, separate, unconditional handling elsewhere).
+
+    LIVE-CORR-3B -- Operational Authority Boundary, section 2's own
+    explicit "this must apply for ALLOW and INVALID_CONTRACT too -- not
+    only NEEDS_INFORMATION/AMBIGUOUS" requirement -- audited BOTH halves;
+    only the ALLOW half could be implemented safely (see the STOP note
+    below for INVALID_CONTRACT):
+
+      `ALLOW` now returns `is_operationally_shaped_request(decision.intent,
+      decision.requested_output)` instead of always `False`. An ORDINARY,
+      non-operational ALLOW turn (a greeting, "what is VSWR?", any plain
+      `INFORMATION`/`FACT` exchange) is completely unaffected -- `is_
+      operationally_shaped_request` is `False` for exactly that shape,
+      preserving greeting/ordinary-conversation behavior byte-for-byte.
+      An operationally-shaped ALLOW turn (e.g. `intent=PROCEDURE,
+      requested_output=PROCEDURE_STEPS`, fully resolved, NO missing
+      context) that never populated `TroubleshootingGuidance` at all is now
+      correctly caught -- previously such a turn escaped this backstop
+      entirely purely because its own status happened to resolve to ALLOW,
+      the same class of gap DEF-0028's original Root Cause A closed for
+      NEEDS_INFORMATION/AMBIGUOUS only.
+
+    STOP CONDITION, honestly documented, per explicit instruction ("if the
+    only proposed solution is phrase/keyword/regex matching, or fixing
+    this requires a new parallel architecture, STOP and report"):
+    `INVALID_CONTRACT` deliberately still returns `False` unconditionally,
+    UNCHANGED from before this pass, despite item 2's own literal text.
+    Audited two candidate designs, both rejected on real evidence, not
+    speculation:
+      (a) fire UNCONDITIONALLY whenever no contract exists -- measured
+      directly against this repository's own real test suite (a genuine
+      regression run, not a guess) and found to collaterally break dozens
+      of PRE-EXISTING, UNRELATED tests (chat streaming semantics, the
+      governed-Knowledge completion gate, Teams read-resume flows, and
+      others) that legitimately never populate a `RequestContract` because
+      their own scenario predates 6A.13/6A.14 and has nothing to do with
+      operational command safety.
+      (b) fire only when this turn's own separate, already-mandatory
+      `record_source_requirements` declaration shows `requires_governed_
+      knowledge`/`requires_teams` -- ALSO measured directly and found
+      unsafe in the OPPOSITE direction: a `requires_governed_knowledge=
+      True` turn is already fully covered by the PRE-EXISTING governed-
+      knowledge completion gate (`chat_service.py`'s own `governed_
+      completion_needed` branch, well upstream of this function) -- EITHER
+      it already deterministically remediated `final_text` (a real,
+      already-trustworthy answer this new backstop would then wrongly
+      discard in favor of a less-informative generic fallback), OR real,
+      freshly-selected evidence was already verified present and
+      consistent (also already trustworthy, via `KnowledgeEvidenceItem`/
+      provenance, a completely separate, robust mechanism). There is no
+      leftover, uncovered case within `requires_governed_knowledge=True`
+      for this new backstop to usefully close, and gating the OPPOSITE way
+      (fire when NEITHER flag is set) reopens design (a)'s own same
+      collateral-damage class (an ordinary, ungoverned conversational
+      reply looks identical to an ungrounded, hallucinated operational one
+      by this signal alone).
+    No third deterministic signal exists in this codebase today that
+    distinguishes "raw text might carry an ungrounded operational
+    recommendation" from "raw text is a safe, already-validated
+    conversational or governed-knowledge answer" without either inspecting
+    response content (a text/command detector, explicitly out of bounds)
+    or a new, currently-nonexistent per-turn "was this specific answer
+    verified against real selected evidence" boolean threaded through this
+    entire call chain (a materially larger, cross-cutting change, not a
+    surgical one). Left OPEN for a future, properly-scoped milestone with
+    access to that signal; DEF-0040/close relatives in `docs/DEFECT_
+    REGISTER.md` should record this as the concrete next step.
     """
     if troubleshooting_guidance_present:
         return False
-    return decision.status in _UNSTRUCTURED_RESPONSE_BLOCKING_STATUSES
+    if decision.status in (RequestExecutionStatus.REQUIRES_APPROVAL, RequestExecutionStatus.UNSUPPORTED_CAPABILITY):
+        return False
+    if decision.status == RequestExecutionStatus.INVALID_CONTRACT:
+        return False
+    if decision.status in _UNSTRUCTURED_RESPONSE_BLOCKING_STATUSES:
+        return True
+    return is_operationally_shaped_request(decision.intent, decision.requested_output)

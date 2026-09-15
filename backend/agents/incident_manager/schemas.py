@@ -221,6 +221,15 @@ class TroubleshootingStep(BaseModel):
             "permissive one."
         ),
     )
+    source_section_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "The exact section_id (from this turn's own currently-selected governed evidence) this step's "
+            "action/command is drawn from, if known. A PROPOSAL only -- deterministically re-verified against the "
+            "backend's own real selected-evidence set before being trusted; never assume it is honored merely "
+            "because it was populated. Leave unset if genuinely uncertain."
+        ),
+    )
 
 
 class TroubleshootingGuidance(BaseModel):
@@ -281,6 +290,15 @@ class TroubleshootingGuidance(BaseModel):
             "LIVE-CORR-3A -- classifies `next_action`/`command` (NEXT_STEP mode only; ignored for FULL_PROCEDURE, "
             "which uses each `TroubleshootingStep.operational_effect` instead). Same meaning/consequence as "
             "`TroubleshootingStep.operational_effect` -- see that field's own description."
+        ),
+    )
+    source_section_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "LIVE-CORR-3B -- the exact section_id (from this turn's own currently-selected governed evidence) "
+            "`next_action`/`command` is drawn from (NEXT_STEP mode only; ignored for FULL_PROCEDURE, which uses "
+            "each `TroubleshootingStep.source_section_id` instead). Same meaning/consequence as "
+            "`TroubleshootingStep.source_section_id` -- see that field's own description."
         ),
     )
 

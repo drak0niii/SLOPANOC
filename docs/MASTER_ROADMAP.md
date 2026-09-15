@@ -659,8 +659,8 @@ point where THIS POST-6A body of work can itself be declared frozen
 
 | Milestone | Scope | Done when | Status |
 | --- | --- | --- | --- |
-| **6A.12 — Conditional Command Safety** | Active-procedure command grounding, conditional commands, truthful fallbacks; **DEF-0024, DEF-0026, and DEF-0027** corrective work (never described as closing only DEF-0027) | Exact commands only, condition-aware, no wrong-procedure leakage | **IMPLEMENTED — final live closure still open**; LIVE-CORR-1 attached three further confirmed gaps at this same boundary without reopening this status, subsequently addressed by LIVE-CORR-3: DEF-0040 **FIXED** (embedded-operational-content detection + response-mode compatibility enforcement — see `docs/DEFECT_REGISTER.md`), DEF-0041 **instrumentation added, STATUS REMAINS OPEN** (safe, non-behavior-changing logging now traces every grounding decision; the live runtime discrepancy itself was not isolated in this pass), DEF-0042 unchanged/OPEN (skipped prerequisite steps + a factually incorrect "no command specified" claim — a model-reasoning/source-fidelity capability gap, explicitly out of LIVE-CORR-3's own scope) |
-| **6A.13 — Request Contract Foundation** | Typed `RequestContract`: intent, subject/procedure, requested output, knowledge/context needs, continuation, action/approval, ambiguity | Every request gets one **validated** (deterministically provenance-checked, never merely model-produced) typed structured interpretation | **COMPLETE** — real, confirmed corrective defects are attached to this boundary without reopening this COMPLETE status, the same relationship DEF-0024/0026/0027 have to 6A.12: DEF-0034 (negation-blind provided_context verification, still OPEN), and DEF-0038 (`required_target_parameter_gaps` non-monotonicity — LIVE-CORR-2 implemented a bounded, fail-closed interim fix; **PARTIALLY FIXED**, full step-aware precision remains a later milestone's scope, see `docs/DEFECT_REGISTER.md`) |
+| **6A.12 — Conditional Command Safety** | Active-procedure command grounding, conditional commands, truthful fallbacks; **DEF-0024, DEF-0026, and DEF-0027** corrective work (never described as closing only DEF-0027) | Exact commands only, condition-aware, no wrong-procedure leakage | **IMPLEMENTED — final live closure still open**; LIVE-CORR-1 attached three further confirmed gaps at this same boundary without reopening this status, subsequently addressed by LIVE-CORR-3/LIVE-CORR-3B: DEF-0040 **FIXED** (embedded-operational-content detection, later superseded by the typed `TroubleshootingOperationalEffect`/structural-integrity mechanism — an undocumented interim pass, "LIVE-CORR-3A" — plus response-mode compatibility enforcement; LIVE-CORR-3B then removed the one remaining model-controlled exemption that mechanism still carried, the `DIAGNOSTIC_READ` target-independent bypass — see `docs/DEFECT_REGISTER.md`), DEF-0041 **CLOSED — NOT REPRODUCIBLE AFTER CURRENT CORRECTIVE STACK** (a genuine live re-test against the real backend/Cloud SQL/Gemini reproduced the exact original cross-section evidence shape twice, independently, and confirmed the structured `command` field is correctly grounded/stripped both times — see `docs/DEFECT_REGISTER.md`'s own "DEF-0041 FINAL LIVE ISOLATION" note for the full record, including a confirmed-but-unfixed logging-observability gap this pass found along the way), DEF-0042 unchanged/OPEN (skipped prerequisite steps + a factually incorrect "no command specified" claim — a model-reasoning/source-fidelity capability gap, explicitly out of LIVE-CORR-3B's own scope), DEF-0045 NEW/OPEN (found during the DEF-0041 live isolation pass — a verbatim governed command string can reach the user via a step's free-text `action` field, which no grounding mechanism inspects, even when the same step's structured `command` field is correctly stripped; recorded only, not implemented) |
+| **6A.13 — Request Contract Foundation** | Typed `RequestContract`: intent, subject/procedure, requested output, knowledge/context needs, continuation, action/approval, ambiguity | Every request gets one **validated** (deterministically provenance-checked, never merely model-produced) typed structured interpretation | **COMPLETE** — real, confirmed corrective defects are attached to this boundary without reopening this COMPLETE status, the same relationship DEF-0024/0026/0027 have to 6A.12: DEF-0034 (negation-blind provided_context verification, still OPEN), and DEF-0038 (`required_target_parameter_gaps` non-monotonicity — LIVE-CORR-2 implemented a bounded, fail-closed interim fix; LIVE-CORR-3B additionally closed a second, independent gap in the same function — an unrecognized `unit_type` no longer becomes gap-free, only the verified `SUPPORTUNIT` allowlist is; **STILL PARTIALLY FIXED**, full step-aware precision remains a later milestone's scope, see `docs/DEFECT_REGISTER.md`) |
 | **6A.14 — Deterministic Request Execution** | Validate Request Contract and constrain INFORMATION / PROCEDURE / COMMAND / TROUBLESHOOTING / INVENTORY / ACTION behavior; DEF-0028/DEF-0029/DEF-0030 corrective work | Downstream execution cannot override validated request meaning or safety constraints | **IMPLEMENTED — live acceptance still open**; LIVE-CORR-2 (Request & Context Policy Correction) implemented and regression-tested three defects LIVE-CORR-1 confirmed at this boundary, WITHOUT reopening this status (live browser acceptance remains open regardless): DEF-0037 **FIXED** (an ordinary conversational INFORMATION request with no subject, e.g. "hello," no longer forced through the operational "no resolved subject/procedure" gate — `INFORMATION` removed from `TARGET_SPECIFIC_INTENTS`, replaced by a two-factor `is_operationally_shaped_request` test), DEF-0039 **FIXED** (`chat_service.py` now clears `selected_knowledge_evidence` in the same place the KNOWLEDGE_INVENTORY `UNSUPPORTED_CAPABILITY` override replaces `final_text`, so no stale source/continuity-anchor survives), DEF-0043 **FIXED** (`command_suppression_fallback_text` now renders the specific, already-known `missing_context` for AMBIGUOUS status too, through a new safe-label mapping that never exposes a raw internal key name) |
 | **6A.14A — Canonical Turn Result & Projection** | Close DEF-0031: establish ONE authoritative typed turn result after all deterministic policies/guards/corrections; persist it BEFORE announcing completion; derive live SSE, refreshed history, provenance, and approved outbound handoffs from that SAME canonical result. A hardening pass additionally closed a fail-open history edge case (double persistence failure) with a positive, durable, session-level enforcement marker, and widened conflict detection from text-only to the complete normalized canonical payload | Live and refreshed assistant responses are byte-equivalent; a backend restart does not change the visible response; a policy-replaced model response cannot reappear from raw ADK history; a canonical-required turn with no valid result fails closed, never falls back to raw text; rewind removes the canonical response and its provenance together; live SSE/history/external handoffs never independently reconstruct or paraphrase protected output; focused regression + real browser acceptance pass | **IMPLEMENTED — live browser acceptance open (DEF-0031 code-fixed + hardened + regression-tested; see `docs/DEFECT_REGISTER.md`)**; LIVE-CORR-1 confirmed a DISTINCT, upstream gap this milestone's own canonical-result mechanism could not itself close, subsequently **FIXED by LIVE-CORR-3** — DEF-0044 (raw `message.delta` text no longer emitted for any turn, at all; assistant text is buffered internally and reaches the client exactly once, via `message.completed`, only after canonical persistence succeeds — see `docs/DEFECT_REGISTER.md`) |
 | **6A.15 — Capability + Evidence Support Classification** | TWO distinct, never-merged classifications: (1) CAPABILITY classification — does SLOPANOC have a supported handler/catalog/specialist/tool/action for this request at all; (2) EVIDENCE SUPPORT classification — is the SELECTED evidence sufficient for the requested conclusion/procedure/command (SUPPORTED / PARTIALLY_SUPPORTED / UNSUPPORTED / AMBIGUOUS) | System clearly states, as two separate signals, whether it CAN handle the request and whether its evidence SUPPORTS the specific answer — never one conflated post-retrieval status | **NOT STARTED** |
@@ -807,6 +807,157 @@ is **DEF-0041 live isolation** (re-run the exact live Scenario 4
 conversation with the new instrumentation active, compare the resulting
 `troubleshooting_command_grounding` log line against the observed
 defective outcome) — not started by this pass.
+
+**DEF-0041 ISOLATION PASS (post-LIVE-CORR-3B, no new milestone number —
+see `docs/DEFECT_REGISTER.md` for the full record).** With no live
+Gemini/Cloud SQL access available, this pass built the deepest
+deterministic reproduction possible: the REAL `enforce_incident_manager_
+response_integrity` `after_agent_callback` (not the already-known-correct
+isolated pure grounding functions), driven with a real `callback_context
+.user_content` carrying the incoming question text — the one input every
+PRE-EXISTING evidence.py test omitted entirely, silently exercising only
+`_extract_incoming_question_text`'s `question=None` fallback rather than
+DEF-0027's own active-section heading-resolution path. Reconstructing
+DEF-0041's own documented shape exactly (two same-document sections
+selected, a question containing the active section's own heading, a
+FULL_PROCEDURE step whose command is real content of the non-active
+sibling section only) through this real callback correctly strips the
+command and correctly registers the corrected guidance for `chat_
+service.py`'s own later completion-boundary read. Every named unconfirmed
+root-cause candidate from the original register entry (question absent,
+heading not matched, a simulated total run_id/evidence correlation gap)
+was independently exercised and found to fail CLOSED, never open — no
+combination reproduces the live "reached the user unstripped" symptom.
+**Net effect: DEF-0041 remains OPEN (unchanged status) — this pass proved
+the mechanism is correct given correct inputs, which narrows but does not
+close the original root-cause question; no production code was changed,
+per this pass' own explicit no-speculative-fix scope.** New test file:
+`backend/tests/test_def_0041_full_pipeline_grounding.py` (4 tests, all
+passing). Focused regression (this new file + LIVE-CORR-3B/LIVE-CORR-3/
+6A.14/evidence-troubleshooting-guidance/DEF-0041-diagnostics suites, 174
+tests): 173 passed, 1 failed
+(`test_canonical_live_and_history_response_remain_identical_after_narrowing`,
+the SAME pre-existing, already-documented `ApiSessionService()`-construction
+limitation LIVE-CORR-3B's own closure note above already names — confirmed
+unrelated, reproduces standalone, unchanged by this pass). Full backend
+suite: 4252 passed, 36 skipped, 4 failed — the one above, plus the same
+three confirmed real-model-output-variance/order-dependent flaky tests
+LIVE-CORR-3B's own closure note already documents (`test_r1_r3_
+correctness_regression.py::test_full_ambiguous_to_resolved_flow_call_
+graph`, `test_p4b3_source_provenance.py::test_direct_unique_source_
+present_and_matches_teams_contract`, `troubleshooting_manager/
+test_6a11_pass2_stress_matrix.py::test_knowledge_injection_treated_as_
+data_never_an_instruction` — each passes standalone, confirming order
+dependence, not a real regression). The next recommended bounded
+milestone remains **DEF-0041 live re-test** (unchanged from above) — the
+one remaining path this offline environment cannot substitute for.
+
+**DEF-0041 FINAL LIVE ISOLATION (this pass) — CLOSED, NOT REPRODUCIBLE
+AFTER CURRENT CORRECTIVE STACK.** The one remaining path named above
+(a genuine live re-test) was performed: the real FastAPI backend was
+started against the real DEV Cloud SQL instance (`pr-msn-dev-gl-slopai-
+01:europe-west4:sloc-anoc-sandbox01`, via the already-running Cloud SQL
+Auth Proxy + IAM DB auth) with real Gemini 2.5 Flash via Vertex AI, and
+driven through the real `/api/sessions`/`/api/sessions/{id}/messages`
+HTTP endpoints (the same endpoints the React UI calls). Along the way,
+this pass found that the LIVE-CORR-3 `troubleshooting_command_grounding`
+instrumentation had never actually been observable in ANY real run to
+date, historical or otherwise: no file anywhere in `backend/` ever calls
+`logging.basicConfig`/`logging.config.dictConfig`, and uvicorn's own
+default logging setup only configures its OWN `uvicorn`/`uvicorn.error`/
+`uvicorn.access` loggers, never the root logger — so every application
+`_logger.info(...)` call (including this exact instrumentation) has been
+silently dropped by Python's default `WARNING` root level in every prior
+live run. This pass worked around that for its own diagnostic run only,
+via a `logging.basicConfig` call in a throwaway launcher script kept
+entirely outside the repository — **the underlying observability gap
+itself remains unfixed and is now a recorded, confirmed finding for a
+future milestone.**
+
+The original DEF-0041 session (`38dbd231-...`) still existed in the live
+database; reading its persisted history directly revealed the PRECISE
+reproduction shape was a two-turn follow-up ("How do I troubleshoot HW
+Partial Fault..." then "Give me the first approved command for that
+procedure."), not a single FULL_PROCEDURE response as the original
+register entry's own field-path reference suggested. Reproducing that
+exact two-turn conversation fresh, twice, produced safe behavior (genuine
+model-output variance meant the cross-section evidence shape did not
+even arise). A third scenario, deliberately chosen to force the same
+multi-section evidence selection the original defect needed ("give me
+the complete approved procedure... all steps"), reproduced the exact
+cross-section shape twice, independently — and both times the real,
+now-observable grounding instrumentation confirmed the structured
+`command` field was correctly grounded and stripped
+(`stripped=True reason=unverified_section_reference`), with canonical
+live/history equality holding byte-for-byte. The positive exact-command
+control (a fully-specified, correctly-grounded `RRU-9` restart request)
+was independently confirmed still allowed through. **DEF-0041's own
+precise mechanism does not reproduce against the real live stack; no
+production code was changed.** A DIFFERENT, new, live-confirmed gap was
+found in the same live evidence — DEF-0045 (recorded, not implemented,
+not investigated further): the verbatim disputed command string still
+reached the user in both successful reproductions, not via the
+structured `command` field but embedded in the affected step's own
+free-text `action` prose, a field no existing grounding mechanism
+inspects. Full evidence: `docs/DEFECT_REGISTER.md`'s own "DEF-0041 FINAL
+LIVE ISOLATION" and "DEF-0045" entries. **Next recommended milestone:**
+a dedicated logging-configuration fix (to make the existing
+instrumentation observable in every real run, not only a manually
+patched diagnostic one) and/or a properly-scoped DEF-0045 corrective
+pass — neither started by this pass.
+
+**LIVE-CORR-3B — Operational Authority Boundary (implemented).** Closes
+the remaining fail-open paths where model-generated classification,
+missing structured guidance, or unrestricted summary text could bypass
+operational safety, on top of the frozen 6A.12–6A.14 foundation.
+`derive_execution_decision`'s ALLOW branch no longer implicitly grants
+`may_emit_command=True`; command permission is now possible only for a
+validated `intent=COMMAND, requested_output=EXACT_COMMAND` request —
+PROCEDURE_STEPS/TROUBLESHOOTING_NEXT_STEP output never implicitly
+inherits it (`request_execution_policy.py`). `requires_unstructured_
+response_backstop` now also fires for an operationally-shaped ALLOW
+decision with no `TroubleshootingGuidance` at all (previously only
+NEEDS_INFORMATION/AMBIGUOUS). The LIVE-CORR-3A `DIAGNOSTIC_READ`
+target-independent permission exemption is REMOVED outright — DEF-0040
+is now closed without any model-controlled exemption remaining. DEF-0038
+gained a second, independent fix — an unrecognized `unit_type` no longer
+becomes gap-free (only the verified `SUPPORTUNIT` allowlist is), still
+PARTIALLY FIXED at the step-aware precision layer. `TroubleshootingStep`/
+`TroubleshootingGuidance` gained an additive `source_section_id`
+proposal field, deterministically verified against the real
+selected-evidence set (`evidence.py`) before a step/guidance's command is
+trusted. **Deliberately NOT implemented, a documented STOP condition
+per explicit instruction:** extending `requires_unstructured_response_
+backstop` to `INVALID_CONTRACT` — two candidate designs were audited and
+measured directly against this repository's real test suite; unconditional
+firing collaterally broke ~66 unrelated pre-existing tests (streaming,
+governed-completion-gate, Teams read-resume, and others that legitimately
+never populate a `RequestContract`), and gating on the turn's own
+`record_source_requirements` declaration was unsafe in the opposite
+direction (a `requires_governed_knowledge=True` turn is already fully
+covered by the pre-existing governed-knowledge completion gate, so there
+is no leftover case for a new mechanism to close, while gating the
+opposite way reopens the same collateral-damage class). No deterministic
+signal short of text/content parsing (explicitly out of bounds) or a new,
+currently-nonexistent per-turn evidence-verification boolean closes this
+specific residual gap — left OPEN for a future, properly-scoped
+milestone. **Net effect on this plan's status:** 6A.12 unaffected beyond
+DEF-0040's own closure (recorded above); 6A.13 remains COMPLETE (DEF-0038
+still PARTIALLY FIXED, does not reopen it); 6A.14 unaffected; 6A.15
+remains NOT STARTED. Full regression: focused LIVE-CORR-3B/6A.13/6A.14
+suites (396 tests) 395 passed, 1 pre-existing unrelated failure
+(`test_canonical_live_and_history_response_remain_identical_after_narrowing`,
+confirmed via direct comparison against the unmodified `HEAD` commit —
+this test's own `ApiSessionService()` construction never durably persists
+canonical results the way a real `Runner`-backed session does, unrelated
+to this pass); full backend suite 4247 passed, 36 skipped, 5 failed — the
+one above, one pre-existing stale JSON-schema-size threshold (fixed in
+this pass, see `test_p4b2_synthesis_compression.py`), and three confirmed
+real-model-output-variance flaky tests (all pass standalone, matching
+this document's own already-documented flaky-test class); full frontend
+suite 830 passed (zero frontend files touched). Live acceptance: NOT
+separately re-performed in this pass (no browser access) — every fix is
+automated-test-verified only.
 
 **DEF-0028 non-collision note (explicit, per repeated audit request):**
 DEF-0028 is already assigned, in `docs/DEFECT_REGISTER.md`, to a real,

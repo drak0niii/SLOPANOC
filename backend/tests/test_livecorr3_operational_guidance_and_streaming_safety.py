@@ -241,10 +241,13 @@ def test_none_guidance_is_a_complete_no_op() -> None:
 # =============================================================================
 
 
-def test_grounded_diagnostic_read_is_not_falsely_suppressed_when_target_unresolved() -> None:
-    """A proven, grounded, DIAGNOSTIC_READ-classified command survives
-    even when `may_emit_command=False` (target confirmation unresolved)
-    -- the ONE exemption LIVE-CORR-3A adds."""
+def test_diagnostic_read_no_longer_bypasses_target_confirmation() -> None:
+    """LIVE-CORR-3B -- Operational Authority Boundary: the LIVE-CORR-3A
+    DIAGNOSTIC_READ target-independent exemption has been REMOVED outright
+    (a model-populated `operational_effect` must never grant permission or
+    relax target/context requirements). A proven, grounded, DIAGNOSTIC_
+    READ-classified command is now withheld exactly like any other,
+    whenever `may_emit_command=False`."""
     guidance = TroubleshootingGuidance(
         interaction_mode=TroubleshootingInteractionMode.NEXT_STEP,
         interpretation="Look up the port reference for the affected antenna group.",
@@ -255,8 +258,8 @@ def test_grounded_diagnostic_read_is_not_falsely_suppressed_when_target_unresolv
     )
     decision = _decision(may_emit_command=False, status=RequestExecutionStatus.NEEDS_INFORMATION)
     corrected, suppressed = enforce_execution_decision_on_guidance(guidance, decision)
-    assert suppressed is False
-    assert corrected.command == _READ_COMMAND
+    assert suppressed is True
+    assert corrected.command is None
 
 
 def test_state_change_recommendation_is_withheld_without_target_confirmation() -> None:
@@ -287,10 +290,11 @@ def test_unclassified_command_defaults_to_the_strict_state_change_treatment() ->
     assert corrected.command is None
 
 
-def test_full_procedure_mixed_steps_diagnostic_read_survives_state_change_withheld() -> None:
-    """Per-step granularity in FULL_PROCEDURE mode: a DIAGNOSTIC_READ step
-    survives while a STATE_CHANGE_RECOMMENDATION step in the SAME
-    guidance is stripped, when target confirmation is unresolved."""
+def test_full_procedure_mixed_steps_diagnostic_read_no_longer_survives() -> None:
+    """LIVE-CORR-3B: the removed DIAGNOSTIC_READ exemption applied at
+    per-step granularity too -- a DIAGNOSTIC_READ step's command is now
+    stripped exactly like a STATE_CHANGE_RECOMMENDATION step's, whenever
+    target confirmation is unresolved."""
     guidance = TroubleshootingGuidance(
         interaction_mode=TroubleshootingInteractionMode.FULL_PROCEDURE,
         interpretation="Two steps.",
@@ -302,7 +306,7 @@ def test_full_procedure_mixed_steps_diagnostic_read_survives_state_change_withhe
     decision = _decision(may_emit_command=False, status=RequestExecutionStatus.NEEDS_INFORMATION)
     corrected, suppressed = enforce_execution_decision_on_guidance(guidance, decision)
     assert suppressed is True
-    assert corrected.full_procedure_steps[0].command == _READ_COMMAND
+    assert corrected.full_procedure_steps[0].command is None
     assert corrected.full_procedure_steps[1].command is None
 
 
@@ -374,11 +378,15 @@ async def test_integration_full_procedure_dump_narrowed_for_next_step_request() 
 
 
 @pytest.mark.asyncio
-async def test_integration_full_procedure_request_still_renders_full_procedure() -> None:
-    """Non-regression: "show me the complete approved procedure" validates
-    to PROCEDURE + PROCEDURE_STEPS -- FULL_PROCEDURE guidance renders
-    normally, ordered, both real commands present (each independently
-    grounded, per DEF-0024/0027's own unchanged mechanism)."""
+async def test_integration_full_procedure_request_no_longer_shows_raw_commands() -> None:
+    """LIVE-CORR-3B -- Operational Authority Boundary, item 1: "show me
+    the complete approved procedure" validates to PROCEDURE + PROCEDURE_
+    STEPS -- FULL_PROCEDURE guidance still renders (interaction-mode
+    compatibility is unaffected), but PROCEDURE_STEPS output no longer
+    implicitly grants exact-command permission, so neither real command is
+    shown; only EXACT_COMMAND requests may. Supersedes this test's own
+    prior non-regression claim (both commands previously shown), which
+    encoded exactly the fail-open path this milestone closes."""
     from backend.api.chat_service import ChatService
     from backend.api.session_service import ApiSessionService
     from backend.api.troubleshooting_guidance_context import register_troubleshooting_guidance
@@ -431,8 +439,8 @@ async def test_integration_full_procedure_request_still_renders_full_procedure()
         if event.type.value == "message.completed":
             completed = event
     assert completed is not None
-    assert _RRU_COMMAND in completed.data["content"]
-    assert _AAS_COMMAND in completed.data["content"]
+    assert _RRU_COMMAND not in completed.data["content"]
+    assert _AAS_COMMAND not in completed.data["content"]
 
 
 @pytest.mark.asyncio

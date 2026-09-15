@@ -71,6 +71,16 @@ _KNOWLEDGE_INGESTION_MAX_TOTAL_EXPANDED_BYTES_ENV_VAR = "SLOPANOC_KNOWLEDGE_INGE
 # one-time legacy-session backfill scan (B4A correction pass) to the same
 # candidate set, so that scan can never grow unbounded either.
 _SAVED_CHAT_LIST_LIMIT_ENV_VAR = "SLOPANOC_SAVED_CHAT_LIST_LIMIT"
+# LIVE-CORR-4 (DEF-0041's own confirmed, still-unfixed observability gap):
+# this codebase never raised the root/module logging level above Python's
+# own default (`WARNING`) anywhere -- every `_logger.info(...)` diagnostic/
+# security line (including evidence.py's own `troubleshooting_command_
+# grounding` instrumentation) was silently dropped in every real run to
+# date. A configurable, settings-driven level -- never a second, competing
+# `basicConfig`/`dictConfig` call anywhere else in this codebase -- mirrors
+# `session_backend`'s own "reject an invalid configured value, never
+# silently substitute a default" discipline.
+_LOG_LEVEL_ENV_VAR = "SLOPANOC_LOG_LEVEL"
 
 # Matches google.adk.agents.llm_agent.LlmAgent.DEFAULT_MODEL in the
 # installed ADK (1.33.0) -- not an independently invented default.
@@ -105,6 +115,16 @@ _DEFAULT_MODEL_WARMUP_TIMEOUT_SECONDS = 30.0
 # own automated test suite for speed/isolation, never the runtime default.
 _DEFAULT_SESSION_BACKEND = "database"
 _VALID_SESSION_BACKENDS = frozenset({"memory", "database"})
+
+# LIVE-CORR-4: `INFO` (not `WARNING`) is the safe default -- it is exactly
+# the level DEF-0027/LIVE-CORR-3's own existing `_logger.info(...)` calls
+# already use, and those calls are already documented (evidence.py's own
+# `_log_grounding_decision` docstring) as logging ONLY safe identifiers/
+# counts/typed enum values, never section/command content, never a secret/
+# URL/credential -- so making them observable by default introduces no new
+# disclosure risk.
+_DEFAULT_LOG_LEVEL = "INFO"
+_VALID_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 # `aiosqlite` (async SQLite DBAPI for SQLAlchemy) is a verified installed
 # dependency of this environment -- a local `.db` file next to wherever
 # the process is run from, requiring zero setup for local development.
@@ -205,6 +225,23 @@ class Settings:
             raise ConfigurationError(
                 f"{_SESSION_BACKEND_ENV_VAR}={raw!r} is not a supported session "
                 f"backend (expected one of {sorted(_VALID_SESSION_BACKENDS)})."
+            )
+        return raw
+
+    @property
+    def log_level(self) -> str:
+        """LIVE-CORR-4 -- `SLOPANOC_LOG_LEVEL` (default `"INFO"`). See this
+        module's own `_LOG_LEVEL_ENV_VAR` comment for why `INFO` is safe as
+        a default. Validated against Python's own standard level names,
+        mirroring `session_backend`'s own "reject an invalid configured
+        value at read time" discipline; returned upper-cased so the one
+        caller (`backend/api/app.py`'s `_lifespan`) never has to normalize
+        it itself.
+        """
+        raw = self._env.get(_LOG_LEVEL_ENV_VAR, _DEFAULT_LOG_LEVEL).strip().upper()
+        if raw not in _VALID_LOG_LEVELS:
+            raise ConfigurationError(
+                f"{_LOG_LEVEL_ENV_VAR}={raw!r} is not a supported log level (expected one of {sorted(_VALID_LOG_LEVELS)})."
             )
         return raw
 

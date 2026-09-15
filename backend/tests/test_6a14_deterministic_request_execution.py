@@ -173,7 +173,13 @@ def test_rru_unit_type_without_unit_id_asks_for_unit_id() -> None:
 
 
 def test_rru9_supplied_by_user_permits_grounded_rru9_command() -> None:
+    """LIVE-CORR-3B -- Operational Authority Boundary: updated to an
+    explicit COMMAND/EXACT_COMMAND contract -- command permission is no
+    longer implicitly granted merely by ALLOW status for this file's own
+    default TROUBLESHOOTING_NEXT_STEP shape (item 1)."""
     contract = _contract(
+        intent=RequestIntent.COMMAND,
+        requested_output=RequestedOutput.EXACT_COMMAND,
         provided_context=[
             RequestParameter(name="unit_type", value="RRU", provenance=ParameterProvenance.USER),
             RequestParameter(name="unit_id", value="RRU-9", provenance=ParameterProvenance.USER),
@@ -230,7 +236,12 @@ def test_aas_unit_type_without_unit_id_asks_for_unit_id() -> None:
 
 
 def test_aas1_user_supplied_permits_grounded_aas1_command() -> None:
+    """LIVE-CORR-3B -- Operational Authority Boundary: updated to an
+    explicit COMMAND/EXACT_COMMAND contract, mirroring the RRU case's own
+    same update (item 1)."""
     contract = _contract(
+        intent=RequestIntent.COMMAND,
+        requested_output=RequestedOutput.EXACT_COMMAND,
         provided_context=[
             RequestParameter(name="unit_type", value="AAS", provenance=ParameterProvenance.USER),
             RequestParameter(name="unit_id", value="AAS-1", provenance=ParameterProvenance.USER),
@@ -247,6 +258,15 @@ def test_aas1_user_supplied_permits_grounded_aas1_command() -> None:
 
 
 def test_supportunit_never_becomes_fabricated_rru_or_aas_target() -> None:
+    """LIVE-CORR-3B -- Operational Authority Boundary: a TROUBLESHOOTING_
+    NEXT_STEP-shaped ALLOW decision no longer implicitly grants exact-
+    command permission (item 1) -- since this function cannot distinguish
+    a genuinely command-free explanation from one that might smuggle a
+    command into free text without parsing it, the whole guidance is
+    suppressed (mirrors the existing, unchanged NEEDS_INFORMATION/
+    AMBIGUOUS behavior, now also applying here). The underlying SAFETY
+    property this test exists to prove is unaffected: no RRU/AAS
+    identifier is ever fabricated."""
     contract = _contract(
         provided_context=[RequestParameter(name="unit_type", value="SupportUnit", provenance=ParameterProvenance.USER)],
         missing_context=[],  # no restart -> no identifier needed at all
@@ -254,22 +274,23 @@ def test_supportunit_never_becomes_fabricated_rru_or_aas_target() -> None:
     decision = derive_execution_decision(contract, _RUN_ID)
     assert decision.status == RequestExecutionStatus.ALLOW  # nothing to withhold -- no command was ever proposed
     corrected, stripped = enforce_execution_decision_on_guidance(_guidance(None, next_action="No restart is permitted for a SupportUnit."), decision)
-    assert stripped is False
+    assert stripped is True
     assert corrected.command is None
+    assert corrected.next_action is None
 
 
-def test_supportunit_no_restart_remains_safe_even_if_a_command_is_wrongly_proposed() -> None:
-    """Defense in depth: even if something upstream wrongly proposed an
-    RRU command for a SupportUnit turn, this policy's own ALLOW state
-    does not fabricate anything -- it is `evidence.py`'s own, separate,
-    unchanged DEF-0024/0027 grounding that would reject an RRU command
-    never grounded in a SupportUnit-scoped selection; this test proves
-    only that 6A.14 itself introduces no new leak path."""
+def test_supportunit_command_permission_requires_exact_command_validation() -> None:
+    """A fully-resolved SupportUnit TROUBLESHOOTING_NEXT_STEP decision no
+    longer implicitly grants command permission -- only a validated
+    EXACT_COMMAND request does (item 1). `evidence.py`'s own, separate,
+    unchanged DEF-0024/0027 grounding remains the SECOND, independent
+    layer that would also reject a fabricated RRU command never grounded
+    in a SupportUnit-scoped selection -- neither layer alone is sufficient."""
     contract = _contract(
         provided_context=[RequestParameter(name="unit_type", value="SupportUnit", provenance=ParameterProvenance.USER)], missing_context=[]
     )
     decision = derive_execution_decision(contract, _RUN_ID)
-    assert decision.may_emit_command is True  # 6A.14 defers to evidence.py's own grounding for the SPECIFIC string
+    assert decision.may_emit_command is False
 
 
 # --- 16: TROUBLESHOOTING may still give a safe non-command step -------
@@ -465,6 +486,10 @@ async def test_integration_rru_missing_unit_id_suppresses_command_end_to_end() -
 
 @pytest.mark.asyncio
 async def test_integration_rru9_user_supplied_permits_command_end_to_end() -> None:
+    """LIVE-CORR-3B -- Operational Authority Boundary: updated to an
+    explicit COMMAND/EXACT_COMMAND contract -- command permission is no
+    longer implicitly granted merely by ALLOW status for this file's own
+    default TROUBLESHOOTING_NEXT_STEP shape (item 1)."""
     from backend.api.chat_service import ChatService
     from backend.api.session_service import ApiSessionService
     from backend.api.troubleshooting_guidance_context import register_troubleshooting_guidance
@@ -473,6 +498,8 @@ async def test_integration_rru9_user_supplied_permits_command_end_to_end() -> No
     async def _side_effect(session_service: Any, session: Any, text: str) -> None:
         run_id = current_run_id()
         contract = _contract(
+            intent=RequestIntent.COMMAND,
+            requested_output=RequestedOutput.EXACT_COMMAND,
             provided_context=[
                 RequestParameter(name="unit_type", value="RRU", provenance=ParameterProvenance.USER),
                 RequestParameter(name="unit_id", value="RRU-9", provenance=ParameterProvenance.USER),
@@ -571,7 +598,14 @@ async def test_integration_knowledge_inventory_never_becomes_semantic_search_out
 @pytest.mark.asyncio
 async def test_integration_ordinary_turn_with_no_contract_and_no_command_is_unaffected() -> None:
     """A missing contract must never block ORDINARY, non-command
-    presentation output -- only command/action-shaped output is gated."""
+    presentation output -- only command/action-shaped output is gated.
+    LIVE-CORR-3B -- Operational Authority Boundary, item 2: `requires_
+    unstructured_response_backstop` now ALSO fires for `INVALID_CONTRACT`,
+    but only when this turn's own separate, already-mandatory `record_
+    source_requirements` declaration shows it touched governed Knowledge/
+    Teams content (`requires_governed_knowledge=False`/`requires_teams=
+    False` here) -- this ordinary, non-governed turn remains completely
+    unaffected, preserving this test's own original claim."""
     from backend.api.chat_service import ChatService
     from backend.api.session_service import ApiSessionService
 

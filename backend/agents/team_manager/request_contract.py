@@ -430,12 +430,22 @@ def required_target_parameter_gaps(
         (param.value for param in provided_context if param.name == _TARGET_TYPE_PARAMETER_NAME), None
     )
     if unit_type_value is not None:
-        if unit_type_value.strip().upper() in _IDENTIFIER_CLASS_PREFIXES:
+        normalized_unit_type = unit_type_value.strip().upper()
+        if normalized_unit_type in _IDENTIFIER_CLASS_PREFIXES:
             return [_TARGET_IDENTIFIER_PARAMETER_NAME]
-        # A confirmed unit_type OUTSIDE the identifier-bearing class (e.g.
-        # "SupportUnit") is a real, verified fact establishing no
-        # identifier is needed -- not a gap.
-        return []
+        if normalized_unit_type in _TARGET_INDEPENDENT_UNIT_TYPES:
+            # A confirmed unit_type in the small, VERIFIED allowlist (e.g.
+            # "SupportUnit") is a real, verified fact establishing no
+            # identifier is needed -- not a gap.
+            return []
+        # LIVE-CORR-3B: an unrecognized/unknown unit_type is NEITHER a
+        # known identifier-bearing class NOR a positively verified
+        # target-independent type -- conservatively requires the SAME
+        # identifier confirmation an identifier-bearing type would, per
+        # section 4's own "an unknown or other unit type must not become
+        # permissive" requirement. Never treated as a verified fact merely
+        # because it fails to match the identifier-bearing class.
+        return [_TARGET_IDENTIFIER_PARAMETER_NAME]
     if requested_output == RequestedOutput.EXACT_COMMAND:
         return sorted([_TARGET_TYPE_PARAMETER_NAME, _TARGET_IDENTIFIER_PARAMETER_NAME])
     return []
@@ -487,6 +497,25 @@ prefixes this codebase's own real governed corpus and live-reported
 defects actually use. Adding a new class (e.g. a different equipment
 family) requires a deliberate code change here, never inferred from free
 text or Knowledge content."""
+
+_TARGET_INDEPENDENT_UNIT_TYPES = frozenset({"SUPPORTUNIT"})
+"""LIVE-CORR-3B -- Operational Authority Boundary, section 4's own explicit
+"do not limit target safety to RRU/AAS; an unknown or other unit type must
+not become permissive" requirement. A SMALL, closed, documented allowlist
+of `unit_type` values POSITIVELY VERIFIED (DEF-0030's own real, read-only
+Cloud SQL audit of the governed "SupportUnit" branch: real content is "No
+restart" -- there is genuinely nothing to identify) to require no
+identifier. Before this pass, `required_target_parameter_gaps` treated
+EVERY `unit_type` value OUTSIDE the small `RRU`/`AAS` identifier-bearing
+class as equally verified-safe -- a model that declared any other string
+at all (a genuine typo, a hallucinated unit-type label, or an entirely
+unrecognized equipment family) silently satisfied the gate with zero
+governed proof. Now only a unit_type in THIS allowlist is gap-free; every
+other value -- known identifier-bearing types AND anything unrecognized --
+conservatively still requires `unit_id`, since no governed step metadata
+proves it is genuinely target-independent. Extending this set requires the
+SAME kind of deliberate, documented, real-content verification DEF-0030
+performed -- never inferred from the model's own unit_type label alone."""
 
 _IDENTIFIER_STRIP_CHARS = ".,;:()[]{}\"'?!"
 """Light trailing/leading punctuation trimming only -- mirrors `evidence

@@ -285,6 +285,28 @@ def _context_item_response(item) -> CaseContextItemResponse:
     )
 
 
+def _configure_application_logging(level_name: str) -> None:
+    """LIVE-CORR-4 -- DEF-0041's own confirmed, honestly-recorded gap: this
+    codebase never raised the root logger above Python's own default
+    (`WARNING`) anywhere, so every existing `_logger.info(...)` diagnostic/
+    security line -- including evidence.py's own `troubleshooting_command_
+    grounding` instrumentation, added specifically to help isolate a real
+    defect -- was silently dropped in every real run to date.
+
+    The ONE centralized logging-configuration call for this whole codebase
+    -- never a per-module `basicConfig()`/`dictConfig()` call anywhere
+    else. A no-op whenever the root logger already has a handler (a host
+    environment's own logging setup, a test runner's own log-capture
+    handler, or a second `create_app()`/`_lifespan` entry within the same
+    process) -- this can never duplicate handlers or clobber an existing
+    configuration; it only ever fills in a genuinely unconfigured default.
+    """
+    root_logger = logging.getLogger()
+    if root_logger.handlers:
+        return
+    logging.basicConfig(level=level_name)
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """P4COLD: this application's one, existing startup/shutdown
@@ -307,7 +329,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     to propagate and abort startup (see runtime_database_policy.py's own
     docstring). Only a sanitized dialect-name pair is ever logged, never
     a resolved URL/credential.
+
+    LIVE-CORR-4 (DEF-0041's own confirmed observability gap): `_configure_
+    application_logging` runs FIRST of all, before even the database
+    check above -- the ONE centralized `logging.basicConfig` call in this
+    entire codebase, so every existing `_logger.info(...)` diagnostic/
+    security line (evidence.py's own grounding instrumentation included)
+    becomes observable in a real run by default, without a second,
+    competing logging-configuration call anywhere else.
     """
+    _configure_application_logging(get_settings().log_level)
     session_backend_name, knowledge_backend_name = validate_runtime_database_configuration(get_settings())
     _logger.info(
         "startup database_backend session=%s knowledge=%s",

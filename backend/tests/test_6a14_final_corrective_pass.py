@@ -207,9 +207,22 @@ def test_evidence_requested_is_also_suppressed_for_consistency() -> None:
 
 
 def test_allowed_guidance_is_never_touched() -> None:
-    """Non-regression: a fully-resolved, ALLOW-status turn's guidance is
-    completely unaffected -- narrative fields survive intact."""
-    contract = _contract(missing_context=[])
+    """Non-regression: a fully-resolved, ALLOW-status, VALIDATED EXACT_
+    COMMAND turn's guidance is completely unaffected -- narrative fields
+    survive intact. LIVE-CORR-3B -- Operational Authority Boundary:
+    updated from this file's own default TROUBLESHOOTING_NEXT_STEP
+    contract to an explicit COMMAND/EXACT_COMMAND one -- command
+    permission is no longer implicitly granted merely by ALLOW status for
+    a non-EXACT_COMMAND request shape (item 1)."""
+    contract = _contract(
+        intent=RequestIntent.COMMAND,
+        requested_output=RequestedOutput.EXACT_COMMAND,
+        provided_context=[
+            RequestParameter(name="unit_type", value="RRU", provenance=ParameterProvenance.USER),
+            RequestParameter(name="unit_id", value="RRU-9", provenance=ParameterProvenance.USER),
+        ],
+        missing_context=[],
+    )
     decision = derive_execution_decision(contract, _RUN_ID)
     guidance = TroubleshootingGuidance(
         interaction_mode=TroubleshootingInteractionMode.NEXT_STEP,
@@ -236,18 +249,36 @@ def test_backstop_does_not_fire_when_guidance_is_present() -> None:
     assert requires_unstructured_response_backstop(decision, troubleshooting_guidance_present=True) is False
 
 
-def test_backstop_does_not_fire_for_allow_decisions() -> None:
+def test_backstop_fires_for_operationally_shaped_allow_decisions() -> None:
+    """LIVE-CORR-3B -- Operational Authority Boundary, item 2's own
+    explicit "this must apply for ALLOW too" requirement: an
+    operationally-shaped ALLOW decision (this file's own default
+    TROUBLESHOOTING_NEXT_STEP contract) with no structured guidance is now
+    correctly caught -- previously such a turn escaped this backstop
+    entirely purely because its own status resolved to ALLOW."""
     decision = derive_execution_decision(_contract(missing_context=[]), _RUN_ID)
+    assert decision.status == RequestExecutionStatus.ALLOW
+    assert requires_unstructured_response_backstop(decision, troubleshooting_guidance_present=False) is True
+
+
+def test_backstop_does_not_fire_for_ordinary_conversation_allow() -> None:
+    """A genuinely non-operational ALLOW turn (INFORMATION/FACT, no
+    subject) is unaffected -- preserves greeting/ordinary-conversation
+    behavior."""
+    contract = RequestContract(intent=RequestIntent.INFORMATION, requested_output=RequestedOutput.FACT, run_id=_RUN_ID)
+    decision = derive_execution_decision(contract, _RUN_ID)
     assert decision.status == RequestExecutionStatus.ALLOW
     assert requires_unstructured_response_backstop(decision, troubleshooting_guidance_present=False) is False
 
 
-def test_backstop_does_not_fire_for_absent_contract() -> None:
-    """Deliberately narrow: an ABSENT contract (INVALID_CONTRACT) is a
-    materially different, lower-confidence signal than a contract that
-    POSITIVELY shows unresolved context -- this backstop only fires on
-    the latter, to avoid over-blocking every ordinary governed-knowledge
-    turn merely because `record_request_contract` was not called."""
+def test_backstop_still_does_not_fire_for_absent_contract() -> None:
+    """LIVE-CORR-3B -- Operational Authority Boundary, item 2: `INVALID_
+    CONTRACT` was audited for the same ALLOW-style widening and
+    deliberately left unchanged -- see `requires_unstructured_response_
+    backstop`'s own docstring for the two candidate designs measured
+    directly against this repository's real test suite and rejected on
+    real evidence (a documented STOP condition, not an oversight). This
+    test's own original, narrower non-firing claim remains accurate."""
     decision = derive_execution_decision(None, _RUN_ID)
     assert decision.status == RequestExecutionStatus.INVALID_CONTRACT
     assert requires_unstructured_response_backstop(decision, troubleshooting_guidance_present=False) is False
@@ -419,7 +450,10 @@ async def test_hw_partial_fault_safety_holds_for_information_intent_with_embedde
 @pytest.mark.asyncio
 async def test_rru9_still_permitted_once_user_supplied_end_to_end() -> None:
     """Non-regression: the legitimate ALLOW path still works after all
-    these corrections."""
+    these corrections. LIVE-CORR-3B -- Operational Authority Boundary:
+    updated to an explicit COMMAND/EXACT_COMMAND contract -- command
+    permission is no longer implicitly granted merely by ALLOW status for
+    this file's own default TROUBLESHOOTING_NEXT_STEP shape (item 1)."""
     from backend.api.chat_service import ChatService
     from backend.api.session_service import ApiSessionService
     from backend.api.troubleshooting_guidance_context import register_troubleshooting_guidance
@@ -428,6 +462,8 @@ async def test_rru9_still_permitted_once_user_supplied_end_to_end() -> None:
     async def _side_effect(session_service: Any, session: Any, text: str) -> None:
         run_id = current_run_id()
         contract = _contract(
+            intent=RequestIntent.COMMAND,
+            requested_output=RequestedOutput.EXACT_COMMAND,
             provided_context=[
                 RequestParameter(name="unit_type", value="RRU", provenance=ParameterProvenance.USER),
                 RequestParameter(name="unit_id", value="RRU-9", provenance=ParameterProvenance.USER),
@@ -516,6 +552,9 @@ def test_command_suppression_fallback_text_never_contains_the_withheld_command()
 
 @pytest.mark.asyncio
 async def test_aas1_permitted_once_user_supplied_end_to_end() -> None:
+    """LIVE-CORR-3B -- Operational Authority Boundary: updated to an
+    explicit COMMAND/EXACT_COMMAND contract, mirroring the RRU flow's own
+    same update (item 1)."""
     from backend.api.chat_service import ChatService
     from backend.api.session_service import ApiSessionService
     from backend.api.troubleshooting_guidance_context import register_troubleshooting_guidance
@@ -524,6 +563,8 @@ async def test_aas1_permitted_once_user_supplied_end_to_end() -> None:
     async def _side_effect(session_service: Any, session: Any, text: str) -> None:
         run_id = current_run_id()
         contract = _contract(
+            intent=RequestIntent.COMMAND,
+            requested_output=RequestedOutput.EXACT_COMMAND,
             provided_context=[
                 RequestParameter(name="unit_type", value="AAS", provenance=ParameterProvenance.USER),
                 RequestParameter(name="unit_id", value="AAS-1", provenance=ParameterProvenance.USER),

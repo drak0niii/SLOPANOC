@@ -237,10 +237,16 @@ def test_response_schema_is_materially_smaller_but_keeps_every_field() -> None:
     # its own `TroubleshootingGuidance`/`TroubleshootingStep`/
     # `TroubleshootingInteractionMode` sub-schemas) -- the deterministic,
     # schema-guided replacement for prompt-only one-command-at-a-time
-    # self-restraint, which real live testing proved unreliable. This
-    # bound still guards against unrelated bloat creeping back in, with
-    # headroom above the new, legitimate baseline.
-    assert len(serialized) < 13679 * 1.1
+    # self-restraint, which real live testing proved unreliable. LIVE-
+    # CORR-3A legitimately grew this again (the typed `operational_effect`
+    # field, measured pre-LIVE-CORR-3B at 17,403 chars -- this bound had
+    # gone stale and was already failing before LIVE-CORR-3B touched this
+    # file). LIVE-CORR-3B adds the typed `source_section_id` field (both
+    # `TroubleshootingStep` and `TroubleshootingGuidance`, section 5's own
+    # "ground operational prose" requirement), measured at 18,386 chars.
+    # This bound still guards against unrelated bloat creeping back in,
+    # with headroom above the new, legitimate baseline.
+    assert len(serialized) < 18386 * 1.1
 
     expected_fields = {
         "outcome",

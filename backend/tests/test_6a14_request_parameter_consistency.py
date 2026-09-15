@@ -427,6 +427,14 @@ def test_20_exact_command_grounding_unchanged() -> None:
 
 
 def test_rru5_accepted_as_context_but_command_still_withheld_end_to_end() -> None:
+    """LIVE-CORR-3B -- Operational Authority Boundary: this contract's own
+    default `requested_output` is TROUBLESHOOTING_NEXT_STEP, which no
+    longer implicitly grants exact-command permission (item 1) even once
+    the parameter-consistency gate itself is satisfied -- command
+    permission now requires a separately validated EXACT_COMMAND request.
+    Actually emitting a grounded "RRU-5" command remains evidence.py's
+    own, completely separate, unchanged job regardless -- proven in
+    test_20 above that RRU-5 still cannot pass exact-verbatim grounding."""
     contract = _contract(
         provided_context=[_param("unit_type", "RRU"), _param("unit_id", "RRU-5")],
         missing_context=[],
@@ -434,10 +442,7 @@ def test_rru5_accepted_as_context_but_command_still_withheld_end_to_end() -> Non
     decision = derive_execution_decision(contract, _RUN_ID)
     # unit_id IS present -> the parameter-consistency gate itself is satisfied.
     assert decision.status == RequestExecutionStatus.ALLOW
-    assert decision.may_emit_command is True
-    # But actually emitting a grounded "RRU-5" command remains evidence.py's
-    # own, completely separate, unchanged job -- proven in test_20 above
-    # that RRU-5 still cannot pass exact-verbatim grounding.
+    assert decision.may_emit_command is False
 
 
 # =============================================================================

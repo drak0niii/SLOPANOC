@@ -125,6 +125,26 @@ requested`, per the new CONDITIONAL COMMAND HANDLING prompt paragraph
 so no fallback text is ever appended; the member exists purely so
 calling code and tests can name this expected outcome by the same
 typed vocabulary as the three rejection reasons.
+
+LIVE-CORR-4 CORRECTIVE PASS (DEF-0045 -- Free-Text Operational Content
+Authority Boundary): a REAL, live-confirmed gap found during DEF-0041's
+final live isolation -- the STRUCTURED `command`/`step.command` safety
+net (DEF-0024/0026/0027/LIVE-CORR-3A/LIVE-CORR-3B, all above) can be
+working perfectly (correctly rejecting/stripping a command) while the
+EXACT SAME verbatim command string still reaches the user through a
+free-text narrative field (`TroubleshootingStep.action`, confirmed live
+in an UNRELATED step; by the same reasoning `interpretation`/`next_
+action`/`evidence_requested` for NEXT_STEP guidance) that no existing
+mechanism ever inspected. `_scrub_narrative_operational_leaks` closes
+this: it compares every narrative field against the SMALL, closed set of
+command strings THIS SAME turn's own grounding has ALREADY rejected
+(never a new free-text/NLP/regex/keyword judgment of what "looks like a
+command") and replaces any contaminated field wholesale with a fixed
+safe sentence -- never a partial edit, since a substring match cannot
+distinguish a prohibition from an instruction. Wired into `enforce_
+procedure_scoped_command_grounding_with_reason` immediately after each
+existing per-step/per-guidance rejection point, for both FULL_PROCEDURE
+and NEXT_STEP.
 """
 from __future__ import annotations
 
@@ -343,10 +363,32 @@ FALLBACK_TEXT` (which describes a narrower, single-document, command-only
 ambiguity) since the underlying condition and its scope are both
 different -- this one covers the ENTIRE response, never only a command."""
 
+_NARRATIVE_OPERATIONAL_LEAK_FALLBACK_TEXT = (
+    "Part of this step's description repeated an operational command that could not be safely verified for this "
+    "request, so it has been withheld for safety."
+)
+"""LIVE-CORR-4 -- DEF-0045 corrective pass: used to replace a free-text
+narrative field (`TroubleshootingStep.action`, or -- NEXT_STEP mode --
+`TroubleshootingGuidance.interpretation`/`next_action`/`evidence_
+requested`) found to reproduce, verbatim, a command THIS SAME turn's own
+command-grounding already rejected -- see `_scrub_narrative_operational_
+leaks`. A FIXED, deterministic, content-independent sentence, never a
+partial/surgical edit of the original text -- a substring check cannot
+distinguish a prohibition ("do not run X") from an instruction ("run X"),
+so the whole contaminated field is replaced rather than leaving a
+possibly garbled or misleading remainder."""
+
 _UNSTRUCTURED_STATE_CHANGE_FALLBACK_TEXT = (
     "This step described an operational recommendation without a verified command to back it, so it has been "
     "withheld for safety. Please ask again."
 )
+_UNVERIFIED_SECTION_REFERENCE_FALLBACK_TEXT = (
+    "This step's operational content could not be verified against the currently active governed section, so it "
+    "has been withheld for safety. Please ask again."
+)
+"""LIVE-CORR-3B -- used for `CommandGroundingReason.UNVERIFIED_SECTION_
+REFERENCE` -- a WHOLE-GUIDANCE suppression (mirrors `UNSTRUCTURED_STATE_
+CHANGE`'s own scope exactly)."""
 """LIVE-CORR-3A -- DEF-0040 corrective pass (SUPERSEDES the removed,
 substring-scanning LIVE-CORR-3 mechanism): used for `CommandGroundingReason
 .UNSTRUCTURED_STATE_CHANGE` -- a WHOLE-GUIDANCE suppression (mirrors
@@ -384,6 +426,15 @@ class CommandGroundingReason(str, Enum):
     no real, grounded `command`/`step.command` -- a state-changing
     "recommendation" conveyed ONLY through free text is structurally
     rejected. See `enforce_structural_operational_integrity`."""
+    UNVERIFIED_SECTION_REFERENCE = "unverified_section_reference"
+    """LIVE-CORR-3B -- Operational Authority Boundary, section 5's own
+    "ground operational prose" requirement: a step/guidance whose own
+    `source_section_id` (a model PROPOSAL) does not match a section
+    actually present in this turn's own real, backend-owned selected-
+    evidence set, or names a section OTHER than the resolved active
+    procedure section, is rejected -- a model-provided section ID is
+    never trusted merely because it was populated. See
+    `_verify_source_section_reference`."""
 
 
 def _fallback_text_for_reason(reason: Optional["CommandGroundingReason"]) -> str:
@@ -399,6 +450,8 @@ def _fallback_text_for_reason(reason: Optional["CommandGroundingReason"]) -> str
         return _AMBIGUOUS_PROCEDURE_FALLBACK_TEXT
     if reason == CommandGroundingReason.UNSTRUCTURED_STATE_CHANGE:
         return _UNSTRUCTURED_STATE_CHANGE_FALLBACK_TEXT
+    if reason == CommandGroundingReason.UNVERIFIED_SECTION_REFERENCE:
+        return _UNVERIFIED_SECTION_REFERENCE_FALLBACK_TEXT
     if reason == CommandGroundingReason.CROSS_PROCEDURE_EVIDENCE:
         return _CROSS_PROCEDURE_EVIDENCE_FALLBACK_TEXT
     return _UNGROUNDED_COMMAND_FALLBACK_TEXT
@@ -622,6 +675,122 @@ def resolve_active_section_id(
     return None
 
 
+def _verify_source_section_reference(
+    source_section_id: Optional[str],
+    section_texts_by_id: dict[str, str],
+    active_id: Optional[str],
+) -> tuple[bool, Optional["CommandGroundingReason"]]:
+    """LIVE-CORR-3B -- Operational Authority Boundary, section 5's own
+    "ground operational prose" requirement: bind each rendered operational
+    step/guidance to its own selected Approved Knowledge section identity.
+    A step/guidance's own `source_section_id` is a model PROPOSAL only --
+    verified here against the SAME real, run-scoped, backend-owned
+    selected-evidence set `_evaluate_command` itself uses
+    (`section_texts_by_id`) and, when an active procedure section could be
+    deterministically resolved, against that active identity specifically.
+
+    `None` (the field left unset -- the overwhelming majority of turns,
+    since this field is brand new and additive) is a complete no-op,
+    returning `(True, None)`: no claim was made to verify, so there is
+    nothing to reject. This does NOT itself constitute grounding --
+    `_evaluate_command`'s own verbatim-content check remains the primary,
+    unaffected command-grounding mechanism regardless of this field.
+
+    Rejects:
+      - a `source_section_id` naming a section NOT present in this turn's
+        own selected evidence at all (unsupported reference);
+      - a `source_section_id` naming a DIFFERENT section than the resolved
+        active procedure section, when one could be resolved (cross-
+        section reference).
+
+    DELIBERATELY NOT ATTEMPTED, per explicit "if the existing Knowledge
+    model cannot prove prerequisites/target independence, fail closed and
+    document that limitation; do not invent metadata": whether a step's
+    own POSITION within `full_procedure_steps` matches the governed
+    source's own explicit ordering (the DEF-0042 "reordered/skipped-
+    prerequisite" concern) is NOT verified here -- the Knowledge model
+    carries no structured, governed step-ordering signal to check against
+    without parsing section text (a text/regex parser is explicitly out of
+    bounds), so DEF-0042 remains OPEN, unresolved by this mechanism.
+    """
+    if source_section_id is None:
+        return True, None
+    if source_section_id not in section_texts_by_id:
+        return False, CommandGroundingReason.UNVERIFIED_SECTION_REFERENCE
+    if active_id is not None and source_section_id != active_id:
+        return False, CommandGroundingReason.UNVERIFIED_SECTION_REFERENCE
+    return True, None
+
+
+def _scrub_narrative_operational_leaks(
+    guidance: TroubleshootingGuidance, rejected_commands: AbstractSet[str]
+) -> tuple[TroubleshootingGuidance, bool]:
+    """LIVE-CORR-4 -- DEF-0045 correction.
+
+    DEF-0045's own live-confirmed shape: a command this turn's own
+    grounding (`_evaluate_command`/`_verify_source_section_reference`)
+    already REJECTED can still reach the user because the exact same
+    verbatim string was ALSO reproduced inside a free-text narrative
+    field -- `TroubleshootingStep.action` (confirmed live in an UNRELATED
+    step, not only the step the rejected command itself belonged to), or,
+    for NEXT_STEP guidance, `interpretation`/`next_action`/`evidence_
+    requested` -- none of which `_evaluate_command`/`_verify_source_
+    section_reference`/`enforce_structural_operational_integrity` ever
+    inspect (they only ever read `command`/`step.command`).
+
+    Per explicit instruction ("no generic text parsing... no regex/
+    keyword/command-syntax detection"), this performs NO command-syntax,
+    NLP, or negation/sentiment parsing whatsoever -- it is a single,
+    exact, deterministic verbatim-substring check against a value THIS
+    SAME turn's own trusted grounding decision has ALREADY rejected
+    (`rejected_commands`, populated by the caller from real, already-
+    computed rejections -- never a new, independent judgment of what
+    counts as "command-shaped"). Because a substring check cannot
+    distinguish a prohibition ("do not run X") from an instruction
+    ("run X"), the ENTIRE contaminated field is replaced by the fixed
+    `_NARRATIVE_OPERATIONAL_LEAK_FALLBACK_TEXT` sentence -- never a
+    partial/surgical edit that could leave a garbled or misleading
+    remainder -- per the explicit "safe over-suppression is preferable to
+    leaking an unauthorized command" instruction. Suppression is scoped to
+    the smallest trustworthy unit: one step's `action` (FULL_PROCEDURE) or
+    one field (NEXT_STEP), never the whole guidance, never unrelated
+    steps/fields that do not contain a rejected string.
+
+    A no-op (`(guidance, False)`) whenever `rejected_commands` is empty
+    (the overwhelming majority of turns -- this only ever runs after a
+    command was already rejected) or no narrative field actually
+    reproduces any of them.
+    """
+    if not rejected_commands:
+        return guidance, False
+
+    def _contaminated(text: Optional[str]) -> bool:
+        return bool(text) and any(rejected in text for rejected in rejected_commands)
+
+    scrubbed = False
+
+    if guidance.interaction_mode == TroubleshootingInteractionMode.FULL_PROCEDURE:
+        new_steps = []
+        for step in guidance.full_procedure_steps:
+            if _contaminated(step.action):
+                new_steps.append(step.model_copy(update={"action": _NARRATIVE_OPERATIONAL_LEAK_FALLBACK_TEXT}))
+                scrubbed = True
+            else:
+                new_steps.append(step)
+        if scrubbed:
+            guidance = guidance.model_copy(update={"full_procedure_steps": new_steps})
+        return guidance, scrubbed
+
+    updates: dict[str, Any] = {}
+    for field_name in ("interpretation", "next_action", "evidence_requested"):
+        if _contaminated(getattr(guidance, field_name)):
+            updates[field_name] = _NARRATIVE_OPERATIONAL_LEAK_FALLBACK_TEXT
+            scrubbed = True
+    if scrubbed:
+        guidance = guidance.model_copy(update=updates)
+    return guidance, scrubbed
+
+
 def _evaluate_command(
     command: str,
     section_texts_by_id: dict[str, str],
@@ -795,18 +964,48 @@ def enforce_procedure_scoped_command_grounding_with_reason(
         stripped = False
         primary_reason: Optional[CommandGroundingReason] = None
         new_steps = []
+        rejected_commands: set[str] = set()
         for step in guidance.full_procedure_steps:
             if not step.command:
                 new_steps.append(step)
+                continue
+            # LIVE-CORR-3B -- section 5's own "ground operational prose"
+            # requirement: verify the step's own proposed `source_section_
+            # id` BEFORE the existing verbatim-content check -- a step
+            # naming a section outside this turn's own selected evidence,
+            # or a section other than the resolved active procedure, is
+            # rejected regardless of whether its `command` string would
+            # otherwise have passed `_evaluate_command`.
+            section_ok, section_reason = _verify_source_section_reference(
+                step.source_section_id, section_texts_by_id, active_id_for_logging
+            )
+            if not section_ok:
+                rejected_commands.add(step.command)
+                new_steps.append(step.model_copy(update={"command": None}))
+                stripped = True
+                if primary_reason is None:
+                    primary_reason = section_reason
                 continue
             grounded, reason = _evaluate_command(step.command, section_texts_by_id, headings_by_id, question)
             if grounded:
                 new_steps.append(step)
             else:
+                rejected_commands.add(step.command)
                 new_steps.append(step.model_copy(update={"command": None}))
                 stripped = True
                 if primary_reason is None:
                     primary_reason = reason
+        if rejected_commands:
+            # LIVE-CORR-4 -- DEF-0045: a command rejected ABOVE (belonging
+            # to ANY step, not only the step being checked) must not still
+            # reach the user through a DIFFERENT step's own free-text
+            # `action` -- the confirmed live DEF-0045 shape. Scans every
+            # step's `action`, not only the step the rejected command
+            # itself came from.
+            scrub_target = guidance.model_copy(update={"full_procedure_steps": new_steps})
+            scrub_target, narrative_scrubbed = _scrub_narrative_operational_leaks(scrub_target, rejected_commands)
+            new_steps = scrub_target.full_procedure_steps
+            stripped = stripped or narrative_scrubbed
         _log_grounding_decision(run_id, guidance, selected_items, active_id_for_logging, stripped, primary_reason)
         if not stripped:
             return guidance, False, None
@@ -816,11 +1015,32 @@ def enforce_procedure_scoped_command_grounding_with_reason(
         _log_grounding_decision(run_id, guidance, selected_items, active_id_for_logging, False, None)
         return guidance, False, None
 
+    # LIVE-CORR-3B -- section 5, the NEXT_STEP-mode counterpart of the
+    # FULL_PROCEDURE per-step check above.
+    section_ok, section_reason = _verify_source_section_reference(
+        guidance.source_section_id, section_texts_by_id, active_id_for_logging
+    )
+    if not section_ok:
+        rejected_command = guidance.command
+        corrected, _ = _scrub_narrative_operational_leaks(
+            guidance.model_copy(update={"command": None}), frozenset({rejected_command})
+        )
+        _log_grounding_decision(run_id, guidance, selected_items, active_id_for_logging, True, section_reason)
+        return corrected, True, section_reason
+
     grounded, reason = _evaluate_command(guidance.command, section_texts_by_id, headings_by_id, question)
     _log_grounding_decision(run_id, guidance, selected_items, active_id_for_logging, not grounded, None if grounded else reason)
     if grounded:
         return guidance, False, None
-    return guidance.model_copy(update={"command": None}), True, reason
+    # LIVE-CORR-4 -- DEF-0045: the rejected `command` must not still reach
+    # the user through `interpretation`/`next_action`/`evidence_requested`
+    # (the NEXT_STEP-mode counterpart of the FULL_PROCEDURE `action` scrub
+    # above).
+    rejected_command = guidance.command
+    corrected, _ = _scrub_narrative_operational_leaks(
+        guidance.model_copy(update={"command": None}), frozenset({rejected_command})
+    )
+    return corrected, True, reason
 
 
 def enforce_procedure_scoped_command_grounding(
