@@ -118,24 +118,48 @@ from backend.agents.team_manager.read_continuation_presentation import (
     synthetic_incident_manager_response_event,
     validate_trusted_envelope_for_run,
 )
+from backend.agents.team_manager.clarification_renderer import render_command_suppression_text
 from backend.agents.team_manager.governed_knowledge_completion import (
     SAFE_COMPLETION_FAILURE_TEXT,
+    discard_governed_completion_deterministic_fallback,
     enforce_governed_knowledge_at_completion,
+    pop_governed_completion_deterministic_fallback,
 )
+from backend.agents.team_manager.authoritative_request_context import (
+    AUTHORITATIVE_REQUEST_CONTEXT_STATE_KEY,
+    render_authoritative_current_turn_request_context,
+)
+from backend.agents.team_manager.authorized_response import (
+    build_authorized_response_context,
+    extract_known_commands_from_guidance,
+)
+from backend.agents.team_manager.final_output_validator import validate_final_output
 from backend.agents.team_manager.request_contract import (
+    PENDING_GOVERNED_REQUEST_STATE_KEY,
     VALIDATED_REQUEST_CONTRACT_STATE_KEY,
+    RequestClass,
+    build_deterministic_read_continuation_contract,
+    parse_pending_governed_request,
     safe_request_contract_observability_fields,
 )
+from backend.agents.team_manager.request_contract_completion import request_current_turn_contract
 from backend.agents.team_manager.request_execution_policy import (
     FULL_PROCEDURE_NOT_PERMITTED_FALLBACK_TEXT,
     KNOWLEDGE_INVENTORY_UNSUPPORTED_TEXT,
+    RequestExecutionDecision,
     RequestExecutionStatus,
-    command_suppression_fallback_text,
+    WorkAuthority,
+    WorkEnvelope,
+    build_pending_governed_request_state_update,
     derive_execution_decision,
+    derive_work_envelope,
     enforce_execution_decision_on_guidance,
     enforce_response_mode_compatibility,
+    expire_completed_pending_on_invalid_contract,
+    is_governed_evidence_continuity_permitted,
     load_current_turn_contract,
     requires_unstructured_response_backstop,
+    resolve_effective_governed_contract,
 )
 from backend.agents.team_manager.source_requirements_completion import (
     SAFE_DECLARATION_FAILURE_TEXT,
@@ -195,6 +219,7 @@ from backend.api.multimodal_turn_context import (
 )
 from backend.agents.incident_manager.schemas import TroubleshootingGuidance
 from backend.api.applicability_context_capture import discard_known_applicability_context
+from backend.api.rejected_command_context import discard_rejected_commands, pop_rejected_commands
 from backend.api.streaming_events import EventSequencer, Stage, StreamEvent, StreamEventType, status_data
 from backend.api.troubleshooting_guidance_context import (
     discard_troubleshooting_guidance,
@@ -311,17 +336,100 @@ class _Runner(Protocol):
 def _build_runner(session_service: ApiSessionService) -> _Runner:
     from google.adk.runners import Runner
 
-    from backend.agents.team_manager.direct_read_fast_path import get_fast_path_team_manager
+    from backend.agents.team_manager.agent import operational_team_manager
+    from backend.agents.team_manager.direct_read_fast_path import _present_fast_path_result_via_trusted_pipeline
+    from backend.api.perf_timing import before_model_call
 
-    # P4B.3 COMPLETION PASS: `get_fast_path_team_manager()` is a `.model_
-    # copy` of `team_manager` (agent.py) with one additional, normally-
-    # inert `before_model_callback` prepended -- see that module's own
-    # docstring for the full ADK-source-verified mechanism. Every other
-    # aspect (instruction, tools, other callbacks) is identical to the
-    # base `team_manager` this Runner used before this pass.
+    # P4B.3 COMPLETION PASS (preserved) + CONTROL-PLANE-SEQ-03: this
+    # Runner is now selected ONLY for a normal turn whose mandatory
+    # current-turn preflight already succeeded AND whose Phase-A
+    # deterministic policy already permits operational orchestration --
+    # it therefore uses `operational_team_manager` (agent.py -- the SAME
+    # `team_manager` role/identity, `record_request_contract`/`record_
+    # source_requirements` structurally removed, since preflight already,
+    # deterministically, owns both declarations for this turn) rather than
+    # the base `team_manager`. The ONE additional, normally-inert P4B.3
+    # `before_model_callback` (`_present_fast_path_result_via_trusted_
+    # pipeline` -- see `direct_read_fast_path.get_fast_path_team_manager`'s
+    # own docstring for the full ADK-source-verified mechanism, unchanged,
+    # not reimplemented here) is composed the SAME way that helper already
+    # does it, just over `operational_team_manager` instead of the base
+    # agent -- every other aspect (instruction, remaining tools, other
+    # callbacks) is identical to what this Runner already used before this
+    # pass, minus the two now-preflight-owned governance tools.
+    operational_fast_path_team_manager = operational_team_manager.model_copy(
+        update={
+            "before_model_callback": [
+                _present_fast_path_result_via_trusted_pipeline,
+                before_model_call("team_manager"),
+            ]
+        }
+    )
     return Runner(
         app_name=APP_NAME,
-        agent=get_fast_path_team_manager(),
+        agent=operational_fast_path_team_manager,
+        session_service=session_service.adk_session_service,
+    )
+
+
+def _build_incident_only_runner(session_service: ApiSessionService) -> _Runner:
+    """CONTROL-PLANE-SEQ-04 §14 -- structural tool removal, one layer up:
+    selected for a turn whose `WorkEnvelope` grants `may_route_incident_
+    manager=True` but `may_route_troubleshooting_manager=False` (in
+    practice, an `OPERATIONAL_INFORMATION`-class request -- see `derive_
+    work_envelope`'s own docstring). Mirrors `_build_runner` exactly,
+    including the SAME P4B.3 fast-path `before_model_callback` composition,
+    over `operational_team_manager_incident_manager_only` (agent.py)
+    instead of the full `operational_team_manager`.
+    """
+    from google.adk.runners import Runner
+
+    from backend.agents.team_manager.agent import operational_team_manager_incident_manager_only
+    from backend.agents.team_manager.direct_read_fast_path import _present_fast_path_result_via_trusted_pipeline
+    from backend.api.perf_timing import before_model_call
+
+    incident_only_fast_path_team_manager = operational_team_manager_incident_manager_only.model_copy(
+        update={
+            "before_model_callback": [
+                _present_fast_path_result_via_trusted_pipeline,
+                before_model_call("team_manager"),
+            ]
+        }
+    )
+    return Runner(
+        app_name=APP_NAME,
+        agent=incident_only_fast_path_team_manager,
+        session_service=session_service.adk_session_service,
+    )
+
+
+def _build_troubleshooting_only_runner(session_service: ApiSessionService) -> _Runner:
+    """CONTROL-PLANE-SEQ-04 §14 -- the mirror-image sibling of `_build_
+    incident_only_runner`, immediately above: selected for a turn whose
+    `WorkEnvelope` grants `may_route_troubleshooting_manager=True` but
+    `may_route_incident_manager=False`. Not currently reachable by any
+    `derive_work_envelope` branch (every class that grants `troubleshooting
+    _manager` also grants `incident_manager`) -- defined for completeness,
+    exactly mirroring `operational_team_manager_troubleshooting_manager_
+    only`'s own construction in agent.py.
+    """
+    from google.adk.runners import Runner
+
+    from backend.agents.team_manager.agent import operational_team_manager_troubleshooting_manager_only
+    from backend.agents.team_manager.direct_read_fast_path import _present_fast_path_result_via_trusted_pipeline
+    from backend.api.perf_timing import before_model_call
+
+    troubleshooting_only_fast_path_team_manager = operational_team_manager_troubleshooting_manager_only.model_copy(
+        update={
+            "before_model_callback": [
+                _present_fast_path_result_via_trusted_pipeline,
+                before_model_call("team_manager"),
+            ]
+        }
+    )
+    return Runner(
+        app_name=APP_NAME,
+        agent=troubleshooting_only_fast_path_team_manager,
         session_service=session_service.adk_session_service,
     )
 
@@ -660,6 +768,122 @@ def _resolve_invocation_id_for_active_user_turn(events: list[Any], turn_index: i
     return None
 
 
+class _ResponseMode:
+    """LIVE-CORR-14 -- the closed set of FINAL RESPONSE MODES.
+
+    THE INVARIANT THIS TYPE EXISTS TO MAKE STRUCTURAL: the already-
+    validated, already-deterministic `RequestExecutionDecision` is the
+    SOLE selector of which kind of response a turn produces. Specialist/
+    model artifacts (`TroubleshootingGuidance`, the Runner's own free
+    text, the governed-completion result) supply CONTENT for the selected
+    mode -- they may never decide WHETHER the system clarifies,
+    disambiguates, restricts, requests approval, answers, or fails.
+
+    Authority order, enforced by `_select_response_mode` + the mode
+    dispatch in `execute_turn_events`:
+
+        RequestExecutionDecision > response mode > specialist/model
+        content > final output validator
+
+    PROVEN LIVE DEFECT THIS CLOSES ("give me a command to restart an
+    RRU"): `derive_execution_decision` correctly produced `status=needs_
+    information, missing_context=[unit_id, unit_type], may_emit_command=
+    False`, yet finalization still emitted `message_completed_emitted=
+    False error_code=run_failure`. Root cause was pure branch shadowing
+    in the response-construction chain, not the decision: the status
+    check lived INSIDE `if captured_troubleshooting_guidance is not
+    None:`, and the three sibling `elif`s (`response_mode_incompatible`,
+    `governed_completion_used_deterministic_fallback`, `requires_
+    unstructured_response_backstop`) were each reachable only when the
+    ones before them happened to be false -- so an artifact-shape
+    combination (no/empty guidance, or a discarded-for-mode guidance, or
+    a governed-completion deterministic fallback that left `final_text`
+    unset) could consume the turn and never render the clarification the
+    decision had already, correctly, required.
+
+    NOT A NEW FRAMEWORK: these are plain string constants (mirroring
+    `RequestExecutionStatus`/`RequestClass`'s own established convention
+    in this codebase) used for exactly one dispatch and one log field.
+    No mode grants any authority of its own, and no mode is derivable
+    from anything except `decision.status`.
+    """
+
+    CLARIFICATION = "clarification"
+    """`NEEDS_INFORMATION`/`AMBIGUOUS` -- render the existing natural
+    clarification/disambiguation from AUTHORITATIVE missing/ambiguous
+    context (`decision.missing_context`). ABSOLUTE: never consults
+    guidance presence, model prose presence, or command presence."""
+
+    RESTRICTION = "restriction"
+    """`UNSUPPORTED_CAPABILITY` -- the existing deterministic restriction
+    text. Its own, separate, pre-existing override (`KNOWLEDGE_INVENTORY_
+    UNSUPPORTED_TEXT`, applied earlier in the same method) was ALREADY
+    status-driven and is unchanged; this mode only guarantees that no
+    later guidance/prose branch can shadow it."""
+
+    APPROVAL = "approval"
+    """`REQUIRES_APPROVAL` -- unchanged behavior: the approval boundary is
+    its own separate state machine (proposal -> trusted approval ->
+    re-authorized execution) and already owns this turn's user-facing
+    proposal text/card. Nothing in the response layer rewrites it."""
+
+    AUTHORIZED_RESPONSE = "authorized_response"
+    """`ALLOW` -- the ONLY mode that consumes specialist/model content:
+    structured guidance, then the governed/deterministic result, then
+    safe free text, with the existing deterministic safe fallback when
+    every permitted candidate is empty."""
+
+    UNRESOLVED_CONTRACT = "unresolved_contract"
+    """`INVALID_CONTRACT` -- deliberately retains the pre-existing,
+    conservative pass-through behavior (no deterministic replacement, and
+    the pre-existing "no final text at all" failure still applies).
+
+    HONEST SCOPE NOTE (not an oversight): LIVE-CORR-3B already audited and
+    REJECTED, against this repository's own real test suite, both
+    candidate designs for turning a missing/stale contract into a
+    deterministic restriction response -- see `requires_unstructured_
+    response_backstop`'s own STOP CONDITION docstring for the measured
+    collateral damage (dozens of pre-existing tests whose scenarios
+    legitimately never record a `RequestContract`). `INVALID_CONTRACT` is
+    also the status a turn that produced NO model output at all resolves
+    to, and that case must keep failing closed as a genuine non-response
+    (test_api_chat_service.py's own `test_no_final_text_produced_becomes_
+    a_safe_error`, test_chat_service_saved_chat_marker.py's own sibling),
+    which is why the hard non-empty-final-text invariant below is scoped
+    to modes that represent a VALID policy state."""
+
+
+_RESPONSE_MODE_BY_STATUS: dict[str, str] = {
+    RequestExecutionStatus.NEEDS_INFORMATION: _ResponseMode.CLARIFICATION,
+    RequestExecutionStatus.AMBIGUOUS: _ResponseMode.CLARIFICATION,
+    RequestExecutionStatus.UNSUPPORTED_CAPABILITY: _ResponseMode.RESTRICTION,
+    RequestExecutionStatus.REQUIRES_APPROVAL: _ResponseMode.APPROVAL,
+    RequestExecutionStatus.ALLOW: _ResponseMode.AUTHORIZED_RESPONSE,
+    RequestExecutionStatus.INVALID_CONTRACT: _ResponseMode.UNRESOLVED_CONTRACT,
+}
+"""Total over `RequestExecutionStatus`'s own closed set -- one entry per
+status, no wildcards, no derivation from anything else."""
+
+
+def _select_response_mode(decision: RequestExecutionDecision) -> str:
+    """THE single response-mode selector (LIVE-CORR-14 section 3).
+
+    Reads `decision.status` and NOTHING else -- never guidance presence,
+    never `rendered_guidance_text`, never `command_suppressed_by_policy`,
+    never `requires_unstructured_response_backstop`, never the Runner's
+    own `final_text`, never a command candidate. An unknown/unexpected
+    status value (structurally impossible -- `RequestExecutionDecision`
+    validates `status` against `_VALID_STATUSES` at construction) falls
+    closed to `UNRESOLVED_CONTRACT`, the most conservative mode.
+
+    This function never re-derives, widens, or narrows `may_emit_command`/
+    `may_execute_action`/`missing_context` -- it is a pure projection of
+    an already-final decision onto the response shape that decision
+    already implies.
+    """
+    return _RESPONSE_MODE_BY_STATUS.get(decision.status, _ResponseMode.UNRESOLVED_CONTRACT)
+
+
 class ChatService:
     """`runner` is injectable so tests can exercise this entire service
     (session validation, locking, status translation, delta/final text
@@ -674,6 +898,8 @@ class ChatService:
         session_service: ApiSessionService,
         runner: Optional[_Runner] = None,
         presentation_runner: Optional[_Runner] = None,
+        incident_only_runner: Optional[_Runner] = None,
+        troubleshooting_only_runner: Optional[_Runner] = None,
         case_service: Optional[CaseService] = None,
         teams_contributors_resolver: Optional[Callable[[Optional[str]], Awaitable[list[str]]]] = None,
         read_continuation_executor: Optional[
@@ -704,6 +930,27 @@ class ChatService:
             self._presentation_runner = runner
         else:
             self._presentation_runner = _build_presentation_runner(session_service)
+        # CONTROL-PLANE-SEQ-04 §14 -- injectable exactly like `presentation_
+        # runner` immediately above, with the SAME "falls back to the
+        # SAME injected `runner` double when not separately injected"
+        # precedent: every existing test that injects only `runner` keeps
+        # resolving every runner slot to that ONE double, never silently
+        # building a real ADK Runner (an uncredentialed Gemini call) in an
+        # offline test. See `_build_incident_only_runner`/`_build_
+        # troubleshooting_only_runner`'s own docstrings for what each
+        # represents in production.
+        if incident_only_runner is not None:
+            self._incident_only_runner = incident_only_runner
+        elif runner is not None:
+            self._incident_only_runner = runner
+        else:
+            self._incident_only_runner = _build_incident_only_runner(session_service)
+        if troubleshooting_only_runner is not None:
+            self._troubleshooting_only_runner = troubleshooting_only_runner
+        elif runner is not None:
+            self._troubleshooting_only_runner = runner
+        else:
+            self._troubleshooting_only_runner = _build_troubleshooting_only_runner(session_service)
         # Injectable exactly like `runner`/`teams_contributors_resolver`
         # above -- lets tests exercise the deterministic continuation-
         # execution path (production hardening pass #2) against a
@@ -1044,6 +1291,16 @@ class ChatService:
         perf.mark("case_context_checked")
 
         error: Optional[tuple[str, str]] = None
+        # LIVE-CORR-14.1 -- keep a response-generation failure separate from
+        # the turn-level fatal error until the deterministic execution
+        # decision has selected the final response mode. A response-generating
+        # Runner failure must remain fatal for modes that depend on Runner/
+        # specialist content, but it must not prevent a fully deterministic,
+        # command-free clarification from being produced when the final policy
+        # decision is NEEDS_INFORMATION/AMBIGUOUS.
+        response_generation_error: Optional[tuple[str, str]] = None
+        response_generation_started = False
+        response_generation_completed = False
         prepared_attachments: list[PreparedAttachment] = []
 
         # POST-5.1 B5 -- structural "must have something" guard
@@ -1212,6 +1469,34 @@ class ChatService:
         # must be captured into this local BEFORE that clear, never
         # re-popped from the (by then already-cleared) store later.
         captured_troubleshooting_guidance: Optional[TroubleshootingGuidance] = None
+        # CONTROL-PLANE-SEQ-04A -- populated (if at all) by the mandatory
+        # preflight's own deterministic governed-read stage, BEFORE the
+        # response-generating Runner ever runs -- see that block's own
+        # comment, below, for the full rationale. `preflight_governed_
+        # read_attempted` alone (regardless of outcome) is what the
+        # runner-selection step consults to prevent a duplicate `incident_
+        # manager_tool` invocation for the SAME governed-read requirement
+        # (§6); `preflight_governed_selected_evidence`/`preflight_governed_
+        # troubleshooting_guidance` are merged into `selected_knowledge_
+        # evidence`/`captured_troubleshooting_guidance` themselves further
+        # below (this turn's own main-Runner `finally` block), never
+        # overwritten by it.
+        preflight_governed_read_attempted = False
+        preflight_governed_selected_evidence: list[Any] = []
+        preflight_governed_troubleshooting_guidance: Optional[TroubleshootingGuidance] = None
+        # CONTROL-PLANE-SEQ-06 -- section 2's own residual command-
+        # inventory gap: every exact command value THIS turn's own
+        # grounding (evidence.py) genuinely possessed and structurally
+        # rejected, across ALL of this turn's own grounding calls (main
+        # Runner, SEQ-04A preflight governed read, and the reactive
+        # governed-completion remediation alike) -- accumulated here,
+        # folded into `known_commands_this_turn` (further below, alongside
+        # `execution_decision`) so the final-output validator can
+        # recognize the SAME already-rejected value if it separately
+        # survives in free-form response text. See rejected_command_
+        # context.py's own module docstring for the full "additive
+        # side-channel, never a new grounding judgment" design.
+        known_rejected_commands_this_turn: set[str] = set()
         run_id_token = bind_run_id(sequencer.run_id)
         # Phase 2 (Runtime Activity Truthfulness): registered in the SAME
         # place, for the SAME reason, as `bind_run_id` above -- this
@@ -1358,7 +1643,324 @@ class ChatService:
                         await self._session_service.persist_state_delta(
                             session, {PENDING_SPECIALIST_RESULT_STATE_KEY: validated_for_presentation}
                         )
+                        # LIVE-CORR-12C -- Fresh RequestContract on
+                        # Presentation Turns: this turn is about to run
+                        # `presentation_team_manager` (tools=[]), which
+                        # structurally cannot call `record_request_contract`
+                        # -- without this, `VALIDATED_REQUEST_CONTRACT_
+                        # STATE_KEY` would be left holding a PRIOR turn's
+                        # own contract, stamped with THAT turn's own
+                        # `run_id`, and `derive_execution_decision` would
+                        # correctly (but misleadingly) reject it as
+                        # `INVALID_CONTRACT` for THIS turn. A resumed
+                        # `ResolvedReadContinuation` is already fully
+                        # deterministic (see `build_deterministic_read_
+                        # continuation_contract`'s own module-level
+                        # comment) -- this contract is synthesized directly,
+                        # never via a model call, so `presentation_team_
+                        # manager`'s own tool-free design is untouched.
+                        await self._session_service.persist_state_delta(
+                            session,
+                            {
+                                VALIDATED_REQUEST_CONTRACT_STATE_KEY: build_deterministic_read_continuation_contract(
+                                    run_id=sequencer.run_id
+                                ).model_dump(mode="json")
+                            },
+                        )
                         specialist_result_state_written = True
+
+            # ================================================================
+            # CONTROL-PLANE-SEQ-04 -- Deterministic Work Envelope +
+            # Authorized Routing (supersedes SEQ-03's own Phase-A-decision-
+            # plus-exception-predicate mechanism as the NORMAL-path
+            # routing authority -- see request_execution_policy.py's own
+            # "CONTROL-PLANE-SEQ-04" module comment for the full
+            # architectural rationale).
+            # ================================================================
+            #
+            # For a NORMAL turn (never a `ResolvedReadContinuation` turn --
+            # that path already has its own deterministic, already-
+            # authorized contract and specialist read, see the block
+            # immediately above / LIVE-CORR-12C), guarantee BEFORE
+            # `incident_manager_tool`/`troubleshooting_manager` are even
+            # reachable:
+            #   1. a fresh, `run_id`-fresh current-turn `RequestContract`
+            #      (reusing `request_current_turn_contract`, request_
+            #      contract_completion.py -- the EXACT SAME bounded,
+            #      tools=[record_request_contract]-only remediation
+            #      machinery LIVE-CORR-12I already established, simply
+            #      invoked FIRST instead of reactively);
+            #   2. a source-requirements declaration (reusing `request_
+            #      source_requirements_declaration`, source_requirements_
+            #      completion.py, unmodified -- kept as a SEPARATE bounded
+            #      call, deliberately NOT merged into one model turn with
+            #      the contract call: correct sequencing, not call-count
+            #      reduction, is this milestone's own stated priority);
+            #   3. governed-evidence-continuity permission (`is_governed_
+            #      evidence_continuity_permitted`, LIVE-CORR-12D, semantics
+            #      completely unmodified -- moved earlier only);
+            #   4. a deterministic `WorkEnvelope` (`derive_work_envelope`,
+            #      request_execution_policy.py) -- WHAT WORK may be
+            #      attempted this turn, never WHAT MAY REACH THE USER (that
+            #      remains exclusively the SEPARATE, later Phase-B `derive_
+            #      execution_decision` call, unchanged, §19/§20 of this
+            #      pass's own instruction). `derive_work_envelope` reuses
+            #      `derive_execution_decision`/`is_deferred_target_
+            #      resolution` INTERNALLY (never duplicated) -- this call
+            #      site itself no longer consults either directly (§23).
+            #
+            # A failed/absent preflight contract naturally, correctly
+            # reproduces a blocked (`work_permitted=False`) envelope (the
+            # SAME freshness check `derive_execution_decision` already,
+            # unconditionally, performs, one layer inside `derive_work_
+            # envelope`) -- no separate `error` branch is needed here; the
+            # gate below routes that turn to the tools=[] presentation
+            # runner exactly like every other hard-gated envelope outcome,
+            # and the EXISTING LIVE-CORR-12I/12I.1 post-run remediation
+            # (untouched, still present) remains available as a fallback
+            # for a NEXT turn's own continuity even though THIS turn's own
+            # operational orchestration is correctly skipped.
+            work_envelope = WorkEnvelope()
+            if error is None and not specialist_result_state_written:
+                preflight_question = _remediation_question(message_text)
+                try:
+                    preflight_contract = await request_current_turn_contract(
+                        question=preflight_question,
+                        user_content=content,
+                        run_id=f"{sequencer.run_id}::preflight-contract",
+                        current_run_id=sequencer.run_id,
+                    )
+                except Exception:
+                    _logger.warning(
+                        "chat_service: contract preflight raised -- failing closed run_id=%s", sequencer.run_id
+                    )
+                    preflight_contract = None
+
+                if preflight_contract is not None:
+                    await self._session_service.persist_state_delta(
+                        session, {VALIDATED_REQUEST_CONTRACT_STATE_KEY: preflight_contract.model_dump(mode="json")}
+                    )
+
+                try:
+                    preflight_declaration = await request_source_requirements_declaration(
+                        question=preflight_question, run_id=f"{sequencer.run_id}::preflight-declaration"
+                    )
+                except Exception:
+                    _logger.warning(
+                        "chat_service: source-requirements preflight raised -- failing closed run_id=%s",
+                        sequencer.run_id,
+                    )
+                    preflight_declaration = None
+                if preflight_declaration is not None:
+                    requires_teams_declared, requires_governed_knowledge_declared = preflight_declaration
+                    source_requirements_capture.record_external_declaration(
+                        requires_teams_declared, requires_governed_knowledge_declared
+                    )
+                # `declared=False` here (preflight declaration failed) is
+                # NOT itself a hard gate -- the EXISTING, unmodified post-
+                # run source-requirements remediation (below, later in this
+                # method) remains the fallback for exactly this case,
+                # preserving today's own fail-closed completion-gate
+                # behavior rather than duplicating it here.
+
+                preflight_pending_governed_request = parse_pending_governed_request(
+                    session.state.get(PENDING_GOVERNED_REQUEST_STATE_KEY)
+                )
+                preflight_governed_evidence_continuity_permitted = is_governed_evidence_continuity_permitted(
+                    preflight_contract, sequencer.run_id, preflight_pending_governed_request
+                )
+                _logger.info(
+                    "chat_service: preflight contract_run_id=%s fresh=%s governed_evidence_continuity=%s run_id=%s",
+                    preflight_contract.run_id if preflight_contract is not None else None,
+                    preflight_contract is not None and preflight_contract.run_id == sequencer.run_id,
+                    "reused_same_request" if preflight_governed_evidence_continuity_permitted else "superseded_new_request",
+                    sequencer.run_id,
+                )
+
+                # CONTROL-PLANE-SEQ-04 §5's own EXACT_COMMAND circularity
+                # fix, and §9-13's own per-class routing rules, both live
+                # entirely inside this one deterministic call -- see
+                # `derive_work_envelope`'s own docstring for the complete
+                # derivation (never duplicated here).
+                work_envelope = derive_work_envelope(
+                    preflight_contract,
+                    sequencer.run_id,
+                    pending_governed_request=preflight_pending_governed_request,
+                    requires_governed_knowledge_declared=source_requirements_capture.requires_governed_knowledge,
+                    requires_teams_declared=source_requirements_capture.requires_teams,
+                )
+                _logger.info(
+                    "chat_service: work_envelope maximum_authority=%s work_permitted=%s "
+                    "may_route_incident_manager=%s may_route_troubleshooting_manager=%s run_id=%s",
+                    work_envelope.maximum_authority,
+                    work_envelope.work_permitted,
+                    work_envelope.may_route_incident_manager,
+                    work_envelope.may_route_troubleshooting_manager,
+                    sequencer.run_id,
+                )
+
+                # ============================================================
+                # CONTROL-PLANE-SEQ-04A -- Deterministic Authorized-Read Stage
+                # ============================================================
+                #
+                # THE GAP THIS CLOSES: `work_envelope.requires_governed_
+                # knowledge=True` alone did not yet cause a governed read to
+                # actually happen BEFORE the response-generating team_manager
+                # turn -- the ONLY existing mechanism forcing one
+                # (`governed_completion_needed`, further below in this
+                # method) is still purely REACTIVE, running only AFTER that
+                # turn already had its own chance to decide (unreliably)
+                # whether to delegate. This block makes the SAME, completely
+                # UNMODIFIED `enforce_governed_knowledge_at_completion` (§2 --
+                # never a second Incident Manager stack, never duplicated
+                # retrieval/selection/grounding/provenance/applicability
+                # logic) the NORMAL, deterministic authorized-read path
+                # whenever it is actually required, BEFORE any response-
+                # generating Runner call.
+                #
+                # NEVER pays this path for a non-governed turn (§8): gated on
+                # `work_envelope.requires_governed_knowledge`, which is
+                # already unconditionally `False` for `GENERAL_CONVERSATION`
+                # (derive_work_envelope, §9) and `False` whenever this turn's
+                # own source-requirements declaration did not ask for it --
+                # preserves EXISTING routing for every other request shape
+                # untouched.
+                #
+                # GOVERNED-EVIDENCE CONTINUITY APPLIED PROACTIVELY (§5): uses
+                # the ALREADY-computed `preflight_governed_evidence_
+                # continuity_permitted` (LIVE-CORR-12D, unmodified predicate)
+                # to decide whether prior evidence/anchor are even read at
+                # all -- byte-for-byte the SAME gating the reactive call
+                # below already applies, just evaluated once, earlier.
+                #
+                # EFFECTIVE GOVERNED REQUEST DRIVES THE READ, NEVER
+                # REDEFINED (§4): `preflight_question`/`preflight_contract.
+                # subject` are the SAME already-validated values `work_
+                # envelope` was itself derived from -- this block performs
+                # no independent request-class/authority/missing-context
+                # judgment of its own.
+                #
+                # NO NEW PERSISTENT SPECIALIST STATE MODEL (§3): results are
+                # held in plain local variables only (`preflight_governed_
+                # selected_evidence`/`preflight_governed_troubleshooting_
+                # guidance`/`preflight_governed_final_text`) -- merged into
+                # this turn's own EXISTING `selected_knowledge_evidence`/
+                # `captured_troubleshooting_guidance` locals further below
+                # (this turn's own main-Runner `finally` block), never a new
+                # durable session-state envelope.
+                #
+                # A deterministic FALLBACK/failure result from this call
+                # (`pop_governed_completion_deterministic_fallback`, the
+                # SAME existing signal the reactive call already relies on)
+                # is deliberately NOT treated as "governed read performed" --
+                # `selected_evidence`/`troubleshooting_guidance` stay empty,
+                # so the EXISTING reactive `governed_completion_needed` gate
+                # (§13, kept as defense-in-depth, unmodified) still correctly
+                # detects missing evidence and runs its own, already-correct,
+                # already-tested fallback logic for that shape -- this block
+                # never tries to reproduce or improve on it.
+                preflight_governed_final_text: Optional[str] = None
+                preflight_governed_read_performed = False
+                if work_envelope.work_permitted and work_envelope.requires_governed_knowledge:
+                    preflight_governed_read_attempted = True
+                    preflight_governed_run_id = f"{sequencer.run_id}::preflight-governed-read"
+                    try:
+                        preflight_chat_topic = (
+                            session.state.get(SELECTED_TEAMS_CHAT_TOPIC_STATE_KEY)
+                            if source_requirements_capture.requires_teams
+                            else None
+                        )
+                        preflight_prior_governed_evidence = (
+                            parse_last_selected_governed_evidence(
+                                session.state.get(LAST_SELECTED_GOVERNED_EVIDENCE_STATE_KEY)
+                            )
+                            if preflight_governed_evidence_continuity_permitted
+                            else []
+                        )
+                        preflight_active_procedure_anchor = (
+                            parse_active_governed_procedure(session.state.get(ACTIVE_GOVERNED_PROCEDURE_STATE_KEY))
+                            if preflight_governed_evidence_continuity_permitted
+                            else None
+                        )
+                        preflight_request_contract_subject = (
+                            preflight_contract.subject
+                            if preflight_contract is not None and not preflight_contract.ambiguity
+                            else None
+                        )
+                        (
+                            preflight_governed_final_text,
+                            preflight_governed_selected_evidence,
+                        ) = await enforce_governed_knowledge_at_completion(
+                            question=preflight_question,
+                            chat_topic=preflight_chat_topic,
+                            run_id=preflight_governed_run_id,
+                            image_parts=trusted_image_parts_from_content(content),
+                            prior_governed_evidence=preflight_prior_governed_evidence,
+                            active_anchor=preflight_active_procedure_anchor,
+                            request_contract_subject=preflight_request_contract_subject,
+                        )
+                        preflight_governed_troubleshooting_guidance = pop_troubleshooting_guidance(
+                            preflight_governed_run_id
+                        )
+                        discard_troubleshooting_guidance(preflight_governed_run_id)
+                        # CONTROL-PLANE-SEQ-06 -- same pop/discard pairing
+                        # as troubleshooting_guidance immediately above,
+                        # for the SAME `preflight_governed_run_id`.
+                        known_rejected_commands_this_turn.update(pop_rejected_commands(preflight_governed_run_id))
+                        discard_rejected_commands(preflight_governed_run_id)
+                        preflight_governed_used_deterministic_fallback = pop_governed_completion_deterministic_fallback(
+                            preflight_governed_run_id
+                        )
+                        discard_governed_completion_deterministic_fallback(preflight_governed_run_id)
+                        preflight_governed_read_performed = not preflight_governed_used_deterministic_fallback
+                        _logger.info(
+                            "chat_service: preflight_governed_read performed=%s deterministic_fallback=%s "
+                            "selected_evidence_count=%s run_id=%s",
+                            preflight_governed_read_performed,
+                            preflight_governed_used_deterministic_fallback,
+                            len(preflight_governed_selected_evidence),
+                            sequencer.run_id,
+                        )
+                    except Exception:
+                        _logger.warning(
+                            "chat_service: preflight governed read raised -- deferring to the existing "
+                            "reactive completion gate run_id=%s",
+                            sequencer.run_id,
+                        )
+                        preflight_governed_selected_evidence = []
+                        preflight_governed_troubleshooting_guidance = None
+                        preflight_governed_final_text = None
+                        preflight_governed_read_performed = False
+                        discard_troubleshooting_guidance(preflight_governed_run_id)
+                        discard_governed_completion_deterministic_fallback(preflight_governed_run_id)
+                        discard_rejected_commands(preflight_governed_run_id)
+
+                # CONTROL-PLANE-SEQ-04 §17 -- AUTHORITATIVE CURRENT-TURN
+                # REQUEST CONTEXT: a plain, deterministic, NEVER-persisted
+                # (`temp:`-prefixed -- see that module's own docstring for
+                # the ADK-source-verified "apply, then trim" mechanism this
+                # relies on) prompt block the downstream operational turn's
+                # own instruction provider (`team_manager_instruction_
+                # provider`, case_context.py) appends. A no-op (nothing
+                # written) whenever there is no validated contract to
+                # summarize. CONTROL-PLANE-SEQ-04A §9: also carries this
+                # turn's own already-retrieved governed specialist result
+                # (when one was genuinely produced, never a deterministic
+                # fallback/failure text), so the response-generating turn
+                # can synthesize/explain from it directly instead of
+                # re-requesting the same retrieval it can no longer even
+                # reach (§6, below).
+                authoritative_context_block = render_authoritative_current_turn_request_context(
+                    preflight_contract,
+                    work_envelope,
+                    governed_specialist_result=(
+                        preflight_governed_final_text if preflight_governed_read_performed else None
+                    ),
+                )
+                if authoritative_context_block:
+                    await self._session_service.persist_state_delta(
+                        session, {AUTHORITATIVE_REQUEST_CONTEXT_STATE_KEY: authoritative_context_block}
+                    )
 
             if error is None:
                 # R1 FIX (correctness-regression pass): `specialist_result_
@@ -1370,7 +1972,68 @@ class ChatService:
                 # one turn `presentation_team_manager` (agent.py, `tools=
                 # []`) exists for: structurally, not just by prompt
                 # wording, forbidding any further delegation.
-                turn_runner = self._presentation_runner if specialist_result_state_written else self._runner
+                #
+                # CONTROL-PLANE-SEQ-04: routing is now driven ENTIRELY by
+                # `work_envelope` -- never a raw Phase-A status/exception-
+                # predicate check at this call site (§23). GENERAL_
+                # CONVERSATION (`maximum_authority==CONVERSATIONAL_
+                # RESPONSE`) and every hard-blocked outcome
+                # (`work_permitted=False`) both reuse the SAME tools=[]
+                # `presentation_team_manager` runner -- `team_manager_
+                # instruction_provider` (case_context.py) already,
+                # independently, falls back to the ordinary `TEAM_MANAGER_
+                # INSTRUCTION` whenever `PENDING_SPECIALIST_RESULT_STATE_
+                # KEY` is absent (verified: this IS absent for this branch,
+                # since `specialist_result_state_written` is `False` here),
+                # so this reuse never risks a "present a trusted result
+                # that doesn't exist" prompt mismatch. Otherwise, `work_
+                # envelope.may_route_incident_manager`/`may_route_
+                # troubleshooting_manager` select the correct capability-
+                # filtered operational Runner -- structural (schema-level
+                # tool removal, §14), never merely instructed -- mirroring
+                # `operational_team_manager`/`presentation_team_manager`'s
+                # own established `.model_copy` precedent one layer up (see
+                # agent.py's own `select_operational_team_manager`, and
+                # this class's own `_build_incident_only_runner`/`_build_
+                # troubleshooting_only_runner`, for the construction side).
+                # Whatever free-form text any of these restricted calls
+                # produces is, exactly as for any other unauthorized-
+                # command shape, unconditionally replaced by the EXISTING,
+                # unmodified `requires_unstructured_response_backstop`/
+                # `command_suppression_fallback_text`/clarification-
+                # renderer machinery further down this method, driven by
+                # the SEPARATE, later Phase-B `execution_decision` -- never
+                # by any of these restricted calls' own output.
+                #
+                # CONTROL-PLANE-SEQ-04A §6 -- DUPLICATE-ROUTING PREVENTION:
+                # `effective_may_route_incident_manager` is `work_envelope.
+                # may_route_incident_manager` UNLESS the deterministic
+                # governed-read stage immediately above already ATTEMPTED
+                # (regardless of outcome -- a failed/ambiguous attempt must
+                # not be silently retried via the model's own delegation
+                # choice either) the SAME turn's own governed-read
+                # requirement, in which case `incident_manager_tool` is
+                # structurally removed from the response-generating Runner
+                # too -- never merely left available and hoped-unused.
+                # `work_envelope.may_route_troubleshooting_manager` is
+                # COMPLETELY UNCHANGED by this (§7) -- that specialist's own
+                # reachability never depends on whether Incident Manager
+                # retrieval already ran.
+                effective_may_route_incident_manager = (
+                    work_envelope.may_route_incident_manager and not preflight_governed_read_attempted
+                )
+                if specialist_result_state_written:
+                    turn_runner = self._presentation_runner
+                elif not work_envelope.work_permitted or work_envelope.maximum_authority == WorkAuthority.CONVERSATIONAL_RESPONSE:
+                    turn_runner = self._presentation_runner
+                elif effective_may_route_incident_manager and work_envelope.may_route_troubleshooting_manager:
+                    turn_runner = self._runner
+                elif effective_may_route_incident_manager:
+                    turn_runner = self._incident_only_runner
+                elif work_envelope.may_route_troubleshooting_manager:
+                    turn_runner = self._troubleshooting_only_runner
+                else:
+                    turn_runner = self._presentation_runner
                 if specialist_result_state_written:
                     # Safe diagnostic only (never a chat id, message body,
                     # or trusted payload) -- mirrors perf_timing.py's own
@@ -1378,6 +2041,11 @@ class ChatService:
                     _logger.info(
                         "perf stage=trusted_result_presentation_mode run_id=%s", sequencer.run_id
                     )
+                elif turn_runner is self._presentation_runner:
+                    _logger.info(
+                        "perf stage=work_envelope_gated_presentation_mode run_id=%s", sequencer.run_id
+                    )
+                response_generation_started = True
                 async with Aclosing(
                     turn_runner.run_async(
                         user_id=user_id, session_id=session_id, new_message=content, run_config=run_config
@@ -1646,10 +2314,34 @@ class ChatService:
                             "run_failure",
                             "The assistant could not complete this request. Please try again.",
                         )
-        except Exception:
-            # Never propagate a raw model/runtime exception (could include
-            # implementation detail) -- see errors.py's module docstring.
-            error = ("run_failure", "The assistant could not complete this request. Please try again.")
+                response_generation_completed = True
+        except Exception as exc:
+            # LIVE-CORR-14.1 -- distinguish an exception raised specifically
+            # while the response-generating Runner/presentation stage is
+            # active from a genuine failure in the control-plane/preflight
+            # stages. We intentionally do NOT clear or swallow the exception
+            # here. It is held separately until RequestExecutionDecision has
+            # deterministically selected the response mode.
+            #
+            # For CLARIFICATION only, the final response is derived entirely
+            # from authoritative decision.missing_context and does not depend
+            # on Runner prose, specialist presentation, or command output.
+            # Every other mode keeps the exact previous fail-closed behavior.
+            if response_generation_started and not response_generation_completed and error is None:
+                response_generation_error = (
+                    "run_failure",
+                    "The assistant could not complete this request. Please try again.",
+                )
+                _logger.warning(
+                    "chat_service: response-generation stage raised before deterministic finalization "
+                    "exception_type=%s run_id=%s",
+                    type(exc).__name__,
+                    sequencer.run_id,
+                )
+            else:
+                # Never propagate a raw model/runtime exception (could include
+                # implementation detail) -- see errors.py's module docstring.
+                error = ("run_failure", "The assistant could not complete this request. Please try again.")
         finally:
             # BUGFIX (evidence-mailbox lifecycle audit): both cleanup calls
             # MUST live in this `finally`, not as separate statements after
@@ -1703,8 +2395,26 @@ class ChatService:
             # troubleshooting_guidance` remains a safe, redundant backstop
             # for any exit path that somehow reaches here without a
             # registration ever happening (a no-op in that case).
-            captured_troubleshooting_guidance = pop_troubleshooting_guidance(sequencer.run_id)
+            # CONTROL-PLANE-SEQ-04A: prefers THIS turn's own main-Runner
+            # guidance (troubleshooting_manager may legitimately still run,
+            # per `work_envelope.may_route_troubleshooting_manager` -- §7,
+            # unaffected by the preflight governed read) when present;
+            # falls back to the deterministic preflight governed-read
+            # stage's own already-captured guidance (if any) otherwise --
+            # never silently discarded merely because this run_id's own
+            # store happens to be empty (expected whenever `incident_
+            # manager_tool` was structurally removed from this turn's
+            # Runner -- §6).
+            captured_troubleshooting_guidance = (
+                pop_troubleshooting_guidance(sequencer.run_id) or preflight_governed_troubleshooting_guidance
+            )
             discard_troubleshooting_guidance(sequencer.run_id)
+            # CONTROL-PLANE-SEQ-06 -- same pop/discard pairing, for the
+            # SAME `sequencer.run_id`, folded into this turn's own running
+            # accumulator (never overwritten -- ADDITIVE with whatever the
+            # preflight governed-read stage already contributed).
+            known_rejected_commands_this_turn.update(pop_rejected_commands(sequencer.run_id))
+            discard_rejected_commands(sequencer.run_id)
             # A5 final corrective pass (Correction D) -- same unconditional
             # cleanup discipline: a registered known-applicability context
             # must never survive past the one turn that registered it,
@@ -1724,7 +2434,17 @@ class ChatService:
             # finally) still has it, mirroring `message_texts_by_id`'s own
             # snapshot-then-use-later shape. Never the model's own
             # agent_payload/text -- always the trusted backend accessor.
-            selected_knowledge_evidence = snapshot_selected_knowledge_evidence(sequencer.run_id)
+            # CONTROL-PLANE-SEQ-04A: same "this turn's own live selection
+            # wins, deterministic preflight result is the fallback" merge
+            # as `captured_troubleshooting_guidance` immediately above --
+            # `incident_manager_tool` being structurally absent from this
+            # turn's own Runner (§6, the normal governed-required case)
+            # means this snapshot is legitimately empty; the deterministic
+            # preflight governed-read stage's own already-selected evidence
+            # (if any) is used instead, never lost.
+            selected_knowledge_evidence = (
+                snapshot_selected_knowledge_evidence(sequencer.run_id) or preflight_governed_selected_evidence
+            )
             # Same discipline for the Generic KM tool adapter's own
             # run-id-keyed trusted evidence state
             # (backend/tools/knowledge/runtime.py) -- guarantees no
@@ -1840,8 +2560,16 @@ class ChatService:
         # it does not change `final_text`, routing, or any execution
         # behavior; 6A.14 is the milestone that will make execution
         # actually obey this contract.
+        # LIVE-CORR-12B: `current_run_id=sequencer.run_id` is now passed
+        # through so the logged projection carries its own `contract_run_id`/
+        # `fresh` fields -- a stale contract (e.g. left behind by a turn that
+        # ran through `presentation_team_manager`'s empty toolset, which
+        # cannot call `record_request_contract` at all) is now immediately
+        # legible in this one log line, rather than looking identical to a
+        # fresh one and only being explained by a SEPARATE `INVALID_CONTRACT`
+        # log line further down this same method.
         observable_contract = safe_request_contract_observability_fields(
-            refreshed_session.state.get(VALIDATED_REQUEST_CONTRACT_STATE_KEY)
+            refreshed_session.state.get(VALIDATED_REQUEST_CONTRACT_STATE_KEY), current_run_id=sequencer.run_id
         )
         if observable_contract is not None:
             _logger.info("request_contract=%s run_id=%s", observable_contract, sequencer.run_id)
@@ -1867,6 +2595,18 @@ class ChatService:
         current_turn_request_contract = load_current_turn_contract(
             refreshed_session.state.get(VALIDATED_REQUEST_CONTRACT_STATE_KEY), sequencer.run_id
         )
+        # LIVE-CORR-11 -- Pending Governed Request Continuity: the SAME
+        # fail-closed-tolerant read discipline as the contract load
+        # immediately above, for whatever unresolved `EXACT_COMMAND`
+        # request (if any) a PRIOR turn's own `RequestExecutionStatus.
+        # NEEDS_INFORMATION` outcome left behind (`build_pending_governed_
+        # request_state_update`, request_execution_policy.py, written at
+        # the end of that prior turn). `None` is the ordinary,
+        # overwhelmingly common case -- no unresolved governed request to
+        # preserve.
+        pending_governed_request = parse_pending_governed_request(
+            refreshed_session.state.get(PENDING_GOVERNED_REQUEST_STATE_KEY)
+        )
         request_contract_subject = (
             current_turn_request_contract.subject
             if current_turn_request_contract is not None
@@ -1874,6 +2614,94 @@ class ChatService:
             and not current_turn_request_contract.ambiguity
             else None
         )
+        # LIVE-CORR-12D -- Request-Scoped Governed Evidence Continuity:
+        # THE continuity check. Computed here (same seam as `request_
+        # contract_subject`, immediately above, reusing the SAME already-
+        # loaded `current_turn_request_contract`/`pending_governed_request`)
+        # so it is available both where `prior_governed_evidence`/`active_
+        # procedure_anchor` are gated (below) and at this turn's own
+        # end-of-turn state-hygiene write (see that comment's own
+        # `LIVE-CORR-12D` marker, further down this method). `False` means
+        # this turn's own validated contract does NOT establish it is
+        # continuing an existing governed operation -- prior evidence must
+        # not become its candidate universe. See `is_governed_evidence_
+        # continuity_permitted`'s own docstring for the full two-path design.
+        governed_evidence_continuity_permitted = is_governed_evidence_continuity_permitted(
+            current_turn_request_contract, sequencer.run_id, pending_governed_request
+        )
+
+        # LIVE-CORR-12I -- Fresh RequestContract Guarantee on Every Normal
+        # User Turn: team_manager's own model is instructed to call
+        # `record_request_contract` every turn, but instruction-following
+        # is not guaranteed -- a normal turn can complete without ever
+        # calling it, leaving `current_turn_request_contract` either
+        # absent or stamped with a PRIOR turn's own `run_id` (both already
+        # fail `derive_execution_decision`'s own, unchanged, freshness
+        # check as `INVALID_CONTRACT`). Skipped for a `specialist_result_
+        # state_written` turn -- that turn deterministically synthesizes
+        # its own fresh, `run_id`-fresh contract already (LIVE-CORR-12C,
+        # `build_deterministic_read_continuation_contract`), so `current_
+        # turn_request_contract` is never stale/absent for it in the first
+        # place.
+        #
+        # LIVE-CORR-12I.1 -- deliberately NOT gated on `final_text is not
+        # None`: a `RequestContract` is control-plane state, produced (or
+        # not) by whatever tool calls the model made this turn -- entirely
+        # independent of whether the SAME turn also produced presentation-
+        # plane text. A live-reproduced turn ending `kind=function_call`
+        # (e.g. a delegation to `incident_manager`, no direct text of its
+        # own) legitimately leaves `final_text=None` at this point in the
+        # method while still needing its own fresh contract just as much
+        # as a `kind=text` turn does -- coupling the two silently skipped
+        # remediation for exactly that shape. The pre-existing, separate
+        # "no final text at all" error path further down this method is
+        # unaffected and still runs regardless of this remediation's own
+        # outcome.
+        if (
+            error is None
+            and not specialist_result_state_written
+            and (current_turn_request_contract is None or current_turn_request_contract.run_id != sequencer.run_id)
+        ):
+            _logger.warning(
+                "chat_service: no fresh current-turn RequestContract -- requesting one via bounded "
+                "remediation run_id=%s",
+                sequencer.run_id,
+            )
+            try:
+                remediated_contract = await request_current_turn_contract(
+                    question=_remediation_question(message_text),
+                    user_content=content,
+                    run_id=f"{sequencer.run_id}::contract-remediation",
+                    current_run_id=sequencer.run_id,
+                )
+            except Exception:
+                _logger.warning(
+                    "chat_service: request-contract remediation raised -- failing closed run_id=%s",
+                    sequencer.run_id,
+                )
+                remediated_contract = None
+
+            if remediated_contract is not None:
+                await self._session_service.persist_state_delta(
+                    session, {VALIDATED_REQUEST_CONTRACT_STATE_KEY: remediated_contract.model_dump(mode="json")}
+                )
+                # Re-derive every value this method already computed from
+                # the (previously stale/absent) contract, exactly as the
+                # original computations above did -- never a duplicate,
+                # independently-drifting derivation.
+                current_turn_request_contract = remediated_contract
+                request_contract_subject = (
+                    current_turn_request_contract.subject if not current_turn_request_contract.ambiguity else None
+                )
+                governed_evidence_continuity_permitted = is_governed_evidence_continuity_permitted(
+                    current_turn_request_contract, sequencer.run_id, pending_governed_request
+                )
+            else:
+                _logger.warning(
+                    "chat_service: request-contract remediation did not produce a fresh contract -- "
+                    "current turn will fail closed to INVALID_CONTRACT run_id=%s",
+                    sequencer.run_id,
+                )
 
         if (
             error is None
@@ -1944,8 +2772,40 @@ class ChatService:
                 # this remediation.
 
         governed_completion_needed = False
-        if error is None and source_requirements_capture.requires_governed_knowledge:
-            if not selected_knowledge_evidence:
+        # LIVE REGRESSION CORRECTIVE PASS: `True` only when THIS turn's
+        # own governed-knowledge remediation returned one of its fixed,
+        # deterministic, never-model-generated fallback/clarification
+        # texts (see `governed_knowledge_completion.py`'s own `_mark_
+        # governed_completion_deterministic_fallback` docstring) --
+        # never for its "real specialist summary" success path, which
+        # remains exactly as subject to `requires_unstructured_response_
+        # backstop` as before this pass.
+        governed_completion_used_deterministic_fallback = False
+        # CONTROL-PLANE-SEQ-04 §8's own explicit "do not let a model
+        # source-requirements declaration increase authority beyond what
+        # RequestClass permits" requirement: a `GENERAL_CONVERSATION`-
+        # classified turn (this turn's own already-derived `work_envelope
+        # .request_class`, frozen from preflight -- correct, since
+        # `operational_team_manager`/`presentation_team_manager` can no
+        # longer alter the contract mid-turn) can no longer force this
+        # deterministic governed-retrieval completion gate merely because
+        # `record_source_requirements` over-declared `requires_governed_
+        # knowledge=True`. `work_envelope.request_class is None` (no
+        # validated contract at all this turn) deliberately does NOT
+        # suppress this gate -- identical, conservative, fail-closed
+        # behavior to before this pass, since there is nothing here to
+        # positively prove the request was general conversation.
+        # `source_requirements_capture.requires_governed_knowledge` itself
+        # is read LIVE, not frozen -- unaffected by this addition, so the
+        # existing reactive source-requirements remediation (above) still
+        # correctly feeds this gate when preflight's own declaration call
+        # failed but that later remediation succeeded.
+        if (
+            error is None
+            and source_requirements_capture.requires_governed_knowledge
+            and work_envelope.request_class != RequestClass.GENERAL_CONVERSATION
+        ):
+            if not selected_knowledge_evidence and not preflight_governed_read_performed:
                 # FOURTH pre-4H correction pass: PAST ASSISTANT OUTPUT !=
                 # GOVERNED KNOWLEDGE. team_manager's own turn declared (via
                 # `record_source_requirements`, directly or via the
@@ -1956,6 +2816,26 @@ class ChatService:
                 # never delegated to incident_manager at all, or because
                 # its own free-form presentation did not carry a validated
                 # result forward faithfully.
+                #
+                # CONTROL-PLANE-SEQ-06 section 10 -- `not preflight_
+                # governed_read_performed` closes the ONE proven-redundant
+                # duplicate SEQ-04A itself disclosed: a deterministic
+                # preflight governed read that already completed with a
+                # REAL, validated specialist response (`ok`/`no_result` --
+                # never a deterministic fallback/failure, see `preflight_
+                # governed_read_performed`'s own SEQ-04A definition) can
+                # legitimately still have zero selected evidence (a
+                # genuine "not found" `no_result` outcome, per `enforce_
+                # governed_knowledge_at_completion`'s own docstring) --
+                # previously indistinguishable here from "never attempted
+                # at all," so this gate always re-ran the SAME deterministic
+                # call a second time, redundantly, for that one shape.
+                # `preflight_governed_read_performed=False` (preflight
+                # never ran -- e.g. `work_envelope.work_permitted` was
+                # `False`, or the preflight call itself raised/returned a
+                # deterministic fallback) leaves this branch's OWN
+                # behavior byte-for-byte unchanged -- still the sole,
+                # required safety net for that case.
                 governed_completion_needed = True
             else:
                 # DEF-0027 FINAL corrective pass (Fix #1): the pre-existing
@@ -2029,17 +2909,34 @@ class ChatService:
                     if source_requirements_capture.requires_teams
                     else None
                 )
-                # DEF-0026 corrective pass -- the SAME kind of durable,
-                # plain-session-state read `chat_topic` immediately above
-                # already performs for Teams, applied here for governed
-                # Knowledge: a prior, genuinely successful turn's own
-                # selected evidence identity (never prose, never an
-                # available-but-unselected item), re-validated in real
-                # time by `enforce_governed_knowledge_at_completion` itself
-                # before it is trusted for anything. See `backend/api/
-                # governed_evidence_continuity.py`'s own module docstring.
-                prior_governed_evidence = parse_last_selected_governed_evidence(
-                    refreshed_session.state.get(LAST_SELECTED_GOVERNED_EVIDENCE_STATE_KEY)
+                # LIVE-CORR-12D -- Request-Scoped Governed Evidence
+                # Continuity: prior evidence identity is read from durable
+                # session state ONLY when `governed_evidence_continuity_
+                # permitted` (computed earlier in this method) is `True` --
+                # i.e. THIS turn's own validated contract positively
+                # establishes it is continuing an existing governed
+                # operation (or genuinely answers/corrects a still-pending
+                # one). Otherwise BOTH are passed empty/`None`, so `enforce_
+                # governed_knowledge_at_completion`'s own, completely
+                # UNCHANGED revalidation/ambiguity logic sees zero stale
+                # candidates and falls straight through to a fresh,
+                # unscoped `incident_manager` run -- the real applicability
+                # narrowing gets a genuine chance to run for a genuinely
+                # new/unrelated request, instead of a stale prior document
+                # choice ever reaching the user. DEF-0026 corrective pass's
+                # own revalidation/deduplication/ambiguity machinery below
+                # this gate is completely untouched -- a prior, genuinely
+                # successful turn's own selected evidence identity (never
+                # prose, never an available-but-unselected item) is STILL
+                # re-validated in real time by `enforce_governed_knowledge_
+                # at_completion` itself before it is trusted for anything,
+                # exactly as before this pass, whenever this gate admits it.
+                prior_governed_evidence = (
+                    parse_last_selected_governed_evidence(
+                        refreshed_session.state.get(LAST_SELECTED_GOVERNED_EVIDENCE_STATE_KEY)
+                    )
+                    if governed_evidence_continuity_permitted
+                    else []
                 )
                 # 6A.14 Active Procedure Continuity Correction -- the
                 # single, dedicated active-procedure anchor (revalidated
@@ -2050,13 +2947,39 @@ class ChatService:
                 # absent) -- both consulted ONLY to deterministically
                 # narrow a genuinely ambiguous `prior_governed_evidence`
                 # set down to one, never to select evidence themselves.
-                active_procedure_anchor = parse_active_governed_procedure(
-                    refreshed_session.state.get(ACTIVE_GOVERNED_PROCEDURE_STATE_KEY)
+                # Gated by the SAME LIVE-CORR-12D continuity check as
+                # `prior_governed_evidence`, immediately above.
+                active_procedure_anchor = (
+                    parse_active_governed_procedure(refreshed_session.state.get(ACTIVE_GOVERNED_PROCEDURE_STATE_KEY))
+                    if governed_evidence_continuity_permitted
+                    else None
                 )
+                # Section 19's own explicit observability request -- safe,
+                # lifecycle-only diagnostic (request-class/lifecycle state,
+                # never raw user text or governed content). Distinguishes
+                # a genuinely NEW request that had stale prior evidence to
+                # ignore (`superseded_new_request`) from one that had none
+                # at all to begin with (`fresh_retrieval`) -- both take the
+                # identical code path below; the distinction is purely
+                # diagnostic.
+                if governed_evidence_continuity_permitted:
+                    evidence_continuity_state = "reused_same_request"
+                elif refreshed_session.state.get(LAST_SELECTED_GOVERNED_EVIDENCE_STATE_KEY) or refreshed_session.state.get(
+                    ACTIVE_GOVERNED_PROCEDURE_STATE_KEY
+                ):
+                    evidence_continuity_state = "superseded_new_request"
+                else:
+                    evidence_continuity_state = "fresh_retrieval"
+                _logger.info(
+                    "chat_service: governed_evidence_continuity=%s run_id=%s",
+                    evidence_continuity_state,
+                    sequencer.run_id,
+                )
+                governed_completion_run_id = f"{sequencer.run_id}::governed-completion"
                 final_text, selected_knowledge_evidence = await enforce_governed_knowledge_at_completion(
                     question=_remediation_question(message_text),
                     chat_topic=chat_topic,
-                    run_id=f"{sequencer.run_id}::governed-completion",
+                    run_id=governed_completion_run_id,
                     # B7 live-regression corrective pass -- this turn's own
                     # trusted image evidence (already validated once, into
                     # `content`, above) must remain available across this
@@ -2069,6 +2992,62 @@ class ChatService:
                     active_anchor=active_procedure_anchor,
                     request_contract_subject=request_contract_subject,
                 )
+                # LIVE-CORR-6 -- this remediation runs the REAL incident_
+                # manager under its OWN, DIFFERENT, suffixed run_id (above)
+                # -- never `sequencer.run_id` itself. `captured_
+                # troubleshooting_guidance` was already popped, using
+                # `sequencer.run_id`, much earlier in this method (the
+                # `finally` block following the ORIGINAL delegation) --
+                # BEFORE this remediation ever ran, so it could never have
+                # seen a guidance object this call is ABOUT to register.
+                # A real, live-confirmed defect: incident_manager's own
+                # `after_agent_callback` (evidence.py) genuinely registers
+                # a correctly-grounded `TroubleshootingGuidance` here (e.g.
+                # `interaction_mode=next_step`, an unauthorized command
+                # correctly stripped, `reason=unstructured_state_change`)
+                # under `governed_completion_run_id` -- but nothing ever
+                # read it back, so the 6A.14 execution-policy layer below
+                # (`enforce_response_mode_compatibility`/`enforce_
+                # execution_decision_on_guidance`) saw `captured_
+                # troubleshooting_guidance is None` and treated this turn
+                # as though NO structured guidance existed at all, firing
+                # `requires_unstructured_response_backstop` and discarding
+                # `final_text` above -- itself already the correct,
+                # grounding-corrected, safe troubleshooting answer -- in
+                # favor of the generic exact-command-style fallback. This
+                # pops the SAME run-scoped store this remediation's own
+                # incident_manager call just wrote to, under the EXACT
+                # run_id the call site above already uses -- no new
+                # correlation mechanism, no new safety framework, reusing
+                # the identical pop/discard pairing the original delegation
+                # already relies on immediately above in this method. A
+                # remediation that produced no structured guidance at all
+                # (an ordinary factual governed-knowledge answer, the
+                # common case) leaves `captured_troubleshooting_guidance`
+                # untouched, exactly as before.
+                remediation_troubleshooting_guidance = pop_troubleshooting_guidance(governed_completion_run_id)
+                discard_troubleshooting_guidance(governed_completion_run_id)
+                if remediation_troubleshooting_guidance is not None:
+                    captured_troubleshooting_guidance = remediation_troubleshooting_guidance
+                # CONTROL-PLANE-SEQ-06 -- same pop/discard pairing, for
+                # the SAME `governed_completion_run_id`, folded ADDITIVELY
+                # into this turn's own running accumulator.
+                known_rejected_commands_this_turn.update(pop_rejected_commands(governed_completion_run_id))
+                discard_rejected_commands(governed_completion_run_id)
+                # LIVE REGRESSION CORRECTIVE PASS -- the SAME pop/discard
+                # pairing immediately above, for the SAME `governed_
+                # completion_run_id`, for the sibling signal: was
+                # `final_text` (just assigned above) one of this
+                # remediation's own fixed, deterministic fallback texts,
+                # never a real (potentially-unvalidated) specialist
+                # summary. See `governed_knowledge_completion.py`'s own
+                # `_mark_governed_completion_deterministic_fallback`
+                # docstring for the full live-defect rationale this
+                # closes.
+                governed_completion_used_deterministic_fallback = pop_governed_completion_deterministic_fallback(
+                    governed_completion_run_id
+                )
+                discard_governed_completion_deterministic_fallback(governed_completion_run_id)
             except Exception:
                 _logger.warning(
                     "chat_service: governed-knowledge completion remediation raised -- failing closed run_id=%s",
@@ -2076,6 +3055,14 @@ class ChatService:
                 )
                 final_text = SAFE_COMPLETION_FAILURE_TEXT
                 selected_knowledge_evidence = []
+                # Defensive cleanup only -- see the success-path comment
+                # above for why this key can exist at all; never trusted
+                # here, since `final_text` was just forced to the safe
+                # failure text regardless of what (if anything) this
+                # remediation attempt managed to register before raising.
+                discard_troubleshooting_guidance(f"{sequencer.run_id}::governed-completion")
+                discard_governed_completion_deterministic_fallback(f"{sequencer.run_id}::governed-completion")
+                discard_rejected_commands(f"{sequencer.run_id}::governed-completion")
 
         # Phase 6A.14 (Deterministic Request Execution) -- derives what
         # this turn's runtime is ALLOWED to do from the validated,
@@ -2090,13 +3077,126 @@ class ChatService:
         # point in the whole turn that has simultaneous access to team_
         # manager's own real session state AND the turn's final
         # `TroubleshootingGuidance`.
-        execution_decision = derive_execution_decision(current_turn_request_contract, sequencer.run_id)
+        # LIVE-CORR-7 -- `captured_troubleshooting_guidance` (already
+        # popped above, INCLUDING this turn's own governed-completion
+        # remediation re-pop) is THIS turn's own real, already-grounded
+        # guidance, if any -- its `command` (when populated) is forwarded
+        # so a genuinely target-independent grounded operation (e.g. a
+        # system-wide alarm listing) is never blanket-assigned `unit_id`/
+        # `unit_type` requirements it does not actually need. `None`
+        # (no guidance captured this turn) preserves the exact prior,
+        # unchanged, conservative behavior.
+        grounded_command_candidate = (
+            captured_troubleshooting_guidance.command if captured_troubleshooting_guidance is not None else None
+        )
+        # LIVE-CORR-9 -- Exact-Command Continuation Loses Resolved
+        # Operation Identity: a command that evidence.py's OWN, separate,
+        # unchanged grounding correctly REJECTED (e.g. `GROUNDING_
+        # REJECTED` -- the model's own reconstructed proposal shared real
+        # token overlap with the active section but was not an exact
+        # verbatim match) leaves `grounded_command_candidate` `None` --
+        # confirmed live root cause: "no, i just need a cmd to run a check
+        # on alarms for ericsson" had its own reconstructed command
+        # correctly stripped, and `required_target_parameter_gaps`
+        # (LIVE-CORR-7) then had NOTHING to consult, falling CLOSED to the
+        # generic `unit_id`/`unit_type` blanket requirement even though
+        # the STRUCTURALLY RESOLVED operation (a system-wide alarm
+        # listing) never needed one. Section 8's own governing distinction:
+        # "is the candidate grounded" and "does this operation require a
+        # physical target" are separate questions -- absence of a
+        # SURVIVING command must not be treated as proof of the second.
+        #
+        # Reuses the EXISTING, revalidated, session-persisted active-
+        # procedure identity (6A.14 Active Procedure Continuity
+        # Correction, governed_evidence_continuity.py) -- never a new
+        # continuity mechanism, never text/keyword matching of the user's
+        # own words: THIS turn's own fresh resolution
+        # (`compute_fresh_active_procedure_anchor`, the SAME call already
+        # used for the end-of-turn anchor write, below) takes precedence;
+        # a PRIOR turn's still-valid anchor is the fallback -- mirroring
+        # that mechanism's own established "a turn that never establishes
+        # a new anchor relies on whatever a prior turn already validly
+        # set" precedent exactly. The RESOLVED section's own real,
+        # governed content (never the user's question, never a rejected/
+        # untrusted command string) is what `required_target_parameter_
+        # gaps` actually inspects -- a genuinely target-independent
+        # governed procedure's own text contains no unit-class identifier
+        # REGARDLESS of what the model's own rejected proposal happened
+        # to say. Still fails closed to the original blanket rule whenever
+        # no active section can be resolved at all (no regression for a
+        # turn that never established one).
+        if grounded_command_candidate is None:
+            active_section_key_for_target_cardinality = compute_fresh_active_procedure_anchor(
+                selected_knowledge_evidence, _remediation_question(message_text)
+            ) or parse_active_governed_procedure(refreshed_session.state.get(ACTIVE_GOVERNED_PROCEDURE_STATE_KEY))
+            if active_section_key_for_target_cardinality is not None:
+                for item in selected_knowledge_evidence:
+                    if (
+                        item.reference.knowledge_id == active_section_key_for_target_cardinality.knowledge_id
+                        and item.reference.version_label == active_section_key_for_target_cardinality.version_label
+                        and item.reference.section_id == active_section_key_for_target_cardinality.section_id
+                    ):
+                        grounded_command_candidate = item.section.content
+                        break
+        execution_decision = derive_execution_decision(
+            current_turn_request_contract,
+            sequencer.run_id,
+            grounded_command_candidate=grounded_command_candidate,
+            pending_governed_request=pending_governed_request,
+        )
         _logger.info(
-            "request_execution_decision status=%s may_emit_command=%s may_execute_action=%s run_id=%s",
+            "request_execution_decision status=%s request_class=%s may_emit_command=%s may_execute_action=%s run_id=%s",
             execution_decision.status,
+            execution_decision.request_class,
             execution_decision.may_emit_command,
             execution_decision.may_execute_action,
             sequencer.run_id,
+        )
+        # LIVE-CORR-11 -- computed here (where `execution_decision`/
+        # `current_turn_request_contract` are both available) but MERGED
+        # into `end_of_turn_state_delta` further below, alongside this
+        # method's other end-of-turn continuity writes (that dict is not
+        # constructed until later in this method) -- refreshed EVERY turn,
+        # never left stale. Built from the SAME effective contract
+        # (pending+current merge, if any applied) this turn's own decision
+        # was actually computed from -- never the raw, un-merged contract,
+        # so a corrected/replaced target (sections 9/10) is what survives
+        # into the next turn, not a stale prior value.
+        #
+        # LIVE-CORR-11 CORRECTIVE PASS -- ISSUE A: `ALLOW` for an `EXACT_
+        # COMMAND` decision now writes a `COMPLETED` (not cleared) pending
+        # record, retained for exactly one more turn so an immediate
+        # correction ("actually it is RRU-10") does not fall through the
+        # same `OPERATIONAL_INFORMATION`/`FACT` gap this milestone exists
+        # to close -- see `build_pending_governed_request_state_update`'s
+        # own docstring for the full, corrected lifecycle (also covers the
+        # `AMBIGUOUS`-with-a-resolved-subject case). Left `None` entirely
+        # (pending state read fresh next turn, untouched by this turn) when
+        # this turn produced no validated contract at all
+        # (`INVALID_CONTRACT`) -- a transient contract-recording failure
+        # must not silently discard a real, still-pending governed request
+        # (LIVE-CORR-10's own audit finding).
+        # LIVE-CORR-11 FINAL SAFETY CLOSURE -- Concern B: when THIS turn
+        # produced no validated contract at all (`current_turn_request_
+        # contract is None` -- INVALID_CONTRACT), `build_pending_governed_
+        # request_state_update` is never called (there is no decision/
+        # contract to build from) -- previously left `pending_governed_
+        # request_state_update` as an unconditional no-op `{}`, meaning a
+        # `COMPLETED` record could survive an intervening invalid turn
+        # and still be eligible for "immediate" correction on a LATER
+        # turn, violating that stage's own one-turn-only contract.
+        # `expire_completed_pending_on_invalid_contract` narrowly expires
+        # ONLY a `COMPLETED` record in this specific case -- an
+        # `UNRESOLVED` record (or no pending state at all) is still left
+        # completely untouched, preserving genuine clarification recovery
+        # across a transient contract-recording glitch.
+        pending_governed_request_state_update: dict[str, object] = (
+            build_pending_governed_request_state_update(
+                execution_decision,
+                resolve_effective_governed_contract(current_turn_request_contract, pending_governed_request),
+            )
+            if current_turn_request_contract is not None
+            else expire_completed_pending_on_invalid_contract(pending_governed_request)
         )
 
         if error is None and execution_decision.status == RequestExecutionStatus.UNSUPPORTED_CAPABILITY:
@@ -2140,102 +3240,547 @@ class ChatService:
             # variable is cleared.
             selected_knowledge_evidence = []
 
-        if error is None and final_text is not None:
-            # A5 final corrective pass -- the HARD, deterministic one-
-            # command-at-a-time override: if incident_manager populated
-            # `troubleshooting_guidance` anywhere in this turn (captured
-            # by evidence.py's own after_agent_callback the instant its
-            # structured response was parsed, regardless of which of the
-            # call paths above produced it), the final answer the user
-            # sees is UNCONDITIONALLY replaced with the deterministic
-            # Python rendering of that typed field -- never team_
-            # manager's own free-form presentation of it, which live
-            # testing proved does not reliably stay bounded to one
-            # action on its own. A turn that never populated the field
-            # (every non-troubleshooting request) is completely
-            # unaffected: `pop_troubleshooting_guidance` returns `None`
-            # and `final_text` is left exactly as team_manager produced
-            # it.
+        # ================================================================
+        # CONTROL-PLANE-SEQ-05 -- Command Authority Inventory (section 6)
+        # ================================================================
+        #
+        # Captured HERE, from `captured_troubleshooting_guidance` in its
+        # own CURRENT, still-untouched-by-anything-below state (this
+        # turn's own final merge of the main-Runner result and/or the
+        # SEQ-04A deterministic governed-read result -- already settled,
+        # well above this point) -- BEFORE `enforce_response_mode_
+        # compatibility`/`enforce_execution_decision_on_guidance` (both
+        # unmodified, immediately below) have any chance to discard or
+        # strip anything. `known_commands_this_turn` is therefore every
+        # exact command value THIS turn structurally knew about at all,
+        # regardless of whether a later gate ends up authorizing,
+        # discarding, or stripping it -- section 10's own "any command
+        # embedded inside an authorized procedure step is STILL separately
+        # subject to may_emit_command" requirement depends on this NOT
+        # being narrowed prematurely. `grounded_command_candidate` (LIVE-
+        # CORR-7/9, computed earlier, unmodified) is folded in too -- for
+        # NEXT_STEP mode it is normally the SAME value as `captured_
+        # troubleshooting_guidance.command`, but is included independently
+        # since it can also be populated from the active-procedure-anchor
+        # fallback (a distinct source `extract_known_commands_from_
+        # guidance` cannot see).
+        known_commands_this_turn = extract_known_commands_from_guidance(captured_troubleshooting_guidance)
+        if grounded_command_candidate:
+            known_commands_this_turn.add(grounded_command_candidate)
+        # CONTROL-PLANE-SEQ-06 section 2 -- folds in every command value
+        # this turn's own grounding already, structurally, rejected (see
+        # `known_rejected_commands_this_turn`'s own declaration/accumulation
+        # comments above) -- these can never be `authorized_commands_this_
+        # turn` (a rejected command is never re-authorized further below),
+        # so this union only ever WIDENS `prohibited_commands`, never
+        # narrows it.
+        known_commands_this_turn |= known_rejected_commands_this_turn
+        authorized_commands_this_turn: set[str] = set()
+
+        # ================================================================
+        # LIVE-CORR-14 -- RequestExecutionDecision IS THE SOLE RESPONSE-
+        # MODE AUTHORITY (sections 1-9)
+        # ================================================================
+        #
+        # OLD (shadowed) precedence, replaced by this block:
+        #
+        #     if captured_troubleshooting_guidance is not None:   # artifact
+        #         if status in (NEEDS_INFORMATION, AMBIGUOUS): ...
+        #         elif command_suppressed_by_policy: ...
+        #         elif rendered_guidance_text: ...
+        #         elif final_text is None: ...
+        #     elif response_mode_incompatible: ...                # artifact
+        #     elif governed_completion_used_deterministic_fallback:
+        #         ...                                             # sets NO text
+        #     elif requires_unstructured_response_backstop(...): ...
+        #
+        # Every one of those four top-level conditions is an ARTIFACT-SHAPE
+        # test, so the decision status was only ever consulted after an
+        # artifact had already claimed the turn. PROVEN LIVE FAILURE ("give
+        # me a command to restart an RRU"): `status=needs_information,
+        # missing_context=[unit_id, unit_type], may_emit_command=False`
+        # (correct) still finished `message_completed_emitted=False error_
+        # code=run_failure`, because a shape reaching one of the two
+        # text-less top-level branches (`governed_completion_used_
+        # deterministic_fallback`, or a guidance object with nothing
+        # renderable under a status the inner chain did not cover) made the
+        # clarification branch structurally unreachable.
+        #
+        # NEW precedence -- status FIRST, content SECOND:
+        #
+        #     RequestExecutionDecision   (authority)
+        #         -> response mode       (_select_response_mode, status only)
+        #             -> specialist/model content  (data for that mode)
+        #                 -> validate_final_output (final boundary)
+        #
+        # `requires_unstructured_response_backstop`, `command_suppressed_
+        # by_policy`, `rendered_guidance_text`, `response_mode_
+        # incompatible` and the governed-completion fallback signal all
+        # REMAIN -- but strictly DEMOTED to CONTENT selection inside the
+        # single `AUTHORIZED_RESPONSE` mode. None of them can grant
+        # authority to clarify, disambiguate, restrict, or fail any more.
+        #
+        # Unchanged by this pass: `RequestContract`, `RequestClass`,
+        # `PendingGovernedRequest`, the effective-governed-request merge,
+        # `WorkEnvelope`, governed retrieval, evidence selection,
+        # grounding, the rejected-command inventory, `derive_execution_
+        # decision`, `may_emit_command`/`may_execute_action`,
+        # `AuthorizedResponseContext`, `validate_final_output`, and action
+        # execution.
+        response_mode = _select_response_mode(execution_decision)
+
+        # LIVE-CORR-14.1 -- the final deterministic decision now decides
+        # whether a response-generation failure is actually relevant to this
+        # turn's user-visible response.
+        #
+        # NEEDS_INFORMATION / AMBIGUOUS -> CLARIFICATION is rendered from
+        # authoritative decision state below and is explicitly command/action
+        # forbidden. Therefore missing Runner prose (or a failure in that
+        # presentation-only stage) cannot veto the clarification.
+        #
+        # All other response modes still depend on their normal upstream
+        # content/state and retain the existing fail-closed behavior.
+        if response_generation_error is not None:
+            if (
+                response_mode == _ResponseMode.CLARIFICATION
+                and not execution_decision.may_emit_command
+                and not execution_decision.may_execute_action
+            ):
+                _logger.warning(
+                    "chat_service: deterministic clarification supersedes response-generation failure "
+                    "decision_status=%s run_id=%s",
+                    execution_decision.status,
+                    sequencer.run_id,
+                )
+                response_generation_error = None
+            elif error is None:
+                error = response_generation_error
+
+        final_response_path = "conversational"
+        # LIVE-CORR-14 section 13 -- every `run_failure` this method can
+        # emit must carry an explicit, safe reason (never raw content).
+        # `None` here means "no finalization-level failure": the generic
+        # `upstream_turn_failure` label is used at the log site for an
+        # `error` one of the EARLIER stages of this method already set
+        # (a Runner exception, a cancelled/superseded run, a trusted-
+        # presentation retry that still produced nothing, and so on --
+        # each of which already logs its own, more specific warning at
+        # the point it happened).
+        run_failure_reason: Optional[str] = None
+        # LIVE-CORR-13.1 section 9 / LIVE-CORR-14 section 13 -- diagnostic-
+        # only observability locals (never read by, and never influencing,
+        # any control-flow decision below -- populated as each stage
+        # actually runs, logged once just before the "no final text"
+        # failure so an empty-final-text turn is self-explanatory from the
+        # logs alone, without needing raw text/commands).
+        captured_guidance_present = captured_troubleshooting_guidance is not None
+        enforced_guidance_present = False
+        rendered_guidance_present = False
+        clarification_rendered_present = False
+        pre_mode_text_present = final_text is not None
+        # LIVE-CORR-13 -- this block (guidance rendering, the unstructured-
+        # response backstop, and the SEQ-05 final authority boundary/
+        # validator immediately below) MUST run whenever `error is None`,
+        # regardless of whether `final_text` already holds team_manager's
+        # own free text. LIVE evidence proved the previous `and final_text
+        # is not None` guard silently skipped this ENTIRE block for a turn
+        # whose Runner ended on a structured/tool-call event with no
+        # accompanying prose (the model's real, ordinary behavior after a
+        # specialist delegation; `_extract_final_text` correctly returns
+        # `None` for such an event). Every branch below already tolerates a
+        # `None` starting `final_text`.
+        if error is None:
+            # ============================================================
+            # STAGE 1 -- CONTENT PREPARATION (never authority)
+            # ============================================================
             #
-            # Phase 6A.14 -- BEFORE rendering, `enforce_execution_
-            # decision_on_guidance` applies the SEPARATE, ADDITIONAL
-            # layer above: DEF-0024/0026/0027's own `evidence.py`
-            # grounding already answered "IF a command may be shown, is
-            # THIS one actually grounded in the right procedure" (still
-            # completely unchanged, still fully in force); this answers
-            # "is the runtime even ALLOWED to show a command for this
-            # request AT ALL" (e.g. a real, live-target parameter the
-            # user never actually supplied is still missing) -- both
-            # must agree before a command reaches the user. A turn whose
-            # execution decision permits commands (the overwhelming
-            # majority) is completely unaffected.
-            # LIVE-CORR-3 -- DEF-0040 corrective pass (section 9's own
-            # "RequestContract and output-mode enforcement" requirement):
-            # BEFORE the existing may-emit-command gate below, confirm the
-            # guidance's own `interaction_mode` is even PERMITTED for the
-            # validated contract's `requested_output` (`execution_
-            # decision.requested_output` -- the SAME already-freshness-
-            # checked value `derive_execution_decision` itself populated,
-            # never a second, redundant read of `current_turn_request_
-            # contract`). A `FULL_PROCEDURE`-shaped response for a
-            # request validated as needing only `TROUBLESHOOTING_NEXT_
-            # STEP`/`EXACT_COMMAND` output is discarded here -- the exact
-            # live DEF-0040 defect shape (multiple conditional branches/
-            # commands shown together as though all currently
-            # executable). A turn whose contract genuinely permits
-            # `PROCEDURE_STEPS` (or has no guidance to check in the first
-            # place) is completely unaffected.
+            # Both enforcement calls are UNCHANGED, and still run for every
+            # mode, so this turn's own command inventories (`authorized_
+            # commands_this_turn`, feeding `AuthorizedResponseContext`
+            # below) are derived identically to before this pass -- what
+            # changed is only that their RESULTS no longer select the
+            # response mode.
+            #
+            # Phase 6A.14 -- `enforce_execution_decision_on_guidance`
+            # applies the layer above DEF-0024/0026/0027's own `evidence
+            # .py` grounding: grounding already answered "IF a command may
+            # be shown, is THIS one actually grounded in the right
+            # procedure"; this answers "is the runtime even ALLOWED to show
+            # a command for this request AT ALL." Both must agree before a
+            # command reaches the user.
+            # LIVE-CORR-3 -- DEF-0040: `enforce_response_mode_
+            # compatibility` first confirms the guidance's own
+            # `interaction_mode` is even PERMITTED for the validated
+            # contract's `requested_output` (`execution_decision.requested_
+            # output` -- the SAME already-freshness-checked value
+            # `derive_execution_decision` itself populated).
             captured_troubleshooting_guidance, response_mode_incompatible = enforce_response_mode_compatibility(
                 captured_troubleshooting_guidance, execution_decision
             )
+            command_suppressed_by_policy = False
+            rendered_guidance_text = ""
             if captured_troubleshooting_guidance is not None:
                 corrected_guidance, command_suppressed_by_policy = enforce_execution_decision_on_guidance(
                     captured_troubleshooting_guidance, execution_decision
                 )
-                final_text = render_troubleshooting_guidance(corrected_guidance)
-                if command_suppressed_by_policy:
-                    fallback_text = command_suppression_fallback_text(execution_decision)
-                    final_text = f"{final_text}\n\n{fallback_text}" if final_text else fallback_text
-            elif response_mode_incompatible:
+                enforced_guidance_present = bool(
+                    corrected_guidance.command
+                    or corrected_guidance.interpretation
+                    or corrected_guidance.next_action
+                    or corrected_guidance.evidence_requested
+                    or corrected_guidance.full_procedure_steps
+                )
+                # CONTROL-PLANE-SEQ-05 section 7 -- the exact grounded
+                # command allowlist: `enforce_execution_decision_on_
+                # guidance` (unmodified) already leaves `corrected_
+                # guidance` fully command-free whenever `execution_
+                # decision.may_emit_command` is `False` -- the explicit
+                # `if execution_decision.may_emit_command else set()`
+                # guard is deliberate, redundant defense-in-depth (section
+                # 4's own "structurally enforce this, never rely solely on
+                # an upstream strip") rather than a second, independently-
+                # drifting condition.
+                authorized_commands_this_turn = (
+                    extract_known_commands_from_guidance(corrected_guidance)
+                    if execution_decision.may_emit_command
+                    else set()
+                )
+                rendered_guidance_text = render_troubleshooting_guidance(corrected_guidance)
+                rendered_guidance_present = bool(rendered_guidance_text)
+
+            # ============================================================
+            # STAGE 2 -- MODE DISPATCH (status already decided this)
+            # ============================================================
+            if response_mode == _ResponseMode.CLARIFICATION:
+                # LIVE-CORR-14 section 4/5 -- ABSOLUTE. `NEEDS_INFORMATION`
+                # and `AMBIGUOUS` always render clarification/
+                # disambiguation from AUTHORITATIVE context, with ZERO
+                # consultation of guidance presence, guidance content,
+                # model prose, or a command candidate. This is the exact
+                # branch the live RRU turn could not reach: it now fires
+                # identically when `captured_guidance` is `None`, when it is
+                # an EMPTY object, when the command was `grounding_
+                # rejected`, when it was `cross_procedure` stripped, when
+                # the Runner produced no final text at all, and when the
+                # model emitted only a function call.
+                #
+                # LIVE-CORR-12E -- the renderer is the tool-free, policy-
+                # validated natural renderer; `execution_decision.missing_
+                # context` (never a raw model declaration) is the ONLY
+                # thing that can make it attempt rendering at all, and any
+                # renderer failure/field mismatch falls back to the exact
+                # same deterministic sentence (`command_suppression_
+                # fallback_text`) this call site always used -- so this
+                # branch structurally cannot produce empty text.
+                final_text = await render_command_suppression_text(
+                    execution_decision,
+                    run_id=sequencer.run_id,
+                    known_context=current_turn_request_contract.provided_context
+                    if current_turn_request_contract is not None
+                    else (),
+                )
+                final_response_path = "clarification"
+                clarification_rendered_present = True
+            elif response_mode == _ResponseMode.RESTRICTION:
+                # `UNSUPPORTED_CAPABILITY`. Its own deterministic override
+                # (`KNOWLEDGE_INVENTORY_UNSUPPORTED_TEXT`, applied earlier
+                # in this method -- ALREADY status-driven, unchanged) has
+                # normally already written `final_text`; the `is None`
+                # guard below reuses that SAME existing text rather than
+                # inventing new wording. What this mode CHANGES is only
+                # that a later guidance/prose branch can no longer shadow
+                # it: under the old chain, guidance for this status was
+                # discarded by `enforce_response_mode_compatibility` and the
+                # `response_mode_incompatible` branch then OVERWROTE the
+                # capability restriction with `FULL_PROCEDURE_NOT_
+                # PERMITTED_FALLBACK_TEXT`.
+                if final_text is None:
+                    final_text = KNOWLEDGE_INVENTORY_UNSUPPORTED_TEXT
+                final_response_path = "restriction"
+            elif response_mode == _ResponseMode.APPROVAL:
+                # `REQUIRES_APPROVAL` -- UNCHANGED behavior, deliberately.
+                # The approval boundary is its own separate, deterministic
+                # state machine (proposed write -> trusted approval/
+                # rejection -> deterministic re-authorized execution) and
+                # already owns this turn's user-facing proposal text and
+                # approval card; nothing here rewrites, re-renders, or
+                # second-guesses it. The only change is negative: guidance/
+                # prose shape can no longer divert an approval turn into a
+                # clarification or a `FULL_PROCEDURE_NOT_PERMITTED_
+                # FALLBACK_TEXT` restriction.
+                final_response_path = "approval"
+            elif response_mode == _ResponseMode.AUTHORIZED_RESPONSE:
+                # ========================================================
+                # LIVE-CORR-14 section 6 -- the ONLY mode that consumes
+                # specialist/model content. Priority INSIDE this mode is
+                # deliberately the pre-existing priority (guidance ->
+                # incompatibility -> governed-completion deterministic
+                # fallback -> unstructured backstop -> safe free text), so
+                # every currently-passing ALLOW behavior is preserved; the
+                # ONLY change is that this whole ladder is now REACHABLE
+                # ONLY for `status=ALLOW`.
+                # ========================================================
+                if captured_troubleshooting_guidance is not None:
+                    if command_suppressed_by_policy:
+                        # LIVE-CORR-12E -- policy-bound natural
+                        # clarification, appended to whatever safe guidance
+                        # text survived the suppression.
+                        fallback_text = await render_command_suppression_text(
+                            execution_decision,
+                            run_id=sequencer.run_id,
+                            known_context=current_turn_request_contract.provided_context
+                            if current_turn_request_contract is not None
+                            else (),
+                        )
+                        final_text = (
+                            f"{rendered_guidance_text}\n\n{fallback_text}" if rendered_guidance_text else fallback_text
+                        )
+                        final_response_path = "clarification_suppressed"
+                        clarification_rendered_present = True
+                    elif rendered_guidance_text:
+                        # A5 final corrective pass -- the HARD, one-command-
+                        # at-a-time override: the deterministic Python
+                        # rendering of the typed field, never team_manager's
+                        # own free-form presentation of it (live testing
+                        # proved that does not reliably stay bounded to one
+                        # action).
+                        final_text = rendered_guidance_text
+                        final_response_path = "guidance_render"
+                    elif final_text is None:
+                        # LIVE-CORR-13.1 -- guidance existed but rendered
+                        # nothing (e.g. `evidence.py`'s own upstream
+                        # grounding already emptied it for `cross_procedure_
+                        # evidence`) AND no earlier stage wrote a specific
+                        # explanation. LIVE-CORR-6's own sibling case (an
+                        # earlier stage this SAME turn already wrote a
+                        # correct, already-safe explanation) is still left
+                        # completely untouched by the `final_text is None`
+                        # guard.
+                        final_text = await render_command_suppression_text(
+                            execution_decision,
+                            run_id=sequencer.run_id,
+                            known_context=current_turn_request_contract.provided_context
+                            if current_turn_request_contract is not None
+                            else (),
+                        )
+                        final_response_path = "empty_guidance_fallback"
+                        clarification_rendered_present = True
+                    # else: `final_text` already holds an earlier stage's
+                    # own correct, already-safe explanation (LIVE-CORR-6's
+                    # original documented case) -- left untouched.
+                elif response_mode_incompatible:
+                    # LIVE-CORR-3/DEF-0040 -- a FULL_PROCEDURE-shaped (or
+                    # otherwise mode-incompatible) response for a request
+                    # validated as needing a different output shape. Still
+                    # decision-driven (`is_full_procedure_response_
+                    # permitted`/`is_next_step_response_permitted`/`is_
+                    # exact_command_response_permitted` all read the
+                    # DECISION, never the model's own claim) -- but now
+                    # scoped to `ALLOW`, so it can no longer shadow a
+                    # clarification, a capability restriction, or an
+                    # approval turn.
+                    _logger.warning(
+                        "chat_service: FULL_PROCEDURE guidance discarded -- validated contract requested_output=%s "
+                        "does not permit full-procedure output run_id=%s",
+                        execution_decision.requested_output,
+                        sequencer.run_id,
+                    )
+                    final_text = FULL_PROCEDURE_NOT_PERMITTED_FALLBACK_TEXT
+                    final_response_path = "full_procedure_not_permitted"
+                elif governed_completion_used_deterministic_fallback:
+                    # LIVE REGRESSION CORRECTIVE PASS -- LIVE session
+                    # 389c0d82-fff5-41c7-bd66-88e5623465c6: governed-
+                    # knowledge remediation this SAME turn returned its own
+                    # fixed, deterministic "which procedure do you mean"
+                    # text (its prior-turn evidence was itself ambiguous
+                    # across more than one candidate procedure and could
+                    # not be deterministically narrowed), so `final_text`
+                    # already holds a correct, never-model-generated
+                    # answer -- and the backstop below would otherwise
+                    # overwrite it with the strictly more generic, here
+                    # actively MISLEADING command-suppression text (no
+                    # target detail was missing; a DIFFERENT, governed-
+                    # evidence-level ambiguity was). Left untouched.
+                    final_response_path = "governed_completion_fallback"
+                elif requires_unstructured_response_backstop(
+                    execution_decision, troubleshooting_guidance_present=False
+                ):
+                    # Phase 6A.14 FINAL corrective pass -- ROOT CAUSE A
+                    # backstop, now strictly a CONTENT helper: no structured
+                    # guidance exists for this turn, so `evidence.py`'s own
+                    # DEF-0024/0027 grounding and `enforce_execution_
+                    # decision_on_guidance` both had NOTHING to examine,
+                    # and whatever free-form text the model produced cannot
+                    # be verified safe (it is never scanned/parsed -- see
+                    # that function's own docstring for why not). For
+                    # `ALLOW` it fires only for an operationally-shaped
+                    # request (LIVE-CORR-3B), leaving ordinary conversation
+                    # untouched. This is the direct, structural fix for the
+                    # real live defect where `accn FieldReplaceableUnit=
+                    # RRU-9 restartunit 1 1 1` reached the user via
+                    # ordinary `summary` prose.
+                    #
+                    # NOTE (LIVE-CORR-14 section 8): this helper is no
+                    # longer consulted for `NEEDS_INFORMATION`/`AMBIGUOUS`
+                    # at all -- the CLARIFICATION mode above already owns
+                    # those unconditionally -- so it can no longer be the
+                    # thing that grants (or, when shadowed, withholds) a
+                    # clarification.
+                    _logger.warning(
+                        "chat_service: operationally-shaped authorized response with no structured "
+                        "troubleshooting_guidance to enforce against -- replacing free-form response "
+                        "deterministically run_id=%s",
+                        sequencer.run_id,
+                    )
+                    final_text = await render_command_suppression_text(
+                        execution_decision,
+                        run_id=sequencer.run_id,
+                        known_context=current_turn_request_contract.provided_context
+                        if current_turn_request_contract is not None
+                        else (),
+                    )
+                    final_response_path = "unstructured_backstop"
+                    clarification_rendered_present = True
+                if not final_text:
+                    # LIVE-CORR-14 sections 6/11 -- THE HARD INVARIANT for a
+                    # VALID policy state: an `ALLOW` turn whose every
+                    # permitted content candidate turned out empty must NOT
+                    # become `final_text=None` + `run_failure` merely
+                    # because a specialist/model returned nothing
+                    # renderable. Reuses the EXISTING, deterministic,
+                    # Python-authored `SAFE_DECLARATION_FAILURE_TEXT`
+                    # (source_requirements_completion.py -- this codebase's
+                    # own established "cannot trust this turn's own
+                    # completion" wording, already used earlier in this
+                    # method for the analogous declaration failure) --
+                    # never new wording, never model-generated, and never a
+                    # reconstruction of a rejected command. The
+                    # operationally-shaped shapes are already covered, more
+                    # specifically, by the branches above; this is the
+                    # residual non-operational case that previously fell
+                    # through to `run_failure`.
+                    #
+                    # `not final_text` (never `is None`) deliberately also
+                    # covers an EMPTY-STRING candidate: `_extract_final_text`
+                    # can never produce one, but a deterministic upstream
+                    # stage returning `""` would otherwise reach
+                    # `MESSAGE_COMPLETED` as a blank assistant message --
+                    # section 11's own invariant is NON-EMPTY, not merely
+                    # non-`None`.
+                    final_text = SAFE_DECLARATION_FAILURE_TEXT
+                    final_response_path = "authorized_response_empty_fallback"
+            else:
+                # `UNRESOLVED_CONTRACT` (`INVALID_CONTRACT`) -- see
+                # `_ResponseMode.UNRESOLVED_CONTRACT`'s own docstring: the
+                # pre-existing conservative pass-through is retained
+                # deliberately (both candidate deterministic-restriction
+                # designs were already audited and rejected against this
+                # repository's own real test suite, and a turn that
+                # produced no model output at all resolves to this status
+                # and must keep failing closed as a genuine non-response).
+                final_response_path = "unresolved_contract"
+
+            # ============================================================
+            # CONTROL-PLANE-SEQ-05 -- ONE FINAL AUTHORITY BOUNDARY (§24)
+            # ============================================================
+            #
+            # Runs UNCONDITIONALLY, on whatever `final_text` ended up being
+            # after EVERY branch above -- the deterministic guidance
+            # render, any of the deterministic fallback/clarification
+            # texts (all already safe by construction; this check on them
+            # is a costless no-op, never special-cased away), or the one
+            # remaining ordinary-conversational free-text path (`known_
+            # commands_this_turn` is empty there, so this is ALSO a costless
+            # no-op -- section 18's own "lightweight for genuine general
+            # conversation" requirement). No response path is exempted --
+            # this is the single choke point every path already converges
+            # into before `MESSAGE_COMPLETED`, never a second, path-
+            # specific validator.
+            authorized_response_context = build_authorized_response_context(
+                execution_decision,
+                authorized_commands=authorized_commands_this_turn,
+                known_commands=known_commands_this_turn,
+            )
+            final_text, final_output_validated = validate_final_output(
+                final_text, execution_decision, authorized_response_context
+            )
+            if not final_output_validated:
+                # Safe diagnostic only -- never the rejected text itself,
+                # never a command value (section 16's own "do not leak the
+                # rejected content inside the explanation," applied here to
+                # this turn's own logs too).
                 _logger.warning(
-                    "chat_service: FULL_PROCEDURE guidance discarded -- validated contract requested_output=%s "
-                    "does not permit full-procedure output run_id=%s",
-                    execution_decision.requested_output,
+                    "chat_service: final output validation rejected a known-unauthorized command in the "
+                    "candidate response -- replaced with the existing deterministic command-suppression "
+                    "fallback run_id=%s",
                     sequencer.run_id,
                 )
-                final_text = FULL_PROCEDURE_NOT_PERMITTED_FALLBACK_TEXT
-            elif requires_unstructured_response_backstop(execution_decision, troubleshooting_guidance_present=False):
-                # Phase 6A.14 FINAL corrective pass -- ROOT CAUSE A
-                # backstop: no `troubleshooting_guidance` exists for this
-                # turn at all (the branch above never ran), so `evidence
-                # .py`'s own DEF-0024/0027 grounding and `enforce_
-                # execution_decision_on_guidance` both had NOTHING to
-                # examine -- yet this turn's own CURRENT, FRESH contract
-                # positively shows unresolved target/condition context
-                # (`execution_decision.status` is `NEEDS_INFORMATION` or
-                # `AMBIGUOUS`). Whatever free-form text team_manager/
-                # incident_manager actually produced (`final_text`,
-                # already computed above) cannot be verified safe --
-                # never scanned/parsed (see `requires_unstructured_
-                # response_backstop`'s own docstring for why not) --  so
-                # it is replaced, unconditionally, with the SAME
-                # deterministic clarification `enforce_execution_
-                # decision_on_guidance` would have produced had
-                # structured guidance existed to strip. This is the
-                # direct, structural fix for the real live defect where
-                # `accn FieldReplaceableUnit=RRU-9 restartunit 1 1 1`/
-                # `...AAS-1...` reached the user via ordinary `summary`
-                # prose, entirely unvalidated by any existing safeguard.
-                _logger.warning(
-                    "chat_service: unresolved target context with no structured troubleshooting_guidance to "
-                    "enforce against -- replacing free-form response deterministically run_id=%s",
-                    sequencer.run_id,
-                )
-                final_text = command_suppression_fallback_text(execution_decision)
+                final_response_path = "final_output_validator_fallback"
+
+            # LIVE-CORR-13.1 section 9 -- pure, side-effect-free re-
+            # derivation for logging only (never re-used for control flow,
+            # never itself gating anything above): makes an empty-final-
+            # text turn self-explanatory from the logs alone.
+            clarification_required = execution_decision.status in (
+                RequestExecutionStatus.NEEDS_INFORMATION,
+                RequestExecutionStatus.AMBIGUOUS,
+            )
+            response_backstop_required = requires_unstructured_response_backstop(
+                execution_decision, troubleshooting_guidance_present=captured_guidance_present
+            )
+
+            # LIVE-CORR-13/13.1 + LIVE-CORR-14 section 13 -- finalization
+            # observability. Safe metadata only: never `final_text`
+            # itself, never a command value, never the user's own
+            # message. `selected_response_mode` is the one field that
+            # makes the new authority order directly auditable from a
+            # live log line: it is derived from `decision_status` ALONE,
+            # so a line whose mode does not match its status would
+            # itself be the defect.
+            _logger.info(
+                "chat_service: finalization final_response_path=%s decision_status=%s "
+                "selected_response_mode=%s request_class=%s "
+                "captured_guidance_present=%s enforced_guidance_present=%s rendered_guidance_present=%s "
+                "clarification_required=%s clarification_rendered_present=%s response_backstop_required=%s "
+                "runner_text_present=%s candidate_response_present=%s final_text_length=%d "
+                "final_output_validator_passed=%s "
+                "authorized_command_count=%d prohibited_command_count=%d run_id=%s",
+                final_response_path,
+                execution_decision.status,
+                response_mode,
+                execution_decision.request_class,
+                captured_guidance_present,
+                enforced_guidance_present,
+                rendered_guidance_present,
+                clarification_required,
+                clarification_rendered_present,
+                response_backstop_required,
+                pre_mode_text_present,
+                final_text is not None,
+                len(final_text) if final_text is not None else 0,
+                final_output_validated,
+                len(authorized_response_context.authorized_commands),
+                len(authorized_response_context.prohibited_commands),
+                sequencer.run_id,
+            )
 
         if error is None and final_text is None:
             # A turn that produced no final text at all is itself an
             # unexpected runtime condition, not a user input problem.
+            #
+            # LIVE-CORR-14 section 11 -- STILL REACHABLE, deliberately,
+            # for exactly two shapes, and no longer for any VALID policy
+            # state: (a) `UNRESOLVED_CONTRACT`/`INVALID_CONTRACT` -- a
+            # turn whose model produced no output at all and recorded no
+            # contract (see `_ResponseMode.UNRESOLVED_CONTRACT`), and
+            # (b) `APPROVAL`, whose user-facing proposal text is owned by
+            # the separate approval state machine. Every other mode now
+            # guarantees a non-empty `final_text` before this point:
+            # CLARIFICATION always renders (the deterministic sentence is
+            # its own fallback), RESTRICTION always has its deterministic
+            # text, and AUTHORIZED_RESPONSE ends in an explicit safe
+            # fallback.
+            run_failure_reason = "no_final_text_after_response_mode_dispatch"
             error = ("run_failure", "The assistant did not produce a response. Please try again.")
 
         if not status_cleared:
@@ -2247,6 +3792,15 @@ class ChatService:
             if contributors_task is not None and not contributors_task.done():
                 contributors_task.cancel()
             code, message = error
+            _logger.info(
+                "chat_service: finalization message_completed_emitted=False error_code=%s "
+                "run_failure_reason=%s selected_response_mode=%s decision_status=%s run_id=%s",
+                code,
+                run_failure_reason or "upstream_turn_failure",
+                response_mode,
+                execution_decision.status,
+                sequencer.run_id,
+            )
             yield sequencer.build(StreamEventType.ERROR, {"code": code, "message": message})
             failed_trace = trace_recorder.record(**response_failed_trace_step())
             if failed_trace is not None:
@@ -2450,6 +4004,34 @@ class ChatService:
             if turn_source_references_delta is not None:
                 end_of_turn_state_delta[TURN_SOURCE_REFERENCES_STATE_KEY] = turn_source_references_delta
 
+            # LIVE-CORR-12D -- Request-Scoped Governed Evidence Continuity,
+            # section 13's own explicit "minimum explicit supersession/
+            # clear behavior" requirement. `governed_completion_needed`
+            # (computed earlier in this method) combined with `not
+            # governed_evidence_continuity_permitted` means THIS turn was
+            # POSITIVELY confirmed, by its own validated contract, to be a
+            # fresh/unrelated governed request -- NOT a continuation of
+            # whatever prior evidence the two keys below may still hold.
+            # Written FIRST, before the two builders immediately below --
+            # a real, fresh, non-empty selection THIS turn (the ordinary
+            # successful case) still overwrites this clear with its own
+            # real identity via those same builders' own `.update()` calls,
+            # exactly as it always has; this clear only ever has a lasting
+            # effect when this turn's own fresh retrieval genuinely found
+            # nothing to replace it with (e.g. a "not found" outcome), so a
+            # stale, unrelated anchor can never silently outlive the
+            # request that made it stale. Deliberately narrow -- never a
+            # blind clear on every empty selection (section 13's own
+            # explicit "do not clear evidence blindly" prohibition): a
+            # clarification-answer/diagnostic-result/same-procedure-next-
+            # step turn never reaches `governed_completion_needed` with
+            # `governed_evidence_continuity_permitted=False` in the first
+            # place (see `is_governed_evidence_continuity_permitted`'s own
+            # docstring), so continuity is never disturbed for those cases.
+            if governed_completion_needed and not governed_evidence_continuity_permitted:
+                end_of_turn_state_delta[LAST_SELECTED_GOVERNED_EVIDENCE_STATE_KEY] = None
+                end_of_turn_state_delta[ACTIVE_GOVERNED_PROCEDURE_STATE_KEY] = None
+
             # DEF-0026 corrective pass -- written ONLY from this turn's own
             # trusted, already-provenance-validated `selected_knowledge_
             # evidence` (the SAME list `knowledge_sources` above was just
@@ -2477,6 +4059,15 @@ class ChatService:
                     compute_fresh_active_procedure_anchor(selected_knowledge_evidence, _remediation_question(message_text))
                 )
             )
+            # LIVE-CORR-11 -- Pending Governed Request Continuity: merges
+            # the update computed earlier in this method (alongside
+            # `execution_decision`, where the fields it needs were already
+            # available) into this SAME single end-of-turn write. Empty
+            # (`{}`) whenever this turn produced no validated contract at
+            # all -- see that computation's own comment for why pending
+            # state is deliberately left untouched, not cleared, in that
+            # case.
+            end_of_turn_state_delta.update(pending_governed_request_state_update)
 
             # 6A.14A -- PERSIST BEFORE ANNOUNCE: a failure here (including
             # the conflict case detected above) must never let a live
@@ -2515,6 +4106,11 @@ class ChatService:
                 await self._best_effort_mark_turn_failed(session_id, user_id, turn_invocation_id)
                 if contributors_task is not None and not contributors_task.done():
                     contributors_task.cancel()
+                _logger.info(
+                    "chat_service: finalization message_completed_emitted=False error_code=run_failure "
+                    "reason=canonical_persistence_failed run_id=%s",
+                    sequencer.run_id,
+                )
                 yield sequencer.build(
                     StreamEventType.ERROR,
                     {
@@ -2529,6 +4125,7 @@ class ChatService:
                 perf.log_duration("total_run", perf.elapsed_seconds())
                 return
 
+        _logger.info("chat_service: finalization message_completed_emitted=True run_id=%s", sequencer.run_id)
         yield sequencer.build(StreamEventType.MESSAGE_COMPLETED, message_completed_data)
 
         pending_action = map_pending_action(refreshed_session.state)

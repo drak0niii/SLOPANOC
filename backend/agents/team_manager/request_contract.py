@@ -84,6 +84,34 @@ state architecture -- `tool_context.state` is ALREADY guaranteed
 per-session, never cross-session, the SAME guarantee `selected_teams_
 chat_id`/`last_teams_evidence`/DEF-0026's own store already rely on. No
 new isolation mechanism was built or is needed.
+
+LIVE-CORR-8 -- REQUEST CLASS, AND HOW THE EXISTING FIELDS MAP TO THE
+CONCEPTUAL `target`/`parameters` DIMENSIONS: `request_class` (below) is
+the NEW, authoritative governance/risk-class dimension, deliberately
+SEPARATE from `intent` (the semantic goal within that class) and
+`requested_output` (the requested answer shape) -- see `RequestClass`'s
+own docstring for the five closed classes and `derive_request_class`'s
+own docstring for the deterministic derivation. This pass does NOT
+introduce dedicated `target`/`parameters` fields -- doing so would be a
+broader schema migration than this defect requires (per instruction,
+"may establish the clean boundary without fully migrating every
+persisted field"). Instead, the EXISTING structured representation
+already carries both concepts, and the mapping is:
+
+  target      = the `provided_context` entry (if any) named
+                `TARGET_IDENTIFIER_PARAMETER_NAME` ("unit_id") -- the
+                one CONCRETE entity/object a request may concern.
+  parameters  = every OTHER `provided_context` entry (e.g. `unit_type`,
+                or any other operation-specific value the user
+                genuinely supplied) plus the corresponding names in
+                `missing_context` for whatever has not yet been
+                supplied -- see `required_target_parameter_gaps`
+                (LIVE-CORR-7) for how these are derived per-operation,
+                never as one generic, class-wide slot list.
+
+`provided_context`/`missing_context` therefore already ARE the
+`target`/`parameters` representation this module uses -- this docstring
+documents the boundary rather than renaming the fields.
 """
 from __future__ import annotations
 
@@ -97,6 +125,57 @@ from backend.api.turn_context import current_run_id
 from backend.gateway.safe_error import validation_error
 
 _logger = logging.getLogger(__name__)
+
+
+class RequestClass:
+    """LIVE-CORR-8 -- Request Class Must Be the Authoritative Governance
+    Boundary. Exactly FIVE closed, top-level governance/risk classes --
+    never a sixth without explicit architectural justification.
+    `RequestIntent`/`RequestedOutput` remain what they always were
+    (semantic goal / answer shape) -- `request_class` is the NEW,
+    SEPARATE governance dimension this milestone establishes, DERIVED
+    deterministically (`derive_request_class`, below), never trusted
+    merely because the model declared it.
+
+    GENERAL_CONVERSATION -- normal conversational text only; no
+      operational claim, procedure, command, or execution authority.
+    OPERATIONAL_INFORMATION -- normal text or grounded operational
+      facts; never automatically troubleshooting/command/execution
+      authority. Target conditional.
+    PROCEDURE_TROUBLESHOOTING -- grounded operational information or
+      procedure/troubleshooting steps; command content remains
+      SEPARATELY controlled (this class alone never grants exact-command
+      authority). Target conditional on intent.
+    EXACT_COMMAND -- an exact command, ONLY once the operation is
+      resolved, required target/parameters (if applicable) are
+      resolved, and grounding/applicability agree. Target usually, not
+      universally, required. Granting this class alone never grants
+      execution authority.
+    ACTION -- actual execution; requires target, parameters,
+      applicability, permission, tool availability, risk controls, and
+      approval where required, before policy may ever return EXECUTE.
+
+    `KNOWLEDGE_INVENTORY` (a legacy `RequestIntent`/`RequestedOutput`
+    concept, kept for backwards compatibility) maps into
+    `OPERATIONAL_INFORMATION` -- it never becomes a sixth class.
+    """
+
+    GENERAL_CONVERSATION = "general_conversation"
+    OPERATIONAL_INFORMATION = "operational_information"
+    PROCEDURE_TROUBLESHOOTING = "procedure_troubleshooting"
+    EXACT_COMMAND = "exact_command"
+    ACTION = "action"
+
+
+_VALID_REQUEST_CLASSES = frozenset(
+    {
+        RequestClass.GENERAL_CONVERSATION,
+        RequestClass.OPERATIONAL_INFORMATION,
+        RequestClass.PROCEDURE_TROUBLESHOOTING,
+        RequestClass.EXACT_COMMAND,
+        RequestClass.ACTION,
+    }
+)
 
 
 class RequestIntent:
@@ -218,6 +297,19 @@ class RequestContract(BaseModel):
     action_requested: bool = False
     approval_required: bool = False
     ambiguity: bool = False
+    request_class: Optional[str] = None
+    """LIVE-CORR-8 -- the authoritative governance class. Mirrors `run_id`
+    's own established "deliberately NOT a parameter of `record_request_
+    contract` -- the model can never set or spoof it" pattern exactly:
+    ADK's auto-generated tool schema is derived only from that function's
+    own parameters, and this field is never one of them. Populated
+    ENTIRELY server-side, by `validate_and_persist_request_contract`,
+    from `derive_request_class`'s own deterministic output -- never
+    trusted from the model, because there is nothing FOR the model to
+    set in the first place. See `RequestClass`'s own docstring for the
+    five governance classes, and `derive_request_class`'s own docstring
+    for exactly how `intent`/`requested_output`/`action_requested`/
+    `subject` combine to produce it."""
     run_id: Optional[str] = None
     """Phase 6A.14 -- the CURRENT-TURN freshness marker. Deliberately NOT
     a parameter of `record_request_contract` (the model can never set or
@@ -243,6 +335,13 @@ class RequestContract(BaseModel):
     def _valid_requested_output(cls, value: str) -> str:
         if value not in _VALID_REQUESTED_OUTPUTS:
             raise ValueError(f"requested_output must be one of: {sorted(_VALID_REQUESTED_OUTPUTS)}")
+        return value
+
+    @field_validator("request_class")
+    @classmethod
+    def _valid_request_class(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and value not in _VALID_REQUEST_CLASSES:
+            raise ValueError(f"request_class must be one of: {sorted(_VALID_REQUEST_CLASSES)}")
         return value
 
     @field_validator("subject")
@@ -361,19 +460,424 @@ def is_operationally_shaped_request(intent: str, requested_output: str) -> bool:
     return intent in TARGET_SPECIFIC_INTENTS or requested_output in _OPERATIONAL_OUTPUT_SHAPES
 
 
-_TARGET_TYPE_PARAMETER_NAME = "unit_type"
-_TARGET_IDENTIFIER_PARAMETER_NAME = "unit_id"
+class RequestScope:
+    """LIVE-CORR-5 -- General Conversation Must Not Trigger Operational
+    Command Gating. A closed, two-value, PURELY DETERMINISTIC scope
+    derived from an already-validated contract's own `intent`/
+    `requested_output`/`action_requested` (never a model-set field, never
+    a third source of truth to keep in sync) -- see `request_scope`,
+    below, for the derivation. `GENERAL` means "this turn carries no
+    operational/governed-procedure content at all" (a greeting, "who are
+    you and what can you do?", a plain factual question with no subject);
+    `OPERATIONAL` means "this turn's own classification concerns a
+    specific governed procedure/command/troubleshooting/action/Knowledge-
+    catalog request," where subject/ambiguity/target-parameter safety
+    genuinely apply. This is NOT a new taxonomy -- it is a name for a
+    distinction `is_operationally_shaped_request` (and, separately,
+    `derive_execution_decision`'s own ACTION/KNOWLEDGE_INVENTORY branches)
+    already made; see `request_scope`'s own docstring for exactly how the
+    two combine.
+    """
+
+    GENERAL = "general"
+    OPERATIONAL = "operational"
+
+
+def request_scope(intent: str, requested_output: str, action_requested: bool = False) -> str:
+    """LIVE-CORR-5 -- the single, deterministic derivation of `RequestScope`
+    for an already-validated contract. Never model-set, never a free-text/
+    keyword/phrase judgment of any kind -- purely a function of already-
+    validated, already-closed-vocabulary `intent`/`requested_output`/
+    `action_requested` fields, exactly the same inputs `is_operationally_
+    shaped_request`/`derive_execution_decision`'s own ACTION/KNOWLEDGE_
+    INVENTORY branches already read.
+
+    `OPERATIONAL` whenever EITHER:
+      - `is_operationally_shaped_request(intent, requested_output)` holds
+        (a COMMAND/TROUBLESHOOTING/PROCEDURE intent, or a command/
+        procedure/troubleshooting-shaped `requested_output` -- the same
+        signal DEF-0037's own fix already established), OR
+      - `intent` is `ACTION`/`KNOWLEDGE_INVENTORY`, or `action_requested`
+        is `True` -- both are ALREADY governed by their own, separate,
+        unconditional, earlier-checked branches in `derive_execution_
+        decision` regardless of subject/ambiguity, so classifying them
+        `OPERATIONAL` here preserves that existing, tested behavior
+        byte-for-byte (this function only ever NARROWS which requests are
+        additionally gated by `derive_execution_decision`'s own
+        `contract.ambiguity` early-return -- see that function's own
+        LIVE-CORR-5 comment -- never widens ACTION/KNOWLEDGE_INVENTORY's
+        already-unconditional handling).
+
+    `GENERAL` otherwise -- in practice, exactly `intent=INFORMATION,
+    requested_output=FACT` with no action requested (every other
+    `RequestIntent`/`RequestedOutput` combination is already claimed by
+    one of the two `OPERATIONAL` conditions above): a plain conversational
+    or informational exchange with no operational/governed-procedure
+    purpose. A `GENERAL`-scope request legitimately has no `subject` and
+    no meaningful notion of "ambiguity requiring operational
+    clarification" -- see `derive_execution_decision`'s own use of this
+    function for the concrete consequence.
+    """
+    if is_operationally_shaped_request(intent, requested_output):
+        return RequestScope.OPERATIONAL
+    if intent in (RequestIntent.ACTION, RequestIntent.KNOWLEDGE_INVENTORY) or action_requested:
+        return RequestScope.OPERATIONAL
+    return RequestScope.GENERAL
+
+
+def derive_request_class(
+    intent: str,
+    requested_output: str,
+    action_requested: bool = False,
+    subject: Optional[str] = None,
+) -> str:
+    """LIVE-CORR-8 -- the single, PURE, deterministic derivation of
+    `RequestClass` -- the authoritative governance boundary. Never model-
+    set, never a free-text/keyword/phrase judgment: purely a function of
+    already-validated, already-closed-vocabulary `intent`/`requested_
+    output`/`action_requested`/`subject` fields.
+
+    CONFIRMED LIVE ROOT CAUSE this closes: "give me the exact command to
+    list current alarms" produced `intent=procedure, requested_output=
+    exact_command` -- a combination NEITHER `is_exact_command_response_
+    permitted` (required `intent==COMMAND`) NOR `is_full_procedure_
+    response_permitted`/`is_next_step_response_permitted` (both require a
+    DIFFERENT `requested_output`) ever authorized, so the correctly-
+    grounded `EXACT_COMMAND`-shaped guidance was discarded and replaced
+    with `FULL_PROCEDURE_NOT_PERMITTED_FALLBACK_TEXT` -- text about a
+    procedure the user never asked to see. `request_class` decouples
+    "what governance class does this output shape belong to" from
+    "which specific `RequestIntent` label the model happened to attach,"
+    exactly per section 7's own "intent = semantic goal within class,
+    request_class = governance dimension" split.
+
+    Evaluated in a fixed, closed order (never ambiguous, never content-
+    dependent):
+
+      1. `ACTION` -- `intent==ACTION`, `action_requested`, or `requested_
+         output==ACTION` (any one signal is enough -- mirrors `request_
+         scope`'s own established "ACTION is unconditionally its own
+         class" precedent).
+      2. `EXACT_COMMAND` -- `intent==COMMAND` OR `requested_output==
+         EXACT_COMMAND` (a deliberate OR, matching `is_operationally_
+         shaped_request`'s own DEF-0037 "intent labels cannot bypass
+         safety" argument: `requested_output` alone is enough regardless
+         of how the model classified `intent`, and vice versa).
+      3. `PROCEDURE_TROUBLESHOOTING` -- `intent` in `{TROUBLESHOOTING,
+         PROCEDURE}` OR `requested_output` in `{TROUBLESHOOTING_NEXT_
+         STEP, PROCEDURE_STEPS}`. THIS is the specific guarantee LIVE-
+         CORR-6 depends on: selected EVIDENCE containing a command never
+         enters this derivation at all (only the validated CONTRACT's own
+         `intent`/`requested_output` do) -- a genuine troubleshooting
+         request never becomes `EXACT_COMMAND` merely because the
+         governed procedure it cites happens to contain one.
+      4. `OPERATIONAL_INFORMATION` -- `intent==KNOWLEDGE_INVENTORY` OR
+         `requested_output==KNOWLEDGE_LIST` (the legacy Knowledge-
+         inventory concept, kept for backwards compatibility -- mapped
+         here, never promoted to a sixth class, per `RequestClass`'s own
+         docstring), OR a resolved `subject` (a real topic/alarm/procedure
+         name the model could name -- mirrors `is_operationally_shaped_
+         request`'s own already-established "resolved subject" signal,
+         reused here rather than inventing a new one).
+      5. `GENERAL_CONVERSATION` -- otherwise: no operational intent, no
+         operational output shape, no resolved subject. In practice,
+         exactly a plain conversational/informational exchange with
+         nothing governed to resolve (a greeting, "who are you and what
+         can you do?").
+
+    Every branch is fail-SAFE, never fail-open: the WORST a wrong
+    classification can do is grant `OPERATIONAL_INFORMATION` (still no
+    command/troubleshooting/action authority) when `GENERAL_CONVERSATION`
+    would have been more precise, or vice versa -- neither direction ever
+    grants command, procedure, or execution authority by itself.
+    """
+    if intent == RequestIntent.ACTION or action_requested or requested_output == RequestedOutput.ACTION:
+        return RequestClass.ACTION
+    if intent == RequestIntent.COMMAND or requested_output == RequestedOutput.EXACT_COMMAND:
+        return RequestClass.EXACT_COMMAND
+    if intent in (RequestIntent.TROUBLESHOOTING, RequestIntent.PROCEDURE) or requested_output in (
+        RequestedOutput.TROUBLESHOOTING_NEXT_STEP,
+        RequestedOutput.PROCEDURE_STEPS,
+    ):
+        return RequestClass.PROCEDURE_TROUBLESHOOTING
+    if intent == RequestIntent.KNOWLEDGE_INVENTORY or requested_output == RequestedOutput.KNOWLEDGE_LIST:
+        return RequestClass.OPERATIONAL_INFORMATION
+    if subject:
+        return RequestClass.OPERATIONAL_INFORMATION
+    return RequestClass.GENERAL_CONVERSATION
+
+
+# =============================================================================
+# LIVE-CORR-12C -- Fresh RequestContract on Presentation Turns
+# =============================================================================
+#
+# THE GAP THIS CLOSES: `presentation_team_manager` (agent.py) is a
+# deliberate `.model_copy()` of `team_manager` with `tools=[]` -- the R1
+# FIX's own structural guarantee that a turn presenting an already-
+# validated `TrustedSpecialistResult` can never re-delegate. Because
+# `record_request_contract` is one of the tools stripped, THAT turn
+# cannot call it -- `VALIDATED_REQUEST_CONTRACT_STATE_KEY` is therefore
+# left holding whatever a PRIOR, genuinely-model-driven turn wrote,
+# stamped with THAT prior turn's own `run_id`. `derive_execution_
+# decision`'s freshness check (correct, and NEVER weakened by this pass --
+# see that function's own docstring) then correctly rejects it as
+# `INVALID_CONTRACT` for the CURRENT turn -- proven, live-reproducible,
+# and root-caused by the LIVE-CORR-12A architectural audit.
+#
+# THE ONLY REAL TRIGGER FOR THIS PATH (audited, confirmed by exhaustive
+# grep of `chat_service.py`): `specialist_result_state_written` is set
+# `True` in exactly ONE place -- after a resumed `ResolvedReadContinuation`
+# (a SelectionCard-driven Teams-read resumption) successfully executes,
+# THIS SAME turn, via `_execute_read_continuation`. This is never a
+# generic "any trusted specialist result" mechanism.
+#
+# THE FIX: `ResolvedReadContinuation` (backend/selection/schemas.py) is
+# ALREADY a fully deterministic, server-resolved turn description --
+# every field (`conversation_target`, `operation`, `selected_chat_id`/
+# `selected_chat_topic`, `question`, `requested_time_range`) is copied
+# verbatim from already-resolved selection state, NEVER re-derived from
+# user text or a model call (see that schema's own docstring). It can
+# therefore NEVER concern an operational command/action -- it is always a
+# read-only presentation of Teams content a specialist call already
+# retrieved and validated THIS SAME turn. `build_deterministic_read_
+# continuation_contract`, below, synthesizes THIS turn's own
+# `RequestContract` directly from that already-known fact -- no model
+# call, no tool, no LLM involvement of any kind -- so `presentation_team_
+# manager`'s own deliberately tool-free design is never touched or
+# widened merely to solve this (Option B/C of the milestone instruction:
+# split contract generation from presentation, using an existing,
+# already-deterministic input, rather than giving the presentation agent
+# back any operational tool authority).
+#
+# `request_class` is computed by the SAME `derive_request_class` every
+# model-produced contract already uses -- never a hand-picked value --
+# so this synthesized contract is subject to EXACTLY the same downstream
+# governance as any other: `intent=INFORMATION`/`requested_output=FACT`/
+# `subject=None` resolves to `RequestClass.GENERAL_CONVERSATION` --
+# never `EXACT_COMMAND`/`ACTION`, so it can never grant command/action
+# authority, and (having empty `provided_context`) it can never be
+# mistaken for an answer to an unrelated, still-pending `EXACT_COMMAND`
+# clarification either (see `request_execution_policy._supplies_
+# context_for_pending_request`'s own `if not contract.provided_context:
+# return False` guard, unchanged).
+#
+# `subject` IS DELIBERATELY LEFT UNSET, never the continuation's own
+# `selected_chat_topic`: this exact log point (`chat_service.py`'s
+# `trusted_result_presentation_mode` turn) has its own PRE-EXISTING,
+# separately-tested "never log a chat id/title" safe-diagnostic contract
+# (see `test_trusted_result_presentation_mode_logs_the_safe_diagnostic`,
+# test_r1_r3_correctness_regression.py) -- and `RequestContract.subject`
+# flows verbatim into `safe_request_contract_observability_fields`'s own
+# logged projection. A real chat topic is exactly the kind of "may be
+# real operational content" value that module's own docstring already
+# warns never belongs in this projection. `GENERAL_CONVERSATION` is
+# exactly as safe as `OPERATIONAL_INFORMATION` would have been (neither
+# ever grants command/action authority) -- there is no safety reason to
+# prefer the more specific class here, only a privacy reason to avoid it.
+def build_deterministic_read_continuation_contract(run_id: str) -> RequestContract:
+    """LIVE-CORR-12C -- the CURRENT turn's own genuinely fresh, `run_id`-
+    stamped `RequestContract` for a resumed Teams-read-continuation/
+    presentation-only turn -- see this section's own module-level comment
+    for the full rationale, including why `subject` is deliberately left
+    unset. Synthesized entirely in Python; the model never sees or
+    influences this. `provided_context`/`missing_context` are
+    deliberately left empty: this turn asks nothing of the user and
+    confirms no target parameter.
+    """
+    contract = RequestContract(
+        intent=RequestIntent.INFORMATION,
+        requested_output=RequestedOutput.FACT,
+        requires_operational_context=True,
+    )
+    request_class = derive_request_class(
+        contract.intent, contract.requested_output, contract.action_requested, contract.subject
+    )
+    return contract.model_copy(update={"request_class": request_class, "run_id": run_id})
+
+
+TARGET_TYPE_PARAMETER_NAME = "unit_type"
+TARGET_IDENTIFIER_PARAMETER_NAME = "unit_id"
 """Section 4/5's own explicit instruction: reuse the ALREADY-ESTABLISHED
 `unit_type`/`unit_id` vocabulary (the only parameter names this codebase's
 own prompt/tests currently use for a live operational target), rather
 than inventing a broader ontology. This is a SMALL, deliberately CLOSED,
 documented, extensible mapping -- currently exactly one target-parameter
 pair. Extending it to a different domain concept requires a deliberate
-code change here, never an inference from free text."""
+code change here, never an inference from free text.
+
+PUBLIC (no leading underscore) since LIVE-CORR-7: mirrors `TARGET_
+SPECIFIC_INTENTS`'s own established "moved here, public... reused by
+both this module's own reconciliation and that module's own execution-
+decision gate, never two independently-drifting copies" precedent --
+`request_execution_policy.py`'s `derive_execution_decision` now also
+needs these exact two names to correctly exclude them from its own
+`contract.missing_context` union (see that function's own LIVE-CORR-7
+comment)."""
+
+
+# =============================================================================
+# LIVE-CORR-12B -- Canonical Request-Context Parameter Authority
+# =============================================================================
+#
+# THE GAP THIS CLOSES: the LIVE-CORR-12A architectural audit proved there
+# was no canonical registry or alias table for `provided_context`/
+# `missing_context` parameter NAMES -- only VALUES (`_canonicalize_if_
+# identifier`, `extract_canonical_identifiers`) were ever normalized. The
+# model was therefore free to name the SAME semantic parameter `unit_id`
+# one turn and `RRU_ID` the next, and nothing anywhere recognized them as
+# the same key -- live-reproduced: identical semantic input ("give me a
+# command to restart an RRU" -> "the RRU is RRU-3") non-deterministically
+# produced either `status=ALLOW` (when the model happened to use
+# `unit_id`) or `status=AMBIGUOUS` (when it happened to use `RRU_ID`).
+#
+# WHAT THIS IS: a SMALL, explicit, closed alias table (`CANONICAL_
+# PARAMETER_ALIASES`) plus two pure functions -- `canonical_parameter_
+# name` (one name -> its canonical form, or `None` if unrecognized) and
+# `authoritative_missing_context_names` (filters a `missing_context` list
+# down to ONLY the names deterministic policy actually understands).
+# Deliberately NOT a general ontology, NOT fuzzy/embedding matching, NOT
+# LLM-assisted canonicalization -- a plain dict lookup, mirroring `_IDENTIFIER_
+# CLASS_PREFIXES`'s own "a deliberate code change here, never inferred
+# from free text" discipline exactly.
+#
+# WHAT THIS DOES NOT DO: it does not invent deterministic support for a
+# parameter name merely because the model has emitted it (`vendor`,
+# `technology`, `software_version`, `alarm_type`, `alarm_status`, `fault`
+# were all audited -- NONE of them has any existing deterministic
+# consumer anywhere in `request_contract.py`/`request_execution_policy.py`
+# today, so none are added to this table; the TELCO Applicability model,
+# a genuinely separate mechanism, operates on governed-document metadata
+# at the KNOWLEDGE RETRIEVAL layer, never on `RequestContract` parameter
+# names). A name absent from this table is NEVER promoted to policy
+# authority -- see `authoritative_missing_context_names`'s own docstring.
+CANONICAL_PARAMETER_ALIASES: dict[str, str] = {
+    "unit_id": TARGET_IDENTIFIER_PARAMETER_NAME,
+    "rru_id": TARGET_IDENTIFIER_PARAMETER_NAME,
+    "unit_type": TARGET_TYPE_PARAMETER_NAME,
+}
+"""Lookup keys are lowercase (matched case-insensitively) -- values are
+always one of the two existing canonical constants above. PUBLIC (no
+leading underscore): consulted by `request_execution_policy.py` via
+`authoritative_missing_context_names`, mirroring `TARGET_TYPE_PARAMETER_
+NAME`/`TARGET_IDENTIFIER_PARAMETER_NAME`'s own established "shared,
+never duplicated" precedent."""
+
+
+def canonical_parameter_name(raw_name: str) -> Optional[str]:
+    """Returns the closed-vocabulary canonical name for `raw_name`
+    (case-insensitive, trimmed), or `None` when `raw_name` is not a
+    recognized alias of anything this codebase's deterministic policy
+    understands. Never raises, never guesses, never fuzzy-matches."""
+    if not isinstance(raw_name, str):
+        return None
+    return CANONICAL_PARAMETER_ALIASES.get(raw_name.strip().lower())
+
+
+def canonicalize_provided_context(provided_context: Sequence[RequestParameter]) -> list[RequestParameter]:
+    """LIVE-CORR-12B -- collapses `provided_context` entries whose NAME is
+    a recognized alias of the SAME canonical parameter down to one entry
+    under its canonical name, BEFORE any value verification runs (the
+    caller, `validate_and_persist_request_contract`, applies this ahead
+    of `_verify_and_filter_provided_context` -- see that function's own
+    call site). An entry whose name is not a recognized alias of anything
+    (e.g. a genuinely free-text, non-target parameter) passes through
+    completely unchanged -- this is never a general rename, only a
+    closed-vocabulary merge.
+
+    FAIL-CLOSED ALIAS CONFLICT (section 7's own explicit requirement):
+    when two aliases of the SAME canonical parameter carry DIFFERENT
+    values (e.g. `RRU_ID=RRU-3` and `unit_id=RRU-10`), neither is trusted
+    -- both are dropped, and the canonical parameter is left completely
+    ABSENT from the result, exactly as if neither alias had ever been
+    supplied. This is a deliberate, minimal design choice: an absent
+    canonical parameter is already the SAME "not yet resolved" state
+    `required_target_parameter_gaps` already treats as a gap, so no new
+    "ambiguous" concept or state is needed -- downstream policy simply,
+    correctly, continues to require it. NEVER a silent pick based on
+    dict/list iteration order. The identical raw VALUE supplied twice
+    under two different alias names (e.g. `RRU_ID=RRU-3` and
+    `unit_id=RRU-3`) is not a conflict -- it collapses to one entry.
+    """
+    canonical_by_name: dict[str, RequestParameter] = {}
+    conflicted_names: set[str] = set()
+    passthrough: list[RequestParameter] = []
+    for param in provided_context:
+        canonical_name = canonical_parameter_name(param.name)
+        if canonical_name is None:
+            passthrough.append(param)
+            continue
+        if canonical_name in conflicted_names:
+            continue
+        existing = canonical_by_name.get(canonical_name)
+        if existing is None:
+            canonical_by_name[canonical_name] = (
+                param if param.name == canonical_name else param.model_copy(update={"name": canonical_name})
+            )
+            continue
+        if existing.value.strip().lower() == param.value.strip().lower():
+            continue  # same value via a different alias spelling -- not a conflict
+        _logger.warning(
+            "request_contract: conflicting aliases for canonical parameter name=%r "
+            "(%r vs %r) -- dropping both, never guessing a winner",
+            canonical_name,
+            existing.value,
+            param.value,
+        )
+        del canonical_by_name[canonical_name]
+        conflicted_names.add(canonical_name)
+    return passthrough + list(canonical_by_name.values())
+
+
+def _canonicalize_missing_context_names(names: Sequence[str]) -> list[str]:
+    """LIVE-CORR-12B -- applies the SAME closed alias table to model-
+    declared `missing_context` NAMES (never values -- there are none to
+    normalize here) before reconciliation, so a model that declares
+    `missing_context=["RRU_ID"]` one turn and `["unit_id"]` the next is
+    reconciled identically either way. A name that is not a recognized
+    alias of anything passes through byte-for-byte unchanged -- this
+    NEVER filters or drops a genuinely free-text, model-declared gap (see
+    `authoritative_missing_context_names`, below, for the SEPARATE
+    question of which names may drive POLICY). Deduplicates after
+    canonicalization (two aliases of the same canonical name collapse to
+    one entry), preserving first-seen order.
+    """
+    seen: set[str] = set()
+    canonicalized: list[str] = []
+    for name in names:
+        canonical_name = canonical_parameter_name(name) or name
+        if canonical_name in seen:
+            continue
+        seen.add(canonical_name)
+        canonicalized.append(canonical_name)
+    return canonicalized
+
+
+def authoritative_missing_context_names(names: Sequence[str]) -> list[str]:
+    """LIVE-CORR-12B -- section 8's own core fix: the ONLY subset of a
+    `missing_context` list deterministic POLICY (`request_execution_
+    policy.derive_execution_decision`) may treat as authoritative --
+    i.e. capable of independently forcing `NEEDS_INFORMATION`. A name
+    that does not resolve to a recognized canonical parameter (`canonical_
+    parameter_name` returns `None`) is EXCLUDED here, regardless of how
+    plausible or specific it looks (`"governed procedure"`, `"specific
+    fault details"`, any future model-invented key) -- it remains fully
+    present in `RequestContract.missing_context` itself (persisted,
+    logged, and still rendered in an ALREADY-DECIDED `AMBIGUOUS`/`NEEDS_
+    INFORMATION` decision's own fallback text via `command_suppression_
+    fallback_text`, unchanged), it simply can never be the THING that
+    independently causes that decision. This is the "model may propose,
+    deterministic backend owns required fields" boundary made concrete:
+    only a name this codebase's own deterministic policy actually
+    understands may gate execution. Returns a sorted, deduplicated list.
+    """
+    return sorted({canonical for name in names if (canonical := canonical_parameter_name(name)) is not None})
 
 
 def required_target_parameter_gaps(
-    intent: str, requested_output: str, provided_context: Sequence[RequestParameter]
+    intent: str,
+    requested_output: str,
+    provided_context: Sequence[RequestParameter],
+    grounded_command_candidate: Optional[str] = None,
 ) -> list[str]:
     """Section 4/5's own deterministic target-parameter rule: for an
     operationally-shaped request (`is_operationally_shaped_request`)
@@ -420,19 +924,69 @@ def required_target_parameter_gaps(
     discovery lookup) can safely relax this -- until then, DEF-0038
     remains open at the step-aware precision layer even though this
     monotonicity gap is closed.
+
+    LIVE-CORR-7 -- Exact Commands Request Irrelevant Generic Context: the
+    "future milestone" this docstring's own prior note anticipated.
+    `grounded_command_candidate` (optional, additive, backward-compatible
+    default `None`) is THIS turn's own real, already-grounded
+    `TroubleshootingGuidance.command` text, when one already exists (the
+    caller -- `derive_execution_decision`, via `chat_service.py`'s own
+    already-captured guidance -- supplies it; this function never
+    resolves it itself). Confirmed live root cause: a plain, generic
+    alarm-listing request ("give me a command to check alarms present for
+    Ericsson") was blanket-assigned `unit_id`/`unit_type` requirements
+    purely because `requested_output == EXACT_COMMAND`, with zero
+    knowledge of what the ACTUAL grounded operation (a system-wide
+    listing, not a per-unit action) needed.
+
+    LIVE-CORR-9 -- Exact-Command Continuation Loses Resolved Operation
+    Identity: `grounded_command_candidate` is NOT always the surviving
+    `command` field specifically -- a command evidence.py's own grounding
+    correctly REJECTS (e.g. a real, live-reproduced `GROUNDING_REJECTED`:
+    the model's own reconstructed proposal shared real token overlap with
+    the active governed section but was not an exact verbatim match)
+    leaves `TroubleshootingGuidance.command` `None`, which previously
+    meant this function had NOTHING to consult and fell back to the
+    generic blanket rule even though the RESOLVED operation was never
+    per-unit in the first place -- conflating "was THIS specific candidate
+    trustworthy enough to show the user" with "does this operation concern
+    one physical unit at all," two separate questions. `chat_service.py`
+    now falls back, in that specific case, to the ACTIVE governed
+    SECTION's own real, already-revalidated content (via the existing 6A.14
+    Active Procedure Continuity anchor, `governed_evidence_continuity.py`
+    -- never a new continuity mechanism) -- this function itself is
+    unchanged either way: it only ever inspects whatever text it is given
+    via `command_text_references_target_identifier_class`, never
+    resolving or trusting the candidate's own origin itself.
+
+    Reuses `extract_canonical_identifiers` -- the SAME deterministic,
+    non-keyword, non-regex identifier recognizer already used for
+    provided-context normalization, never a new taxonomy, never text/
+    keyword matching of the user's own words -- applied to the ACTUAL
+    governed command CANDIDATE's own verbatim text (never the user's
+    question). A real candidate containing NO recognized unit-class
+    identifier at all positively proves this operation does not concern
+    one specific unit -- no gap. Absence of a candidate (not yet
+    grounded, or this turn never produced one) fails CLOSED to the
+    EXISTING, unchanged, conservative blanket rule below -- this can only
+    ever NARROW the requirement with positive structural proof, never
+    widen it, and never grants MORE permission than today when no such
+    proof exists. The `unit_type`-informed branches above (already
+    correctly operation-aware once a `unit_type` is confirmed) are
+    completely unaffected.
     """
     if not is_operationally_shaped_request(intent, requested_output):
         return []
     provided_names = {param.name for param in provided_context}
-    if _TARGET_IDENTIFIER_PARAMETER_NAME in provided_names:
+    if TARGET_IDENTIFIER_PARAMETER_NAME in provided_names:
         return []
     unit_type_value = next(
-        (param.value for param in provided_context if param.name == _TARGET_TYPE_PARAMETER_NAME), None
+        (param.value for param in provided_context if param.name == TARGET_TYPE_PARAMETER_NAME), None
     )
     if unit_type_value is not None:
         normalized_unit_type = unit_type_value.strip().upper()
         if normalized_unit_type in _IDENTIFIER_CLASS_PREFIXES:
-            return [_TARGET_IDENTIFIER_PARAMETER_NAME]
+            return [TARGET_IDENTIFIER_PARAMETER_NAME]
         if normalized_unit_type in _TARGET_INDEPENDENT_UNIT_TYPES:
             # A confirmed unit_type in the small, VERIFIED allowlist (e.g.
             # "SupportUnit") is a real, verified fact establishing no
@@ -445,9 +999,20 @@ def required_target_parameter_gaps(
         # section 4's own "an unknown or other unit type must not become
         # permissive" requirement. Never treated as a verified fact merely
         # because it fails to match the identifier-bearing class.
-        return [_TARGET_IDENTIFIER_PARAMETER_NAME]
+        return [TARGET_IDENTIFIER_PARAMETER_NAME]
     if requested_output == RequestedOutput.EXACT_COMMAND:
-        return sorted([_TARGET_TYPE_PARAMETER_NAME, _TARGET_IDENTIFIER_PARAMETER_NAME])
+        # LIVE-CORR-7: a real, already-grounded command candidate whose
+        # own verbatim text contains NO recognized unit-class identifier
+        # positively proves this specific operation is not per-unit --
+        # see this function's own docstring, and `command_text_
+        # references_target_identifier_class`'s own docstring for why a
+        # SEPARATE recognizer (rather than `extract_canonical_
+        # identifiers`) is used for command text specifically. Absence of
+        # a candidate fails closed to the original, unchanged blanket
+        # requirement.
+        if grounded_command_candidate is not None and not command_text_references_target_identifier_class(grounded_command_candidate):
+            return []
+        return sorted([TARGET_TYPE_PARAMETER_NAME, TARGET_IDENTIFIER_PARAMETER_NAME])
     return []
 
 
@@ -569,6 +1134,47 @@ def extract_canonical_identifiers(text: Optional[str]) -> set[str]:
     return found
 
 
+def command_text_references_target_identifier_class(command_text: Optional[str]) -> bool:
+    """LIVE-CORR-7 -- a narrower, SEPARATE counterpart to `extract_
+    canonical_identifiers`, scoped specifically to real GOVERNED COMMAND
+    TEXT -- never the user's own words (`extract_canonical_identifiers`
+    remains the sole, unchanged recognizer for that; this function is
+    never applied to it). Confirmed by direct execution against a real
+    governed example command (`accn FieldReplaceableUnit=RRU-9
+    restartunit 1 1 1`) that `extract_canonical_identifiers`'s own token
+    rules -- built for natural language, where an identifier is never
+    fused onto an unrelated word via `=` -- do NOT recognize an
+    identifier embedded in a `key=value` command argument (the identifier
+    is fused onto "FieldReplaceableUnit", not its own token); extending
+    that function's own rules to treat `=` as a token boundary would
+    change its behavior for every EXISTING natural-language caller
+    (`_verify_and_filter_provided_context`), an unrelated, already-tested
+    concern this pass does not touch. A dedicated, narrowly-scoped
+    recognizer is safer than widening a shared one.
+
+    Reuses the SAME closed `_IDENTIFIER_CLASS_PREFIXES` taxonomy (RRU/
+    AAS) -- never a new one, never a new vocabulary. Deterministic
+    token/boundary check only, no `re`, no NLP/semantic matching: splits
+    on whitespace AND `=` (the one additional boundary real command
+    syntax needs), then checks each resulting token for a class prefix
+    immediately followed by a hyphen and digits, exactly mirroring
+    `extract_canonical_identifiers`'s own fused-token rule (form 1) --
+    the two-adjacent-token form (form 2) does not apply to command
+    syntax, which never expresses an identifier as "RRU 9".
+    """
+    if not command_text:
+        return False
+    for raw_token in command_text.replace("=", " ").split():
+        token = raw_token.strip(_IDENTIFIER_STRIP_CHARS).upper()
+        for prefix in _IDENTIFIER_CLASS_PREFIXES:
+            if token.startswith(prefix):
+                remainder = token[len(prefix):]
+                remainder = remainder[1:] if remainder.startswith("-") else remainder
+                if remainder and remainder.isdigit():
+                    return True
+    return False
+
+
 def _canonicalize_if_identifier(value: str) -> str:
     """If `value` resolves to EXACTLY ONE recognized operational
     identifier, returns its canonical hyphenated form (`RRU-5`);
@@ -686,6 +1292,192 @@ validated+provenance-corrected `RequestContract` (as
 `validate_and_persist_request_contract`, below."""
 
 
+PENDING_GOVERNED_REQUEST_STATE_KEY = "pending_governed_request"
+"""LIVE-CORR-11 -- Pending Governed Request Continuity and Final Command
+Authority. THE GAP THIS CLOSES: a turn that leaves an `EXACT_COMMAND`
+request unresolved (`RequestExecutionStatus.NEEDS_INFORMATION`) has NO
+durable memory of that fact -- `derive_request_class` (above) derives
+`request_class` purely from the CURRENT turn's own `intent`/`requested_
+output`, so a later turn that merely answers the outstanding question
+(e.g. "the RRU is rru-3") can be freshly, independently classified
+`OPERATIONAL_INFORMATION`/`FACT` -- a real, live-reproduced sequence
+(see `docs/DEFECT_REGISTER.md`) -- which routes team_manager's own raw
+free text around BOTH existing command-safety backstops (`enforce_
+execution_decision_on_guidance` has no `TroubleshootingGuidance` to
+examine; `requires_unstructured_response_backstop` does not fire for an
+`ALLOW`+non-operationally-shaped decision).
+
+WHAT THIS IS: the SMALLEST additive session-state record of "a governed
+request the runtime has not yet finished resolving" -- `request_class`,
+`requested_output`, `subject` (the OPERATION, e.g. "restart RRU" -- never
+the value-answer turn's own throwaway subject like "RRU ID"), the
+governed request's own `missing_context`, and its own already-VERIFIED
+`provided_context` (e.g. `unit_type=RRU`). Written ONLY by `chat_service
+.py`'s own end-of-turn state delta (mirrors `governed_evidence_
+continuity.build_active_governed_procedure_state_update`'s established
+idiom exactly -- an additive, single-key update, never a new state-
+management subsystem), from that turn's own already-computed
+`RequestExecutionDecision` -- NEVER written by, or trusted from, the
+model. Read ONLY by `request_execution_policy.derive_execution_decision`
+(via a `pending_governed_request` parameter chat_service.py supplies from
+this same key), which decides -- deterministically, never by scanning
+user text -- whether the CURRENT turn's own contract is answering this
+pending request or represents a genuinely new one. See `PendingGoverned
+Request`'s own docstring and `resolve_effective_governed_contract`
+(request_execution_policy.py) for the full mechanics.
+
+WHAT THIS IS NOT: never a persisted command, grounding result, or
+authorization -- see `PendingGovernedRequest`'s own docstring's explicit
+"never persist prior command authorization" rule. `RequestClass` itself
+(the five closed governance classes) is completely UNCHANGED -- this is
+lifecycle state describing an unresolved (or recently-resolved, see
+`PendingGovernedRequestStatus`) instance of the EXISTING `EXACT_COMMAND`
+class, never a sixth class.
+
+LIVE-CORR-11 CORRECTIVE PASS (pre-live-validation audit, four issues
+found and fixed before any real traffic exercised this store):
+
+  ISSUE A -- clearing on `ALLOW` alone left no way to safely re-target an
+  IMMEDIATELY-following correction ("give me a command to restart an
+  RRU" -> "RRU-3" -> ALLOW -> "actually it is RRU-10"): the correction
+  turn reproduces the EXACT SAME `OPERATIONAL_INFORMATION`/`FACT`
+  reclassification this whole milestone exists to close, with nothing
+  left to correct AGAINST. Fixed by `PendingGovernedRequestStatus.
+  COMPLETED` (below) -- a deliberately narrow, ONE-MORE-TURN-ONLY
+  lifecycle stage (never a TTL/timestamp mechanism: `build_pending_
+  governed_request_state_update`, request_execution_policy.py, already
+  unconditionally rewrites this key EVERY turn, so a `COMPLETED` record
+  is naturally superseded by whatever the VERY NEXT turn's own outcome
+  is, matched or not -- no new expiry machinery needed).
+
+  ISSUE C -- the ORIGINAL predicate never checked that supplied context
+  actually RELATES to the pending request (see `PendingGovernedRequest
+  Status`'s own docstring's sibling note): a genuinely independent
+  question that happens to supply a same-named parameter (e.g. "what is
+  the status of RRU-9?" supplying `unit_id=RRU-9` while a `restart RRU`
+  request is pending with `missing_context=["unit_id"]`) could
+  previously be misread as answering the pending request. Fixed in
+  `request_execution_policy._supplies_context_for_pending_request`.
+
+See that module's own updated docstrings for the full corrected
+mechanics; this module's own additive schema changes are ISSUE A
+(`status`) and ISSUE D (`intent`, below)."""
+
+
+class PendingGovernedRequestStatus:
+    """LIVE-CORR-11 CORRECTIVE PASS -- ISSUE A. Two closed lifecycle
+    stages for a `PendingGovernedRequest` -- deliberately NOT a
+    `RequestClass` (governance is unchanged; this is lifecycle state
+    ABOUT an existing `EXACT_COMMAND`-class request, never a new
+    governance dimension -- mirrors `RequestExecutionStatus`'s own
+    "separate closed vocabulary, one layer removed from `RequestClass`"
+    precedent).
+
+    UNRESOLVED -- required target/parameter context is still missing
+      (`NEEDS_INFORMATION`), or the request is `AMBIGUOUS` but a concrete
+      operation/subject was still resolved (see `build_pending_governed_
+      request_state_update`'s own docstring for exactly which `AMBIGUOUS`
+      shape qualifies). A clarification-answer turn is matched against
+      `missing_context` -- "does the supplied parameter relate to what is
+      STILL NEEDED."
+    COMPLETED -- the request reached `ALLOW` (command permission granted
+      at THIS policy layer; downstream grounding/applicability is a
+      SEPARATE, always-fresh question -- see `PendingGovernedRequest`'s
+      own "never persist prior command authorization" rule). Retained for
+      EXACTLY one more turn so an immediate correction ("actually it is
+      RRU-10") can re-open the SAME operation -- matched against the
+      request's own already-VERIFIED `provided_context` names -- "does
+      the supplied parameter correct something ALREADY SUPPLIED." Any
+      turn after that -- matched or not -- causes `build_pending_
+      governed_request_state_update` to rewrite this key again from that
+      turn's own fresh outcome, so a `COMPLETED` record can never survive
+      more than one extra turn.
+    """
+
+    UNRESOLVED = "unresolved"
+    COMPLETED = "completed"
+
+
+_VALID_PENDING_GOVERNED_REQUEST_STATUSES = frozenset(
+    {PendingGovernedRequestStatus.UNRESOLVED, PendingGovernedRequestStatus.COMPLETED}
+)
+
+
+class PendingGovernedRequest(BaseModel):
+    """LIVE-CORR-11 -- the minimal state needed to represent "a governed
+    request the runtime has not yet finished resolving, or has just
+    finished resolving and remains correctable for one more turn."
+    Deliberately scoped to `RequestClass.EXACT_COMMAND` only (this
+    milestone's own proven defect shape; see `PENDING_GOVERNED_REQUEST_
+    STATE_KEY`'s own docstring) -- a future milestone may widen this if a
+    comparably real, proven defect is found for another class.
+
+    Represents WHAT GOVERNED REQUEST IS STILL BEING COMPLETED (OR WAS
+    JUST COMPLETED AND REMAINS CORRECTABLE), never WHAT ANSWER SHOULD BE
+    REUSED: no command text, no grounding/applicability result, and no
+    execution permission is ever stored here -- every field below is
+    either a closed governance/output-shape/lifecycle label or a
+    provenance-verified parameter, exactly the same trust class
+    `RequestContract.provided_context` itself already carries (this is
+    never a new provenance concept, only a narrower snapshot of the
+    existing one). Re-grounding/re-applicability is ALWAYS required fresh
+    before any command may be emitted for a resolved pending request --
+    enforced by the EXISTING, completely unchanged `evidence.py`/
+    `enforce_execution_decision_on_guidance` layers underneath, which this
+    milestone does not touch.
+
+    LIVE-CORR-11 CORRECTIVE PASS -- ISSUE D: `intent` (additive) is the
+    ORIGINAL turn's own semantic `RequestIntent` label (e.g. `COMMAND`,
+    but just as validly `PROCEDURE`/`TROUBLESHOOTING`/`INFORMATION` --
+    see `derive_request_class`'s own docstring: `EXACT_COMMAND` is
+    derived from `intent` OR `requested_output`, so the intent behind an
+    `EXACT_COMMAND`-class request is not always literally `COMMAND`).
+    Restoring THIS value (rather than unconditionally forcing
+    `RequestIntent.COMMAND`, the ORIGINAL LIVE-CORR-11 pass's own
+    shortcut) preserves the operation's true semantic identity across a
+    clarification/correction turn -- `request_class` remains the sole
+    governance/risk boundary; `intent` remains the semantic goal, exactly
+    per this module's own "keep these concepts separate" architecture.
+    """
+
+    request_class: str
+    requested_output: str
+    intent: str
+    status: str = PendingGovernedRequestStatus.UNRESOLVED
+    subject: Optional[str] = None
+    missing_context: list[str] = Field(default_factory=list)
+    provided_context: list[RequestParameter] = Field(default_factory=list)
+
+    @field_validator("status")
+    @classmethod
+    def _valid_status(cls, value: str) -> str:
+        if value not in _VALID_PENDING_GOVERNED_REQUEST_STATUSES:
+            raise ValueError(f"status must be one of: {sorted(_VALID_PENDING_GOVERNED_REQUEST_STATUSES)}")
+        return value
+
+    @field_validator("intent")
+    @classmethod
+    def _valid_intent(cls, value: str) -> str:
+        if value not in _VALID_INTENTS:
+            raise ValueError(f"intent must be one of: {sorted(_VALID_INTENTS)}")
+        return value
+
+
+def parse_pending_governed_request(raw: Any) -> Optional["PendingGovernedRequest"]:
+    """Tolerant, fail-closed parse of the raw session-state value --
+    mirrors `load_current_turn_contract` (request_execution_policy.py)
+    exactly: malformed/absent/wrong-shaped data all resolve to `None`,
+    never a raised exception. A `None`/absent pending record simply means
+    "no unresolved governed request to preserve" -- the ordinary,
+    overwhelmingly common case."""
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return PendingGovernedRequest.model_validate(raw)
+    except ValidationError:
+        return None
+
+
 def _extract_current_turn_user_text(tool_context: Any) -> Optional[str]:
     """The literal text of THIS invocation's own top-level user message --
     team_manager is the ROOT agent, so `tool_context.user_content` here is
@@ -700,6 +1492,165 @@ def _extract_current_turn_user_text(tool_context: Any) -> Optional[str]:
         return None
     text = "".join(part.text for part in parts if getattr(part, "text", None))
     return text or None
+
+
+# =============================================================================
+# LIVE-CORR-12F -- Evidence-Bound Semantic Context Verification
+# =============================================================================
+#
+# THE GAP THIS CLOSES: the LIVE-CORR-12A architectural audit proved
+# `_verify_and_filter_provided_context`'s own three existing paths
+# (literal substring, session-confirmed, identifier-class) can NEVER
+# verify a qualitative state fact whose canonical VALUE is not itself a
+# literal word the user said -- "the alarm is gone" never contains the
+# literal string "cleared", so a model candidate `alarm_status=cleared`
+# was unconditionally dropped, regardless of how unambiguously the user
+# actually stated it. This is a real, live-reproduced architectural gap,
+# not a defect in the existing three paths (which remain completely
+# untouched and are still the ONLY verification for every other
+# parameter name).
+#
+# WHAT THIS IS: a SMALL, CLOSED, deliberately narrow FOURTH verification
+# path, scoped to EXACTLY ONE parameter name (`alarm_status`) and TWO
+# canonical values (`active`/`cleared`) -- audited first, per instruction:
+# `alarm_status`/`active_alarm_status`/`fault`/`alarm_text`/`alarm_
+# severity` were all grepped across this codebase's own production code
+# and found to have ZERO existing consumers; none is added here except
+# `alarm_status`, deliberately, as this milestone's own explicit,
+# narrowly-scoped decision -- never because a model happened to emit one
+# of the others.
+#
+# HOW IT WORKS: `_ALARM_STATUS_EVIDENCE_PHRASES` is a small, closed,
+# hardcoded ALLOWLIST mapping specific, deliberately unambiguous literal
+# phrases to their canonical value -- never a general NLP classifier,
+# never fuzzy/keyword/regex matching, never a synonym list driving
+# routing (section 16's own explicit prohibition; this drives ONE
+# parameter's VALUE, never `RequestClass`/intent/routing of any kind).
+# A candidate `alarm_status` value is accepted ONLY when at least one
+# phrase mapped to THAT SAME value is a literal, case-insensitive,
+# CONTIGUOUS substring of the CURRENT TURN's own real user text --
+# mirrors the existing three paths' own "compare only against real,
+# already-trusted text" discipline exactly, applied to phrases instead
+# of bare values.
+#
+# NEGATION SAFETY BY CONSTRUCTION, NEVER BY DETECTION (section 12's own
+# explicit "if the design cannot safely handle polarity, fail closed"
+# allowance): this design does not attempt to detect negation at all --
+# it simply never recognizes a phrase shape it was not given. Each
+# allowlisted phrase is long/specific enough that a natural negated
+# variant ("the alarm is NOT gone", "the alarm has NOT cleared") fails
+# to match STRUCTURALLY: the inserted negation word breaks the
+# CONTIGUOUS substring the allowlist requires. This is a property of the
+# deliberately-chosen phrase text, never an explicit "if 'not' appears,
+# reject" rule -- there is no such rule anywhere in this code. A
+# genuinely novel phrasing this table was never given (however
+# semantically clear to a human) is NOT recognized and fails closed,
+# exactly like any other unverifiable claim -- this design never claims
+# to understand natural language; it only ever confirms a model's own
+# candidate against a real, closed, pre-curated literal phrase.
+#
+# HONESTY (section 8's own explicit requirement): this is
+# `MODEL_CANDIDATE_THEN_EVIDENCE_VALIDATED`, deliberately NEVER
+# `AUTHORITATIVE_DETERMINISTIC` -- no code here independently derives
+# meaning from arbitrary language; it only ever confirms the MODEL's own
+# proposed value against a real, deterministic, closed phrase match.
+#
+# CANONICAL CONTEXT, NEVER AUTHORITATIVE REQUIRED CONTEXT (section 4/10's
+# own explicit, critical requirement): `alarm_status` is deliberately
+# NEVER added to `CANONICAL_PARAMETER_ALIASES` (LIVE-CORR-12B) -- that
+# table feeds `authoritative_missing_context_names`/`required_target_
+# parameter_gaps`, the SOLE authority for what can force `NEEDS_
+# INFORMATION`/gate `may_emit_command`. A model that declares
+# `missing_context=["alarm_status"]` is COMPLETELY UNAFFECTED by this
+# module -- that name is not, and must never become, a recognized
+# canonical alias, so `authoritative_missing_context_names` continues to
+# silently exclude it exactly as it already excludes any other
+# unrecognized name. `SEMANTIC_CONTEXT_PARAMETER_NAMES`, below, is a
+# DELIBERATELY SEPARATE registry -- extending the canonical-CONTEXT set
+# (what may be safely RETAINED once verified) never automatically
+# extends the authoritative-REQUIRED set (what may be safely REQUIRED).
+_ALARM_STATUS_PARAMETER_NAME = "alarm_status"
+
+SEMANTIC_CONTEXT_PARAMETER_NAMES = frozenset({_ALARM_STATUS_PARAMETER_NAME})
+"""LIVE-CORR-12F -- the closed set of parameter NAMES eligible for
+evidence-bound semantic verification (`_verify_semantic_context_entry`).
+Deliberately separate from `CANONICAL_PARAMETER_ALIASES` (LIVE-CORR-12B,
+which governs NAME aliasing for the authoritative unit_id/unit_type
+target parameters) -- see this section's own "CANONICAL CONTEXT, NEVER
+AUTHORITATIVE REQUIRED CONTEXT" comment for why the two must never be
+merged. Extending this set requires the SAME deliberate, audited,
+documented code change `CANONICAL_PARAMETER_ALIASES`'s own discipline
+already requires -- never inferred from an arbitrary model-invented
+name."""
+
+_ALARM_STATUS_VALUES = frozenset({"active", "cleared"})
+"""Section 9's own explicit "closed value domain" requirement -- exactly
+the two states this milestone's own live evidence justifies. No
+`"unknown"`/other value: not yet proven genuinely useful, and adding one
+speculatively would only widen the domain without a real justification."""
+
+_ALARM_STATUS_EVIDENCE_PHRASES: dict[str, str] = {
+    "the alarm is gone": "cleared",
+    "alarm is gone": "cleared",
+    "the alarm has cleared": "cleared",
+    "alarm has cleared": "cleared",
+    "the alarm cleared": "cleared",
+    "alarm cleared": "cleared",
+    "the alarm is clear": "cleared",
+    "alarm is clear": "cleared",
+    "the alarm is resolved": "cleared",
+    "alarm is resolved": "cleared",
+    "the alarm is still active": "active",
+    "alarm is still active": "active",
+    "the alarm is active": "active",
+    "alarm is active": "active",
+    "the alarm is still there": "active",
+    "alarm is still there": "active",
+    "the alarm is still present": "active",
+    "alarm is still present": "active",
+}
+"""The COMPLETE closed allowlist -- see this section's own module-level
+comment for the full "negation safety by construction" rationale. Every
+key is lowercase (matched against lowercased current-turn text);
+extending this set requires a deliberate code change here, verified
+against the SAME "does a natural negated variant still fail to match"
+property every existing entry was chosen to have -- never added merely
+because a model happened to phrase something differently once."""
+
+
+def _verify_semantic_context_entry(param: RequestParameter, current_turn_text: Optional[str]) -> Optional[RequestParameter]:
+    """LIVE-CORR-12F -- the fourth, deliberately narrow verification path
+    `_verify_and_filter_provided_context` consults ONLY for `param.name
+    in SEMANTIC_CONTEXT_PARAMETER_NAMES`, and ONLY after that function's
+    own existing three paths have already failed to verify the entry.
+    Returns the verified param (value canonicalized to the closed
+    lowercase form) on a genuine phrase match, else `None` (drop, fail
+    closed) -- never raises, never fabricates a value, never trusts a
+    value outside `_ALARM_STATUS_VALUES`. See this section's own module-
+    level comment for the complete safety/honesty rationale.
+    """
+    if param.name != _ALARM_STATUS_PARAMETER_NAME:
+        return None
+    normalized_value = param.value.strip().lower()
+    if normalized_value not in _ALARM_STATUS_VALUES:
+        return None
+    if not current_turn_text:
+        return None
+    current_lower = current_turn_text.lower()
+    for phrase, canonical_value in _ALARM_STATUS_EVIDENCE_PHRASES.items():
+        if canonical_value == normalized_value and phrase in current_lower:
+            _logger.info(
+                "request_contract: semantic_context_verification parameter=%s result=accepted "
+                "verification_mode=evidence_bound",
+                param.name,
+            )
+            return param.model_copy(update={"value": canonical_value})
+    _logger.info(
+        "request_contract: semantic_context_verification parameter=%s result=rejected "
+        "verification_mode=evidence_bound",
+        param.name,
+    )
+    return None
 
 
 def _verify_and_filter_provided_context(
@@ -717,8 +1668,8 @@ def _verify_and_filter_provided_context(
     matches -- see `validate_and_persist_request_contract`). Never a
     fuzzy/semantic match -- mirrors `governed_evidence_continuity.py`'s
     own "compare only against real, already-trusted text" discipline.
-    Anything neither path can verify is silently DROPPED -- never
-    trusted merely because the model's own JSON happened to parse.
+    Anything no path can verify is silently DROPPED -- never trusted
+    merely because the model's own JSON happened to parse.
 
     6A.14 Request Parameter Consistency & Identifier Normalization: a
     THIRD verification path handles the case where the literal spelling
@@ -732,6 +1683,34 @@ def _verify_and_filter_provided_context(
     identifier`) ONLY when it is unambiguously identifier-shaped --
     `unit_type`'s own bare `"RRU"` value and any genuinely free-text
     value pass through byte-for-byte unchanged.
+
+    LIVE-CORR-12F -- a FOURTH path (`_verify_semantic_context_entry`) for
+    the small, closed `SEMANTIC_CONTEXT_PARAMETER_NAMES` set (currently
+    only `alarm_status`): evidence-bound qualitative-state verification
+    (e.g. `alarm_status=cleared` from "the alarm is gone") -- see that
+    function's own docstring for the full design, including its own
+    negation-safety-by-construction argument.
+
+    CRITICAL, LIVE-CORR-12F-CONFIRMED CAVEAT: for a `SEMANTIC_CONTEXT_
+    PARAMETER_NAMES` entry, the FIRST path above (bare literal substring
+    of `param.value` in current-turn text) is DELIBERATELY SKIPPED, never
+    merely "tried first" -- a value like `"cleared"`/`"active"` is itself
+    an ordinary English word that can trivially appear inside a NEGATED
+    sentence ("the alarm is **not** cleared" literally contains
+    "cleared"). Live-verified during this milestone's own test-writing:
+    without this skip, path 1 alone would have verified `alarm_status=
+    cleared` against "the alarm is not cleared" -- reproducing exactly
+    the negation-blindness (DEF-0034) this milestone's own section 12
+    explicitly warned against worsening. The THIRD (identifier-class)
+    path is also irrelevant for this parameter family (its values are
+    never RRU/AAS-shaped) and is likewise skipped for it. The SECOND
+    (session-confirmed exact match) path is NOT skipped -- it compares
+    against an ALREADY-VERIFIED prior value for the SAME name, never raw
+    current-turn text, so it carries none of path 1's negation risk and
+    remains the legitimate cross-turn carry-forward mechanism. Every
+    OTHER (non-semantic-context) parameter name -- `unit_id`/`unit_type`
+    included -- is completely UNAFFECTED: paths 1-3 run for them exactly
+    as before this pass.
     """
     current_lower = current_turn_text.lower() if current_turn_text else ""
     current_turn_identifiers = extract_canonical_identifiers(current_turn_text)
@@ -739,8 +1718,9 @@ def _verify_and_filter_provided_context(
     for param in provided_context:
         value_lower = param.value.lower()
         canonical_candidate = _canonicalize_if_identifier(param.value)
+        is_semantic_context_param = param.name in SEMANTIC_CONTEXT_PARAMETER_NAMES
 
-        if value_lower and value_lower in current_lower:
+        if not is_semantic_context_param and value_lower and value_lower in current_lower:
             verified.append(param.model_copy(update={"value": canonical_candidate}))
             continue
 
@@ -756,8 +1736,9 @@ def _verify_and_filter_provided_context(
         # "RRU-5", in which case `canonical_candidate == param.value`, but
         # this path must still run: the substring check above only fails
         # because the USER's own raw text used a DIFFERENT, equally valid
-        # spelling, e.g. "RRU 5").
-        is_identifier_shaped_value = len(extract_canonical_identifiers(param.value)) == 1
+        # spelling, e.g. "RRU 5"). Skipped entirely for a semantic-context
+        # parameter name -- see this function's own docstring.
+        is_identifier_shaped_value = not is_semantic_context_param and len(extract_canonical_identifiers(param.value)) == 1
         if is_identifier_shaped_value:
             if canonical_candidate in current_turn_identifiers:
                 verified.append(param.model_copy(update={"value": canonical_candidate}))
@@ -766,10 +1747,16 @@ def _verify_and_filter_provided_context(
                 verified.append(param.model_copy(update={"value": canonical_candidate}))
                 continue
 
+        if param.name in SEMANTIC_CONTEXT_PARAMETER_NAMES:
+            semantically_verified = _verify_semantic_context_entry(param, current_turn_text)
+            if semantically_verified is not None:
+                verified.append(semantically_verified)
+                continue
+
         _logger.info(
             "request_contract: dropping unverifiable provided_context entry name=%r "
-            "(neither current-turn text, session-confirmed state, nor identifier-class "
-            "normalization could establish it)",
+            "(neither current-turn text, session-confirmed state, identifier-class "
+            "normalization, nor evidence-bound semantic verification could establish it)",
             param.name,
         )
     return verified
@@ -825,10 +1812,28 @@ def validate_and_persist_request_contract(
         and contract.subject
         and prior_contract.subject.strip().lower() == contract.subject.strip().lower()
     ):
-        session_confirmed = {param.name: param.value for param in prior_contract.provided_context}
+        # LIVE-CORR-12B: the prior contract's own `provided_context` was
+        # already name-canonicalized when IT was persisted (this same
+        # code path), but is re-canonicalized here defensively too --
+        # e.g. for a prior contract that predates this pass, or one built
+        # directly by a test/caller -- so a carried-forward key can never
+        # silently fail to line up with this turn's own canonical names.
+        session_confirmed = {
+            (canonical_parameter_name(param.name) or param.name): param.value
+            for param in prior_contract.provided_context
+        }
+
+    # LIVE-CORR-12B -- Canonical Request-Context Parameter Authority:
+    # collapses recognized-alias NAMES (e.g. `RRU_ID` -> `unit_id`) to one
+    # canonical entry BEFORE value verification runs, so the SAME semantic
+    # parameter is reconciled identically regardless of which spelling the
+    # model happened to use this turn. See `canonicalize_provided_context`'s
+    # own docstring for the fail-closed alias-conflict rule. Value
+    # verification itself (below) is completely unchanged.
+    canonical_provided_context = canonicalize_provided_context(contract.provided_context)
 
     current_turn_text = _extract_current_turn_user_text(tool_context)
-    verified_this_turn = _verify_and_filter_provided_context(contract.provided_context, current_turn_text, session_confirmed)
+    verified_this_turn = _verify_and_filter_provided_context(canonical_provided_context, current_turn_text, session_confirmed)
 
     merged_by_name: dict[str, RequestParameter] = {
         name: RequestParameter(name=name, value=value, provenance=ParameterProvenance.SESSION)
@@ -866,8 +1871,33 @@ def validate_and_persist_request_contract(
     # context`. Reconciles the model's own claim against the SAME
     # `final_provided_context` this contract is about to durably store --
     # never a second, independently-computed provided_context.
+    #
+    # LIVE-CORR-12B: the model's own declared `missing_context` NAMES are
+    # canonicalized first (recognized aliases only, e.g. `RRU_ID` ->
+    # `unit_id`; anything else passes through unchanged) so reconciliation
+    # against `final_provided_context` (already canonical, above) removes
+    # a satisfied key regardless of which spelling the model used THIS
+    # turn versus a prior one. `contract.missing_context` -- the FULL,
+    # still-unfiltered list, canonicalized names included -- remains the
+    # persisted, observability-visible record; `authoritative_missing_
+    # context_names` (request_execution_policy.py's own consumer) is the
+    # SEPARATE, narrower question of which of these names may drive
+    # policy -- never conflated here.
     reconciled_missing_context = reconcile_missing_context(
-        contract.intent, contract.requested_output, final_provided_context, contract.missing_context
+        contract.intent,
+        contract.requested_output,
+        final_provided_context,
+        _canonicalize_missing_context_names(contract.missing_context),
+    )
+
+    # LIVE-CORR-8 -- Request Class Must Be the Authoritative Governance
+    # Boundary: computed here, ALWAYS from `derive_request_class`'s own
+    # pure, deterministic derivation over already-validated `intent`/
+    # `requested_output`/`action_requested`/`subject` -- never from the
+    # model (see `RequestContract.request_class`'s own docstring for why
+    # there is nothing for the model to override in the first place).
+    final_request_class = derive_request_class(
+        contract.intent, contract.requested_output, contract.action_requested, contract.subject
     )
 
     # Phase 6A.14 -- the CURRENT-TURN freshness marker (see RequestContract
@@ -882,6 +1912,7 @@ def validate_and_persist_request_contract(
             "continuation": final_continuation,
             "ambiguity": final_ambiguity,
             "approval_required": final_approval_required,
+            "request_class": final_request_class,
             "run_id": current_run_id(),
         }
     )
@@ -890,7 +1921,9 @@ def validate_and_persist_request_contract(
     return None
 
 
-def safe_request_contract_observability_fields(raw_contract: Any) -> Optional[dict[str, Any]]:
+def safe_request_contract_observability_fields(
+    raw_contract: Any, current_run_id: Optional[str] = None
+) -> Optional[dict[str, Any]]:
     """Section 16 (Observability) -- a SAFE projection of a validated
     contract for logging/diagnostics: intent/subject/requested_output/
     continuation/requires_governed_knowledge/requires_operational_context/
@@ -898,6 +1931,23 @@ def safe_request_contract_observability_fields(raw_contract: Any) -> Optional[di
     context` -- never a parameter VALUE (which may be real operational
     content). Returns `None` for anything that is not a valid, already-
     validated contract dict (never fabricates a log line from garbage).
+
+    LIVE-CORR-12B -- Observability: the LIVE-CORR-12A audit proved this
+    projection previously omitted `run_id` entirely, so a STALE contract
+    (e.g. left behind in session state by a turn that ran through
+    `presentation_team_manager`'s empty toolset, which cannot call
+    `record_request_contract` at all) logged IDENTICALLY to a genuinely
+    FRESH one -- the immediately-following `derive_execution_decision`
+    rejection as `INVALID_CONTRACT` then looked, from the log alone, like
+    an unexplained contradiction rather than the correct, deterministic
+    freshness check it actually is. `contract_run_id` (always included --
+    a correlation id, never sensitive, already logged bare elsewhere
+    throughout this codebase) makes that visible on its own; passing the
+    caller's own `current_run_id` (optional, backward-compatible default
+    `None` -- every existing call site is unaffected) additionally
+    computes `fresh` directly, so a log line alone answers "was this
+    contract usable this turn" without needing to cross-reference a
+    separate `run_id=...` log entry by hand.
     """
     if not isinstance(raw_contract, dict):
         return None
@@ -905,7 +1955,8 @@ def safe_request_contract_observability_fields(raw_contract: Any) -> Optional[di
         contract = RequestContract.model_validate(raw_contract)
     except ValidationError:
         return None
-    return {
+    fields: dict[str, Any] = {
+        "request_class": contract.request_class,
         "intent": contract.intent,
         "subject": contract.subject,
         "requested_output": contract.requested_output,
@@ -917,4 +1968,8 @@ def safe_request_contract_observability_fields(raw_contract: Any) -> Optional[di
         "approval_required": contract.approval_required,
         "provided_context_keys": [param.name for param in contract.provided_context],
         "missing_context_keys": list(contract.missing_context),
+        "contract_run_id": contract.run_id,
     }
+    if current_run_id is not None:
+        fields["fresh"] = contract.run_id == current_run_id
+    return fields

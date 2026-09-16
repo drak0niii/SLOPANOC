@@ -137,6 +137,7 @@ actually selected.
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any, Optional, Sequence
 
 from google.adk.memory import InMemoryMemoryService
@@ -171,6 +172,81 @@ _APP_NAME = f"{APP_NAME}::governed-knowledge-completion-remediation"
 other throwaway-session helper in this codebase (`_INTERNAL_SPECIALIST_
 APP_NAME`, `_FAST_PATH_APP_NAME_SUFFIX`, `_retry_trusted_presentation_
 once`'s own app name)."""
+
+_deterministic_fallback_lock = threading.Lock()
+_deterministic_fallback_run_ids: set[str] = set()
+"""LIVE REGRESSION CORRECTIVE PASS -- in-process, never-persisted,
+run-id-keyed signal, mirroring `troubleshooting_guidance_context.py`'s
+own exact register/pop/discard pattern one layer over (never a new
+architectural mechanism).
+
+THE GAP THIS CLOSES: this module's own `build_ambiguous_procedure_
+clarification`/`build_scoped_failure_clarification`/`GENERIC_MISSING_
+PROCEDURE_CLARIFICATION` returns are ALL deterministic, Python-authored,
+never-model-generated text (see each one's own docstring) -- genuinely
+SAFE by construction, unlike this SAME function's own "real specialist
+`summary`" success return, which remains exactly as unvalidated as
+before and must still be subject to `requires_unstructured_response_
+backstop` (LIVE-CORR-3B's own protection). A real, live-reproduced
+defect proved `chat_service.py` cannot currently tell these two return
+shapes apart from the returned text alone: an `EXACT_COMMAND`-classified
+turn whose CONTRACT-level target/parameters are already fully resolved
+(e.g. "the RRU is RRU-3" after "give me a command to restart an RRU")
+resolves `ALLOW`/`may_emit_command=True` -- correct, since `derive_
+execution_decision` only ever answers "is a command ELIGIBLE," never "a
+concrete candidate already exists" (see that module's own docstring).
+With no `TroubleshootingGuidance` captured (this module never even
+invoked `incident_manager` for the ambiguous-procedure shape --
+confirmed by direct trace, not inferred), `requires_unstructured_
+response_backstop` unconditionally fires for this `ALLOW`+operationally-
+shaped decision and OVERWRITES the ALREADY-CORRECT, ALREADY-SAFE "which
+procedure do you mean" clarification with its OWN, strictly more
+generic, and here MISLEADING "please confirm the missing details" text
+-- misleading because no target detail is actually missing; a DIFFERENT
+governed-evidence question (which document) is what remains unresolved.
+
+Marked by THIS module at each of its three deterministic-fallback
+return sites (never at the real-summary success return); read exactly
+once by `chat_service.py`, correlated by the SAME `governed_completion_
+run_id` its own guidance re-pop already uses, to skip that backstop
+overwrite for -- and ONLY for -- this specific, already-safe shape."""
+
+
+def _mark_governed_completion_deterministic_fallback(run_id: Optional[str]) -> None:
+    """Called only from this module's own three fixed-template return
+    sites, immediately before returning. A no-op for a missing `run_id`,
+    mirroring every other run-scoped store's "never fail the turn over a
+    side channel" discipline."""
+    if not run_id:
+        return
+    with _deterministic_fallback_lock:
+        _deterministic_fallback_run_ids.add(run_id)
+
+
+def pop_governed_completion_deterministic_fallback(run_id: Optional[str]) -> bool:
+    """Read exactly once, at `chat_service.py`'s own turn-completion
+    boundary, immediately alongside its existing `pop_troubleshooting_
+    guidance` re-pop for the SAME `governed_completion_run_id` -- removes
+    the entry as it reads it. `False` for a missing `run_id` or a turn
+    that never marked one (both the ordinary, ovewhelmingly common
+    case)."""
+    if not run_id:
+        return False
+    with _deterministic_fallback_lock:
+        if run_id in _deterministic_fallback_run_ids:
+            _deterministic_fallback_run_ids.discard(run_id)
+            return True
+        return False
+
+
+def discard_governed_completion_deterministic_fallback(run_id: Optional[str]) -> None:
+    """Backstop/defensive cleanup, mirroring `discard_troubleshooting_
+    guidance`'s own sibling shape -- safe to call whether or not an entry
+    exists."""
+    if not run_id:
+        return
+    with _deterministic_fallback_lock:
+        _deterministic_fallback_run_ids.discard(run_id)
 
 _REMEDIATION_USER_ID = "governed-knowledge-completion-remediation"
 
@@ -303,6 +379,12 @@ async def enforce_governed_knowledge_at_completion(
             effective_candidates = [resolved]
         else:
             _perf_logger.info("perf stage=governed_knowledge_completion_remediation_ambiguous_prior_evidence run_id=%s", run_id)
+            # LIVE REGRESSION CORRECTIVE PASS: `incident_manager` is never
+            # invoked for this shape (see this function's own early
+            # return, immediately below) -- this deterministic, fixed-
+            # template text is genuinely safe as-is; see `_mark_governed_
+            # completion_deterministic_fallback`'s own docstring.
+            _mark_governed_completion_deterministic_fallback(run_id)
             return build_ambiguous_procedure_clarification(effective_candidates), []
     elif override_heading is None and len(effective_candidates) == 0 and active_candidate is not None:
         effective_candidates = [active_candidate]
@@ -324,6 +406,12 @@ async def enforce_governed_knowledge_at_completion(
         "governed_knowledge_completion: remediation did not produce a usable governed answer run_id=%s", run_id
     )
     _perf_logger.info("perf stage=governed_knowledge_completion_remediation_failed run_id=%s", run_id)
+    # LIVE REGRESSION CORRECTIVE PASS: both remaining returns are the
+    # SAME class of fixed, deterministic, never-model-generated text as
+    # the ambiguous-prior-evidence return above -- `incident_manager` DID
+    # run here (unlike that branch), but its own response was rejected as
+    # unusable, so neither line below ever echoes anything it said.
+    _mark_governed_completion_deterministic_fallback(run_id)
     if scoped_procedure is not None:
         return build_scoped_failure_clarification(scoped_procedure), []
     return GENERIC_MISSING_PROCEDURE_CLARIFICATION, []

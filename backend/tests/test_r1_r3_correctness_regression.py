@@ -81,10 +81,23 @@ def test_presentation_team_manager_is_the_same_role_different_capability_set() -
     """Same user-facing identity/name/model -- R1 explicitly requires this
     to remain "the SAME logical/user-facing Team Manager role", never a
     second agent.
+
+    LIVE-CORR-13: `instruction` is now a DELIBERATELY separate provider
+    (`presentation_team_manager_instruction_provider`, case_context.py) --
+    not `team_manager.instruction` -- because the shared provider's
+    fallback (`TEAM_MANAGER_INSTRUCTION`) unconditionally instructs calling
+    `record_request_contract`/`record_source_requirements`, tools this
+    `tools=[]` agent structurally cannot call; live evidence proved the
+    model narrated the attempt as user-visible text instead. See
+    test_livecorr13_finalization_and_presentation_isolation.py for the
+    behavioral proof.
     """
+    from backend.agents.team_manager.case_context import presentation_team_manager_instruction_provider
+
     assert presentation_team_manager.name == team_manager.name == "team_manager"
     assert presentation_team_manager.model is team_manager.model
-    assert presentation_team_manager.instruction is team_manager.instruction
+    assert presentation_team_manager.instruction is presentation_team_manager_instruction_provider
+    assert presentation_team_manager.instruction is not team_manager.instruction
     assert presentation_team_manager.before_tool_callback is None
     assert presentation_team_manager.after_tool_callback is None
     # P2 unchanged: same model-call instrumentation, same agent attribution.

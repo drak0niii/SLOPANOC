@@ -157,13 +157,15 @@ async def test_a_normal_team_manager_instruction_contains_markdown_contract() ->
 
 @pytest.mark.asyncio
 async def test_b_presentation_team_manager_receives_the_same_markdown_contract() -> None:
-    """presentation_team_manager shares team_manager's own instruction
-    provider (never overridden by its `.model_copy` -- see agent.py) --
-    mode selection is state-driven, not tied to the agent object, exactly
-    like `test_pending_specialist_result_switches_to_the_trusted_result_
-    instruction` above already proves for team_manager itself. Also
-    reconfirms the R1 structural trust boundary (`tools == []`) that this
-    formatting-only pass must never weaken.
+    """LIVE-CORR-13: `presentation_team_manager` now uses its OWN dedicated
+    `presentation_team_manager_instruction_provider` (agent.py), not the
+    shared `team_manager_instruction_provider` -- but that dedicated
+    provider still selects `TEAM_MANAGER_TRUSTED_RESULT_INSTRUCTION`
+    whenever a pending specialist result exists, exactly like `team_
+    manager_instruction_provider` does, so this specific mode's rendered
+    text is byte-for-byte unchanged. Also reconfirms the R1 structural
+    trust boundary (`tools == []`) that this formatting-only pass must
+    never weaken.
     """
     from backend.agents.team_manager.agent import presentation_team_manager
 

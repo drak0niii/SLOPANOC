@@ -98,7 +98,10 @@ from __future__ import annotations
 
 from google.adk.agents import Agent
 
-from backend.agents.team_manager.case_context import team_manager_instruction_provider
+from backend.agents.team_manager.case_context import (
+    presentation_team_manager_instruction_provider,
+    team_manager_instruction_provider,
+)
 from backend.agents.team_manager.direct_read_fast_path import _fast_path_incident_manager
 from backend.agents.team_manager.case_tools import record_case_analysis
 from backend.agents.team_manager.conversation_target import record_conversation_target
@@ -200,6 +203,13 @@ presentation_team_manager = team_manager.model_copy(
         "tools": [],
         "before_tool_callback": None,
         "after_tool_callback": None,
+        # LIVE-CORR-13 -- a dedicated instruction provider, never the
+        # shared `team_manager_instruction_provider` (which falls back to
+        # the full `TEAM_MANAGER_INSTRUCTION` -- unconditionally demanding
+        # `record_request_contract`/`record_source_requirements` calls
+        # this `tools=[]` agent cannot make) -- see that provider's own
+        # docstring for the full rationale.
+        "instruction": presentation_team_manager_instruction_provider,
     }
 )
 """R1 FIX (correctness-regression pass): the STRUCTURAL half of "trusted
@@ -242,5 +252,99 @@ already refuses to reference anything for an empty/absent result, and the
 TOOLS half here independently, structurally forbids delegation regardless
 of what the instruction says. Two independent enforcement layers, not one.
 """
+
+operational_team_manager = team_manager.model_copy(
+    update={
+        "tools": [
+            tool
+            for tool in team_manager.tools
+            if tool not in (record_request_contract, record_source_requirements)
+        ],
+    }
+)
+"""CONTROL-PLANE-SEQ-03 -- the NORMAL-turn runner used AFTER mandatory
+current-turn request preflight (chat_service.py) has already produced a
+fresh, `run_id`-fresh `RequestContract` and declared source requirements.
+Mirrors `presentation_team_manager`'s own established "remove the
+capability from the schema, don't just police it via prompt wording"
+precedent exactly: `.model_copy`, same role/identity/model/instruction/
+model-callbacks, with ONLY `record_request_contract`/`record_source_
+requirements` removed from `tools` -- every other tool (`incident_manager_
+tool`, `troubleshooting_manager`, `record_conversation_target`, `record_
+case_analysis`) is retained UNCHANGED, and `before_tool_callback`/`after_
+tool_callback` are left UNCHANGED too (`enforce_read_continuation`/
+`block_repeated_delegation_after_selection_needed`/`block_repeated_
+troubleshooting_invocation`/`sync_incident_manager_result_to_state`/
+`record_selection_needed`/`cache_troubleshooting_result_this_turn` all
+still guard the tools that remain; `validate_and_persist_request_contract`
+becomes inert -- never triggered, since its own tool is gone -- exactly
+like `enforce_read_continuation`/`sync_incident_manager_result_to_state`
+already do for `presentation_team_manager`'s own empty toolset).
+
+With this tool absent, ADK's function-calling schema sent to Gemini for
+this Runner contains NO callable path to `record_request_contract`/
+`record_source_requirements` at all -- structurally, not merely by
+instruction, this turn's own model reasoning cannot rewrite `request_
+class`, `missing_context` authority, or the source-requirements
+declaration preflight already, deterministically, established. Those
+remain owned exclusively by the preflight contract/declaration calls
+(`request_contract_completion.py`/`source_requirements_completion.py`)
+that ran BEFORE this runner was ever selected.
+
+MODE SELECTION IS SERVER-TRUSTED here too: which of `team_manager`/
+`operational_team_manager`/`presentation_team_manager` a turn's `Runner`
+uses is decided entirely by `chat_service.py`'s own deterministic Phase-A
+gate (CONTROL-PLANE-SEQ-03) -- never by the model, never by user text.
+"""
+
+operational_team_manager_incident_manager_only = operational_team_manager.model_copy(
+    update={"tools": [tool for tool in operational_team_manager.tools if tool is not troubleshooting_manager]}
+)
+"""CONTROL-PLANE-SEQ-04 -- section 14's own explicit "if work_envelope.
+may_route_troubleshooting_manager == False, Troubleshooting Manager is
+unreachable" requirement, enforced STRUCTURALLY (schema-level tool
+removal -- the SAME `.model_copy` precedent `operational_team_manager`/
+`presentation_team_manager` already established), not merely by
+instruction. Used for a turn whose `WorkEnvelope` grants `may_route_
+incident_manager=True` but `may_route_troubleshooting_manager=False` --
+in practice, an `OPERATIONAL_INFORMATION`-class request (see
+`request_execution_policy.derive_work_envelope`'s own docstring for
+exactly which classes grant which routing flags). Every other tool/
+callback is identical to `operational_team_manager` -- see that agent's
+own docstring for the full rationale."""
+
+operational_team_manager_troubleshooting_manager_only = operational_team_manager.model_copy(
+    update={"tools": [tool for tool in operational_team_manager.tools if tool is not incident_manager_tool]}
+)
+"""CONTROL-PLANE-SEQ-04 -- the mirror-image sibling of `operational_team_
+manager_incident_manager_only`, immediately above: `may_route_incident_
+manager=False` but `may_route_troubleshooting_manager=True`. Not currently
+reachable by any `derive_work_envelope` branch (every class that grants
+`troubleshooting_manager` also grants `incident_manager`), but defined
+here -- rather than only where it might first become reachable -- so the
+full, closed set of capability combinations `select_operational_team_
+manager` (below) may need is available now, exactly mirroring `operational
+_team_manager_incident_manager_only`'s own construction."""
+
+
+def select_operational_team_manager(
+    *, may_route_incident_manager: bool, may_route_troubleshooting_manager: bool
+):
+    """CONTROL-PLANE-SEQ-04 -- the single, deterministic selector
+    `chat_service.py` calls to pick the correct capability-filtered
+    variant for a turn's own already-derived `WorkEnvelope` (never passed
+    the `WorkEnvelope` object itself -- this module stays decoupled from
+    that type, taking only the two plain booleans it actually needs).
+    Never model-chosen; MODE SELECTION IS SERVER-TRUSTED, exactly like
+    every other agent-variant selection in this file.
+    """
+    if may_route_incident_manager and may_route_troubleshooting_manager:
+        return operational_team_manager
+    if may_route_incident_manager:
+        return operational_team_manager_incident_manager_only
+    if may_route_troubleshooting_manager:
+        return operational_team_manager_troubleshooting_manager_only
+    return presentation_team_manager
+
 
 root_agent = team_manager

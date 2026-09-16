@@ -737,8 +737,44 @@ def test_wiring_confirmation_team_manager_tool_still_uses_fast_path_variant() ->
 
 
 def test_wiring_confirmation_chat_service_uses_fast_path_team_manager() -> None:
+    """CONTROL-PLANE-SEQ-06 -- reconciled with the SEQ-03/SEQ-04
+    capability-filtered-runner architecture: `_build_runner()` no longer
+    wraps `get_fast_path_team_manager()`'s own base `team_manager` (which
+    still carries `record_request_contract`/`record_source_requirements`
+    -- deliberately reachable there ONLY for the bounded preflight
+    remediation agents, never for the normal response-generating runner
+    since SEQ-03's own mandatory preflight). It wraps `operational_team_
+    manager` (agent.py) instead -- the SAME role/identity/model/
+    instruction, with those two governance tools structurally absent --
+    while preserving the IDENTICAL P4B.3 fast-path `before_model_callback`
+    composition `get_fast_path_team_manager()` itself established
+    (`_present_fast_path_result_via_trusted_pipeline` first, `before_
+    model_call("team_manager")` second). This asserts the CURRENT
+    architectural invariant directly (capability-filtered tools + the
+    preserved fast-path callback shape) rather than object identity with
+    the now-superseded `get_fast_path_team_manager()` singleton, which
+    remains a real, distinct object other tests in this file still use to
+    exercise the fast-path/trust-failure mechanism in isolation.
+    """
+    from backend.agents.team_manager.agent import operational_team_manager
+    from backend.agents.team_manager.direct_read_fast_path import _present_fast_path_result_via_trusted_pipeline
     from backend.api.chat_service import _build_runner
     from backend.api.session_service import ApiSessionService
 
     runner = _build_runner(ApiSessionService())
-    assert runner.agent is get_fast_path_team_manager()
+    agent = runner.agent
+
+    tool_names = {getattr(t, "name", None) or getattr(t, "__name__", None) for t in agent.tools}
+    assert "record_request_contract" not in tool_names
+    assert "record_source_requirements" not in tool_names
+    assert tool_names == {
+        getattr(t, "name", None) or getattr(t, "__name__", None) for t in operational_team_manager.tools
+    }
+
+    assert agent.name == operational_team_manager.name
+    assert agent.model is operational_team_manager.model
+    assert agent.instruction is operational_team_manager.instruction
+
+    callbacks = agent.before_model_callback
+    assert isinstance(callbacks, list)
+    assert callbacks[0] is _present_fast_path_result_via_trusted_pipeline

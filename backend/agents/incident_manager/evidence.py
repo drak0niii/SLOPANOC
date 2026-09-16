@@ -157,6 +157,7 @@ from google.genai import types
 
 from backend.agents.incident_manager.provenance_compliance import enforce_governed_knowledge_selection
 from backend.agents.incident_manager.schemas import TroubleshootingGuidance, TroubleshootingInteractionMode, TroubleshootingOperationalEffect
+from backend.api.rejected_command_context import register_rejected_commands
 from backend.api.turn_context import current_run_id
 from backend.tools.teams.get_messages import read_known_message_ids
 
@@ -936,6 +937,22 @@ def enforce_procedure_scoped_command_grounding_with_reason(
     active_id_for_logging = resolve_active_section_id(question, list(section_texts_by_id.keys()), headings_by_id)
 
     if not _guidance_scope_established(knowledge_ids_by_id):
+        # CONTROL-PLANE-SEQ-06 -- section 2's own disclosed residual: the
+        # exact command value(s) this wholesale cross-procedure-evidence
+        # wipe is ABOUT to discard are ALREADY known here, before they are
+        # ever nulled out below -- forwarded via `register_rejected_
+        # commands` (rejected_command_context.py, mirrors `register_
+        # troubleshooting_guidance`'s own run-id-keyed, never-persisted
+        # lifecycle exactly) so `chat_service.py`'s own final-output
+        # validator can recognize the SAME value if it separately survives
+        # in team_manager's own downstream free-form prose -- never a new
+        # grounding judgment, never text scanning; this is purely an
+        # additive side-channel over an ALREADY-DECIDED rejection.
+        register_rejected_commands(
+            run_id,
+            ([guidance.command] if guidance.command else [])
+            + [step.command for step in guidance.full_procedure_steps if step.command],
+        )
         suppressed = guidance.model_copy(
             update={
                 "interpretation": None,
@@ -1006,6 +1023,12 @@ def enforce_procedure_scoped_command_grounding_with_reason(
             scrub_target, narrative_scrubbed = _scrub_narrative_operational_leaks(scrub_target, rejected_commands)
             new_steps = scrub_target.full_procedure_steps
             stripped = stripped or narrative_scrubbed
+            # CONTROL-PLANE-SEQ-06 -- forwards the SAME `rejected_commands`
+            # this loop already computed (never re-derived) to `chat_
+            # service.py`'s own final-output validator, via the SAME
+            # additive side-channel as the cross-procedure-evidence site
+            # above.
+            register_rejected_commands(run_id, rejected_commands)
         _log_grounding_decision(run_id, guidance, selected_items, active_id_for_logging, stripped, primary_reason)
         if not stripped:
             return guidance, False, None
@@ -1022,6 +1045,9 @@ def enforce_procedure_scoped_command_grounding_with_reason(
     )
     if not section_ok:
         rejected_command = guidance.command
+        # CONTROL-PLANE-SEQ-06 -- same additive forward as the two sites
+        # above.
+        register_rejected_commands(run_id, [rejected_command])
         corrected, _ = _scrub_narrative_operational_leaks(
             guidance.model_copy(update={"command": None}), frozenset({rejected_command})
         )
@@ -1037,6 +1063,8 @@ def enforce_procedure_scoped_command_grounding_with_reason(
     # (the NEXT_STEP-mode counterpart of the FULL_PROCEDURE `action` scrub
     # above).
     rejected_command = guidance.command
+    # CONTROL-PLANE-SEQ-06 -- same additive forward as the sites above.
+    register_rejected_commands(run_id, [rejected_command])
     corrected, _ = _scrub_narrative_operational_leaks(
         guidance.model_copy(update={"command": None}), frozenset({rejected_command})
     )

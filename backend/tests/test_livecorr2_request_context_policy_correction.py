@@ -449,10 +449,18 @@ def test_ambiguous_with_subject_and_no_missing_context_uses_generic_text() -> No
     assert text == "An exact command cannot yet be safely provided for this step. Please confirm the missing details."
 
 
-def test_invalid_contract_status_unchanged_by_this_pass() -> None:
+def test_invalid_contract_status_no_longer_presumes_an_alarm_or_procedure() -> None:
+    """LIVE-CORR-5 correction (section 6 of that pass's own instruction):
+    a missing/stale contract alone is not evidence the user asked about a
+    specific alarm/procedure -- previously asserted the OPPOSITE
+    ("alarm or governed procedure" IN text); now asserts the corrected,
+    neutral wording. The underlying safety decision (command withheld) is
+    unaffected by this wording-only change -- see `command_suppression_
+    fallback_text`'s own `_INVALID_CONTRACT_FALLBACK_TEXT` docstring."""
     decision = RequestExecutionDecision(status=RequestExecutionStatus.INVALID_CONTRACT, missing_context=[])
     text = command_suppression_fallback_text(decision)
-    assert "alarm or governed procedure" in text
+    assert "alarm or governed procedure" not in text
+    assert text
 
 
 def test_model_declared_missing_context_phrase_passes_through_unmodified() -> None:

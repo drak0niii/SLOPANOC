@@ -52,9 +52,11 @@ from google.adk.utils.instructions_utils import inject_session_state
 
 from backend.agents.team_manager.prompts import (
     CASE_CONTEXT_TEAM_MANAGER_ADDENDUM,
+    TEAM_MANAGER_CONVERSATIONAL_PRESENTATION_INSTRUCTION,
     TEAM_MANAGER_INSTRUCTION,
     TEAM_MANAGER_TRUSTED_RESULT_INSTRUCTION,
 )
+from backend.agents.team_manager.authoritative_request_context import AUTHORITATIVE_REQUEST_CONTEXT_STATE_KEY
 from backend.agents.team_manager.read_continuation_presentation import PENDING_SPECIALIST_RESULT_STATE_KEY
 from backend.api.case_service import ACTIVE_CASE_ID_STATE_KEY
 from backend.cases.schemas import CaseContextSnapshot
@@ -87,8 +89,45 @@ def _render_case_context_block(snapshot: CaseContextSnapshot) -> str:
     return "\n".join(lines)
 
 
+async def _finalize_instruction(base: str, ctx: ReadonlyContext) -> str:
+    """Shared tail shared by every `InstructionProvider` in this module:
+    session-state placeholder substitution, the CONTROL-PLANE-SEQ-04
+    authoritative-context block, and the Case context addendum. Each
+    provider differs only in which `base` instruction string it selects."""
+    base_instruction = await inject_session_state(base, ctx)
+
+    # CONTROL-PLANE-SEQ-04 -- section 17's own "supply Effective Governed
+    # Request downstream" requirement: a plain, already-rendered string
+    # `chat_service.py`'s own mandatory preflight wrote into THIS turn's
+    # live (never durably persisted -- `temp:`-prefixed, see that module's
+    # own docstring) session state, read back here unchanged. Absent for
+    # every turn this milestone's preflight does not run for (a resumed
+    # read-continuation, a turn with no validated contract at all) -- a
+    # complete no-op in that case, never a placeholder/empty block.
+    authoritative_request_context = ctx.state.get(AUTHORITATIVE_REQUEST_CONTEXT_STATE_KEY)
+    if authoritative_request_context:
+        base_instruction = f"{base_instruction}\n\n{authoritative_request_context}"
+
+    case_id = ctx.state.get(ACTIVE_CASE_ID_STATE_KEY)
+    if not case_id:
+        return base_instruction
+
+    try:
+        case_service = get_case_service()
+        case = await case_service.get_case(ctx.user_id, case_id)
+        items = await case_service.get_context_items(ctx.user_id, case_id)
+    except SafeErrorException:
+        return base_instruction
+
+    snapshot = build_case_context_snapshot(case, items)
+    return f"{base_instruction}\n\n{CASE_CONTEXT_TEAM_MANAGER_ADDENDUM}\n\n{_render_case_context_block(snapshot)}"
+
+
 async def team_manager_instruction_provider(ctx: ReadonlyContext) -> str:
-    """The `InstructionProvider` ADK invokes once per team_manager turn.
+    """The `InstructionProvider` ADK invokes once per `team_manager`/
+    `operational_team_manager` turn (never `presentation_team_manager` --
+    see `presentation_team_manager_instruction_provider` below for that
+    agent's own, separate provider).
 
     P4A -- MODE SELECTION: `chat_service.py` writes `PENDING_SPECIALIST_
     RESULT_STATE_KEY` into session state (if at all) strictly BEFORE
@@ -103,20 +142,43 @@ async def team_manager_instruction_provider(ctx: ReadonlyContext) -> str:
     INSTRUCTION` instead of paying for the full orchestration instruction
     every time.
     """
-    case_id = ctx.state.get(ACTIVE_CASE_ID_STATE_KEY)
     pending_specialist_result = ctx.state.get(PENDING_SPECIALIST_RESULT_STATE_KEY)
     base = TEAM_MANAGER_TRUSTED_RESULT_INSTRUCTION if pending_specialist_result else TEAM_MANAGER_INSTRUCTION
-    base_instruction = await inject_session_state(base, ctx)
+    return await _finalize_instruction(base, ctx)
 
-    if not case_id:
-        return base_instruction
 
-    try:
-        case_service = get_case_service()
-        case = await case_service.get_case(ctx.user_id, case_id)
-        items = await case_service.get_context_items(ctx.user_id, case_id)
-    except SafeErrorException:
-        return base_instruction
+async def presentation_team_manager_instruction_provider(ctx: ReadonlyContext) -> str:
+    """LIVE-CORR-13 -- the dedicated `InstructionProvider` for
+    `presentation_team_manager` (agent.py, `tools=[]`) ONLY.
 
-    snapshot = build_case_context_snapshot(case, items)
-    return f"{base_instruction}\n\n{CASE_CONTEXT_TEAM_MANAGER_ADDENDUM}\n\n{_render_case_context_block(snapshot)}"
+    THE GAP THIS CLOSES: `presentation_team_manager` previously shared
+    `team_manager_instruction_provider` above, which falls back to the
+    FULL `TEAM_MANAGER_INSTRUCTION` whenever there is no trusted specialist
+    result to present (i.e. every ordinary `GENERAL_CONVERSATION`/not-
+    work-permitted turn -- see chat_service.py's own runner-selection
+    comment). That instruction unconditionally tells the model to call
+    `record_request_contract`/`record_source_requirements` "for EVERY
+    request, with no exception" -- but `presentation_team_manager` has
+    `tools=[]`, so it structurally CANNOT call them. Live evidence proved
+    the model, faced with an instruction it cannot fulfill via a function
+    call, narrated the attempt as plain text instead (e.g. "I'm calling
+    `record_source_requirements`...") -- exposing internal control-plane
+    machinery to the user.
+
+    THE FIX: reuse the SAME trusted-result instruction as before when a
+    pending specialist result exists (unchanged), but fall back to
+    `TEAM_MANAGER_CONVERSATIONAL_PRESENTATION_INSTRUCTION` -- a separate,
+    narrower instruction that never mentions those tools at all, and
+    explicitly forbids narrating any internal call -- instead of the full
+    orchestration instruction. Never touches `team_manager_instruction_
+    provider` above (still used, unchanged, by `team_manager`/`operational_
+    team_manager`, which DO retain enough of the original toolset that the
+    mismatch this closes does not apply to them the same way).
+    """
+    pending_specialist_result = ctx.state.get(PENDING_SPECIALIST_RESULT_STATE_KEY)
+    base = (
+        TEAM_MANAGER_TRUSTED_RESULT_INSTRUCTION
+        if pending_specialist_result
+        else TEAM_MANAGER_CONVERSATIONAL_PRESENTATION_INSTRUCTION
+    )
+    return await _finalize_instruction(base, ctx)

@@ -1,0 +1,8 @@
+2026/09/14 13:17:04 Authorizing with Application Default Credentials
+2026/09/14 13:17:04 [pr-msn-dev-gl-slopai-01:europe-west4:sloc-anoc-sandbox01] Listening on 127.0.0.1:5433
+2026/09/14 13:17:04 The proxy has started successfully and is ready for new connections!
+2026/09/14 13:19:42 [pr-msn-dev-gl-slopai-01:europe-west4:sloc-anoc-sandbox01] Accepted connection from 127.0.0.1:51075
+2026/09/14 13:21:14 [pr-msn-dev-gl-slopai-01:europe-west4:sloc-anoc-sandbox01] Accepted connection from 127.0.0.1:55679
+2026/09/14 14:17:01 Sending SIGINT signal for proxy to shutdown.
+2026/09/14 14:17:01 SIGINT signal received. Shutting down...
+2026/09/14 14:17:01 proxy server error: accept tcp4 127.0.0.1:5433: use of closed network connection

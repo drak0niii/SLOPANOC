@@ -81,14 +81,57 @@ from pydantic import BaseModel, Field, ValidationError
 from backend.agents.incident_manager.schemas import (
     TroubleshootingGuidance,
     TroubleshootingInteractionMode,
+    TroubleshootingOperationalEffect,
 )
 from backend.agents.team_manager.request_contract import (
+    PENDING_GOVERNED_REQUEST_STATE_KEY,
+    TARGET_IDENTIFIER_PARAMETER_NAME,
+    TARGET_TYPE_PARAMETER_NAME,
+    PendingGovernedRequest,
+    PendingGovernedRequestStatus,
+    RequestClass,
     RequestContract,
     RequestedOutput,
     RequestIntent,
+    RequestParameter,
+    RequestScope,
+    authoritative_missing_context_names,
+    derive_request_class,
     is_operationally_shaped_request,
+    request_scope,
     required_target_parameter_gaps,
 )
+
+
+def _resolve_request_class(
+    request_class: Optional[str], intent: Optional[str], requested_output: Optional[str], subject: Optional[str] = None
+) -> Optional[str]:
+    """LIVE-CORR-8 -- defensive fallback, used everywhere this module
+    reads a `request_class`. A REAL, persisted `RequestContract` always
+    has `request_class` populated by `validate_and_persist_request_
+    contract` (request_contract.py) -- but a `RequestContract`/
+    `RequestExecutionDecision` constructed DIRECTLY (every pre-existing
+    test in this codebase's own suite that predates this milestone, and
+    any future caller that does the same) may leave it unset. Re-derives
+    it, on the fly, from the exact SAME pure `derive_request_class`
+    function whenever it is `None` -- byte-identical to what persistence
+    would have computed from the SAME `intent`/`requested_output`, so a
+    caller that never set it explicitly behaves IDENTICALLY to one that
+    did; this is never a second, independently-drifting classification.
+    `action_requested` is not available on `RequestExecutionDecision`
+    (only `intent`/`requested_output`/`subject` are) -- passed as `False`
+    here, which only affects the `ACTION` class, itself irrelevant to
+    every call site in this module that needs this fallback (all three
+    are checked well after `derive_execution_decision`'s own separate,
+    earlier, unconditional ACTION branch has already run). `None` `intent`
+    or `requested_output` (e.g. `INVALID_CONTRACT`) returns `None`
+    unchanged -- nothing to derive from.
+    """
+    if request_class is not None:
+        return request_class
+    if intent is None or requested_output is None:
+        return None
+    return derive_request_class(intent, requested_output, False, subject)
 
 
 class RequestExecutionStatus:
@@ -159,6 +202,12 @@ class RequestExecutionDecision(BaseModel):
     """
 
     status: str
+    request_class: Optional[str] = None
+    """LIVE-CORR-8 -- the authoritative governance class, propagated
+    unchanged from the validated `RequestContract.request_class` (itself
+    ALWAYS deterministically derived -- see `RequestContract.request_
+    class`'s own docstring). `None` only for `INVALID_CONTRACT` (no
+    contract to read a class from at all)."""
     intent: Optional[str] = None
     requested_output: Optional[str] = None
     subject: Optional[str] = None
@@ -171,10 +220,396 @@ class RequestExecutionDecision(BaseModel):
     reason: str = ""
 
 
-def derive_execution_decision(contract: Optional[RequestContract], current_run_id: Optional[str]) -> RequestExecutionDecision:
+def _turn_requires_no_independent_lookup(contract: RequestContract) -> bool:
+    """LIVE-CORR-11 CORRECTIVE PASS -- ISSUE C. Reuses two EXISTING
+    `RequestContract` fields (part of the 6A.13 schema since before this
+    milestone; never previously consulted by the pending-continuity
+    mechanism) as the PRIMARY discriminator between "a bare value/fact
+    answering an outstanding question" and "a self-contained new question
+    that happens to mention a same-shaped parameter": `requires_governed_
+    knowledge`/`requires_operational_context` are the model's own existing
+    declaration of whether THIS turn, on its own, needs to consult
+    governed Knowledge or live operational context to be answered.
+
+    CONFIRMED LIVE SHAPE (LIVE-CORR-10's own audit): the real "the RRU is
+    rru-3" clarification-answer turns show BOTH `False` -- a bare fact
+    needs no lookup of its own. A genuinely independent question such as
+    "what is the status of RRU-9?" plausibly needs one or the other (a
+    live status check is an operational-context lookup) -- `True` for
+    either flag means this turn is answering ITS OWN question, not the
+    pending one, regardless of what parameter names it happens to
+    mention.
+    """
+    return not contract.requires_governed_knowledge and not contract.requires_operational_context
+
+
+def _relates_to_pending_vocabulary(contract: RequestContract, relevant_names: frozenset[str]) -> bool:
+    """LIVE-CORR-11 CORRECTIVE PASS -- ISSUE C's own explicit "prove the
+    supplied structured context is actually satisfying/refining the
+    pending request" requirement. `relevant_names` is the pending
+    record's own closed vocabulary for THIS check -- `missing_context`
+    (what is still needed) for an `UNRESOLVED` record, or the record's
+    own `provided_context` NAMES (what was already supplied, and could
+    now be corrected) for a `COMPLETED` one -- never the user's raw text,
+    never a new taxonomy. A supplied parameter whose NAME does not appear
+    in either set (e.g. `vendor=ericsson` mentioned while a `restart RRU`
+    request only ever cared about `unit_id`/`unit_type`) does not relate,
+    regardless of any other signal."""
+    provided_names = {param.name for param in contract.provided_context}
+    return bool(provided_names & relevant_names)
+
+
+def _subject_consistent_with_pending(contract_subject: Optional[str], pending_subject: Optional[str]) -> bool:
+    """LIVE-CORR-12G -- deterministic, non-fuzzy subject consistency check:
+    exact match, or one containing the other verbatim, case-insensitively
+    (mirrors `governed_evidence_continuity._subject_matches_heading`'s own
+    established discipline exactly -- never a new comparison idiom). Both
+    values are already-validated `RequestContract.subject`/`PendingGoverned
+    Request.subject` strings -- never raw user text, never a keyword/regex
+    match. `None`/blank on either side is never consistent with anything
+    (a missing subject proves nothing, positively or negatively)."""
+    if not contract_subject or not pending_subject:
+        return False
+    left = contract_subject.strip().lower()
+    right = pending_subject.strip().lower()
+    if not left or not right:
+        return False
+    return left == right or left in right or right in left
+
+
+def _supplies_context_for_pending_request(
+    contract: RequestContract, relevant_names: frozenset[str], pending_subject: Optional[str] = None
+) -> bool:
+    """LIVE-CORR-11 -- section 8's own explicit "deterministic/structured
+    criterion, never keyword/regex routing" requirement.
+
+    LIVE-CORR-11 CORRECTIVE PASS -- ISSUE B/C. TRUE when signals 1, 2, and
+    4 below all agree AND EITHER signal 3 holds OR the LIVE-CORR-12G
+    subject-consistency bypass applies:
+
+      1. the CURRENT turn's own resolved class is `OPERATIONAL_
+         INFORMATION` specifically -- never `GENERAL_CONVERSATION` (a
+         genuine "hello" must never be promoted into command governance),
+         and never an already-resolved `EXACT_COMMAND`/`PROCEDURE_
+         TROUBLESHOOTING`/`ACTION` turn (which needs no inheritance -- it
+         already classified itself correctly). This is the EXACT proven
+         defect shape (section 2's own live evidence: a value-answer turn
+         reclassifies to `OPERATIONAL_INFORMATION`/`FACT`).
+      2. `contract.provided_context` is non-empty -- the model supplied
+         SOME provenance-VERIFIED parameter this turn (already survived
+         `_verify_and_filter_provided_context`'s own real-text/session-
+         confirmed check before this function ever sees it -- never an
+         unchecked model claim). A pure new QUESTION ("what does a VSWR
+         alarm mean?") supplies no parameter at all and is correctly
+         excluded here, distinguishing it from a genuine clarification
+         ANSWER without inspecting the user's raw text.
+      3. `_turn_requires_no_independent_lookup` -- this turn is not
+         ITSELF a self-contained request needing its own governed-
+         Knowledge/operational-context lookup (ISSUE C's own core fix:
+         "what is the status of RRU-9?" is excluded HERE, even though it
+         may supply a same-named `unit_id` parameter).
+      4. `_relates_to_pending_vocabulary` -- the supplied parameter NAME
+         actually belongs to the pending record's own relevant vocabulary
+         (ISSUE C's own second, independent protection: an unrelated
+         mention, e.g. `vendor=ericsson`, is excluded even when the other
+         signals all hold).
+
+    LIVE-CORR-12G -- PROVEN LIVE GAP: a real reproduction showed signal 3
+    alone incorrectly excluding a turn whose OWN `subject` was already an
+    exact, deterministic match for the pending operation's own subject
+    ("the RRU is RRU-3", `subject="restart RRU"`, answering a pending
+    "restart RRU" `EXACT_COMMAND` request) merely because that turn's own
+    (unreliable, model-set) `requires_governed_knowledge`/`requires_
+    operational_context` flags happened to be `True` -- signal 3 cannot
+    distinguish "this turn needs its own independent lookup because it is
+    a NEW, self-contained question" from "this turn needs a lookup only
+    because completing the SAME pending operation always would." Signal 3
+    is no longer an unconditional requirement: `contract.continuation is
+    True` AND `_subject_consistent_with_pending(contract.subject,
+    pending_subject)` is now an ALTERNATE, equally sufficient path -- an
+    explicit, deterministic subject match combined with the model's own
+    continuation claim is at least as strong a relatedness signal as
+    "needs no independent lookup" was always only an approximation of.
+    Never gated on raw user text, never fuzzy -- `pending_subject` is
+    `None` for every pre-existing caller (LIVE-CORR-11's own suite, and
+    the `COMPLETED`-status call site), so this bypass is inert unless a
+    caller deliberately supplies it, preserving all prior behavior byte-
+    for-byte for every case that does not.
+
+    LIVE-CORR-11 CORRECTIVE PASS -- ISSUE B: `contract.continuation` alone
+    (previously the SOLE gate) was already proven insufficient -- live
+    evidence showed the model can emit `continuation=False` for a genuine
+    same-operation/new-target turn. It remains, as of LIVE-CORR-12G, one
+    half of the narrow subject-consistency bypass above, never a gate on
+    its own.
+
+    Still NOT gated on `contract.subject` matching the pending request's
+    own `subject` as an UNCONDITIONAL requirement -- LIVE-CORR-10's own
+    finding (value-answer turns with a placeholder subject like `"RRU
+    ID"`) remains valid, and signal 3 remains the PRIMARY path for that
+    shape; subject-consistency is only ever an ADDITIONAL, alternate way
+    to satisfy relatedness, never a replacement for signals 1/2/4.
+    """
+    resolved_class = _resolve_request_class(contract.request_class, contract.intent, contract.requested_output, contract.subject)
+    if resolved_class != RequestClass.OPERATIONAL_INFORMATION:
+        return False
+    if not contract.provided_context:
+        return False
+    if not _turn_requires_no_independent_lookup(contract) and not (
+        contract.continuation and _subject_consistent_with_pending(contract.subject, pending_subject)
+    ):
+        return False
+    return _relates_to_pending_vocabulary(contract, relevant_names)
+
+
+def _merge_pending_provided_context(
+    pending_provided_context: list["RequestParameter"], current_provided_context: list["RequestParameter"]
+) -> list["RequestParameter"]:
+    """Same "current turn's own verified value always wins, by parameter
+    NAME" merge `validate_and_persist_request_contract`'s own `session_
+    confirmed` carry-forward already uses (request_contract.py) --
+    reapplied here, one layer up, for the pending-request store instead
+    of the prior-turn-contract store. THE direct mechanism for section 9's
+    "preserve parameter correction" requirement: "actually it is RRU-10"
+    supplies a fresh, already-verified `unit_id` that overwrites the
+    pending record's own stale `RRU-3`, never accumulates both."""
+    merged: dict[str, "RequestParameter"] = {param.name: param for param in pending_provided_context}
+    for param in current_provided_context:
+        merged[param.name] = param
+    return list(merged.values())
+
+
+def resolve_effective_governed_contract(
+    contract: RequestContract, pending_governed_request: Optional[PendingGovernedRequest]
+) -> RequestContract:
+    """LIVE-CORR-11 -- section 6/7's own "execution-policy authority must
+    use a deterministic effective governed request" requirement. Returns
+    an IN-MEMORY-ONLY `RequestContract` (never persisted -- the REAL,
+    durable `VALIDATED_REQUEST_CONTRACT_STATE_KEY` contract, and every
+    field team_manager's own model actually declared this turn, is left
+    completely untouched by this function; see `PENDING_GOVERNED_
+    REQUEST_STATE_KEY`'s own docstring's "never silently mutate history"
+    note) reflecting the EFFECTIVE governance this turn's execution
+    decision must be computed from.
+
+    A no-op (`contract` returned unchanged) unless BOTH a pending governed
+    request exists AND `_supplies_context_for_pending_request` positively,
+    deterministically establishes this turn is answering/correcting it.
+    `intent`/`requested_output`/`subject`/`request_class` are overridden
+    to the PENDING request's own values (restoring the governance class/
+    answer shape/semantic operation a value-only clarification turn does
+    not itself re-declare); `provided_context` is the deterministic
+    pending+current merge (section 9); `missing_context` seeds from the
+    pending record's own last-known gap and is then FULLY RECOMPUTED,
+    unchanged, by the existing logic below this call site (never
+    precomputed here) -- so a fresh `grounded_command_candidate` this
+    turn's own grounding produced still narrows or confirms the gap
+    exactly as it would for any ordinary `EXACT_COMMAND` contract
+    (section 11's own "grounding must stay fresh" requirement -- this
+    function never weakens or bypasses that layer).
+
+    LIVE-CORR-11 CORRECTIVE PASS:
+
+      ISSUE A -- branches on `pending_governed_request.status`
+      (`PendingGovernedRequestStatus`): an `UNRESOLVED` record is matched
+      against its own `missing_context` (what is still needed); a
+      `COMPLETED` record -- the previous target/instance already reached
+      `ALLOW` -- is matched against its own `provided_context` NAMES
+      (what was already supplied, now being corrected). Either way, the
+      relevant vocabulary is computed here and handed to `_supplies_
+      context_for_pending_request`/`_relates_to_pending_vocabulary` --
+      this is what lets "actually it is RRU-10" reopen an already-ALLOWed
+      "restart RRU" request for exactly one more turn (see that status's
+      own docstring for why no TTL/timestamp is needed).
+
+      ISSUE D -- restores `intent = pending_governed_request.intent` (the
+      ORIGINAL turn's own semantic label), never a hardcoded `RequestIntent
+      .COMMAND`. Safe regardless of the original intent's own value:
+      `requested_output` is unconditionally forced to `EXACT_COMMAND`
+      here, and `is_operationally_shaped_request`/`required_target_
+      parameter_gaps` (request_contract.py) are both already an OR over
+      `intent` and `requested_output` -- `requested_output=EXACT_COMMAND`
+      alone is always sufficient to keep every downstream gate's existing
+      behavior, whatever the restored `intent` turns out to be.
+    """
+    if pending_governed_request is None or pending_governed_request.request_class != RequestClass.EXACT_COMMAND:
+        return contract
+    pending_provided_names = frozenset(param.name for param in pending_governed_request.provided_context)
+    if pending_governed_request.status == PendingGovernedRequestStatus.UNRESOLVED:
+        # Still-needed keys ARE the primary vocabulary, but a real live
+        # value-answer turn can re-supply an ALREADY-provided key's name
+        # again (e.g. the model consistently tags an RRU identifier under
+        # `unit_type` across multiple turns rather than `unit_id` -- a
+        # separate, out-of-scope naming-accuracy quirk, LIVE-CORR-10's own
+        # documented finding) -- included so that re-statement still
+        # counts as relating to the SAME pending operation. This is never
+        # what makes an UNRELATED mention (e.g. `vendor=ericsson`) match;
+        # it only ever widens the ALREADY-narrow "known to this specific
+        # operation" set, never opens it to an arbitrary parameter name.
+        relevant_names = frozenset(pending_governed_request.missing_context) | pending_provided_names
+    elif pending_governed_request.status == PendingGovernedRequestStatus.COMPLETED:
+        relevant_names = pending_provided_names
+    else:
+        return contract
+    if not _supplies_context_for_pending_request(contract, relevant_names, pending_governed_request.subject):
+        return contract
+    merged_provided_context = _merge_pending_provided_context(
+        pending_governed_request.provided_context, contract.provided_context
+    )
+    return contract.model_copy(
+        update={
+            "intent": pending_governed_request.intent,
+            "requested_output": RequestedOutput.EXACT_COMMAND,
+            "subject": pending_governed_request.subject,
+            "provided_context": merged_provided_context,
+            "missing_context": list(pending_governed_request.missing_context),
+            "request_class": RequestClass.EXACT_COMMAND,
+            "ambiguity": False,
+        }
+    )
+
+
+# =============================================================================
+# LIVE-CORR-12D -- Request-Scoped Governed Evidence Continuity
+# =============================================================================
+#
+# THE GAP THIS CLOSES: the LIVE-CORR-12A architectural audit proved
+# `chat_service.py`'s governed-knowledge completion boundary
+# (`enforce_governed_knowledge_at_completion`, governed_knowledge_
+# completion.py) consults `LAST_SELECTED_GOVERNED_EVIDENCE_STATE_KEY`/
+# `ACTIVE_GOVERNED_PROCEDURE_STATE_KEY` -- a PRIOR turn's own selected-
+# evidence identity -- completely independently of this turn's own
+# validated `RequestContract`: a genuinely NEW, unrelated request ("what
+# is alt command doing?" after a prior "restart RRU" exchange, `request_
+# class=OPERATIONAL_INFORMATION`, `continuation=False`) still inherited
+# the OLD evidence as its own candidate universe, produced a genuinely
+# stale ambiguity ("Do you mean MOP X or Document1?"), and -- critically
+# -- that early-return NEVER gave the real `incident_manager`/fresh
+# `knowledge_search`/TELCO-applicability-narrowing pipeline a chance to
+# run for the NEW request at all.
+#
+# THE FIX: `is_governed_evidence_continuity_permitted`, below, is the
+# missing CONTINUITY CHECK step the milestone's own target architecture
+# names -- consulted by `chat_service.py` BEFORE it decides what to pass
+# as `prior_governed_evidence`/`active_anchor` into `enforce_governed_
+# knowledge_at_completion`. `False` means prior evidence must NOT be
+# treated as this turn's own candidate universe -- the caller passes an
+# EMPTY prior-evidence list and no anchor, so `enforce_governed_knowledge_
+# at_completion`'s OWN, completely UNCHANGED revalidation/ambiguity logic
+# naturally sees ZERO stale candidates and falls straight through to a
+# fresh, UNSCOPED `_run_incident_manager_remediation_once` call -- the
+# REAL `incident_manager` runs, the REAL, existing TELCO applicability
+# narrowing runs, exactly as it would for a request with no prior
+# governed history at all. This is a GATE on what evidence enters scope,
+# never a change to how that evidence is revalidated/narrowed/graded once
+# in scope -- `governed_evidence_continuity.py`/`governed_knowledge_
+# completion.py` are completely untouched by this pass.
+def is_governed_evidence_continuity_permitted(
+    contract: Optional[RequestContract],
+    current_run_id: Optional[str],
+    pending_governed_request: Optional[PendingGovernedRequest] = None,
+) -> bool:
+    """LIVE-CORR-12D -- the CONTINUITY CHECK: may THIS turn's governed-
+    knowledge completion boundary treat a PRIOR turn's own selected
+    governed evidence as its own candidate universe? Two independent
+    paths, either alone sufficient; a missing/stale/ambiguous contract
+    fails CLOSED to `False` -- prior evidence is NEVER the default.
+
+    PATH 1 -- A GENUINELY RELEVANT PendingGovernedRequest (section 12's
+    own explicit "PendingGovernedRequest must remain the authority for
+    request continuity; the evidence anchor must not independently
+    override it" requirement). Reuses `resolve_effective_governed_
+    contract` (this module, completely UNCHANGED) -- the EXACT SAME
+    relevance judgment `derive_execution_decision` already makes, never a
+    second, independently-drifting copy: if applying the pending record
+    actually CHANGES the contract (that function's own documented
+    no-op-unless-matched contract), this turn is genuinely answering/
+    correcting THAT SAME pending operation. A pending record that merely
+    EXISTS but is NOT relevant to this turn (e.g. an old, still-technically
+    -pending EXACT_COMMAND clarification sitting untouched while the user
+    asks something entirely unrelated) correctly falls through to PATH 2
+    instead of being trusted merely because some pending record exists --
+    `resolve_effective_governed_contract`'s own `provided_context`-
+    emptiness/vocabulary-relevance checks already guard exactly this case.
+
+    PATH 2 -- `contract.continuation is True` AND `contract.request_class`
+    is a real, non-`GENERAL_CONVERSATION` governed class. Section 8's own
+    explicit "continuation must not become the sole gate" requirement:
+    NEITHER signal is trusted alone -- `continuation` is the model's own
+    claim (independently proven unreliable in BOTH directions by LIVE-
+    CORR-10/11's own findings), and `request_class` alone is derived from
+    ANY truthy `subject` (`derive_request_class`'s own "a resolved subject
+    is enough" rule), including a BRAND NEW one, so it cannot by itself
+    distinguish "same topic" from "different topic" either. Combined, they
+    require the model to BOTH explicitly claim this is a follow-up AND
+    have produced a governed (non-conversational) request shape -- this is
+    exactly what FAILS for "what is alt command doing?"/"Resource
+    Activation Timeout on RRU -- help me fix it" (both live-confirmed
+    `continuation=False`) and exactly what HOLDS for a genuine "here is
+    the diagnostic output" follow-up. Never raw subject-string equality,
+    never keyword/regex matching of any kind -- the EXISTING, separate,
+    already-tested `resolve_active_candidate_among_ambiguous`/`detect_
+    explicit_sibling_topic_override` machinery (governed_evidence_
+    continuity.py, untouched) still independently narrows/overrides
+    WITHIN whatever candidate set this gate admits.
+
+    A missing (`None`), stale (`run_id` mismatch), or ambiguous contract
+    fails CLOSED -- mirrors `derive_execution_decision`'s own established
+    freshness-check discipline exactly, applied one layer earlier, so a
+    turn with nothing trustworthy to check is NEVER treated as safe to
+    reuse prior evidence merely by default.
+    """
+    if contract is None or not current_run_id or contract.run_id != current_run_id or contract.ambiguity:
+        return False
+    if pending_governed_request is not None:
+        effective = resolve_effective_governed_contract(contract, pending_governed_request)
+        if effective != contract:
+            return True
+    if not contract.continuation:
+        return False
+    # `_resolve_request_class` (this module, already established): a REAL
+    # persisted contract always has `request_class` populated, but a
+    # directly-constructed one (every pre-LIVE-CORR-8 test, and any future
+    # caller that does the same) may leave it unset -- re-derives it
+    # on the fly from the SAME pure function, never a second,
+    # independently-drifting classification.
+    resolved_request_class = _resolve_request_class(
+        contract.request_class, contract.intent, contract.requested_output, contract.subject
+    )
+    return resolved_request_class not in (None, RequestClass.GENERAL_CONVERSATION)
+
+
+def derive_execution_decision(
+    contract: Optional[RequestContract],
+    current_run_id: Optional[str],
+    grounded_command_candidate: Optional[str] = None,
+    pending_governed_request: Optional[PendingGovernedRequest] = None,
+) -> RequestExecutionDecision:
     """Pure, deterministic derivation -- NO LLM reasoning, no natural-
     language parsing. See this module's own docstring for the full
     branch-by-branch rationale.
+
+    LIVE-CORR-7 -- `grounded_command_candidate` (optional, additive,
+    backward-compatible default `None`): THIS turn's own real, already-
+    captured `TroubleshootingGuidance.command` text (the caller --
+    `chat_service.py`, which already has it available at this exact call
+    site), forwarded unchanged to `required_target_parameter_gaps` so a
+    genuinely target-independent grounded operation (e.g. a system-wide
+    alarm listing) is not blanket-assigned `unit_id`/`unit_type`
+    requirements it never actually needs -- see that function's own
+    docstring for the full rationale. Every existing caller that omits
+    this parameter is completely unaffected.
+
+    LIVE-CORR-11 -- `pending_governed_request` (optional, additive,
+    backward-compatible default `None`): the CALLER's own already-parsed
+    `PendingGovernedRequest` (`request_contract.py`), when one survived
+    from a prior turn's unresolved `EXACT_COMMAND` request. Applied via
+    `resolve_effective_governed_contract`, below, BEFORE any other branch
+    in this function ever runs -- every branch after that point already
+    operates on whatever `contract` refers to, unchanged, so this is a
+    single, additive, minimal-blast-radius correction at the top of the
+    function rather than a second, parallel decision path. Every existing
+    caller that omits this parameter is completely unaffected.
     """
     if contract is None or not current_run_id or contract.run_id != current_run_id:
         return RequestExecutionDecision(
@@ -187,9 +622,50 @@ def derive_execution_decision(contract: Optional[RequestContract], current_run_i
             reason="no current-turn validated request contract",
         )
 
-    if contract.ambiguity:
+    contract = resolve_effective_governed_contract(contract, pending_governed_request)
+
+    # LIVE-CORR-8 -- computed ONCE here, reused for every branch below via
+    # `resolved_request_class`: a REAL, persisted contract already has
+    # `request_class` populated by `validate_and_persist_request_
+    # contract`; `_resolve_request_class`'s own fallback re-derives it,
+    # identically, for a directly-constructed contract that left it unset
+    # (every pre-LIVE-CORR-8 test in this codebase's own suite) -- so
+    # both behave identically, never a second, independently-drifting
+    # classification.
+    resolved_request_class = _resolve_request_class(contract.request_class, contract.intent, contract.requested_output, contract.subject)
+
+    # LIVE-CORR-5 -- General Conversation Must Not Trigger Operational
+    # Command Gating. A model-set `ambiguity=True` is only a SAFETY-
+    # RELEVANT signal for a request `request_scope` classifies as
+    # `OPERATIONAL` -- subject/ambiguity are concepts about which specific
+    # governed procedure/command/action a request concerns, and simply do
+    # not apply to a `GENERAL` request (a greeting, "who are you and what
+    # can you do?", any plain conversational/informational exchange with
+    # no operational purpose). Confirmed live root cause: the model was
+    # (and, defensively, still may be) instructed to set `ambiguity=true`
+    # whenever `subject` is unset, with no distinction between "subject
+    # genuinely unclear for an operational request" and "subject does not
+    # apply because this is not an operational request at all" -- the
+    # SAME conflation `is_operationally_shaped_request` (DEF-0037) already
+    # fixed for the SEPARATE "no resolved subject/procedure" gate further
+    # below, applied here to this contract's own explicit `ambiguity`
+    # flag. This is a DETERMINISTIC, code-enforced correction, not a
+    # prompt-only fix (prompts.py's own guidance is also corrected, but
+    # this gate does not rely on the model actually following it).
+    #
+    # This narrows ONLY this `ambiguity`-triggered branch. This branch
+    # runs BEFORE the ACTION/KNOWLEDGE_INVENTORY branches below in source
+    # order, so `request_scope` deliberately classifies ACTION/KNOWLEDGE_
+    # INVENTORY intents `OPERATIONAL` too -- an ambiguous ACTION/KNOWLEDGE_
+    # INVENTORY contract still resolves `AMBIGUOUS` here, exactly as
+    # before this pass (see `request_scope`'s own docstring). Existing
+    # operational-ambiguity behavior (COMMAND/TROUBLESHOOTING/PROCEDURE
+    # intents, or a command/procedure-shaped `requested_output`) is
+    # completely unaffected.
+    if contract.ambiguity and request_scope(contract.intent, contract.requested_output, contract.action_requested) == RequestScope.OPERATIONAL:
         return RequestExecutionDecision(
             status=RequestExecutionStatus.AMBIGUOUS,
+            request_class=resolved_request_class,
             intent=contract.intent,
             requested_output=contract.requested_output,
             subject=contract.subject,
@@ -205,6 +681,7 @@ def derive_execution_decision(contract: Optional[RequestContract], current_run_i
     if contract.intent == RequestIntent.ACTION or contract.action_requested:
         return RequestExecutionDecision(
             status=RequestExecutionStatus.REQUIRES_APPROVAL,
+            request_class=resolved_request_class,
             intent=contract.intent,
             requested_output=contract.requested_output,
             subject=contract.subject,
@@ -220,6 +697,7 @@ def derive_execution_decision(contract: Optional[RequestContract], current_run_i
     if contract.intent == RequestIntent.KNOWLEDGE_INVENTORY:
         return RequestExecutionDecision(
             status=RequestExecutionStatus.UNSUPPORTED_CAPABILITY,
+            request_class=resolved_request_class,
             intent=contract.intent,
             requested_output=contract.requested_output,
             subject=contract.subject,
@@ -235,6 +713,7 @@ def derive_execution_decision(contract: Optional[RequestContract], current_run_i
     if is_operationally_shaped_request(contract.intent, contract.requested_output) and not contract.subject:
         return RequestExecutionDecision(
             status=RequestExecutionStatus.AMBIGUOUS,
+            request_class=resolved_request_class,
             intent=contract.intent,
             requested_output=contract.requested_output,
             subject=None,
@@ -261,13 +740,27 @@ def derive_execution_decision(contract: Optional[RequestContract], current_run_i
     # silently discarded purely because of how loosely intent/
     # requested_output happened to be classified, reopening exactly the
     # class of defect DEF-0037's own fix exists to close (never trust the
-    # model's OWN classification alone to decide safety). `contract.
-    # missing_context` is ALWAYS enough on its own to enter this branch,
-    # regardless of `is_operationally_shaped_request`'s own result --
-    # this is a strict OR, never an AND, so DEF-0037's own fix (an
-    # ordinary "hello," `missing_context=[]`, correctly skips this branch
-    # entirely) remains completely unaffected.
-    if is_operationally_shaped_request(contract.intent, contract.requested_output) or contract.missing_context:
+    # model's OWN classification alone to decide safety).
+    #
+    # LIVE-CORR-12B -- Canonical Request-Context Parameter Authority:
+    # `contract.missing_context` is no longer, on its own, enough to enter
+    # this branch -- only its AUTHORITATIVE subset is (`authoritative_
+    # missing_context_names`, request_contract.py: recognized canonical
+    # names only, e.g. `unit_id`/`unit_type`). The LIVE-CORR-12A audit
+    # proved the model can freely invent ANY `missing_context` name
+    # (`"governed procedure"`, `"specific fault details"`, a differently-
+    # spelled alias of an already-canonical key) with zero deterministic
+    # backing -- letting such a name alone force `NEEDS_INFORMATION` is
+    # exactly the "arbitrary string becomes a mandatory policy
+    # requirement" authority gap this milestone closes. The DEF-0037 live
+    # shape this comment originally described used the CANONICAL names
+    # `unit_type`/`unit_id` -- `authoritative_missing_context_names`
+    # recognizes both, so that regression is completely unaffected; this
+    # is a strict OR, never an AND, so DEF-0037's own fix (an ordinary
+    # "hello," `missing_context=[]`, correctly skips this branch entirely)
+    # also remains completely unaffected.
+    authoritative_declared_missing_context = set(authoritative_missing_context_names(contract.missing_context))
+    if is_operationally_shaped_request(contract.intent, contract.requested_output) or authoritative_declared_missing_context:
         # 6A.14 Request Parameter Consistency -- Section 7's own explicit
         # "defense in depth" requirement: do NOT rely on the validator's
         # own already-reconciled `contract.missing_context` alone.
@@ -279,13 +772,47 @@ def derive_execution_decision(contract: Optional[RequestContract], current_run_i
         # somehow reached this function with an empty `missing_context`
         # despite a genuinely unconfirmed target identifier still cannot
         # fail open.
+        # LIVE-CORR-7: `contract.missing_context` was persisted at
+        # `validate_and_persist_request_contract` time (request_
+        # contract.py), BEFORE any governed evidence for this turn could
+        # possibly have been grounded -- for an `EXACT_COMMAND` request
+        # specifically, its own contribution of `unit_type`/`unit_id` (if
+        # present purely because of the deterministic blanket rule, never
+        # because the MODEL genuinely declared them as a real condition)
+        # reflects ONLY that original, ungrounded rule, never this turn's
+        # own grounded command candidate. Excluded here, for `EXACT_
+        # COMMAND` ONLY, so those two specific keys come EXCLUSIVELY from
+        # the fresh call below (which DOES have `grounded_command_
+        # candidate`, when one exists) -- otherwise a stale, ungrounded
+        # requirement already baked into `contract.missing_context` would
+        # survive this union regardless of what the fresh, better-informed
+        # call concludes. For every OTHER `requested_output` (e.g.
+        # `PROCEDURE_STEPS`/`TROUBLESHOOTING_NEXT_STEP`, where `unit_type`/
+        # `unit_id` can be a genuine, model-declared CONDITIONAL-branch
+        # signal per prompts.py's own "CONDITIONAL COMMAND HANDLING"
+        # instruction -- `required_target_parameter_gaps`'s own blanket
+        # rule never even applies), the AUTHORITATIVE contribution is left
+        # completely untouched, exactly as before this pass (only now
+        # drawn from the canonical subset, never the raw model list).
+        if contract.requested_output == RequestedOutput.EXACT_COMMAND:
+            contract_missing_context_contribution = authoritative_declared_missing_context - {
+                TARGET_TYPE_PARAMETER_NAME,
+                TARGET_IDENTIFIER_PARAMETER_NAME,
+            }
+        else:
+            contract_missing_context_contribution = authoritative_declared_missing_context
         effective_missing_context = sorted(
-            set(contract.missing_context)
-            | set(required_target_parameter_gaps(contract.intent, contract.requested_output, contract.provided_context))
+            contract_missing_context_contribution
+            | set(
+                required_target_parameter_gaps(
+                    contract.intent, contract.requested_output, contract.provided_context, grounded_command_candidate
+                )
+            )
         )
         if effective_missing_context:
             return RequestExecutionDecision(
                 status=RequestExecutionStatus.NEEDS_INFORMATION,
+                request_class=resolved_request_class,
                 intent=contract.intent,
                 requested_output=contract.requested_output,
                 subject=contract.subject,
@@ -302,22 +829,43 @@ def derive_execution_decision(contract: Optional[RequestContract], current_run_i
     # explicit "ALLOW must not automatically mean may_emit_command=True"
     # requirement. Command permission is a SEPARATE, NARROWER grant than
     # "this request is fully resolved and safe to answer at all" --
-    # possible ONLY for a request VALIDATED as `intent=COMMAND,
-    # requested_output=EXACT_COMMAND` (mirrors `is_exact_command_response_
-    # permitted`'s own established definition, applied here one layer
-    # earlier). A PROCEDURE_STEPS/TROUBLESHOOTING_NEXT_STEP-shaped ALLOW
-    # decision never implicitly inherits command permission merely because
-    # the overall request is otherwise fully resolved -- closes the exact
+    # possible ONLY for a request VALIDATED as belonging to the
+    # `EXACT_COMMAND` governance class WITH `requested_output=EXACT_
+    # COMMAND` (mirrors `is_exact_command_response_permitted`'s own
+    # established definition, applied here one layer earlier). A
+    # PROCEDURE_STEPS/TROUBLESHOOTING_NEXT_STEP-shaped ALLOW decision
+    # never implicitly inherits command permission merely because the
+    # overall request is otherwise fully resolved -- closes the exact
     # fail-open path where a fully-parameterized "next step" answer showed
     # a raw command with no EXACT_COMMAND validation at all.
+    #
+    # LIVE-CORR-8 -- Request Class Must Be the Authoritative Governance
+    # Boundary: this check previously required `contract.intent ==
+    # RequestIntent.COMMAND` specifically -- the CONFIRMED live root cause
+    # of "give me the exact command to list current alarms" being
+    # rejected: the model classified `intent=procedure` (a semantically
+    # reasonable label for a request grounded in a governed procedure
+    # document) with `requested_output=exact_command`, a combination the
+    # OLD `intent==COMMAND` check never recognized, regardless of how
+    # clearly the requested OUTPUT shape said "exact command." `request_
+    # class` (`derive_request_class`, request_contract.py) is DERIVED
+    # from `intent` OR `requested_output` (either signal is enough,
+    # mirroring DEF-0037's own "intent labels cannot bypass safety"
+    # argument) -- so `contract.request_class == RequestClass.EXACT_
+    # COMMAND` is TRUE for this exact live shape, closing the gap, while
+    # `requested_output == EXACT_COMMAND` is still independently required
+    # too (defense in depth -- a contract whose `request_class` was
+    # somehow `EXACT_COMMAND` for an unrelated reason still cannot grant
+    # command permission for a DIFFERENT `requested_output`).
     #
     # `may_emit_operational_steps` remains the separate, broader signal
     # (unchanged in meaning) for whether NON-COMMAND operational/diagnostic
     # narrative is in scope at all for this request shape -- never on its
     # own sufficient to authorize a command.
-    allow_command = contract.intent == RequestIntent.COMMAND and contract.requested_output == RequestedOutput.EXACT_COMMAND
+    allow_command = resolved_request_class == RequestClass.EXACT_COMMAND and contract.requested_output == RequestedOutput.EXACT_COMMAND
     return RequestExecutionDecision(
         status=RequestExecutionStatus.ALLOW,
+        request_class=resolved_request_class,
         intent=contract.intent,
         requested_output=contract.requested_output,
         subject=contract.subject,
@@ -333,6 +881,569 @@ def derive_execution_decision(contract: Optional[RequestContract], current_run_i
             else "request contract satisfied -- non-command operational output permitted; no exact-command grant"
         ),
     )
+
+
+def is_deferred_target_resolution(
+    contract: Optional[RequestContract], phase_a_decision: RequestExecutionDecision
+) -> bool:
+    """CONTROL-PLANE-SEQ-03 -- the ONE proven, narrow Phase-A circular-
+    dependency exception identified by CONTROL-PLANE-SEQ-02's own audit.
+
+    THE GAP: a fresh, valid `EXACT_COMMAND`-classified contract whose own
+    `provided_context` never supplied `unit_type` at all cannot yet be
+    distinguished, by a PRE-EXECUTION policy call alone (`derive_
+    execution_decision(..., grounded_command_candidate=None, ...)`), from
+    a genuinely target-independent operation (e.g. a system-wide alarm
+    listing) -- `required_target_parameter_gaps`'s own documented
+    "absence of a candidate fails CLOSED to the blanket rule" design
+    (LIVE-CORR-7) means a Phase-A `NEEDS_INFORMATION` in EXACTLY this
+    shape is not yet a proven requirement; only a SECOND policy call, made
+    AFTER specialist work has produced a real grounded candidate (Phase
+    B), can prove it either way. If Phase A hard-gated this shape,
+    specialist work could never run, and Phase B could never get the
+    chance to disprove the blanket assumption -- a genuine circular
+    dependency.
+
+    THE FIX: this predicate identifies EXACTLY that shape, and ONLY that
+    shape -- never widens any other `NEEDS_INFORMATION`, `AMBIGUOUS`,
+    `INVALID_CONTRACT`, `REQUIRES_APPROVAL`, or `UNSUPPORTED_CAPABILITY`
+    outcome. Returns `True` only when ALL of the following hold:
+
+      1. `phase_a_decision.status == NEEDS_INFORMATION` -- every other
+         status is untouched by this predicate.
+      2. the resolved request class is `EXACT_COMMAND` (via the SAME
+         `_resolve_request_class` fallback every other caller in this
+         module already uses -- never a second classification).
+      3. `contract.provided_context` supplies NEITHER `unit_type` NOR
+         `unit_id` at all. The identifier-bearing (`unit_type` supplied,
+         identifier-class) and target-independent-verified (`unit_type`
+         in the small `SupportUnit`-style allowlist) branches of
+         `required_target_parameter_gaps` are BOTH stable across
+         `grounded_command_candidate` values (they never consult it) --
+         this predicate never defers those; they remain unconditional
+         Phase-A hard gates.
+      4. `phase_a_decision.missing_context` is EXACTLY `{unit_type,
+         unit_id}` -- the blanket fallback's own, and ONLY its own,
+         contribution. Any OTHER authoritative missing-context name
+         (canonical or model-declared) keeps this predicate `False`, so
+         a request with some UNRELATED genuine gap is never deferred
+         merely because it also happens to lack a target.
+
+    Never inspects raw user text, never keyword/regex matching, never
+    guesses intent or grounding outcome -- reuses `_resolve_request_class`
+    and the two existing canonical target-parameter-name constants,
+    exactly as `derive_execution_decision` itself already does
+    internally. Never a second, independently-drifting classification.
+
+    SAFETY: this predicate NEVER grants `may_emit_command`, and is never
+    itself consulted by anything that could. It only ever controls
+    whether OPERATIONAL_EXECUTION (specialist delegation/grounding) is
+    PERMITTED TO RUN AT ALL for this one narrow shape -- so that a real
+    `grounded_command_candidate` can eventually be produced for Phase B
+    to evaluate. Phase B -- a SEPARATE, later `derive_execution_decision`
+    call, made with the REAL candidate -- remains the sole, completely
+    unmodified authority for command emission (`allow_command`'s own
+    computation is untouched by this function, and does not consult it).
+    A request deferred here that Phase B later finds DOES require a
+    target still correctly returns `NEEDS_INFORMATION` at that point --
+    there is no permanent bypass.
+    """
+    if contract is None:
+        return False
+    if phase_a_decision.status != RequestExecutionStatus.NEEDS_INFORMATION:
+        return False
+    resolved_request_class = _resolve_request_class(
+        contract.request_class, contract.intent, contract.requested_output, contract.subject
+    )
+    if resolved_request_class != RequestClass.EXACT_COMMAND:
+        return False
+    provided_names = {param.name for param in contract.provided_context}
+    if TARGET_TYPE_PARAMETER_NAME in provided_names or TARGET_IDENTIFIER_PARAMETER_NAME in provided_names:
+        return False
+    return set(phase_a_decision.missing_context) == {TARGET_TYPE_PARAMETER_NAME, TARGET_IDENTIFIER_PARAMETER_NAME}
+
+
+# =============================================================================
+# CONTROL-PLANE-SEQ-04 -- Deterministic Work Envelope + Authorized Routing
+# =============================================================================
+#
+# THE GAP THIS CLOSES: CONTROL-PLANE-SEQ-03 made specialist/retrieval work
+# structurally unreachable until AFTER a fresh `RequestContract` and a
+# pre-execution ("Phase-A") policy decision existed -- but it did so by
+# reusing `derive_execution_decision(..., grounded_command_candidate=None,
+# ...)`, a function whose actual JOB is "what may reach the user," pressed
+# into service one call too early to answer a DIFFERENT question ("what
+# work may the system even attempt"). The one narrow shape where those two
+# questions structurally disagree -- a fresh `EXACT_COMMAND` contract with
+# no `unit_type`/`unit_id` supplied at all, where `required_target_
+# parameter_gaps`'s own candidate-dependent blanket rule cannot yet be
+# proven either way -- required a SEPARATE, bolted-on exception predicate
+# (`is_deferred_target_resolution`, above) purely to keep the (correct)
+# Phase-A/Phase-B split from becoming a circular dependency.
+#
+# THE FIX: `WorkEnvelope` is a SEPARATE, explicitly-scoped deterministic
+# answer to "what work may the system perform this turn," never "what may
+# reach the user" (that remains exclusively `RequestExecutionDecision`'s
+# job, computed LATER, from real post-specialist evidence -- completely
+# unmodified by this section). `derive_work_envelope`, below, is the ONE
+# pure function that owns this question -- and it answers it by REUSING
+# `derive_execution_decision`/`is_deferred_target_resolution` internally
+# (as proven, tested building blocks -- never a second, independently-
+# drifting copy of their freshness/ambiguity/subject/missing-context
+# logic), then RE-INTERPRETING their combined output through the "work
+# permitted" lens instead of the "user-visible" lens. Concretely: a Phase-A-
+# shaped `NEEDS_INFORMATION` that `is_deferred_target_resolution` already
+# proves is the ONE candidate-dependent EXACT_COMMAND shape now correctly
+# PERMITS specialist work (`may_generate_command_candidate=True`) while
+# still NEVER granting `may_emit_command` (that field does not exist on
+# this type at all) -- eliminating the circular dependency by construction,
+# not by a bolted-on exception `chat_service.py` has to remember to check.
+#
+# `chat_service.py`'s own normal-turn routing now consults ONLY
+# `WorkEnvelope` fields -- never `phase_a_decision.status`/`is_deferred_
+# target_resolution` directly (section 23's own explicit "the normal
+# successful flow must be validated contract -> effective request ->
+# WorkEnvelope -> authorized routing, not: fake early final decision ->
+# exception predicate -> routing" requirement). `is_deferred_target_
+# resolution` itself is NOT deleted (kept for transitional/back-compat
+# reachability, per explicit instruction) -- it is simply no longer a
+# ChatService-level branching predicate; it is now purely an internal
+# implementation detail `derive_work_envelope` reuses.
+class WorkAuthority:
+    """Closed, ordered vocabulary for `WorkEnvelope.maximum_authority` --
+    the HIGHEST CLASS of candidate work the runtime may prepare this turn,
+    never a grant of `may_emit_command`/`may_execute_action` (those remain
+    exclusively `RequestExecutionDecision`'s job -- see `WorkEnvelope`'s
+    own docstring for the full "maximum authority is not final authority"
+    distinction, instruction section 4)."""
+
+    NONE = "none"
+    CONVERSATIONAL_RESPONSE = "conversational_response"
+    OPERATIONAL_INFORMATION = "operational_information"
+    PROCEDURE_CANDIDATE = "procedure_candidate"
+    COMMAND_CANDIDATE = "command_candidate"
+    ACTION_CANDIDATE = "action_candidate"
+
+
+class WorkEnvelope(BaseModel):
+    """WHAT WORK MAY THE SYSTEM PERFORM this turn -- deterministic, LOCAL
+    to the current turn, immutable (a plain, frozen-by-convention pydantic
+    value -- never mutated after `derive_work_envelope` returns it), and
+    NEVER persisted. No LLM ever writes or influences a single field on
+    this type -- it is produced entirely from already-validated,
+    already-authoritative control state (see `derive_work_envelope`'s own
+    docstring for the exact deterministic inputs/rules).
+
+    THIS TYPE DOES NOT ANSWER "what may reach the user" (that remains
+    `RequestExecutionDecision`, computed separately, later, from REAL
+    post-specialist evidence) and DOES NOT ANSWER "may an action execute"
+    (there is no such field here at all -- see instruction section 13:
+    actual execution remains a completely separate, later boundary this
+    milestone does not implement). `maximum_authority` is the highest
+    CLASS of candidate work permitted -- e.g. `COMMAND_CANDIDATE` means a
+    command STRING may be internally generated/grounded this turn, never
+    that it may be shown to the user; `may_emit_command=True` is a
+    RequestExecutionDecision-only concept and intentionally has no
+    equivalent field on this type at all, so no code can ever mistake one
+    for the other by reading the wrong object.
+    """
+
+    request_class: Optional[str] = None
+    maximum_authority: str = WorkAuthority.NONE
+    work_permitted: bool = False
+    """Whether ANY specialist/retrieval work may be attempted at all this
+    turn -- `False` for every candidate-INDEPENDENT blocker (invalid/stale
+    contract, unresolved ambiguity, no resolved subject for an
+    operationally-shaped request, an unsupported capability) -- see
+    `derive_work_envelope`'s own docstring. Conversational response
+    generation (`may_generate_conversational_response`) is independent of
+    this flag -- a blocked turn can, and normally does, still need to
+    generate a clarification/refusal via the tool-free presentation path."""
+    clarification_required_before_work: bool = False
+    may_generate_conversational_response: bool = True
+    may_use_operational_context: bool = False
+    may_use_governed_knowledge: bool = False
+    requires_governed_knowledge: bool = False
+    """Section 8 -- consumes `SourceRequirementsCapture.requires_governed_
+    knowledge` (the model's OWN declaration, via `record_source_
+    requirements` -- a COMPLETELY SEPARATE mechanism from `RequestContract
+    .requires_governed_knowledge`, never merged, per explicit instruction),
+    narrowed so a declaration alone can never grant more authority than
+    `request_class` itself permits (`False`, unconditionally, for
+    `GENERAL_CONVERSATION` -- section 9's own explicit structural
+    prohibition)."""
+    may_route_incident_manager: bool = False
+    may_route_troubleshooting_manager: bool = False
+    may_generate_procedure_candidate: bool = False
+    may_generate_command_candidate: bool = False
+    may_prepare_action_candidate: bool = False
+    reason: str = ""
+
+
+def derive_work_envelope(
+    contract: Optional[RequestContract],
+    current_run_id: Optional[str],
+    pending_governed_request: Optional[PendingGovernedRequest] = None,
+    requires_governed_knowledge_declared: bool = False,
+    requires_teams_declared: bool = False,
+) -> WorkEnvelope:
+    """CONTROL-PLANE-SEQ-04 -- the ONE pure, deterministic function that
+    owns "what work may the system perform this turn." See this section's
+    own module-level comment for the full architectural rationale.
+
+    INPUTS, ALL ALREADY-AUTHORITATIVE (never raw user text, never keyword/
+    regex matching, never model prose):
+      - `contract`/`current_run_id`/`pending_governed_request`: passed
+        straight through to `derive_execution_decision` (unmodified) --
+        the SAME freshness/pending-resolution/ambiguity/missing-context
+        logic every other caller already relies on.
+      - `requires_governed_knowledge_declared`/`requires_teams_declared`:
+        THIS turn's own `SourceRequirementsCapture` values (declared via
+        `record_source_requirements`, section 8 -- a source-requirements
+        DECLARATION, never `RequestContract.requires_governed_knowledge`).
+        Used ONLY for the `requires_governed_knowledge`/`may_use_governed_
+        knowledge` OBSERVABILITY fields on the returned envelope -- NEVER
+        to decide `may_route_incident_manager` (see below for why).
+
+    DERIVATION:
+      1. Computes a Phase-A-shaped `RequestExecutionDecision` via `derive_
+         execution_decision(contract, current_run_id, grounded_command_
+         candidate=None, pending_governed_request=pending_governed_
+         request)` -- reused verbatim, never duplicated. This ALREADY
+         performs pending-resolution (`resolve_effective_governed_
+         contract`, exactly once, internally -- this function never
+         separately resolves pending state itself, so there is no risk of
+         double-resolution), freshness checking, ambiguity/no-subject/
+         missing-context gating, and request-class derivation.
+      2. Computes `is_deferred_target_resolution(contract, phase_decision)`
+         -- reused verbatim (section 6: kept, not deleted, but now only
+         ever consulted FROM HERE, never directly by `chat_service.py`).
+      3. Maps the combined result onto `WorkEnvelope`:
+           - `INVALID_CONTRACT` -> blocked, `work_permitted=False`,
+             `clarification_required_before_work=True` (a missing/stale
+             contract fails at LEAST as restrictively as before).
+           - `AMBIGUOUS` -> blocked, `clarification_required_before_
+             work=True` -- a candidate-INDEPENDENT blocker (instruction
+             section 7's own explicit "deterministic ambiguity that
+             prevents identifying the governed request" example).
+           - `UNSUPPORTED_CAPABILITY` (KNOWLEDGE_INVENTORY) -> blocked, but
+             NOT a clarification -- the existing, deterministic `KNOWLEDGE_
+             INVENTORY_UNSUPPORTED_TEXT` fallback (unchanged, downstream)
+             already answers this without any specialist work.
+           - `NEEDS_INFORMATION` and NOT `is_deferred_target_resolution`
+             -> blocked, `clarification_required_before_work=True` -- every
+             OTHER authoritative missing-context shape (a resolved
+             `unit_type` still needing `unit_id`, a genuinely model-
+             declared canonical gap for a NON-`EXACT_COMMAND` request, ...)
+             is candidate-INDEPENDENT (instruction section 7's own explicit
+             "other authoritative missing context... does NOT depend on
+             the eventual grounded candidate" example) -- `required_target_
+             parameter_gaps`'s own `unit_type`-informed branches never even
+             consult `grounded_command_candidate`, so there is nothing a
+             specialist call could prove here that this function does not
+             already know.
+           - `NEEDS_INFORMATION` and `is_deferred_target_resolution` ->
+             PERMITTED (instruction section 5's own core fix): the ONE
+             genuinely candidate-DEPENDENT shape -- `maximum_authority=
+             COMMAND_CANDIDATE`, `may_generate_command_candidate=True`,
+             specialist routing permitted so a real grounded candidate can
+             be produced for Phase B to evaluate. Never sets `clarification
+             _required_before_work` -- whether clarification is ultimately
+             needed is exactly the question Phase B, with real evidence,
+             will answer.
+           - `ALLOW`/`REQUIRES_APPROVAL` -> PERMITTED, `maximum_authority`
+             and routing flags keyed off the decision's own `request_class`
+             (`GENERAL_CONVERSATION` -> `CONVERSATIONAL_RESPONSE`, no
+             operational capability at all, per instruction section 9;
+             `OPERATIONAL_INFORMATION` -> `OPERATIONAL_INFORMATION`, may
+             route `incident_manager` only, per instruction section 10;
+             `PROCEDURE_TROUBLESHOOTING` -> `PROCEDURE_CANDIDATE`, may
+             route both specialists, per instruction section 11;
+             `EXACT_COMMAND` -> `COMMAND_CANDIDATE`, may route
+             `incident_manager` and generate a command candidate, per
+             instruction section 12; `ACTION` -> `ACTION_CANDIDATE`,
+             read-only preparation only -- there is no execution field on
+             this type at all, per instruction section 13).
+
+    ROUTING (`may_route_incident_manager`/`may_route_troubleshooting_
+    manager`) IS CLASS-DRIVEN, DELIBERATELY NOT DECLARATION-DRIVEN: the
+    ONLY unconditional structural prohibition instruction section 9 gives a
+    concrete example for is "`GENERAL_CONVERSATION` must never reach either
+    specialist" -- a closed, deterministic, already-safe signal
+    (`resolved_request_class`). Gating tool REACHABILITY itself (as opposed
+    to whether governed retrieval is ANSWER-COMPLETION-MANDATORY, which
+    remains the SEPARATE, existing `governed_completion_needed` gate,
+    unchanged in spirit) on `requires_governed_knowledge_declared`/
+    `requires_teams_declared` was deliberately REJECTED: those are the
+    SAME per-turn model declarations LIVE-CORR-12I's own remediation
+    machinery exists BECAUSE they are not always reliably produced -- using
+    an unreliable per-turn declaration as a HARD gate on a tool team_
+    manager's model has always been free to reach for every other class
+    would risk a new class of regression (a genuinely Teams-only or
+    genuinely governed-knowledge-needing request silently losing access to
+    `incident_manager_tool` merely because the SEPARATE, narrower preflight
+    declaration call under-declared). `may_use_governed_knowledge`/
+    `requires_governed_knowledge` (declaration-driven, narrowed by class)
+    remain the correct, existing signal for the SEPARATE "is governed
+    retrieval mandatory for a complete answer" question.
+
+    NEVER inspects raw user text, never keyword/regex matching, never
+    guesses grounding outcome -- every branch reads only already-validated,
+    already-typed fields.
+    """
+    phase_decision = derive_execution_decision(
+        contract, current_run_id, grounded_command_candidate=None, pending_governed_request=pending_governed_request
+    )
+    deferred_target = is_deferred_target_resolution(contract, phase_decision)
+
+    if phase_decision.status == RequestExecutionStatus.INVALID_CONTRACT:
+        return WorkEnvelope(
+            request_class=None,
+            maximum_authority=WorkAuthority.NONE,
+            work_permitted=False,
+            clarification_required_before_work=True,
+            may_generate_conversational_response=True,
+            reason="no current-turn validated request contract",
+        )
+
+    if phase_decision.status == RequestExecutionStatus.AMBIGUOUS:
+        return WorkEnvelope(
+            request_class=phase_decision.request_class,
+            maximum_authority=WorkAuthority.NONE,
+            work_permitted=False,
+            clarification_required_before_work=True,
+            may_generate_conversational_response=True,
+            reason=phase_decision.reason,
+        )
+
+    if phase_decision.status == RequestExecutionStatus.UNSUPPORTED_CAPABILITY:
+        return WorkEnvelope(
+            request_class=phase_decision.request_class,
+            maximum_authority=WorkAuthority.NONE,
+            work_permitted=False,
+            clarification_required_before_work=False,
+            may_generate_conversational_response=True,
+            reason=phase_decision.reason,
+        )
+
+    if phase_decision.status == RequestExecutionStatus.NEEDS_INFORMATION and not deferred_target:
+        return WorkEnvelope(
+            request_class=phase_decision.request_class,
+            maximum_authority=WorkAuthority.NONE,
+            work_permitted=False,
+            clarification_required_before_work=True,
+            may_generate_conversational_response=True,
+            reason=phase_decision.reason,
+        )
+
+    # From here: status is ALLOW, REQUIRES_APPROVAL, or the one deferred-
+    # target NEEDS_INFORMATION shape -- all genuinely permit SOME
+    # candidate-independent work to proceed.
+    resolved_request_class = phase_decision.request_class
+    requires_governed_knowledge = bool(requires_governed_knowledge_declared) and resolved_request_class != RequestClass.GENERAL_CONVERSATION
+    may_use_governed_knowledge = requires_governed_knowledge
+
+    if resolved_request_class == RequestClass.GENERAL_CONVERSATION:
+        return WorkEnvelope(
+            request_class=resolved_request_class,
+            maximum_authority=WorkAuthority.CONVERSATIONAL_RESPONSE,
+            work_permitted=True,
+            clarification_required_before_work=False,
+            may_generate_conversational_response=True,
+            reason="general conversation -- no operational capability required",
+        )
+
+    if resolved_request_class == RequestClass.OPERATIONAL_INFORMATION:
+        return WorkEnvelope(
+            request_class=resolved_request_class,
+            maximum_authority=WorkAuthority.OPERATIONAL_INFORMATION,
+            work_permitted=True,
+            clarification_required_before_work=False,
+            may_generate_conversational_response=True,
+            may_use_operational_context=True,
+            may_use_governed_knowledge=may_use_governed_knowledge,
+            requires_governed_knowledge=requires_governed_knowledge,
+            may_route_incident_manager=True,
+            reason="operational information request -- informational specialist routing permitted",
+        )
+
+    if resolved_request_class == RequestClass.PROCEDURE_TROUBLESHOOTING:
+        return WorkEnvelope(
+            request_class=resolved_request_class,
+            maximum_authority=WorkAuthority.PROCEDURE_CANDIDATE,
+            work_permitted=True,
+            clarification_required_before_work=False,
+            may_generate_conversational_response=True,
+            may_use_operational_context=True,
+            may_use_governed_knowledge=may_use_governed_knowledge,
+            requires_governed_knowledge=requires_governed_knowledge,
+            may_route_incident_manager=True,
+            may_route_troubleshooting_manager=True,
+            may_generate_procedure_candidate=True,
+            reason="procedure/troubleshooting request -- specialist candidate generation permitted",
+        )
+
+    if resolved_request_class == RequestClass.EXACT_COMMAND:
+        return WorkEnvelope(
+            request_class=resolved_request_class,
+            maximum_authority=WorkAuthority.COMMAND_CANDIDATE,
+            work_permitted=True,
+            clarification_required_before_work=False,
+            may_generate_conversational_response=True,
+            may_use_operational_context=True,
+            may_use_governed_knowledge=may_use_governed_knowledge,
+            requires_governed_knowledge=requires_governed_knowledge,
+            may_route_incident_manager=True,
+            may_route_troubleshooting_manager=True,
+            may_generate_command_candidate=True,
+            reason=(
+                "target parameters not yet confirmed -- specialist grounding permitted to determine "
+                "whether a target is actually required before final policy decides"
+                if deferred_target
+                else "exact-command request resolved -- specialist grounding permitted to produce a candidate"
+            ),
+        )
+
+    if resolved_request_class == RequestClass.ACTION:
+        return WorkEnvelope(
+            request_class=resolved_request_class,
+            maximum_authority=WorkAuthority.ACTION_CANDIDATE,
+            work_permitted=True,
+            clarification_required_before_work=False,
+            may_generate_conversational_response=True,
+            may_use_operational_context=True,
+            may_use_governed_knowledge=may_use_governed_knowledge,
+            requires_governed_knowledge=requires_governed_knowledge,
+            may_route_incident_manager=True,
+            may_route_troubleshooting_manager=True,
+            may_prepare_action_candidate=True,
+            reason="action request -- read-only preparation permitted; execution remains a separate, unimplemented approval boundary",
+        )
+
+    # Unreachable in practice -- every RequestClass is handled above, and
+    # `_resolve_request_class`/`derive_request_class` are both closed,
+    # exhaustive functions. Fails closed regardless.
+    return WorkEnvelope(
+        request_class=resolved_request_class,
+        maximum_authority=WorkAuthority.NONE,
+        work_permitted=False,
+        clarification_required_before_work=True,
+        may_generate_conversational_response=True,
+        reason="unrecognized request class",
+    )
+
+
+def build_pending_governed_request_state_update(
+    decision: RequestExecutionDecision, contract: RequestContract
+) -> dict[str, object]:
+    """LIVE-CORR-11 -- the caller-facing (`chat_service.py`) counterpart
+    to `resolve_effective_governed_contract`: builds THIS turn's own
+    outcome into the SAME additive, single-key session-state update shape
+    `governed_evidence_continuity.build_active_governed_procedure_state_
+    update` already established, for the CALLER to merge into its own
+    `end_of_turn_state_delta` and persist via the existing `persist_state_
+    delta` call -- never a new persistence mechanism.
+
+    UNLIKE that existing sibling builder (which never blanks a previously
+    valid continuity anchor), this key is DELIBERATELY, ALWAYS refreshed
+    every turn -- section 10's own "must not accidentally inherit stale
+    target/authorization from the previous target" requirement, and
+    section 8's "a pending EXACT_COMMAND request must NOT contaminate a
+    genuinely new request" requirement, both demand active clearing, not
+    stickiness. `decision.request_class != EXACT_COMMAND` always clears
+    immediately, regardless of status. For an `EXACT_COMMAND`-class
+    decision:
+
+      - `NEEDS_INFORMATION` -- the proven defect shape -- writes an
+        `UNRESOLVED` `PendingGovernedRequest`.
+      - `AMBIGUOUS` -- LIVE-CORR-11 CORRECTIVE PASS, section 6's own
+        "AMBIGUOUS is not necessarily terminal" audit: writes `UNRESOLVED`
+        too, but ONLY when `contract.subject is not None` -- an ambiguity
+        that never even resolved a subject/operation (`derive_execution_
+        decision`'s own separate "no resolved subject/procedure" branch)
+        has no concrete operation identity worth preserving; that shape
+        clears, exactly as before.
+      - `ALLOW` -- LIVE-CORR-11 CORRECTIVE PASS -- ISSUE A: writes
+        `COMPLETED` (not a clear) -- see `PendingGovernedRequestStatus`'s
+        own docstring for why this is safe: it is unconditionally
+        rewritten again by THIS SAME function on the very next turn
+        (matched-and-superseded, or unmatched-and-cleared), so it can
+        never survive more than one extra turn, and it never itself
+        carries a command/grounding result -- only the resolved
+        governance identity and its own already-verified parameters.
+      - `REQUIRES_APPROVAL`/`UNSUPPORTED_CAPABILITY`/`INVALID_CONTRACT`
+        (the last never actually reaches this function -- `chat_service
+        .py` only calls it when a validated contract exists) -- clears,
+        unchanged from before this pass.
+
+    Built from THIS turn's own already-verified `contract.provided_
+    context` and (for `UNRESOLVED`) `decision.missing_context` (already
+    the fully fresh-grounding-aware value `derive_execution_decision`
+    computed) -- never a copy of any OLDER pending record, so a
+    corrected/replaced target (sections 9/10) can never leak a stale
+    value forward. `intent=contract.intent` preserves the ORIGINAL
+    semantic operation (ISSUE D) across however many turns this record
+    survives.
+    """
+    if decision.request_class != RequestClass.EXACT_COMMAND:
+        return {PENDING_GOVERNED_REQUEST_STATE_KEY: None}
+    if decision.status == RequestExecutionStatus.NEEDS_INFORMATION:
+        status = PendingGovernedRequestStatus.UNRESOLVED
+        missing = list(decision.missing_context)
+    elif decision.status == RequestExecutionStatus.AMBIGUOUS and contract.subject is not None:
+        status = PendingGovernedRequestStatus.UNRESOLVED
+        missing = list(decision.missing_context)
+    elif decision.status == RequestExecutionStatus.ALLOW:
+        status = PendingGovernedRequestStatus.COMPLETED
+        missing = []  # resolved -- ISSUE A's own "recently completed" stage, never a stale gap
+    else:
+        return {PENDING_GOVERNED_REQUEST_STATE_KEY: None}
+    pending = PendingGovernedRequest(
+        request_class=RequestClass.EXACT_COMMAND,
+        requested_output=RequestedOutput.EXACT_COMMAND,
+        intent=contract.intent,
+        status=status,
+        subject=contract.subject,
+        missing_context=missing,
+        provided_context=list(contract.provided_context),
+    )
+    return {PENDING_GOVERNED_REQUEST_STATE_KEY: pending.model_dump(mode="json")}
+
+
+def expire_completed_pending_on_invalid_contract(
+    pending_governed_request: Optional[PendingGovernedRequest],
+) -> dict[str, object]:
+    """LIVE-CORR-11 FINAL SAFETY CLOSURE -- Concern B. Called ONLY when
+    THIS turn produced no validated `RequestContract` at all (`chat_
+    service.py`'s own `current_turn_request_contract is None` case --
+    the SAME shape `derive_execution_decision` itself reports as `INVALID_
+    CONTRACT`) -- the one case `build_pending_governed_request_state_
+    update` is never itself invoked for (there is no `RequestExecution
+    Decision`/contract to build a fresh record from in the first place).
+
+    Deliberately narrow, NEVER a global "clear all pending state on
+    INVALID_CONTRACT" rule (section 8's own explicit prohibition -- that
+    would regress genuine `UNRESOLVED` clarification recovery, LIVE-
+    CORR-10's own finding about transient contract-recording failures):
+
+      - `COMPLETED` -- `PendingGovernedRequestStatus`'s own docstring is
+        explicit that this stage exists ONLY to support an IMMEDIATE
+        correction/re-targeting of the just-completed operation, for
+        exactly one more turn. A turn whose own contract could not even
+        be validated is definitionally not that immediate next turn,
+        whatever the user actually said -- expires it here, the one seam
+        `build_pending_governed_request_state_update`'s own "rewritten
+        every turn" refresh cannot reach (it is never called this turn).
+      - `UNRESOLVED`/absent -- the user still owes the SAME missing
+        information regardless of one glitchy turn; left completely
+        untouched -- an EMPTY update (no key at all), mirroring this
+        codebase's own established "empty means no change" convention
+        (e.g. `governed_evidence_continuity.build_last_selected_governed_
+        evidence_state_update`), never an explicit no-op write.
+    """
+    if pending_governed_request is not None and pending_governed_request.status == PendingGovernedRequestStatus.COMPLETED:
+        return {PENDING_GOVERNED_REQUEST_STATE_KEY: None}
+    return {}
 
 
 def load_current_turn_contract(raw_contract: object, current_run_id: Optional[str]) -> Optional[RequestContract]:
@@ -367,6 +1478,22 @@ convention (e.g. `evidence.py`'s `_UNGROUNDED_COMMAND_FALLBACK_TEXT`)."""
 _NO_SUBJECT_FALLBACK_TEXT = "I need to know which specific alarm or governed procedure you mean before I can give you a command. Please name it explicitly."
 
 _GENERIC_WITHHELD_COMMAND_TEXT = "An exact command cannot yet be safely provided for this step. Please confirm the missing details."
+
+_INVALID_CONTRACT_FALLBACK_TEXT = (
+    "I don't have enough verified context for this turn to safely provide that yet. Could you clarify what you'd like me to do?"
+)
+"""LIVE-CORR-5 -- section 6's own explicit finding: an internal, missing/
+stale `RequestContract` (`INVALID_CONTRACT`) is, by itself, NOT evidence
+that the user asked about a specific alarm or governed procedure -- it
+could just as easily be a genuinely ordinary conversational turn that
+happened to carry a populated `TroubleshootingGuidance` from an unrelated
+prior state, or any other internal condition unrelated to what the user
+actually asked. `_NO_SUBJECT_FALLBACK_TEXT`'s own "which specific alarm or
+governed procedure you mean" wording presumes an operational request that
+was never actually established here -- this neutral text asks for
+clarification without manufacturing an operational framing the contract
+never established. Never changes the underlying SAFETY decision (a command
+is still withheld either way) -- wording only."""
 
 _SAFE_MISSING_CONTEXT_LABELS: dict[str, str] = {
     # LIVE-CORR-2 -- DEF-0043 CORRECTIVE PASS: a small, closed mapping
@@ -430,7 +1557,10 @@ def command_suppression_fallback_text(decision: RequestExecutionDecision) -> str
     if decision.status == RequestExecutionStatus.AMBIGUOUS and not decision.subject:
         return _NO_SUBJECT_FALLBACK_TEXT
     if decision.status == RequestExecutionStatus.INVALID_CONTRACT:
-        return _NO_SUBJECT_FALLBACK_TEXT
+        # LIVE-CORR-5 -- section 6: a missing/stale contract alone is not
+        # evidence the user asked about an alarm/procedure -- see
+        # `_INVALID_CONTRACT_FALLBACK_TEXT`'s own docstring.
+        return _INVALID_CONTRACT_FALLBACK_TEXT
     return _GENERIC_WITHHELD_COMMAND_TEXT
 
 
@@ -449,7 +1579,17 @@ def is_full_procedure_response_permitted(decision: RequestExecutionDecision) -> 
     False`, and a genuinely RESOLVED `subject` -- ALL FOUR, never a subset.
     Uses ONLY already-validated, already-freshness-checked `RequestExecutionDecision`
     fields (never re-reads the raw contract) -- never phrase/keyword/regex
-    matching of any kind."""
+    matching of any kind.
+
+    LIVE-CORR-8 audit note: kept on the ORIGINAL, narrower `intent==
+    RequestIntent.PROCEDURE` check, deliberately NOT widened to `request_
+    class==PROCEDURE_TROUBLESHOOTING` (which would also accept `intent=
+    TROUBLESHOOTING`) -- no live defect proves this specific combination
+    needs to change, and an existing, explicit regression
+    (`test_full_procedure_discarded_when_any_one_of_the_four_fields_
+    fails`) affirmatively requires `intent=troubleshooting` to be
+    DISCARDED here. Only `is_exact_command_response_permitted`, below --
+    the function with a CONFIRMED live defect -- was widened."""
     return (
         decision.intent == RequestIntent.PROCEDURE
         and decision.requested_output == RequestedOutput.PROCEDURE_STEPS
@@ -461,14 +1601,34 @@ def is_full_procedure_response_permitted(decision: RequestExecutionDecision) -> 
 def is_next_step_response_permitted(decision: RequestExecutionDecision) -> bool:
     """LIVE-CORR-3A -- `intent=TROUBLESHOOTING`, `requested_output=
     TROUBLESHOOTING_NEXT_STEP` -- the validated shape for an ordinary,
-    one-diagnostic-action troubleshooting answer."""
+    one-diagnostic-action troubleshooting answer.
+
+    LIVE-CORR-8 audit note: kept on the ORIGINAL, narrower intent-exact
+    check for the same reason as `is_full_procedure_response_permitted`
+    immediately above -- no confirmed live defect for this specific
+    combination; only `is_exact_command_response_permitted` (the function
+    with a confirmed live defect) was widened to use `request_class`."""
     return decision.intent == RequestIntent.TROUBLESHOOTING and decision.requested_output == RequestedOutput.TROUBLESHOOTING_NEXT_STEP
 
 
 def is_exact_command_response_permitted(decision: RequestExecutionDecision) -> bool:
-    """LIVE-CORR-3A -- `intent=COMMAND`, `requested_output=EXACT_COMMAND`
-    -- the validated shape for a request asking for one specific command."""
-    return decision.intent == RequestIntent.COMMAND and decision.requested_output == RequestedOutput.EXACT_COMMAND
+    """LIVE-CORR-3A -- `requested_output=EXACT_COMMAND` -- the validated
+    shape for a request asking for one specific command.
+
+    LIVE-CORR-8 -- Request Class Must Be the Authoritative Governance
+    Boundary: THE direct fix for the confirmed live defect ("give me the
+    exact command to list current alarms" produced `intent=procedure,
+    requested_output=exact_command`, a combination the former `intent==
+    RequestIntent.COMMAND` check never recognized, discarding the
+    correctly-grounded response). `request_class=EXACT_COMMAND` (derived
+    from `intent==COMMAND` OR `requested_output==EXACT_COMMAND` -- either
+    signal is enough, mirroring DEF-0037's own "intent labels cannot
+    bypass safety" argument) replaces the narrower intent-only check."""
+    return (
+        _resolve_request_class(decision.request_class, decision.intent, decision.requested_output, decision.subject)
+        == RequestClass.EXACT_COMMAND
+        and decision.requested_output == RequestedOutput.EXACT_COMMAND
+    )
 
 
 def enforce_response_mode_compatibility(
@@ -533,20 +1693,69 @@ def enforce_execution_decision_on_guidance(
 ) -> tuple[Optional[TroubleshootingGuidance], bool]:
     """The actual enforcement step (section 9/10 -- "No Model Override").
 
-    6A.14 FINAL corrective pass (section 5 -- "command-bearing free-form
-    prose must not bypass policy"): when `decision.may_emit_command` is
-    `False`, the ENTIRE guidance is suppressed -- `interpretation`,
-    `next_action`, `command`, `evidence_requested`, and every
-    `TroubleshootingStep.action`/`.command` -- never `command`/`step
-    .command` alone. Rather than selectively trust some fields and not
-    others, the whole guidance is replaced with a single, fixed,
-    deterministic clarification (the caller substitutes `command_
-    suppression_fallback_text(decision)` once `render_troubleshooting_
-    guidance` renders the now-empty guidance to `""`) -- mirrors the SAME
-    "suppress the entire guidance, not just one field" philosophy DEF-0027
-    's own `_guidance_scope_established` (evidence.py) already established
-    for the cross-document case, applied here for a different,
-    execution-policy-driven reason.
+    LIVE-CORR-6 -- Valid Troubleshooting Response Incorrectly Replaced by
+    Command Backstop: for `NEXT_STEP` guidance, when `decision.may_emit_
+    command` is `False`, this branch previously wiped the ENTIRE guidance
+    -- `interpretation`/`next_action`/`evidence_requested` included --
+    UNCONDITIONALLY, regardless of whether a command was ever proposed at
+    all. Since `TROUBLESHOOTING`+`TROUBLESHOOTING_NEXT_STEP` requests
+    structurally NEVER get `may_emit_command=True` (LIVE-CORR-3B: command
+    permission exists only for a validated `intent=COMMAND, requested_
+    output=EXACT_COMMAND` request), this wiped EVERY SINGLE troubleshooting_
+    next_step response's safe diagnostic content, confirmed live: "how can
+    i troubleshoot: ESS Service Unavailable?" -- a fully-resolved
+    (`missing_context=[]`), `status=ALLOW` troubleshooting request -- lost
+    its entire grounded diagnostic answer to this branch, replaced by a
+    generic exact-command-style fallback that never even applied (no
+    command was ever involved).
+
+    THE FIX reuses the SAME typed `TroubleshootingOperationalEffect`
+    classification `evidence.py`'s own `enforce_structural_operational_
+    integrity` already established for exactly this class of problem
+    (LIVE-CORR-3A/DEF-0040) -- never a new safety framework, never text/
+    keyword inspection of `interpretation`/`next_action`:
+
+      - `operational_effect` IS (or, unset, DEFAULTS TO -- same "strictest,
+        safest interpretation" rule as evidence.py's own `_effective_
+        operational_effect`) `STATE_CHANGE_RECOMMENDATION`: the ENTIRE
+        guidance is still suppressed, exactly as before this pass --
+        UNCHANGED, non-regression-tested (`test_state_change_
+        recommendation_is_withheld_without_target_confirmation`,
+        `test_interpretation_cannot_bypass_may_emit_command_false`, and
+        siblings) -- a state-changing recommendation carries operational
+        authority that must be either fully verified (`may_emit_command=
+        True`, the early-return above) or withheld ENTIRELY; a command
+        smuggled into `interpretation`/`next_action` free text while
+        `command` itself is left unset must still be caught, and IS,
+        because the WHOLE guidance -- not merely `command` -- is removed
+        whenever this classification applies and `may_emit_command` is
+        `False`. A guidance that is ALREADY fully empty (e.g. `evidence.py`
+        already performed this exact suppression upstream) is returned
+        completely unchanged, `stripped=False` -- nothing left to strip,
+        and the caller (`chat_service.py`) must not report a suppression
+        that did not happen here.
+      - `operational_effect` is `REFERENCE_DESCRIPTION`/`OBSERVATION`/
+        `DIAGNOSTIC_READ` -- content the model itself classified as
+        carrying NO operational/state-changing authority at all (a safe
+        diagnostic check, an observation, descriptive text): only
+        `command` is stripped, when present (defense in depth -- this
+        classification should not carry one in the first place); the
+        genuinely safe `interpretation`/`next_action`/`evidence_requested`
+        text is preserved and reaches the user. This is the NEW behavior
+        this pass adds -- exactly mirroring the SIBLING `FULL_PROCEDURE`
+        branch immediately below (already correct, already tested,
+        UNCHANGED by this pass), one level up.
+
+    A command that IS present and genuinely unauthorized is STILL always
+    removed, in every classification. This fix narrows WHAT gets
+    suppressed for the genuinely non-operational classifications only --
+    it never weakens the STATE_CHANGE_RECOMMENDATION protection, and never
+    lets `operational_effect` grant command authority (that remains solely
+    `decision.may_emit_command`'s job, checked before this function's body
+    even runs). `evidence.py`'s own, separate, completely unchanged
+    grounding layer (DEF-0024/0026/0027/LIVE-CORR-3A/3B) is unaffected
+    either way -- both layers must still independently agree before a
+    command reaches the user.
 
     LIVE-CORR-3B -- Operational Authority Boundary, section 3's own
     explicit "remove the DIAGNOSTIC_READ target-independent permission
@@ -591,16 +1800,30 @@ def enforce_execution_decision_on_guidance(
             return guidance, False
         return guidance.model_copy(update={"full_procedure_steps": new_steps}), True
 
-    suppressed = guidance.model_copy(
-        update={
-            "interpretation": None,
-            "next_action": None,
-            "command": None,
-            "evidence_requested": None,
-            "full_procedure_steps": [],
-        }
-    )
-    return suppressed, True
+    # LIVE-CORR-6 -- see this function's own docstring for the full
+    # rationale. `operational_effect` unset defaults to the strictest
+    # interpretation (`STATE_CHANGE_RECOMMENDATION`), mirroring evidence
+    # .py's own `_effective_operational_effect` exactly.
+    effective_effect = guidance.operational_effect or TroubleshootingOperationalEffect.STATE_CHANGE_RECOMMENDATION
+    if effective_effect == TroubleshootingOperationalEffect.STATE_CHANGE_RECOMMENDATION:
+        if guidance.interpretation is None and guidance.next_action is None and guidance.command is None and guidance.evidence_requested is None:
+            # Already fully empty (e.g. evidence.py's own structural-
+            # integrity suppression already ran upstream) -- nothing for
+            # THIS function to strip; reporting `stripped=True` here would
+            # incorrectly tell the caller a NEW suppression happened.
+            return guidance, False
+        suppressed = guidance.model_copy(
+            update={"interpretation": None, "next_action": None, "command": None, "evidence_requested": None, "full_procedure_steps": []}
+        )
+        return suppressed, True
+
+    # REFERENCE_DESCRIPTION / OBSERVATION / DIAGNOSTIC_READ -- no
+    # operational/state-changing authority claimed at all; strip `command`
+    # only, when present (defense in depth), never the safe descriptive/
+    # diagnostic text.
+    if guidance.command is None:
+        return guidance, False
+    return guidance.model_copy(update={"command": None}), True
 
 
 _UNSTRUCTURED_RESPONSE_BLOCKING_STATUSES = frozenset(
