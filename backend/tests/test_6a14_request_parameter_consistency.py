@@ -33,7 +33,7 @@ from backend.agents.team_manager.request_contract import (
     RequestIntent,
     RequestParameter,
     RequestedOutput,
-    _verify_and_filter_provided_context,
+    _verify_and_filter_provided_context_list,
     extract_canonical_identifiers,
     reconcile_missing_context,
     required_target_parameter_gaps,
@@ -155,7 +155,7 @@ def test_4_execution_policy_blocks_even_with_malformed_empty_missing_context() -
 
 def test_5_knowledge_example_rru9_cannot_satisfy_unit_id() -> None:
     provided = [_param("unit_type", "RRU", ParameterProvenance.USER), _param("unit_id", "RRU-9", ParameterProvenance.USER)]
-    verified = _verify_and_filter_provided_context(
+    verified = _verify_and_filter_provided_context_list(
         provided, current_turn_text="okie will do , also give me the cmd to restart the rru", session_confirmed={}
     )
     names = {p.name for p in verified}
@@ -164,7 +164,7 @@ def test_5_knowledge_example_rru9_cannot_satisfy_unit_id() -> None:
 
 def test_6_knowledge_example_aas1_cannot_satisfy_unit_id() -> None:
     provided = [_param("unit_type", "AAS", ParameterProvenance.USER), _param("unit_id", "AAS-1", ParameterProvenance.USER)]
-    verified = _verify_and_filter_provided_context(provided, current_turn_text="it's an AAS, give me the command", session_confirmed={})
+    verified = _verify_and_filter_provided_context_list(provided, current_turn_text="it's an AAS, give me the command", session_confirmed={})
     names = {p.name for p in verified}
     assert "unit_id" not in names
 
@@ -182,7 +182,7 @@ def test_7_8_9_various_spellings_verify_as_canonical_rru5(raw: str) -> None:
 
 def test_provided_context_rru5_hyphen_verifies_against_raw_space_text() -> None:
     provided = [_param("unit_id", "RRU-5")]
-    verified = _verify_and_filter_provided_context(provided, current_turn_text="but my issues is in RRU 5 not 9 ...", session_confirmed={})
+    verified = _verify_and_filter_provided_context_list(provided, current_turn_text="but my issues is in RRU 5 not 9 ...", session_confirmed={})
     assert len(verified) == 1
     assert verified[0].value == "RRU-5"
     assert verified[0].provenance == ParameterProvenance.USER
@@ -190,7 +190,7 @@ def test_provided_context_rru5_hyphen_verifies_against_raw_space_text() -> None:
 
 def test_provided_context_rru5_space_form_verifies_and_canonicalizes() -> None:
     provided = [_param("unit_id", "RRU 5")]
-    verified = _verify_and_filter_provided_context(provided, current_turn_text="my issue is rru 5", session_confirmed={})
+    verified = _verify_and_filter_provided_context_list(provided, current_turn_text="my issue is rru 5", session_confirmed={})
     assert len(verified) == 1
     assert verified[0].value == "RRU-5"
 
@@ -208,13 +208,13 @@ def test_10_rru5_not9_verifies_rru5_never_rru9() -> None:
 
 def test_11_aas3_never_verifies_rru3() -> None:
     provided = [_param("unit_id", "RRU-3")]
-    verified = _verify_and_filter_provided_context(provided, current_turn_text="my target is AAS 3", session_confirmed={})
+    verified = _verify_and_filter_provided_context_list(provided, current_turn_text="my target is AAS 3", session_confirmed={})
     assert verified == []
 
 
 def test_12_rru15_never_verifies_rru5() -> None:
     provided = [_param("unit_id", "RRU-5")]
-    verified = _verify_and_filter_provided_context(provided, current_turn_text="the unit is RRU 15", session_confirmed={})
+    verified = _verify_and_filter_provided_context_list(provided, current_turn_text="the unit is RRU 15", session_confirmed={})
     assert verified == []
 
 
@@ -231,7 +231,7 @@ def test_13_bare_five_does_not_become_rru5() -> None:
 
 def test_13b_bare_five_provided_context_never_canonicalizes_to_rru5() -> None:
     provided = [_param("unit_id", "5")]
-    verified = _verify_and_filter_provided_context(provided, current_turn_text="the number is 5", session_confirmed={})
+    verified = _verify_and_filter_provided_context_list(provided, current_turn_text="the number is 5", session_confirmed={})
     # The literal "5" claim verifies via the pre-existing, unmodified
     # substring check (unchanged, orthogonal behavior) -- but it is never
     # PROMOTED to a fabricated "RRU-5"/"AAS-5".
@@ -248,7 +248,7 @@ def test_13b_bare_five_provided_context_never_canonicalizes_to_rru5() -> None:
 
 def test_14_canonical_value_retains_user_provenance() -> None:
     provided = [_param("unit_id", "RRU-5", ParameterProvenance.USER)]
-    verified = _verify_and_filter_provided_context(provided, current_turn_text="rru 5 is the one", session_confirmed={})
+    verified = _verify_and_filter_provided_context_list(provided, current_turn_text="rru 5 is the one", session_confirmed={})
     assert verified[0].provenance == ParameterProvenance.USER
 
 
@@ -261,14 +261,14 @@ def test_14_canonical_value_retains_user_provenance() -> None:
 def test_15_same_subject_continuation_carries_verified_rru5() -> None:
     provided = [_param("unit_id", "RRU-5")]
     # No current-turn text at all this time -- relies purely on session_confirmed.
-    verified = _verify_and_filter_provided_context(provided, current_turn_text="", session_confirmed={"unit_id": "RRU-5"})
+    verified = _verify_and_filter_provided_context_list(provided, current_turn_text="", session_confirmed={"unit_id": "RRU-5"})
     assert len(verified) == 1
     assert verified[0].value == "RRU-5"
 
 
 def test_15b_session_confirmed_space_form_still_matches_hyphen_claim() -> None:
     provided = [_param("unit_id", "RRU-5")]
-    verified = _verify_and_filter_provided_context(provided, current_turn_text="", session_confirmed={"unit_id": "RRU 5"})
+    verified = _verify_and_filter_provided_context_list(provided, current_turn_text="", session_confirmed={"unit_id": "RRU 5"})
     assert len(verified) == 1
     assert verified[0].value == "RRU-5"
 

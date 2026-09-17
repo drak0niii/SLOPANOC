@@ -34,6 +34,7 @@ import requests
 
 from ..config.settings import ConfigurationError, Settings, get_settings
 from .safe_error import (
+    SafeErrorException,
     internal_error,
     rate_limited,
     run_failure,
@@ -76,6 +77,18 @@ _perf_logger = logging.getLogger("backend.perf")
 # connection setup, not something else, dominates a Teams-heavy turn's
 # time. Revisit via `power_automate_gateway` perf lines (this module's
 # own `_log_gateway_duration`) once real numbers are available.
+
+
+class GatewayAmbiguousOutcomeError(SafeErrorException):
+    """POST-6A -- the request LEFT this process and its outcome is
+    unknown: a timeout, or a response lost mid-flight.
+
+    Deliberately a distinct type from an ordinary gateway failure. An
+    ordinary failure means the operation did NOT take effect, so a retry
+    is safe. This means it MAY have taken effect, so a retry may
+    duplicate it. Callers that perform writes must treat the two
+    differently; a single exception type makes that impossible.
+    """
 
 
 class PowerAutomateClient:
@@ -215,9 +228,28 @@ class PowerAutomateClient:
                 timeout=self._settings.request_timeout_seconds,
             )
         except requests.exceptions.Timeout:
+            # POST-6A -- AMBIGUOUS, NOT FAILED. The request left this
+            # process; Power Automate may have completed the operation and
+            # we simply never saw the response. For a READ that only means
+            # "try again"; for a WRITE it means the write may already have
+            # happened, so the caller must not retry blindly. A distinct
+            # exception type is what lets the write path tell the two
+            # apart -- `run_failure` alone cannot.
             self._log_gateway_duration(operation, request_started_at, "timeout")
-            raise run_failure(
-                "The Teams connector timed out. Please try again."
+            raise GatewayAmbiguousOutcomeError(
+                run_failure(
+                    "The Teams connector did not respond in time, so the outcome of this request is unknown."
+                ).safe_error
+            ) from None
+        except requests.exceptions.ChunkedEncodingError:
+            # The connection dropped mid-response: the request was fully
+            # sent and may have been processed. Same ambiguity as a
+            # timeout, same refusal to retry blindly.
+            self._log_gateway_duration(operation, request_started_at, "lost_response")
+            raise GatewayAmbiguousOutcomeError(
+                run_failure(
+                    "The connection to the Teams connector was lost, so the outcome of this request is unknown."
+                ).safe_error
             ) from None
         except requests.exceptions.RequestException:
             # Deliberately not str(exc): requests' own exception messages

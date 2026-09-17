@@ -464,7 +464,7 @@ class _GatedRunner:
         self._resume = resume
         self.finished = False
 
-    async def run_async(self, *, user_id, session_id, new_message, run_config=None):
+    async def run_async(self, *, user_id, session_id, new_message, state_delta=None, run_config=None):
         session = await self._session_service.get_session(session_id, user_id)
         await self._session_service.persist_state_delta(session, {})
         yield FakeEvent(text="a", final=False, partial=True)

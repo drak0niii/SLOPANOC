@@ -68,11 +68,27 @@ class FakeIndexRepository:
     async def get(self, evidence_id):
         return self.rows.get(evidence_id)
 
+    async def delete_missing_for_version(self, knowledge_id, version_label, *, keep_evidence_ids):
+        """POST-6A: mirrors the real repository's own reconciliation
+        delete -- scoped to ONE (knowledge_id, version_label), returning
+        how many stale rows were removed."""
+        keep = set(keep_evidence_ids)
+        stale = [
+            evidence_id
+            for evidence_id, record in self.rows.items()
+            if record.knowledge_id == knowledge_id
+            and record.version_label == version_label
+            and evidence_id not in keep
+        ]
+        for evidence_id in stale:
+            self.rows.pop(evidence_id, None)
+        return len(stale)
+
     async def upsert(self, record, embedding, *, now):
         self.rows[record.evidence_id] = record
         return True
 
-    async def exact_match(self, permitted_knowledge_ids, query_text):
+    async def exact_match(self, permitted_knowledge_ids, query_text, permitted_version_keys=None):
         from backend.knowledge.hybrid_retrieval.contracts import ChannelHit, RetrievalChannel
 
         if not permitted_knowledge_ids:
@@ -83,7 +99,7 @@ class FakeIndexRepository:
             if r.knowledge_id in permitted_knowledge_ids and query_text.lower() in r.indexable_text.lower()
         ]
 
-    async def lexical_search(self, permitted_knowledge_ids, query_text, limit):
+    async def lexical_search(self, permitted_knowledge_ids, query_text, limit, permitted_version_keys=None):
         from backend.knowledge.hybrid_retrieval.contracts import ChannelHit, RetrievalChannel
 
         if not permitted_knowledge_ids:
@@ -94,7 +110,7 @@ class FakeIndexRepository:
             if r.knowledge_id in permitted_knowledge_ids and any(w.lower() in r.indexable_text.lower() for w in query_text.split())
         ]
 
-    async def semantic_search(self, permitted_knowledge_ids, query_embedding, limit):
+    async def semantic_search(self, permitted_knowledge_ids, query_embedding, limit, permitted_version_keys=None):
         return []
 
     async def get_many(self, evidence_ids):

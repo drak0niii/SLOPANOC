@@ -40,7 +40,12 @@ bar — recording the negative finding is itself deliberate, per this
 register's own governing instruction, so nobody re-opens them later on
 the same mistaken suspicion.
 
-**Next available ID: DEF-0037.**
+**Next available ID: DEF-0048.**
+
+(Corrected POST-6A: this line read `DEF-0037` while DEF-0037 through
+DEF-0047 were all already recorded below. A stale next-ID is exactly
+how two defects end up sharing one number, which this register's own
+never-reuse rule exists to prevent.)
 **First ID in this register: DEF-0001. Last ID currently used: DEF-0036.**
 **First use of the reserved `OPS-xxxx` prefix: OPS-0001 (6A.8 migration-test target-isolation finding, below) — an operational/testing-methodology finding, not a functional application defect; no application code was found defective.**
 
@@ -4680,6 +4685,80 @@ is correctly grounded/stripped
   `TroubleshootingStep`, not merely `command`.
 - **Explicit statement:** the pass that found this did NOT implement any
   fix — no production code was changed as a result of this finding.
+
+===================================================================
+DEF-0046 — A configured environment variable could authorize a
+governance approval and sign it with a human governor's name
+===================================================================
+
+- **Status:** FIXED (POST-6A repair campaign, prompt 6).
+- **Severity:** HIGH — it is an authorization bypass whose artifact is a
+  trusted audit record.
+- **Component:** `backend/tools/admin/descriptor_admin.py`,
+  `backend/config/settings.py` (`admin_actor_id`).
+- **Symptom:** the descriptor CLI accepted `--actor alice` and performed
+  a governance approval whenever `SLOPANOC_ADMIN_ACTOR_ID` matched that
+  string and was on the governor allowlist — in ANY deployment, not only
+  a development one.
+- **Root cause:** `SLOPANOC_ADMIN_ACTOR_ID` is CONFIGURATION, and it was
+  being read as IDENTITY. Setting an environment variable proves only
+  that something could set an environment variable on the host: a
+  deployment account, a CI runner, or any compromised process on the box
+  qualifies equally. The resulting `OperationApprovalRecord` then named a
+  real human as the reviewer of a state-changing Teams operation they had
+  never seen — an audit record that is worse than no record, because it
+  is trusted.
+- **Fix:** the CLI's normal path is now the AUTHENTICATED HTTP API. It
+  sends a bearer token from `SLOPANOC_API_TOKEN` and takes no `--actor`
+  argument at all, in any subcommand; the server derives the actor from
+  the verified token and writes the record against that identity. The
+  direct-to-database path is `--local` and refuses unless
+  `SLOPANOC_GOVERNANCE_DEV_MODE` is explicitly set, the same flag that
+  makes the server itself accept unverified identity.
+- **Tests:** `backend/tests/test_post6a_identity_and_concurrency.py::
+  test_the_cli_takes_no_actor_argument_at_all`,
+  `::test_the_cli_local_path_refuses_outside_development_mode`,
+  `::test_the_cli_remote_path_requires_a_token`.
+- **Related, fixed in the same pass:** drafting a descriptor was gated
+  only on governance being AVAILABLE, not on governor PERMISSION. Since
+  `author_operation` calls `invalidate_on_edit`, any authenticated user
+  could overwrite a reviewed descriptor and demote an APPROVED operation
+  to CANDIDATE — destroying operational authority for everyone. Removing
+  authority is a governance act; it now takes the same permission check
+  as granting it (`test_drafting_is_permission_gated`).
+
+===================================================================
+DEF-0047 — A long-running active turn could be recorded as INTERRUPTED
+by an unrelated worker
+===================================================================
+
+- **Status:** FIXED (POST-6A repair campaign, prompt 6).
+- **Severity:** MEDIUM — it fabricates a terminal outcome for work that
+  is still running.
+- **Component:** `backend/api/turn_lifecycle.py`
+  (`reconcile_interrupted_turns`), `backend/api/chat_service.py`.
+- **Symptom:** an ACCEPTED turn older than `stale_after_seconds` (900)
+  was reconciled to INTERRUPTED by whichever worker next started a turn
+  on that session — including a turn belonging to a different worker that
+  was running perfectly well at that instant.
+- **Root cause:** an AGE THRESHOLD was used as a proxy for "no longer
+  running". It cannot distinguish "still working" from "gone", and the
+  case it gets wrong is the one that matters most: a large multimodal
+  investigation, a slow specialist chain, or a gateway simply taking its
+  time is ACTIVE, and 15 minutes is not evidence of anything.
+- **Fix:** reconciliation is now OWNERSHIP-based. A turn holds a
+  PostgreSQL session advisory lock for its whole duration (`chat_service`
+  `_drive`, released in its `finally`, including on cancellation). Another
+  worker reconciles that turn only after establishing ownership is gone —
+  by successfully TAKING that lock, which PostgreSQL releases the moment
+  the owner's connection dies. A turn whose lock cannot be taken is left
+  ACCEPTED however long it has been running. The `stale_after_seconds`
+  parameter is removed outright rather than defaulted higher; a larger
+  threshold is the same mistake, slower.
+- **Tests:** `backend/tests/test_post6a_durable_outcomes.py::
+  test_an_interrupted_turn_is_reconciled_not_lost`,
+  `backend/tests/test_post6a_prompt6.py::
+  test_a_long_running_active_turn_is_not_reconciled_as_interrupted`.
 
 ===================================================================
 MAINTENANCE

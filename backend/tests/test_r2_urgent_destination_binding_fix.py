@@ -143,7 +143,7 @@ async def test_2_underlying_retrieval_receives_the_authoritative_chat_id_not_a_m
             self._app_name = app_name
             self._session_service = session_service
 
-        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
             from backend.agents.incident_manager.evidence import validate_evidence
 
             session = await self._session_service.get_session(
@@ -248,7 +248,7 @@ async def test_3_authoritative_destination_is_the_only_possible_outcome_across_r
             self._app_name = app_name
             self._session_service = session_service
 
-        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
             session = await self._session_service.get_session(
                 app_name=self._app_name, user_id=user_id, session_id=session_id
             )
@@ -332,7 +332,7 @@ async def test_4_missing_binding_never_reaches_the_gateway_or_produces_a_trusted
             self._app_name = app_name
             self._session_service = session_service
 
-        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
             token = execution_module._active_continuation_chat_id.set(None)
             try:
                 result = get_resolved_chat_messages(tool_context=_Ctx({}))
@@ -391,7 +391,7 @@ async def test_5_second_retrieval_attempt_in_the_same_continuation_is_blocked(mo
             self._app_name = app_name
             self._session_service = session_service
 
-        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
             session = await self._session_service.get_session(
                 app_name=self._app_name, user_id=user_id, session_id=session_id
             )
@@ -537,7 +537,7 @@ async def test_7_no_result_is_accepted_when_retrieval_genuinely_returned_nothing
             self._app_name = app_name
             self._session_service = session_service
 
-        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
             session = await self._session_service.get_session(
                 app_name=self._app_name, user_id=user_id, session_id=session_id
             )
@@ -608,7 +608,7 @@ async def test_8_gateway_failure_produces_a_safe_error_never_a_fabricated_summar
             self._app_name = app_name
             self._session_service = session_service
 
-        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
             session = await self._session_service.get_session(
                 app_name=self._app_name, user_id=user_id, session_id=session_id
             )

@@ -20,7 +20,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -56,5 +56,7 @@ class TelcoContextAssertionRecord(Base):
     canonical_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     origin: Mapped[str] = mapped_column()
     source_reference: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    supersedes_assertion_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    retracted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     asserted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

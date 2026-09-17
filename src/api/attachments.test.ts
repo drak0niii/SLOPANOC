@@ -41,9 +41,15 @@ describe("uploadAttachment — POST-5.1 B3 real attachment API client", () => {
     expect(init.method).toBe("POST");
     expect(init.body).toBeInstanceOf(FormData);
     expect((init.body as FormData).get("file")).toBe(file);
-    // Never set manually — the browser must compute the multipart boundary
-    // itself, or the backend's multipart parser rejects the request.
-    expect(init.headers).toBeUndefined();
+    // POST-6A — the invariant is that CONTENT-TYPE is never set here, not
+    // that the headers object is absent. Every request now flows through
+    // `withAuth`, which always produces a `Headers` instance so a
+    // credential can be merged in without clobbering what the caller set.
+    // An empty/auth-only `Headers` is exactly as correct as no headers at
+    // all: `fetch` computes the `multipart/form-data; boundary=...` value
+    // from the FormData body whenever Content-Type is not explicitly
+    // present, and setting it by hand is what would break the boundary.
+    expect(new Headers(init.headers).get("Content-Type")).toBeNull();
   });
 
   it("URL-encodes the session id into the path", async () => {

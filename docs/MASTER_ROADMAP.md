@@ -607,6 +607,51 @@ unchanged in internal order and dependency shape from their description
 in `docs/BUILD_SEQUENCE.md` §2a — this document does not re-derive that
 rationale, it only restates current status against canonical IDs.
 
+## 7b. POST-6A REPAIR CAMPAIGN (prompts 1–6) — status
+
+A bounded corrective campaign run directly on the working branch from
+audited baseline `fdd7c68`. It is NOT a new milestone and does not
+advance the 6A.12–6A.28 sequence in §7a; it repairs boundaries that
+sequence depends on.
+
+**IMPLEMENTED — code complete, hermetic checks passing:**
+
+| Area | What now holds |
+| --- | --- |
+| ADK invocation state | Authoritative turn context reaches the agent via `run_async(state_delta=...)`; the previous pre-Runner `persist_state_delta` write was never visible to the running agent at all |
+| Request extraction | Bounded canonical context; ONE effective request per turn; clarification / correction / cancellation / new-request all resolved deterministically |
+| Operational authority | Exact identifier verification; governed operation descriptors with fingerprint-bound human approval; deterministic command construction; typed response plans |
+| Evidence | One shared evidence service per turn; permitted and indeterminate version keys kept DISTINCT; operational authority gated on authorized evidence |
+| Troubleshooting | Durable investigation state with interpret-before-advance |
+| Turn lifecycle | ACCEPTED / COMPLETED / FAILED / CANCELLED / INTERRUPTED, with terminal transitions made atomic at the persistence boundary (compare-and-set against ADK's storage revision, not an in-memory check) |
+| Gateway writes | Strict response contracts; business failure vs UNCONFIRMED vs success; UNKNOWN_OUTCOME preserved and never auto-retried |
+| Identity | OIDC/JWT bearer verification (issuer, audience, algorithm allowlist, tenant, JWKS rotation); browser login wired end to end on `oidc-client-ts`; 401 restarts sign-in |
+| Governance | Draft / approve / revoke all permission-gated; the admin CLI's configured-actor bypass closed (DEF-0046) |
+| Concurrency | PostgreSQL advisory locks for liveness PLUS a durable ownership generation (`slopanoc_operation_claims`) for fencing; ownership-based turn reconciliation (DEF-0047); cancellation-safe connection release |
+
+**NOT PROVEN — explicitly open:**
+
+- **Distributed correctness is UNVERIFIED.** Every concurrency check in
+  this campaign ran on SQLite in one process. That proves the fencing
+  RULES are right; it proves nothing about two workers. The mechanisms
+  that actually need PostgreSQL — session advisory locks, `pg_locks`
+  ownership probes, `ON CONFLICT` under real contention — have not been
+  exercised against an isolated PostgreSQL instance.
+- **No live acceptance.** No real IdP sign-in, no real Teams write, no
+  migration applied to any database.
+- **Two migrations are PENDING and unapplied:** `f1b6c3d05a27`
+  (`slopanoc_operation_approvals`) and `b7c4e1a95d60`
+  (`slopanoc_operation_claims`). Dispatch REFUSES rather than running
+  unfenced if the claim table is absent in a PostgreSQL deployment.
+- **One redundant model call remains.** A turn whose answer is already
+  fully determined deterministically (clarification / restriction) still
+  runs the tool-free presentation Runner, and its output is discarded.
+  Skipping it requires appending the user-turn event that ADK's
+  `Runner._append_new_message_to_session` currently owns — without it the
+  turn disappears from history projection entirely. That is a change to
+  the canonical persistence path, not a latency tweak, and was
+  deliberately left out of this campaign.
+
 ## Future-milestone record template
 
 When a future milestone (starting with P11) closes, add a row to §4's

@@ -29,6 +29,7 @@ from backend.knowledge.domain._shared import require_non_blank
 from backend.knowledge.domain.artifacts import KnowledgeArtifact, validate_artifact_lineage
 from backend.knowledge.domain.asset_metadata import KnowledgeAssetMetadata
 from backend.knowledge.domain.enums import KnowledgeDocumentType, LifecycleStatus
+from backend.knowledge.domain.operation_descriptor import GovernedOperationDescriptor
 
 __all__ = [
     "require_non_blank",
@@ -302,6 +303,17 @@ class KnowledgeSection(BaseModel):
             "or None if this section came from the root document's own primary text (the only case that existed "
             "before A5's compound-artifact support). Completes hierarchical provenance (e.g. section -> embedded "
             "spreadsheet -> sheet -> range) without a parallel citation system -- see backend/knowledge/domain/artifacts.py."
+        ),
+    )
+
+    operation: Optional[GovernedOperationDescriptor] = Field(
+        default=None,
+        description=(
+            "POST-6A REPAIR 3 -- the governed description of the operation this section defines (target scope, "
+            "required parameters, approved command templates, effect, prerequisites, prohibitions). Optional and "
+            "absent for every ordinary descriptive section; `None` means NOTHING is established about this "
+            "section's operational shape, never that it is safe/target-independent. Only an APPROVED descriptor "
+            "may authorize anything -- see operation_descriptor.py."
         ),
     )
 

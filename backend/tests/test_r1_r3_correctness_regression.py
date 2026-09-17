@@ -49,7 +49,7 @@ class _TaggedFakeRunner(FakeRunner):
         self._tag = tag
         self._calls = calls
 
-    async def run_async(self, *, user_id, session_id, new_message, run_config=None):
+    async def run_async(self, *, user_id, session_id, new_message, state_delta=None, run_config=None):
         self._calls.append(self._tag)
         async for event in super().run_async(
             user_id=user_id, session_id=session_id, new_message=new_message, run_config=run_config

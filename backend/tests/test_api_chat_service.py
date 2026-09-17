@@ -41,7 +41,7 @@ async def test_unknown_session_is_rejected_before_any_runner_call() -> None:
     calls: list[str] = []
 
     class TrackingRunner:
-        async def run_async(self, *, user_id, session_id, new_message, run_config=None):
+        async def run_async(self, *, user_id, session_id, new_message, state_delta=None, run_config=None):
             calls.append(session_id)
             yield FakeEvent(text="should never run")
 

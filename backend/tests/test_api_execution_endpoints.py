@@ -113,7 +113,13 @@ async def test_execute_create_chat_success_consumes_and_persists(monkeypatch: py
 
 @pytest.mark.asyncio
 async def test_execute_send_message_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    _install_gateway(monkeypatch, FakeResponse(200, {}))
+    # POST-6A: a send is CONFIRMED only on positive evidence. `messageId`
+    # is the contract's identifier for this operation and is recognized
+    # already, ahead of the flow returning it -- see
+    # `backend/gateway/write_envelope.py`. An empty body is now
+    # UNCONFIRMED (covered by
+    # `test_post6a_durable_outcomes.py::test_empty_write_acknowledgement...`).
+    _install_gateway(monkeypatch, FakeResponse(200, {"messageId": "m-1"}))
     service = ApiSessionService()
     session_id = await service.create_session()
     proposal_id = await _approved_send_message(service, session_id, chat_id="c1", message="Hi team")
@@ -243,7 +249,9 @@ async def test_execute_gateway_failure_leaves_proposal_approved_and_reexecutable
     refreshed = await service.get_session(session_id)
     assert refreshed.state[PENDING_ACTION_PROPOSAL_STATE_KEY]["status"] == "approved"  # NOT consumed
 
-    _install_gateway(monkeypatch, FakeResponse(200, {}))
+    # The healthy retry must now carry positive evidence, or it would be
+    # UNCONFIRMED rather than executed -- see POST-6A's write contract.
+    _install_gateway(monkeypatch, FakeResponse(200, {"messageId": "m-1"}))
     second = await execution_service.execute(service, session_id, proposal_id)
     assert second.result == "executed"
 
@@ -346,7 +354,7 @@ def _create_approved_proposal_via_http(client: TestClient, session_service: ApiS
 def test_execute_endpoint_never_calls_team_manager_runner(
     http_client: TestClient, http_session_service: ApiSessionService, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _install_gateway(monkeypatch, FakeResponse(200, {}))
+    _install_gateway(monkeypatch, FakeResponse(200, {"messageId": "m-1"}))
 
     class TrackingRunner:
         called = False

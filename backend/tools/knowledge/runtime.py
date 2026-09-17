@@ -16,6 +16,7 @@ from backend.knowledge.provenance.contracts import KnowledgeEvidenceItem, Knowle
 from backend.knowledge.provenance.service import KnowledgeProvenanceService, validate_evidence_selection
 from backend.knowledge.repository.sqlalchemy import SqlAlchemyKnowledgeRepository
 from backend.knowledge.retrieval.service import KnowledgeRetrievalService
+from backend.knowledge.shared_evidence import SharedEvidenceService
 from backend.knowledge.tools.contracts import KnowledgeSearchExecutionResult, KnowledgeToolExecutionContext
 from backend.knowledge.tools.service import KnowledgeToolService
 
@@ -58,6 +59,12 @@ class KnowledgeRunEvidenceState:
     execution_context: KnowledgeToolExecutionContext
     available_evidence: KnowledgeEvidenceSet = field(default_factory=KnowledgeEvidenceSet)
     selected_evidence: list[KnowledgeEvidenceItem] = field(default_factory=list)
+    context_state: dict = field(default_factory=dict)
+    """POST-6A -- the TELCO context state narrowing is evaluated against
+    for this run, captured once alongside `execution_context`. Part of
+    the shared evidence cache key (via `applicability_fingerprint`), so
+    two queries evaluated under different known facts never share a
+    result."""
 
 
 _lock = threading.Lock()
@@ -219,4 +226,25 @@ def get_knowledge_tool_service() -> KnowledgeToolService:
     easier.
     """
     repository = get_knowledge_repository()
-    return KnowledgeToolService(KnowledgeRetrievalService(repository), KnowledgeProvenanceService(repository))
+    retrieval = KnowledgeRetrievalService(repository)
+    provenance = KnowledgeProvenanceService(repository)
+    # POST-6A -- THE LIVE `knowledge_search` PATH NOW CONSUMES THE SHARED
+    # EVIDENCE SERVICE. It composes the SAME `KnowledgeRetrievalService`/
+    # `KnowledgeProvenanceService` instances constructed here (never a
+    # second retrieval stack) and adds narrowing, per-version
+    # authorization, the per-turn cache both specialists share, and a
+    # typed availability outcome.
+    shared = SharedEvidenceService(repository, retrieval_service=retrieval, provenance_service=provenance)
+    return KnowledgeToolService(retrieval, provenance, shared_evidence_service=shared)
+
+
+def get_shared_evidence_service() -> SharedEvidenceService:
+    """The one `SharedEvidenceService` both specialists use. Reuses the
+    memoized `KnowledgeToolService`'s own instance rather than building a
+    second one, so Incident Manager (via `knowledge_search`) and
+    Troubleshooting Manager (via `context_support.query_selected_evidence`)
+    genuinely share the same per-turn cache."""
+    service = get_knowledge_tool_service()
+    shared = getattr(service, "_shared_evidence_service", None)
+    assert shared is not None, "the production KnowledgeToolService is always composed with a shared evidence service"
+    return shared

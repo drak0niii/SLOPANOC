@@ -430,7 +430,7 @@ async def test_30_concurrent_teams_run_and_knowledge_run_never_cross_contaminate
         )
 
     class _TeamsActivityRunner:
-        async def run_async(self, *, user_id, session_id, new_message, run_config=None):
+        async def run_async(self, *, user_id, session_id, new_message, state_delta=None, run_config=None):
             yield _declare_non_governed()
             report_activity(ActivityKind.TEAMS_CHAT_DISCOVERY_STARTED)
             await asyncio.sleep(0)
@@ -440,7 +440,7 @@ async def test_30_concurrent_teams_run_and_knowledge_run_never_cross_contaminate
             yield FakeEvent(text="Teams answer.", final=True)
 
     class _KnowledgeActivityRunner:
-        async def run_async(self, *, user_id, session_id, new_message, run_config=None):
+        async def run_async(self, *, user_id, session_id, new_message, state_delta=None, run_config=None):
             yield _declare_non_governed()
             report_activity(ActivityKind.KNOWLEDGE_SEARCH_STARTED)
             await asyncio.sleep(0)
@@ -496,7 +496,7 @@ async def test_22_activity_driven_status_never_affects_source_requirements_trust
     from backend.api.streaming_events import StreamEventType as _SET
 
     class _ActivityReportingRunner:
-        async def run_async(self, *, user_id, session_id, new_message, run_config=None):
+        async def run_async(self, *, user_id, session_id, new_message, state_delta=None, run_config=None):
             report_activity(ActivityKind.KNOWLEDGE_SEARCH_STARTED)
             report_activity(ActivityKind.KNOWLEDGE_SEARCH_SUCCEEDED, {"document_count": 1})
             yield FakeEvent(text="This text must stay buffered.", final=False, partial=True)

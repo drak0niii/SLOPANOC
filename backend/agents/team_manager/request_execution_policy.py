@@ -76,19 +76,21 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from backend.agents.incident_manager.schemas import (
     TroubleshootingGuidance,
     TroubleshootingInteractionMode,
     TroubleshootingOperationalEffect,
 )
+from backend.knowledge.domain.operation_descriptor import GovernedOperationDescriptor
 from backend.agents.team_manager.request_contract import (
     PENDING_GOVERNED_REQUEST_STATE_KEY,
     TARGET_IDENTIFIER_PARAMETER_NAME,
     TARGET_TYPE_PARAMETER_NAME,
     PendingGovernedRequest,
     PendingGovernedRequestStatus,
+    PendingRequestRelationship,
     RequestClass,
     RequestContract,
     RequestedOutput,
@@ -132,6 +134,34 @@ def _resolve_request_class(
     if intent is None or requested_output is None:
         return None
     return derive_request_class(intent, requested_output, False, subject)
+
+
+class PendingContinuationRelation:
+    """POST-6A REPAIR 4 -- the closed, deterministic outcome vocabulary of
+    `resolve_pending_continuation`, below. Distinct from `PendingRequest
+    Relationship` (request_contract.py), which is only ever the MODEL's
+    own proposal: this is what the runtime actually concluded.
+
+    NONE       -- there is no pending governed request to relate to.
+    ANSWERS    -- this turn deterministically answers/corrects it; the
+                  pending governance identity is inherited.
+    NEW        -- this turn is a genuinely separate request; the pending
+                  record is simply not inherited (it is still rewritten
+                  from this turn's own outcome, exactly as before).
+    CANCELLED  -- the user explicitly withdrew the pending request.
+    UNRESOLVED -- this turn supplies something that BELONGS to the
+                  pending request's own parameter vocabulary, but the
+                  structural signals do not establish that it is
+                  answering it, and the model did not disown it either.
+                  Neither resuming nor silently dropping is safe, so the
+                  runtime must ASK -- see `resolve_pending_continuation`.
+    """
+
+    NONE = "none"
+    ANSWERS = "answers"
+    NEW = "new"
+    CANCELLED = "cancelled"
+    UNRESOLVED = "unresolved"
 
 
 class RequestExecutionStatus:
@@ -217,6 +247,20 @@ class RequestExecutionDecision(BaseModel):
     missing_context: list[str] = Field(default_factory=list)
     ambiguity: bool = False
     approval_required: bool = False
+    pending_relationship: str = PendingContinuationRelation.NONE
+    """POST-6A REPAIR 4 -- what `resolve_pending_continuation` concluded
+    about this turn's relationship to a still-pending governed request
+    (`PendingContinuationRelation`). Observability plus exactly ONE
+    behavioral consumer: `command_suppression_fallback_text` renders the
+    dedicated relationship clarification for `UNRESOLVED`, instead of a
+    missing-parameter question the user has no way to act on. Never
+    itself a permission -- every `may_*` grant above is derived from the
+    already-effective contract, unchanged."""
+    pending_subject: Optional[str] = None
+    """POST-6A REPAIR 4 -- the pending request's own `subject` (the
+    user's own earlier operation, e.g. "restart RRU"), carried so the
+    `UNRESOLVED` clarification can name what it is asking about.
+    `None` whenever there is no pending request."""
     reason: str = ""
 
 
@@ -349,9 +393,25 @@ def _supplies_context_for_pending_request(
     ID"`) remains valid, and signal 3 remains the PRIMARY path for that
     shape; subject-consistency is only ever an ADDITIONAL, alternate way
     to satisfy relatedness, never a replacement for signals 1/2/4.
+
+    POST-6A REPAIR 4 -- SIGNAL 1 WIDENED TO INCLUDE `GENERAL_
+    CONVERSATION`: a value-only clarification answer ("RRU-3", "it's
+    rru-3") legitimately classifies `intent=information`/`requested_
+    output=fact`/`subject=None`, which `derive_request_class` resolves to
+    `GENERAL_CONVERSATION`, not `OPERATIONAL_INFORMATION` -- so the
+    original class check silently DROPPED the pending objective for
+    exactly the shape this whole mechanism exists to preserve. The
+    original rationale for excluding it ("a genuine 'hello' must never be
+    promoted into command governance") is fully carried by SIGNAL 2
+    instead, which it always was: a greeting supplies no verified
+    `provided_context` at all, so it can never reach the remaining
+    signals. Every already-resolved operational class (`EXACT_COMMAND`/
+    `PROCEDURE_TROUBLESHOOTING`/`ACTION`) stays excluded exactly as
+    before -- such a turn classified itself correctly and needs no
+    inheritance.
     """
     resolved_class = _resolve_request_class(contract.request_class, contract.intent, contract.requested_output, contract.subject)
-    if resolved_class != RequestClass.OPERATIONAL_INFORMATION:
+    if resolved_class not in (RequestClass.OPERATIONAL_INFORMATION, RequestClass.GENERAL_CONVERSATION):
         return False
     if not contract.provided_context:
         return False
@@ -377,6 +437,222 @@ def _merge_pending_provided_context(
     for param in current_provided_context:
         merged[param.name] = param
     return list(merged.values())
+
+
+class PendingContinuationResolution(BaseModel):
+    """POST-6A REPAIR 3 -- the ONE effective current request, resolved
+    once from the raw extraction proposal plus existing pending state,
+    and reused by every consumer that needs it (work permissions,
+    governed-retrieval input, the authoritative prompt block, the final
+    execution decision, and the pending-request continuity write).
+
+    `contract` is the EFFECTIVE contract -- in-memory only, exactly as
+    `resolve_effective_governed_contract` always was: the RAW, durable
+    `VALIDATED_REQUEST_CONTRACT_STATE_KEY` contract is never rewritten by
+    this resolution (see `PENDING_GOVERNED_REQUEST_STATE_KEY`'s own
+    "never silently mutate history" note). Callers keep the raw
+    extraction and this effective authority as separate values."""
+
+    model_config = ConfigDict(frozen=True)
+
+    relation: str
+    contract: RequestContract
+    pending_subject: Optional[str] = None
+
+
+def _declared_relationship(contract: RequestContract) -> str:
+    """The model's own declaration, defaulted defensively -- a contract
+    built before this field existed (or by a test/caller that omits it)
+    reads as `UNKNOWN`, i.e. "said nothing"."""
+    declared = getattr(contract, "pending_request_relationship", None)
+    return declared if isinstance(declared, str) and declared else PendingRequestRelationship.UNKNOWN
+
+
+def _pending_relevant_names(pending_governed_request: PendingGovernedRequest) -> Optional[frozenset[str]]:
+    """The pending record's own closed parameter vocabulary for
+    relatedness checks -- extracted verbatim from `resolve_effective_
+    governed_contract`'s own original inline derivation (ISSUE A), so
+    both the ANSWERS path and the new UNRESOLVED path judge relatedness
+    against the SAME set, never two drifting copies. `None` for a status
+    this mechanism does not recognize."""
+    pending_provided_names = frozenset(param.name for param in pending_governed_request.provided_context)
+    if pending_governed_request.status == PendingGovernedRequestStatus.UNRESOLVED:
+        # Still-needed keys ARE the primary vocabulary, but a real live
+        # value-answer turn can re-supply an ALREADY-provided key's name
+        # again (e.g. the model consistently tags an RRU identifier under
+        # `unit_type` across multiple turns rather than `unit_id` -- a
+        # separate, out-of-scope naming-accuracy quirk, LIVE-CORR-10's own
+        # documented finding) -- included so that re-statement still
+        # counts as relating to the SAME pending operation. This is never
+        # what makes an UNRELATED mention (e.g. `vendor=ericsson`) match;
+        # it only ever widens the ALREADY-narrow "known to this specific
+        # operation" set, never opens it to an arbitrary parameter name.
+        return frozenset(pending_governed_request.missing_context) | pending_provided_names
+    if pending_governed_request.status == PendingGovernedRequestStatus.COMPLETED:
+        return pending_provided_names
+    return None
+
+
+def _turn_is_self_contained_request(contract: RequestContract) -> bool:
+    """POST-6A REPAIR 4 -- does THIS turn, on its own, already state a
+    complete request of its own? Two already-validated, already-closed
+    signals, either alone sufficient:
+
+      - its resolved `request_class` is one of the operational classes a
+        turn only ever reaches by classifying ITSELF operationally
+        (`EXACT_COMMAND`/`PROCEDURE_TROUBLESHOOTING`/`ACTION`); or
+      - it resolved a `subject` of its own -- a real topic/alarm/procedure
+        the model could name for THIS message ("RRU status"), which a
+        bare clarification answer ("rru-3") never has.
+
+    This is what separates "a genuinely independent question that happens
+    to mention a same-named parameter" (never worth interrupting the user
+    over -- it is simply a new request) from "a fragment whose
+    relationship to the pending request the runtime genuinely cannot
+    determine" (which must ask). Never inspects raw user text.
+    """
+    resolved_class = _resolve_request_class(
+        contract.request_class, contract.intent, contract.requested_output, contract.subject
+    )
+    if resolved_class in (RequestClass.EXACT_COMMAND, RequestClass.PROCEDURE_TROUBLESHOOTING, RequestClass.ACTION):
+        return True
+    return bool(contract.subject)
+
+
+def resolve_pending_continuation(
+    contract: RequestContract, pending_governed_request: Optional[PendingGovernedRequest]
+) -> PendingContinuationResolution:
+    """POST-6A REPAIR 3/4 -- the SINGLE resolution of "what is this turn
+    actually asking, given what the runtime is still waiting on." Pure and
+    deterministic: same inputs always produce the same effective request,
+    so `chat_service.py` and `derive_execution_decision`/`derive_work_
+    envelope` all agree without any of them having to pass the resolved
+    value to each other.
+
+    WHO GRANTS WHAT (the governing trust rule): continuation authority is
+    granted ONLY by `_supplies_context_for_pending_request`'s own
+    deterministic structural signals. The model's own `pending_request_
+    relationship` declaration can never resume anything on its own -- it
+    can only DROP pending authority (`CANCELS_PENDING`/`NEW_REQUEST`,
+    both fail-safe directions) or break a tie the structural signals
+    genuinely cannot decide.
+
+    OUTCOMES, in fixed order:
+
+      1. No pending record, or one that is not `EXACT_COMMAND`-class, or
+         one with an unrecognized status -> `NONE`, contract unchanged.
+      2. The model declared `CANCELS_PENDING` -> `CANCELLED`, contract
+         unchanged. Honored directly: withdrawing a request only ever
+         removes authority. The caller clears the pending record.
+      3. The structural signals establish this turn answers/corrects the
+         pending request -> `ANSWERS`, and the effective contract
+         inherits the pending governance identity exactly as
+         `resolve_effective_governed_contract` always did.
+      4. The model declared `NEW_REQUEST` -> `NEW`, contract unchanged.
+         This is the explicit escape hatch for a genuinely independent
+         question that happens to mention a same-named parameter ("what
+         is the status of RRU-9?" while a `restart RRU` request is
+         pending) -- it drops pending authority, never grants any.
+      5. Otherwise, if this turn supplies a verified parameter whose NAME
+         belongs to the pending request's own vocabulary, step 3's
+         signals did NOT agree, AND the turn is not itself a self-
+         contained request (`_turn_is_self_contained_request` -- it
+         resolved no subject and no operational class of its own)
+         -> `UNRESOLVED`. Resuming would be the
+         "an unrelated identifier mention silently resumes an old
+         operation" failure; silently ignoring it would be the "the
+         pending objective is lost" failure. Neither is acceptable, so
+         the effective contract is rendered deliberately AMBIGUOUS while
+         RETAINING the pending request's own identity/parameters -- which
+         routes the turn, through the EXISTING, unmodified ambiguity
+         branch of `derive_execution_decision`, to a deterministic
+         clarification, and (through `build_pending_governed_request_
+         state_update`, also unmodified) keeps the pending record alive
+         so the user's answer can still resume it next turn. Note that
+         the current turn's OWN supplied parameters are deliberately NOT
+         merged in here: an unresolved relationship must never adopt a
+         value as if it had answered the pending request.
+      6. Otherwise -> `NEW`, contract unchanged (the ordinary,
+         overwhelmingly common case: an unrelated turn that shares no
+         parameter vocabulary with the pending request at all).
+    """
+    if pending_governed_request is None or pending_governed_request.request_class != RequestClass.EXACT_COMMAND:
+        return PendingContinuationResolution(relation=PendingContinuationRelation.NONE, contract=contract)
+
+    pending_subject = pending_governed_request.subject
+    declared = _declared_relationship(contract)
+
+    if declared == PendingRequestRelationship.CANCELS_PENDING:
+        return PendingContinuationResolution(
+            relation=PendingContinuationRelation.CANCELLED, contract=contract, pending_subject=pending_subject
+        )
+
+    relevant_names = _pending_relevant_names(pending_governed_request)
+    if relevant_names is None:
+        return PendingContinuationResolution(relation=PendingContinuationRelation.NONE, contract=contract)
+
+    if _supplies_context_for_pending_request(contract, relevant_names, pending_subject):
+        # POST-6A -- CONFIRMATION IS NOT GRANTED HERE.
+        #
+        # An earlier cut upgraded a parameter to `CONFIRMED` right here,
+        # whenever its NAME appeared in the pending request's
+        # `missing_context`. That is still an inference over message
+        # content: it cannot tell whether the outstanding question is
+        # still about the same operation, whether the governed operation
+        # has been edited since, or whether the value has since been
+        # corrected. All three are real ways for an answer to become
+        # stale between being given and being used.
+        #
+        # Confirmation is now a bound RECORD, created and re-verified by
+        # `target_confirmation.py` against the pending request, the
+        # operation and the candidate revision. This function's job is
+        # only to resolve WHICH request is effective; parameters keep
+        # whatever confirmation state they legitimately carry.
+        merged_provided_context = _merge_pending_provided_context(
+            pending_governed_request.provided_context, contract.provided_context
+        )
+        effective = contract.model_copy(
+            update={
+                "intent": pending_governed_request.intent,
+                "requested_output": RequestedOutput.EXACT_COMMAND,
+                "subject": pending_subject,
+                "provided_context": merged_provided_context,
+                "missing_context": list(pending_governed_request.missing_context),
+                "request_class": RequestClass.EXACT_COMMAND,
+                "ambiguity": False,
+            }
+        )
+        return PendingContinuationResolution(
+            relation=PendingContinuationRelation.ANSWERS, contract=effective, pending_subject=pending_subject
+        )
+
+    if declared == PendingRequestRelationship.NEW_REQUEST:
+        return PendingContinuationResolution(
+            relation=PendingContinuationRelation.NEW, contract=contract, pending_subject=pending_subject
+        )
+
+    if _relates_to_pending_vocabulary(contract, relevant_names) and not _turn_is_self_contained_request(contract):
+        unresolved = contract.model_copy(
+            update={
+                "intent": pending_governed_request.intent,
+                "requested_output": RequestedOutput.EXACT_COMMAND,
+                "subject": pending_subject,
+                # Deliberately the PENDING record's own already-verified
+                # parameters, never this turn's -- an unresolved
+                # relationship must not adopt the mentioned value.
+                "provided_context": list(pending_governed_request.provided_context),
+                "missing_context": list(pending_governed_request.missing_context),
+                "request_class": RequestClass.EXACT_COMMAND,
+                "ambiguity": True,
+            }
+        )
+        return PendingContinuationResolution(
+            relation=PendingContinuationRelation.UNRESOLVED, contract=unresolved, pending_subject=pending_subject
+        )
+
+    return PendingContinuationResolution(
+        relation=PendingContinuationRelation.NEW, contract=contract, pending_subject=pending_subject
+    )
 
 
 def resolve_effective_governed_contract(
@@ -431,42 +707,18 @@ def resolve_effective_governed_contract(
       `intent` and `requested_output` -- `requested_output=EXACT_COMMAND`
       alone is always sufficient to keep every downstream gate's existing
       behavior, whatever the restored `intent` turns out to be.
+
+    POST-6A REPAIR 3/4: the derivation itself now lives in `resolve_
+    pending_continuation`, above -- ONE resolution, reused by every
+    consumer. This function is the unchanged-signature projection of it
+    (the effective contract alone), kept so every existing caller and
+    test keeps working exactly as written. The one behavior change is the
+    one this repair exists to make: an UNRESOLVED relationship now yields
+    a deliberately AMBIGUOUS effective contract that retains the pending
+    request's identity, instead of silently returning the raw contract as
+    though the pending request had never existed.
     """
-    if pending_governed_request is None or pending_governed_request.request_class != RequestClass.EXACT_COMMAND:
-        return contract
-    pending_provided_names = frozenset(param.name for param in pending_governed_request.provided_context)
-    if pending_governed_request.status == PendingGovernedRequestStatus.UNRESOLVED:
-        # Still-needed keys ARE the primary vocabulary, but a real live
-        # value-answer turn can re-supply an ALREADY-provided key's name
-        # again (e.g. the model consistently tags an RRU identifier under
-        # `unit_type` across multiple turns rather than `unit_id` -- a
-        # separate, out-of-scope naming-accuracy quirk, LIVE-CORR-10's own
-        # documented finding) -- included so that re-statement still
-        # counts as relating to the SAME pending operation. This is never
-        # what makes an UNRELATED mention (e.g. `vendor=ericsson`) match;
-        # it only ever widens the ALREADY-narrow "known to this specific
-        # operation" set, never opens it to an arbitrary parameter name.
-        relevant_names = frozenset(pending_governed_request.missing_context) | pending_provided_names
-    elif pending_governed_request.status == PendingGovernedRequestStatus.COMPLETED:
-        relevant_names = pending_provided_names
-    else:
-        return contract
-    if not _supplies_context_for_pending_request(contract, relevant_names, pending_governed_request.subject):
-        return contract
-    merged_provided_context = _merge_pending_provided_context(
-        pending_governed_request.provided_context, contract.provided_context
-    )
-    return contract.model_copy(
-        update={
-            "intent": pending_governed_request.intent,
-            "requested_output": RequestedOutput.EXACT_COMMAND,
-            "subject": pending_governed_request.subject,
-            "provided_context": merged_provided_context,
-            "missing_context": list(pending_governed_request.missing_context),
-            "request_class": RequestClass.EXACT_COMMAND,
-            "ambiguity": False,
-        }
-    )
+    return resolve_pending_continuation(contract, pending_governed_request).contract
 
 
 # =============================================================================
@@ -562,9 +814,20 @@ def is_governed_evidence_continuity_permitted(
     if contract is None or not current_run_id or contract.run_id != current_run_id or contract.ambiguity:
         return False
     if pending_governed_request is not None:
-        effective = resolve_effective_governed_contract(contract, pending_governed_request)
-        if effective != contract:
+        # POST-6A REPAIR 3/4: uses the SAME single resolution every other
+        # consumer does, and branches on its explicit outcome rather than
+        # on "did the contract object change" -- which, now that an
+        # UNRESOLVED relationship also rewrites the contract, would
+        # otherwise have granted evidence continuity to precisely the
+        # turn whose relationship to the pending request is unknown.
+        resolution = resolve_pending_continuation(contract, pending_governed_request)
+        if resolution.relation == PendingContinuationRelation.ANSWERS:
             return True
+        if resolution.relation in (
+            PendingContinuationRelation.CANCELLED,
+            PendingContinuationRelation.UNRESOLVED,
+        ):
+            return False
     if not contract.continuation:
         return False
     # `_resolve_request_class` (this module, already established): a REAL
@@ -584,6 +847,8 @@ def derive_execution_decision(
     current_run_id: Optional[str],
     grounded_command_candidate: Optional[str] = None,
     pending_governed_request: Optional[PendingGovernedRequest] = None,
+    operation_descriptor: Optional[GovernedOperationDescriptor] = None,
+    evidence_authorized: bool = True,
 ) -> RequestExecutionDecision:
     """Pure, deterministic derivation -- NO LLM reasoning, no natural-
     language parsing. See this module's own docstring for the full
@@ -599,6 +864,24 @@ def derive_execution_decision(
     requirements it never actually needs -- see that function's own
     docstring for the full rationale. Every existing caller that omits
     this parameter is completely unaffected.
+
+    POST-6A -- `evidence_authorized` (optional, additive, default
+    `True`): `False` when this turn's governed evidence comes from a
+    version whose applicability narrowing could not PROVE. Withdraws
+    command/operational-step/action permission at the final boundary --
+    indeterminate evidence may inform a clarification or an explicitly
+    qualified reference, but it never authorizes direction. Every
+    existing caller that omits it is unaffected.
+
+    POST-6A REPAIR 2 -- `operation_descriptor` (optional, additive,
+    backward-compatible default `None`): the APPROVED `GovernedOperation
+    Descriptor` bound to the governed section this turn actually selected,
+    when one exists. Forwarded unchanged to `required_target_parameter_
+    gaps`, which is the ONE place it is consulted. `None` (no descriptor,
+    a CANDIDATE one, or one whose scope is `UNKNOWN`) keeps that
+    function's own conservative blanket requirement -- this parameter can
+    only ever NARROW a requirement with positive governed proof, never
+    widen permission.
 
     LIVE-CORR-11 -- `pending_governed_request` (optional, additive,
     backward-compatible default `None`): the CALLER's own already-parsed
@@ -622,7 +905,18 @@ def derive_execution_decision(
             reason="no current-turn validated request contract",
         )
 
-    contract = resolve_effective_governed_contract(contract, pending_governed_request)
+    # POST-6A REPAIR 3/4 -- ONE resolution of the effective current
+    # request, from the raw extraction proposal plus existing pending
+    # state. `resolve_pending_continuation` is pure, so `chat_service.py`
+    # calling it for its own consumers (retrieval input, authoritative
+    # prompt block, continuity write) and this function calling it here
+    # always agree on the same effective request -- there is no second,
+    # independently-drifting derivation, and no need for the caller to
+    # thread the resolved value through.
+    pending_resolution = resolve_pending_continuation(contract, pending_governed_request)
+    contract = pending_resolution.contract
+    pending_relationship = pending_resolution.relation
+    pending_subject = pending_resolution.pending_subject
 
     # LIVE-CORR-8 -- computed ONCE here, reused for every branch below via
     # `resolved_request_class`: a REAL, persisted contract already has
@@ -674,6 +968,8 @@ def derive_execution_decision(
             may_emit_operational_steps=False,
             missing_context=list(contract.missing_context),
             ambiguity=True,
+            pending_relationship=pending_relationship,
+            pending_subject=pending_subject,
             approval_required=contract.approval_required,
             reason="request is ambiguous -- clarification required before any operational output",
         )
@@ -690,6 +986,8 @@ def derive_execution_decision(
             may_emit_operational_steps=False,
             missing_context=list(contract.missing_context),
             ambiguity=False,
+            pending_relationship=pending_relationship,
+            pending_subject=pending_subject,
             approval_required=True,  # 6A.13 already forces this on the contract itself; reasserted defensively here
             reason="action requests always require the existing, unchanged approval boundary",
         )
@@ -706,6 +1004,8 @@ def derive_execution_decision(
             may_emit_operational_steps=False,
             missing_context=list(contract.missing_context),
             ambiguity=False,
+            pending_relationship=pending_relationship,
+            pending_subject=pending_subject,
             approval_required=False,
             reason="deterministic Knowledge catalog enumeration is not yet implemented (a future milestone)",
         )
@@ -722,6 +1022,8 @@ def derive_execution_decision(
             may_emit_operational_steps=False,
             missing_context=list(contract.missing_context),
             ambiguity=True,
+            pending_relationship=pending_relationship,
+            pending_subject=pending_subject,
             approval_required=contract.approval_required,
             reason="no resolved subject/procedure for a command-shaped request",
         )
@@ -805,7 +1107,15 @@ def derive_execution_decision(
             contract_missing_context_contribution
             | set(
                 required_target_parameter_gaps(
-                    contract.intent, contract.requested_output, contract.provided_context, grounded_command_candidate
+                    contract.intent,
+                    contract.requested_output,
+                    contract.provided_context,
+                    grounded_command_candidate,
+                    # POST-6A REPAIR 2: positive governed metadata for the
+                    # section actually selected this turn, when one exists.
+                    # `None` keeps the conservative blanket rule -- unknown
+                    # scope stays unresolved, never permissive.
+                    operation_descriptor,
                 )
             )
         )
@@ -821,6 +1131,8 @@ def derive_execution_decision(
                 may_emit_operational_steps=True,  # a safe, non-command diagnostic step/clarification remains allowed
                 missing_context=effective_missing_context,
                 ambiguity=False,
+                pending_relationship=pending_relationship,
+                pending_subject=pending_subject,
                 approval_required=contract.approval_required,
                 reason=f"required context not yet confirmed by the user: {', '.join(effective_missing_context)}",
             )
@@ -863,6 +1175,27 @@ def derive_execution_decision(
     # narrative is in scope at all for this request shape -- never on its
     # own sufficient to authorize a command.
     allow_command = resolved_request_class == RequestClass.EXACT_COMMAND and contract.requested_output == RequestedOutput.EXACT_COMMAND
+
+    # POST-6A -- INDETERMINATE APPLICABILITY AUTHORIZES NOTHING.
+    #
+    # `evidence_authorized=False` means the governed evidence this turn is
+    # standing on comes from a version whose applicability could NOT be
+    # proven against the context known so far. Such evidence is still
+    # legitimately RETRIEVED -- it is what a clarification or an
+    # explicitly-qualified reference is built from -- but an operational
+    # instruction grounded in knowledge we cannot show applies is exactly
+    # the failure the permitted/indeterminate split exists to prevent.
+    #
+    # So command, operational-step and action permissions are all
+    # withdrawn here, at the final policy boundary, regardless of how
+    # correct the contract and the descriptor themselves are. The turn
+    # remains answerable -- it simply answers with reference and
+    # clarification rather than with direction.
+    allow_operational_steps = is_operationally_shaped_request(contract.intent, contract.requested_output)
+    if not evidence_authorized:
+        allow_command = False
+        allow_operational_steps = False
+
     return RequestExecutionDecision(
         status=RequestExecutionStatus.ALLOW,
         request_class=resolved_request_class,
@@ -871,9 +1204,11 @@ def derive_execution_decision(
         subject=contract.subject,
         may_emit_command=allow_command,
         may_execute_action=False,  # never this policy's job to authorize an actual write
-        may_emit_operational_steps=is_operationally_shaped_request(contract.intent, contract.requested_output),
+        may_emit_operational_steps=allow_operational_steps,
         missing_context=list(contract.missing_context),
         ambiguity=False,
+        pending_relationship=pending_relationship,
+        pending_subject=pending_subject,
         approval_required=contract.approval_required,
         reason=(
             "request contract satisfied -- exact-command output permitted, subject to existing grounding"
@@ -1390,7 +1725,16 @@ def build_pending_governed_request_state_update(
     if decision.status == RequestExecutionStatus.NEEDS_INFORMATION:
         status = PendingGovernedRequestStatus.UNRESOLVED
         missing = list(decision.missing_context)
-    elif decision.status == RequestExecutionStatus.AMBIGUOUS and contract.subject is not None:
+    elif decision.status == RequestExecutionStatus.AMBIGUOUS and (
+        contract.subject is not None
+        # POST-6A REPAIR 4: an UNRESOLVED relationship is an ambiguity
+        # ABOUT the pending request itself -- the runtime is asking the
+        # user whether to continue it. Clearing it here (which a pending
+        # record that never resolved a subject of its own would otherwise
+        # do) would destroy the very thing the question is about, so the
+        # user's answer next turn would have nothing left to resume.
+        or decision.pending_relationship == PendingContinuationRelation.UNRESOLVED
+    ):
         status = PendingGovernedRequestStatus.UNRESOLVED
         missing = list(decision.missing_context)
     elif decision.status == RequestExecutionStatus.ALLOW:
@@ -1495,6 +1839,38 @@ clarification without manufacturing an operational framing the contract
 never established. Never changes the underlying SAFETY decision (a command
 is still withheld either way) -- wording only."""
 
+EVIDENCE_RETRIEVAL_UNAVAILABLE_TEXT = (
+    "I couldn't reach governed knowledge just now, so I can't ground an answer for this. "
+    "That's a problem on my side, not missing detail from you -- please try again shortly."
+)
+"""POST-6A -- the deterministic text for
+`EvidenceAvailability.RETRIEVAL_UNAVAILABLE`.
+
+Says three things explicitly, because the failure this closes was saying
+none of them: WHAT failed (reaching governed knowledge), WHOSE fault it
+is (ours), and that supplying more context will not help. The
+alternative -- falling through to the missing-context clarification --
+asks the engineer to keep typing detail at an outage, which wastes their
+time and hides a real fault."""
+
+_PENDING_RELATIONSHIP_UNRESOLVED_TEXT_TEMPLATE = (
+    "I'm still waiting on details for your earlier request about {subject}, and I can't tell whether "
+    "this message answers that or starts something new. Do you want me to continue with {subject}, "
+    "or should I treat this as a separate request?"
+)
+_PENDING_RELATIONSHIP_UNRESOLVED_TEXT_NO_SUBJECT = (
+    "I'm still waiting on details for an earlier request of yours, and I can't tell whether this "
+    "message answers that or starts something new. Should I continue the earlier request, or treat "
+    "this as a separate one?"
+)
+"""POST-6A REPAIR 4 -- the deterministic, Python-authored clarification
+for `PendingContinuationRelation.UNRESOLVED`. Never model-generated, and
+templated with NOTHING except the pending request's own `subject` -- the
+user's own earlier operation name, already carried in the validated
+contract that produced the pending record (never Knowledge content, never
+a parameter value, never raw user text). Matches this codebase's own
+established fixed-fallback-sentence convention exactly."""
+
 _SAFE_MISSING_CONTEXT_LABELS: dict[str, str] = {
     # LIVE-CORR-2 -- DEF-0043 CORRECTIVE PASS: a small, closed mapping
     # from this module's own DETERMINISTIC internal key names (currently
@@ -1551,6 +1927,16 @@ def command_suppression_fallback_text(decision: RequestExecutionDecision) -> str
     (`"unit_id"`) is never shown verbatim; a model-declared, already-safe
     phrase (e.g. `"equipment identifier"`) passes through unchanged.
     """
+    # POST-6A REPAIR 4 -- checked FIRST, ahead of the missing-context
+    # template: for an UNRESOLVED relationship the outstanding question
+    # is not "which unit?" (the user may well have just told us one) but
+    # "is this the same request at all?" -- asking the parameter question
+    # here would be unanswerable noise, and answering it would be the
+    # silent-resume failure this repair closes.
+    if decision.pending_relationship == PendingContinuationRelation.UNRESOLVED:
+        if decision.pending_subject:
+            return _PENDING_RELATIONSHIP_UNRESOLVED_TEXT_TEMPLATE.format(subject=decision.pending_subject)
+        return _PENDING_RELATIONSHIP_UNRESOLVED_TEXT_NO_SUBJECT
     if decision.missing_context:
         labels = ", ".join(_safe_missing_context_label(key) for key in decision.missing_context)
         return _MISSING_CONTEXT_FALLBACK_TEXT_TEMPLATE.format(items=labels)

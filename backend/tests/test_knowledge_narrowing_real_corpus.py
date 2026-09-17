@@ -33,7 +33,16 @@ _ROGERS_4G5G = Path(
 )
 _ALL_PATHS = [_DOCUMENT1, _ROGERS_4G, _ROGERS_4G5G]
 _missing = [p for p in _ALL_PATHS if not p.is_file()]
-pytestmark = pytest.mark.skipif(bool(_missing), reason=f"real validation corpus not available on this machine: {_missing}")
+# POST-6A -- DECLARED LIVE. These tests read real MOP documents from
+# outside this repository, so on any other machine they skip. A silent
+# skip is indistinguishable from a pass in the summary line, which is
+# exactly wrong for a test whose whole value is that it ran against real
+# material. `live` deselects them from the default run (see pytest.ini),
+# so running them is now a deliberate act (`pytest -m live`).
+pytestmark = [
+    pytest.mark.live,
+    pytest.mark.skipif(bool(_missing), reason=f"real validation corpus not available on this machine: {_missing}"),
+]
 
 _AS_OF = datetime(2026, 9, 11, tzinfo=timezone.utc)
 _EFFECTIVE_FROM = datetime(2026, 1, 1, tzinfo=timezone.utc)

@@ -470,7 +470,7 @@ def test_a_database_failure_on_chat_is_also_a_safe_error() -> None:
     service = ApiSessionService()
 
     class _FailingRunner:
-        async def run_async(self, *, user_id, session_id, new_message, run_config=None):
+        async def run_async(self, *, user_id, session_id, new_message, state_delta=None, run_config=None):
             raise RuntimeError("psycopg.OperationalError: connection to server at secret-host failed")
             yield  # pragma: no cover
 

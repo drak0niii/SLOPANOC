@@ -87,6 +87,23 @@ class ContextAssertion(BaseModel):
     canonical_value: Optional[str] = None
     origin: ContextOrigin
     source_reference: Optional[str] = None
+    supersedes_assertion_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "POST-6A -- CORRECTION. The `assertion_id` this one REPLACES: the user said RRU-3, then corrected "
+            "it to RRU-10. The store stays append-only (nothing is edited or deleted), but `compute_context_"
+            "state` excludes a superseded assertion from the effective state, so a correction genuinely "
+            "corrects instead of producing a permanent CONFLICTING state that no later turn can clear."
+        ),
+    )
+    retracted: bool = Field(
+        default=False,
+        description=(
+            "POST-6A -- RETRACTION. The user withdrew this fact without replacing it ('actually ignore the "
+            "vendor'). Excluded from the effective state exactly like a superseded assertion, but recorded "
+            "rather than deleted so the history of what was believed, and when, stays auditable."
+        ),
+    )
     asserted_at: Optional[datetime] = Field(
         default=None, description="When the underlying fact was true/observed, if known -- distinct from created_at."
     )
@@ -169,6 +186,34 @@ def _position_key(assertion: ContextAssertion) -> tuple:
     return ("value", assertion.canonical_value)
 
 
+def effective_assertions(assertions: Sequence[ContextAssertion]) -> list[ContextAssertion]:
+    """POST-6A -- the assertions that are still TRUE, from an append-only
+    history that may contain corrections and retractions.
+
+    Deterministic and order-independent: an assertion is excluded if it
+    is itself `retracted`, or if ANY other assertion in the same history
+    declares `supersedes_assertion_id == its id`. Nothing is mutated and
+    nothing is deleted -- the full history remains, which is what keeps
+    "what did we believe, and when" answerable.
+
+    Transitive chains resolve naturally: A superseded by B, B superseded
+    by C leaves only C, because A and B are each named by a successor.
+    A cycle (A supersedes B, B supersedes A) excludes both, which is the
+    fail-closed outcome -- two mutually-superseding claims establish
+    nothing.
+    """
+    superseded_ids = {
+        assertion.supersedes_assertion_id
+        for assertion in assertions
+        if assertion.supersedes_assertion_id is not None
+    }
+    return [
+        assertion
+        for assertion in assertions
+        if not assertion.retracted and assertion.assertion_id not in superseded_ids
+    ]
+
+
 def reduce_dimension(dimension: ContextDimension, assertions: Sequence[ContextAssertion]) -> ContextValue:
     """Deterministically fold every assertion for `dimension` into its
     current `ContextValue`. Pure and order-independent -- the SAME set of
@@ -191,10 +236,12 @@ def reduce_dimension(dimension: ContextDimension, assertions: Sequence[ContextAs
         by a later value, nor silently win over one -- instruction
         section 32's Invariant 4; the conflict itself must be visible)
 
-    Retracting/negating a specific prior value is explicitly out of scope
-    for 6A.2 (no such concept is requested) -- a MULTI dimension can only
-    grow its accepted set through this function, never shrink it based on
-    assertion content alone.
+    POST-6A: retraction and correction ARE now supported, but NOT here --
+    `reduce_dimension` still only ever folds the assertions it is given.
+    `effective_assertions` (above) is what removes superseded/retracted
+    ones first, and `compute_context_state` applies it. That split keeps
+    this function pure and order-independent, and keeps the "which facts
+    are still true" decision in exactly one place.
     """
     if not assertions:
         return ContextValue(dimension=dimension, state=ContextState.UNKNOWN, accepted=[], conflicting=[])
@@ -226,8 +273,14 @@ def compute_context_state(assertions: Sequence[ContextAssertion]) -> dict[Contex
     ever asserted anything about, keeping profiles with few known facts
     cheap to compute and serialize.
     """
+    # POST-6A: the EFFECTIVE context is rebuilt from the full history on
+    # every call, with corrections and retractions applied first. This is
+    # what makes a follow-up turn ("what next?") keep every still-true
+    # fault/vendor/target fact without also resurrecting values the user
+    # has since corrected away.
+    live = effective_assertions(assertions)
     by_dimension: dict[ContextDimension, list[ContextAssertion]] = {}
-    for assertion in assertions:
+    for assertion in live:
         by_dimension.setdefault(assertion.dimension, []).append(assertion)
     return {dimension: reduce_dimension(dimension, group) for dimension, group in by_dimension.items()}
 

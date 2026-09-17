@@ -57,6 +57,8 @@ def _assertion_to_domain(record: TelcoContextAssertionRecord) -> ContextAssertio
         canonical_value=record.canonical_value,
         origin=ContextOrigin(record.origin),
         source_reference=record.source_reference,
+        supersedes_assertion_id=record.supersedes_assertion_id,
+        retracted=bool(record.retracted),
         asserted_at=record.asserted_at,
         created_at=record.created_at,
     )
@@ -142,6 +144,8 @@ class TelcoContextService:
         canonical_value: Optional[str] = None,
         source_reference: Optional[str] = None,
         asserted_at: Optional[datetime] = None,
+        supersedes_assertion_id: Optional[str] = None,
+        retracted: bool = False,
     ) -> ContextAssertion:
         """Append one new, immutable assertion. Validates via the domain
         model's own `ContextAssertion` constructor (kind/value
@@ -151,6 +155,14 @@ class TelcoContextService:
         callers needing the current state call `get_context_state`
         separately, keeping "record a fact" and "compute current state"
         two distinct, independently-testable operations.
+
+        POST-6A -- `supersedes_assertion_id`/`retracted` express a
+        CORRECTION or a WITHDRAWAL without ever editing or deleting a
+        prior row: the store stays strictly append-only, and
+        `compute_context_state` resolves which assertions are still
+        effective. That is what lets "actually it is RRU-10" genuinely
+        replace RRU-3 instead of leaving the dimension permanently
+        CONFLICTING.
         """
         await self._db.ensure_schema()
         async with self._db.session() as session:
@@ -167,6 +179,8 @@ class TelcoContextService:
                 canonical_value=canonical_value,
                 origin=origin,
                 source_reference=source_reference,
+                supersedes_assertion_id=supersedes_assertion_id,
+                retracted=retracted,
                 asserted_at=asserted_at,
                 created_at=now,
             )
@@ -179,6 +193,8 @@ class TelcoContextService:
                 canonical_value=assertion.canonical_value,
                 origin=assertion.origin.value,
                 source_reference=assertion.source_reference,
+                supersedes_assertion_id=assertion.supersedes_assertion_id,
+                retracted=assertion.retracted,
                 asserted_at=assertion.asserted_at,
                 created_at=assertion.created_at,
             )

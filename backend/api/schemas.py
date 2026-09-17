@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
+from backend.knowledge.domain.operation_descriptor import GovernedOperationDescriptor
 
 from backend.cases.schemas import CaseMemberRole, CaseStatus, ContextItemKind
 
@@ -631,3 +632,28 @@ class RenameSessionRequest(BaseModel):
     """
 
     title: str = Field(min_length=1)
+
+
+class DraftOperationRequest(BaseModel):
+    """POST-6A -- draft/replace a section's governed operation descriptor.
+
+    `descriptor` omitted means "draft a CANDIDATE skeleton from the
+    section itself" (`draft_descriptor_from_section`), which records
+    identity and leaves scope UNKNOWN with no templates -- a human fills
+    those in. Whatever `authority` a supplied descriptor claims is
+    discarded: authoring always produces CANDIDATE.
+    """
+
+    descriptor: Optional[GovernedOperationDescriptor] = None
+
+
+class ApproveOperationRequest(BaseModel):
+    """POST-6A -- approve a section's governed operation descriptor.
+
+    Deliberately carries ONLY an optional reviewer note. Identity comes
+    from the resolved request context and the fingerprint is computed
+    server-side from the descriptor actually on the section, so a request
+    body cannot name who approved, what was approved, or when.
+    """
+
+    note: Optional[str] = None

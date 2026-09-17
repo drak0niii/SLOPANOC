@@ -23,6 +23,22 @@ class FakeIndexRepository:
     async def get(self, evidence_id):
         return self.rows.get(evidence_id)
 
+    async def delete_missing_for_version(self, knowledge_id, version_label, *, keep_evidence_ids):
+        """POST-6A: mirrors the real repository's own reconciliation
+        delete -- scoped to ONE (knowledge_id, version_label), returning
+        how many stale rows were removed."""
+        keep = set(keep_evidence_ids)
+        stale = [
+            evidence_id
+            for evidence_id, record in self.rows.items()
+            if record.knowledge_id == knowledge_id
+            and record.version_label == version_label
+            and evidence_id not in keep
+        ]
+        for evidence_id in stale:
+            self.rows.pop(evidence_id, None)
+        return len(stale)
+
     async def upsert(self, record, embedding, *, now):
         self.rows[record.evidence_id] = record
         return True

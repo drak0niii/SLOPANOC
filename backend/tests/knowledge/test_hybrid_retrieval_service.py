@@ -48,7 +48,7 @@ class FakeRepository:
     async def ensure_schema(self) -> None:
         return None
 
-    async def exact_match(self, permitted_knowledge_ids, query_text):
+    async def exact_match(self, permitted_knowledge_ids, query_text, permitted_version_keys=None):
         if not permitted_knowledge_ids:
             return []
         return [
@@ -57,7 +57,7 @@ class FakeRepository:
             for eid in self._data.get(kid, [])
         ]
 
-    async def lexical_search(self, permitted_knowledge_ids, query_text, limit):
+    async def lexical_search(self, permitted_knowledge_ids, query_text, limit, permitted_version_keys=None):
         if not permitted_knowledge_ids:
             return []
         return [
@@ -66,7 +66,7 @@ class FakeRepository:
             for eid in self._data.get(kid, [])
         ]
 
-    async def semantic_search(self, permitted_knowledge_ids, query_embedding, limit):
+    async def semantic_search(self, permitted_knowledge_ids, query_embedding, limit, permitted_version_keys=None):
         if not permitted_knowledge_ids or not self._vector_available:
             return []
         return [

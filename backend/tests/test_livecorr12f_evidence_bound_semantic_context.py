@@ -40,7 +40,7 @@ from backend.agents.team_manager.request_contract import (
     RequestParameter,
     RequestedOutput,
     SEMANTIC_CONTEXT_PARAMETER_NAMES,
-    _verify_and_filter_provided_context,
+    _verify_and_filter_provided_context_list,
     authoritative_missing_context_names,
     record_request_contract,
     validate_and_persist_request_contract,
@@ -191,7 +191,7 @@ def test_d_e_direct_helper_negation_matrix() -> None:
         ("active", "the alarm is not active"),
     ]
     for value, text in contradictory_cases:
-        verified = _verify_and_filter_provided_context([_param("alarm_status", value)], text, {})
+        verified = _verify_and_filter_provided_context_list([_param("alarm_status", value)], text, {})
         assert verified == [], f"{value!r} must not verify against {text!r}"
 
 
@@ -225,7 +225,7 @@ def test_g_current_turn_with_no_evidence_and_no_carry_forward_fails() -> None:
     reopened by this milestone) -- a freshly-claimed `alarm_status`
     candidate with NOTHING in the current turn's own text to support it
     must fail, regardless of what a prior turn may have said."""
-    verified = _verify_and_filter_provided_context(
+    verified = _verify_and_filter_provided_context_list(
         [_param("alarm_status", "cleared")], "what does alt command do?", {}
     )
     assert verified == []

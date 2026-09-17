@@ -80,7 +80,7 @@ class _SynthesisOnlyFakeRunner:
         self._app_name = app_name
         self._session_service = session_service
 
-    async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+    async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
         request = json.loads(new_message.parts[0].text)
         assert "prefetched_evidence" in request
         assert "chat_id" not in request  # the model was never asked to supply a destination
@@ -456,7 +456,7 @@ async def test_time_range_continuation_still_uses_the_model_driven_retrieval_too
             self._app_name = app_name
             self._session_service = session_service
 
-        async def run_async(self, *, user_id, session_id, new_message, run_config=None):
+        async def run_async(self, *, user_id, session_id, new_message, state_delta=None, run_config=None):
             session = await self._session_service.get_session(
                 app_name=self._app_name, user_id=user_id, session_id=session_id
             )

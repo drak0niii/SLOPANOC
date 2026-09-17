@@ -87,10 +87,37 @@ to before this pass, just without the speedup that turn) -- `record_
 conversation_target`'s own validation and `ConversationTargetCapture`'s
 diagnostic value are otherwise completely unchanged; no phrase/regex
 routing was introduced or removed by this pass either way.
+
+POST-6A REPAIR 5 -- ONE INSTRUCTION PER REAL TOOLSET: `TEAM_MANAGER_
+INSTRUCTION` below is now composed from named sections rather than being
+one monolithic literal, so the capability-filtered `.model_copy` variants
+in agent.py (`operational_team_manager`, `operational_team_manager_
+incident_manager_only`, `operational_team_manager_troubleshooting_manager
+_only`) can each be given an instruction that matches the tools they
+ACTUALLY have. `TEAM_MANAGER_INSTRUCTION` itself is the same string it
+always was -- every section, in the same order (a test asserts that
+composition byte-for-byte) -- so the base `team_manager`, which still has
+the full toolset, is completely unaffected.
+
+THE GAP THIS CLOSES: `operational_team_manager` has `record_request_
+contract`/`record_source_requirements` REMOVED from its schema (the
+preflight already owns both), and the incident-only/troubleshooting-only
+variants each have one specialist removed -- yet all three rendered the
+full instruction, which tells the model to call `record_source_
+requirements` "for EVERY request, with no exception", to call `record_
+request_contract` "for EVERY request", and to delegate to specialists
+that are not in its schema. LIVE-CORR-13 already documented what a model
+does with an instruction it cannot fulfil via a function call: it
+narrates the attempt to the user as plain text, exposing internal
+control-plane machinery. That fix was applied only to `presentation_team_
+manager`; this repair applies the same, already-established principle to
+the operational variants. Deterministic orchestration is untouched --
+which variant runs is still decided entirely by `chat_service.py` from
+the `WorkEnvelope`, never by the model.
 """
 from __future__ import annotations
 
-TEAM_MANAGER_INSTRUCTION = """\
+_TEAM_MANAGER_IDENTITY_SECTION = """\
 You are team_manager, the orchestrator for SLOPANOC. You own the \
 user-facing conversation and are the only agent that ever replies to the \
 user.
@@ -133,6 +160,12 @@ longer explanation -- and keep an ordinary short reply (a greeting, a \
 one-line answer) as simple conversational text, not headings or a list \
 just because they are available.
 
+"""
+"""POST-6A REPAIR 5 -- identity, scope, image-evidence and response-
+formatting guidance. Common to every team_manager variant that owns a
+real orchestration turn, regardless of which tools that variant has."""
+
+_TEAM_MANAGER_TEAMS_CONTEXT_SECTION = """\
 Currently selected Teams chat (from session state, if any): topic \
 "{selected_teams_chat_topic?}".
 
@@ -301,6 +334,14 @@ use whatever dimension names/values the user's own words naturally \
 suggest, exactly like `Applicability`'s own open-keyed design elsewhere \
 in this system.
 
+"""
+"""POST-6A REPAIR 5 -- selected-Teams-chat state, conversation-target
+resolution, and the delegation PARAMETERS (`chat_topic`/`requires_
+governed_knowledge`/`requires_rich_content`/`known_applicability_
+facts`) an `incident_manager` call takes. Only rendered for a variant
+that actually has `incident_manager_tool`."""
+
+_TEAM_MANAGER_SOURCE_DECLARATION_SECTION = """\
 CURRENT-TURN SOURCE DECLARATION: for EVERY request, with no exception -- \
 including current_thread and a plain greeting -- call `record_source_\
 requirements(requires_teams, requires_governed_knowledge)` once; unlike \
@@ -311,6 +352,17 @@ similar answer, even if asked to skip citations: a prior answer is never \
 current verification, and citation wording never changes this \
 declaration.
 
+"""
+"""POST-6A REPAIR 5 -- the MANDATORY `record_source_requirements` call.
+Rendered ONLY for a variant whose toolset actually contains that tool
+(the base `team_manager`). `operational_team_manager` and its
+capability-filtered siblings have it removed at the schema level --
+the preflight declaration call already owns that declaration -- so
+instructing them to call it could only ever produce an unfulfillable
+instruction, which live evidence (LIVE-CORR-13) already proved the
+model narrates to the user as plain text."""
+
+_TEAM_MANAGER_REQUEST_CONTRACT_SECTION = """\
 REQUEST CONTRACT (Phase 6A.13 foundation): for EVERY request, call \
 `record_request_contract(...)` once -- deterministic code reads this to \
 understand the request; it does not change what you do this turn. Set \
@@ -348,6 +400,26 @@ narrow question; what matters is that the condition itself is genuinely \
 unresolved, not how you phrase your answer around that fact. Set \
 `action_requested=true` for a Teams write request.
 
+PENDING REQUEST RELATIONSHIP (POST-6A REPAIR 4): when an OUTSTANDING \
+REQUEST is described to you -- something you already asked the user for \
+and have not yet received -- also set `pending_request_relationship` to \
+exactly one of: "answers_pending" when this message supplies or corrects \
+what was asked for; "cancels_pending" when the user explicitly dropped \
+that request; "new_request" when this is a genuinely separate request, \
+which is the right answer even when the message happens to mention a \
+similar-looking identifier; or "unknown" when you genuinely cannot tell \
+-- the application will ask the user rather than guess, which is always \
+better than resuming the wrong operation. Leave it unset when no \
+outstanding request was described to you. This declaration can never, by \
+itself, resume anything: deterministic code decides that, and only ever \
+treats your answer as one signal among its own.
+
+"""
+"""POST-6A REPAIR 5 -- the MANDATORY `record_request_contract` call.
+Same rule as the source-declaration section immediately above:
+rendered ONLY for a variant that actually has the tool."""
+
+_TEAM_MANAGER_TEAMS_ORCHESTRATION_SECTION = """\
 When the user asks you to summarize, read, or ask a question about a \
 Teams chat/conversation -- including a follow-up to something discussed \
 earlier in this conversation -- and you have determined the target above \
@@ -664,6 +736,13 @@ imply that you, or anyone within this conversation, approved a write \
 action -- approval is never something that happens inside this \
 conversation.
 
+"""
+"""POST-6A REPAIR 5 -- the `incident_manager` delegation steps,
+selection/ambiguity handling, Teams write-action guidance, and Teams
+grounding rules. Only rendered for a variant that actually has
+`incident_manager_tool`."""
+
+_TEAM_MANAGER_TROUBLESHOOTING_DELEGATION_SECTION = """\
 TROUBLESHOOTING DELEGATION (Phase 6A.10): `troubleshooting_manager` is a \
 second, separate specialist for "what should I check or do next, and \
 why?" -- distinct from `incident_manager`'s "what happened?". Decide \
@@ -691,6 +770,68 @@ never infer, assume, guess, or carry a fact forward from an earlier \
 turn unless the user restates it now; when in doubt, leave it out \
 entirely.
 """
+"""POST-6A REPAIR 5 -- the `troubleshooting_manager` delegation
+guidance. Only rendered for a variant that actually has that tool."""
+
+TEAM_MANAGER_INSTRUCTION = (
+    _TEAM_MANAGER_IDENTITY_SECTION
+    + _TEAM_MANAGER_TEAMS_CONTEXT_SECTION
+    + _TEAM_MANAGER_SOURCE_DECLARATION_SECTION
+    + _TEAM_MANAGER_REQUEST_CONTRACT_SECTION
+    + _TEAM_MANAGER_TEAMS_ORCHESTRATION_SECTION
+    + _TEAM_MANAGER_TROUBLESHOOTING_DELEGATION_SECTION
+)
+
+_NO_TEAMS_THIS_TURN_NOTE = """\
+This turn has no Microsoft Teams capability at all: you cannot retrieve \
+Teams messages, discover or select a Teams chat, or propose any Teams \
+write action, and there is nothing for any of those to do this turn \
+regardless. If the request genuinely needs Teams content, say plainly \
+that you cannot retrieve it right now rather than describing what you \
+would have done -- and never mention a tool, function, or internal \
+mechanism by name.
+
+"""
+"""POST-6A REPAIR 5 -- the one piece of guidance that has to be ADDED
+rather than removed: `operational_team_manager_troubleshooting_manager_
+only` is the single variant with no `incident_manager_tool`, so dropping
+the Teams sections would otherwise leave it silently unaware that Teams
+is out of scope for this turn. Deliberately a plain capability statement,
+never a substitute Teams workflow."""
+
+OPERATIONAL_TEAM_MANAGER_INSTRUCTION = (
+    _TEAM_MANAGER_IDENTITY_SECTION
+    + _TEAM_MANAGER_TEAMS_CONTEXT_SECTION
+    + _TEAM_MANAGER_TEAMS_ORCHESTRATION_SECTION
+    + _TEAM_MANAGER_TROUBLESHOOTING_DELEGATION_SECTION
+)
+"""POST-6A REPAIR 5 -- for `operational_team_manager` (both specialists
+present; `record_request_contract`/`record_source_requirements` removed).
+Identical to `TEAM_MANAGER_INSTRUCTION` minus exactly the two mandatory
+declaration sections whose tools that variant does not have."""
+
+OPERATIONAL_TEAM_MANAGER_INCIDENT_ONLY_INSTRUCTION = (
+    _TEAM_MANAGER_IDENTITY_SECTION
+    + _TEAM_MANAGER_TEAMS_CONTEXT_SECTION
+    + _TEAM_MANAGER_TEAMS_ORCHESTRATION_SECTION
+)
+"""POST-6A REPAIR 5 -- for `operational_team_manager_incident_manager_
+only` (`troubleshooting_manager` also removed). Drops the troubleshooting
+delegation section as well; every Teams instruction it retains matches a
+tool it genuinely has."""
+
+OPERATIONAL_TEAM_MANAGER_TROUBLESHOOTING_ONLY_INSTRUCTION = (
+    _TEAM_MANAGER_IDENTITY_SECTION
+    + _NO_TEAMS_THIS_TURN_NOTE
+    + _TEAM_MANAGER_TROUBLESHOOTING_DELEGATION_SECTION
+)
+"""POST-6A REPAIR 5 -- for `operational_team_manager_troubleshooting_
+manager_only` (`incident_manager_tool` removed). Every Teams section is
+dropped -- conversation-target resolution, delegation parameters, the
+delegation steps, selection handling and write-action guidance all
+describe a tool this variant does not have -- and replaced by the single
+explicit capability statement above."""
+
 
 CASE_CONTEXT_TEAM_MANAGER_ADDENDUM = """\
 CASE CONTEXT: when this session is linked to a Case, an "ACTIVE CASE \

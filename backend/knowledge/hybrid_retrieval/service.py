@@ -26,6 +26,8 @@ milestone either).
 """
 from __future__ import annotations
 
+import logging
+
 from backend.knowledge.hybrid_retrieval.contracts import (
     HybridRetrievalCandidate,
     HybridRetrievalQuery,
@@ -36,6 +38,8 @@ from backend.knowledge.hybrid_retrieval.embedding import EmbeddingProvider
 from backend.knowledge.hybrid_retrieval.fusion import fuse
 from backend.knowledge.hybrid_retrieval.reranking import rerank
 from backend.knowledge.hybrid_retrieval.repository import EvidenceIndexRepository
+
+_logger = logging.getLogger(__name__)
 
 __all__ = ["hybrid_retrieve"]
 
@@ -51,16 +55,49 @@ async def hybrid_retrieve(
             telemetry=RetrievalTelemetry(candidate_count_from_6a4=0, semantic_channel_mode="unavailable"),
         )
 
-    exact_hits = await repository.exact_match(query.permitted_knowledge_ids, query.query_text)
-    lexical_hits = await repository.lexical_search(query.permitted_knowledge_ids, query.query_text, limit=max(query.limit * 4, 20))
+    # POST-6A -- VERSION IDENTITY IS PRESERVED INTO EVERY CHANNEL QUERY.
+    # `permitted_version_keys` is the (knowledge_id, version_label) set
+    # narrowing actually authorized; passing only `permitted_knowledge_ids`
+    # would silently widen authorization to every version sharing an id,
+    # including ARCHIVE/superseded ones whose sections remain indexed.
+    version_keys = [tuple(key) for key in query.permitted_version_keys] or None
+    exact_hits = await repository.exact_match(
+        query.permitted_knowledge_ids, query.query_text, permitted_version_keys=version_keys
+    )
+    lexical_hits = await repository.lexical_search(
+        query.permitted_knowledge_ids,
+        query.query_text,
+        limit=max(query.limit * 4, 20),
+        permitted_version_keys=version_keys,
+    )
 
     await repository.ensure_schema()
     semantic_hits = []
     semantic_mode = "unavailable"
     if repository.vector_available:
-        [query_vector] = await embedding_provider.embed([query.query_text])
-        semantic_hits = await repository.semantic_search(query.permitted_knowledge_ids, list(query_vector.values), limit=max(query.limit * 4, 20))
-        semantic_mode = "executed"
+        # POST-6A -- EMBEDDING FAILURE MUST NOT DESTROY USABLE RESULTS.
+        # An embedding-provider outage previously propagated out of this
+        # function, discarding the exact/lexical hits already retrieved
+        # above. Those hits are fully authorized and independently useful,
+        # so the failure is recorded as an explicit DEGRADATION and the
+        # authorized non-semantic results are returned. The caller can
+        # always tell this apart from "genuinely nothing matched".
+        try:
+            [query_vector] = await embedding_provider.embed([query.query_text])
+            semantic_hits = await repository.semantic_search(
+                query.permitted_knowledge_ids,
+                list(query_vector.values),
+                limit=max(query.limit * 4, 20),
+                permitted_version_keys=version_keys,
+            )
+            semantic_mode = "executed"
+        except Exception:
+            _logger.warning(
+                "hybrid_retrieve: semantic channel unavailable -- returning authorized exact/lexical results",
+                exc_info=True,
+            )
+            semantic_hits = []
+            semantic_mode = "degraded_embedding_unavailable"
     else:
         semantic_mode = "degraded_no_vector_extension"
 

@@ -191,6 +191,23 @@ def test_only_the_expected_routes_exist() -> None:
         # rewind_before_user_turn); never a new session, never a
         # tool-execution channel.
         "/api/sessions/{session_id}/rewind",
+        # POST-6A -- the governed-operation authoring/review surface.
+        # Listing and drafting are read/CANDIDATE-only and grant nothing;
+        # approve/revoke are the two authority-bearing routes and are
+        # gated server-side on `SLOPANOC_KNOWLEDGE_GOVERNORS` inside
+        # `OperationApprovalStore.require_governance_permission`. None of
+        # these is a tool-execution or raw state-mutation channel: they
+        # change only descriptor authority, never a session, a proposal,
+        # or anything executable.
+        "/api/knowledge/{knowledge_id}/versions/{version_label}/operations",
+        "/api/knowledge/{knowledge_id}/versions/{version_label}/operations/{section_id}/draft",
+        "/api/knowledge/{knowledge_id}/versions/{version_label}/operations/{section_id}/approve",
+        "/api/knowledge/{knowledge_id}/versions/{version_label}/operations/{section_id}/revoke",
+        # POST-6A -- read-only recovery surface: which of THIS session's
+        # turns never reached a terminal state, and whether an execution
+        # was left unconfirmed. Ownership-scoped like every other session
+        # route; never a mutation channel.
+        "/api/sessions/{session_id}/operational-status",
         "/api/sessions/{session_id}/approve",
         "/api/sessions/{session_id}/reject",
         # Phase 4G -- the only route that can actually execute an approved
@@ -393,27 +410,69 @@ def test_agent_topology_is_unaffected_by_the_api_layer() -> None:
 
 
 def test_chat_service_reuses_the_single_canonical_team_manager_agent() -> None:
-    """No second agent runtime/definition was introduced.
+    """No second agent runtime/definition was introduced, and the
+    operational variant's capability surface is RESTRICTED, never widened.
 
-    P4B.3 COMPLETION PASS: `_build_runner`'s agent is now a `.model_copy`
-    of the canonical `team_manager` (direct_read_fast_path.py's own
-    `get_fast_path_team_manager`) -- the SAME established pattern already
-    used for `presentation_team_manager` (R1): identical name, instruction,
-    tools, model, and every OTHER callback; only one additional, narrowly-
-    scoped `before_model_callback` is prepended (normally a no-op -- see
-    that module's own docstring). This is not a second agent runtime/
-    definition, so the assertion checks identity of everything that
-    actually defines the agent's behavior/security surface, not raw
-    object identity.
+    POST-6A -- CORRECTED, NOT RELAXED. This test previously asserted
+    `runner.agent.instruction is canonical_team_manager.instruction` and
+    `runner.agent.tools == canonical_team_manager.tools`. Both assertions
+    had become assertions that a deliberate restriction had NOT happened:
+
+      - `operational_team_manager` structurally REMOVES
+        `record_request_contract` and `record_source_requirements`,
+        because the deterministic preflight now owns both declarations.
+      - It therefore also carries its OWN instruction provider
+        (`operational_team_manager_instruction_provider`), because the
+        full `TEAM_MANAGER_INSTRUCTION` demands tool calls this variant
+        cannot make -- and a model given an unfulfillable tool
+        instruction narrates the attempt to the user as plain text, the
+        exact failure LIVE-CORR-13 already fixed for
+        `presentation_team_manager`.
+
+    Restoring either tool to satisfy the old assertion would undo a
+    safety repair to keep a test green. So the assertions are corrected
+    to check the invariant that actually matters here -- ONE agent
+    identity, and a tool surface that only ever SHRINKS.
     """
     from backend.agents.team_manager.agent import team_manager as canonical_team_manager
+    from backend.agents.team_manager.case_context import (
+        operational_team_manager_instruction_provider,
+    )
     from backend.api.chat_service import _build_runner
     from backend.api.session_service import ApiSessionService
 
     runner = _build_runner(ApiSessionService())
+
+    # ONE agent identity and ONE model -- not a second agent runtime.
     assert runner.agent.name == canonical_team_manager.name
-    assert runner.agent.instruction is canonical_team_manager.instruction
-    assert runner.agent.tools == canonical_team_manager.tools
     assert runner.agent.model is canonical_team_manager.model
     assert runner.agent.after_tool_callback == canonical_team_manager.after_tool_callback
     assert runner.agent.after_model_callback is canonical_team_manager.after_model_callback
+
+    # The instruction is the provider that MATCHES this variant's real
+    # toolset -- deliberately not the canonical one.
+    assert runner.agent.instruction is operational_team_manager_instruction_provider
+    assert runner.agent.instruction is not canonical_team_manager.instruction
+
+    # THE SECURITY INVARIANT: the operational runner's tools are a strict
+    # SUBSET of the canonical agent's. A test that pinned equality could
+    # not tell a removal (safe) from an addition (a new capability
+    # reaching the model); a subset check rejects exactly the dangerous
+    # direction and permits exactly the safe one.
+    canonical_tool_names = {_tool_name(tool) for tool in canonical_team_manager.tools}
+    runner_tool_names = {_tool_name(tool) for tool in runner.agent.tools}
+    assert runner_tool_names <= canonical_tool_names, (
+        "the operational runner must never gain a capability the canonical agent does not have"
+    )
+
+    # And the two declaration tools are REMOVED, on purpose: the
+    # deterministic preflight owns both declarations for this turn.
+    assert "record_request_contract" not in runner_tool_names
+    assert "record_source_requirements" not in runner_tool_names
+    assert {"record_request_contract", "record_source_requirements"} <= canonical_tool_names
+
+
+def _tool_name(tool) -> str:
+    """ADK tools are a mix of plain functions and `AgentTool`/`BaseTool`
+    instances, so neither `__name__` nor `.name` alone covers them."""
+    return getattr(tool, "name", None) or getattr(tool, "__name__", repr(tool))

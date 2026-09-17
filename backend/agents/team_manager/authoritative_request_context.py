@@ -14,9 +14,23 @@ Python string built directly from an already-validated `RequestContract`
 and its already-derived `WorkEnvelope`, no new schema, no new persisted
 concept. `chat_service.py` calls `render_authoritative_current_turn_
 request_context` once, per normal turn, immediately after preflight/
-Work-Envelope derivation, and writes the result into session state under
-`AUTHORITATIVE_REQUEST_CONTEXT_STATE_KEY` via the SAME `persist_state_
-delta` mechanism every other end-of-preflight write already uses.
+Work-Envelope derivation, and supplies the result to that turn's own
+Runner under `AUTHORITATIVE_REQUEST_CONTEXT_STATE_KEY`.
+
+DELIVERED AS INVOCATION STATE, NEVER A PRE-RUNNER PERSISTED WRITE
+(POST-6A REPAIR 1): `chat_service.py` passes this key/value through ADK's
+own documented `Runner.run_async(state_delta=...)` parameter. The
+ORIGINAL implementation instead issued a separate `ApiSessionService
+.persist_state_delta(session, {...})` call immediately BEFORE the Runner
+call -- which applied the value only to `chat_service.py`'s OWN in-memory
+`Session` handle. `Runner.run_async` then RELOADS its own, separate
+`Session` from the session service (`_get_or_create_session`, verified
+against the installed ADK 1.33.0 source), and a `temp:`-prefixed key is
+by construction absent from anything durable, so the running agent's
+`ctx.state` never actually contained this block. `run_async(state_delta=
+...)` is the supported path: ADK applies the delta, via `_append_new_
+message_to_session`, to the SAME session object the invocation context
+is built from.
 
 NEVER PERSISTED (section 17's own explicit requirement): the state key is
 deliberately `temp:`-prefixed -- ADK's own documented convention (already
@@ -26,13 +40,13 @@ live, in-memory session state for the REST of this turn (so `team_manager
 _instruction_provider`'s own `ctx.state.get(...)` sees it when ADK invokes
 the instruction provider for this turn's Runner call) but is unconditionally
 stripped before anything is durably persisted -- verified against this
-exact call path: `ApiSessionService.persist_state_delta` uses ADK's own
-`append_event`/state-delta application (`_apply_temp_state`), the "apply,
-then trim" path that correctly honors `temp:` keys, NOT `create_session`'s
-own separate, documented-broken-for-`temp:` code path (see read_
-continuation_enforcement.py's own docstring for that distinct, unrelated
-limitation -- it concerns forwarding into a NESTED child session via
-`create_session`, never this module's own top-level-session use).
+exact call path: the state delta reaches ADK's own `append_event`/state-
+delta application (`_apply_temp_state`), the "apply, then trim" path that
+correctly honors `temp:` keys, NOT `create_session`'s own separate,
+documented-broken-for-`temp:` code path (see read_continuation_
+enforcement.py's own docstring for that distinct, unrelated limitation --
+it concerns forwarding into a NESTED child session via `create_session`,
+never this module's own top-level-session use).
 
 DOWNSTREAM MODEL NEVER OVERWRITES IT (section 17's own explicit
 requirement): this is a plain string appended to the OUTGOING prompt by

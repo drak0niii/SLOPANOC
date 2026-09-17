@@ -62,7 +62,17 @@ class VertexTextEmbeddingProvider:
     outside of tests. A test double (see `backend/tests/knowledge/
     hybrid_retrieval/` fixtures) implements the same `EmbeddingProvider`
     Protocol without ever importing this module.
+
+    POST-6A: describes the vectors it currently produces, so
+    `index_knowledge_object` can detect an already-embedded row whose
+    stored vector came from a different model/version/dimensionality and
+    must be re-embedded -- a reconciliation need content hashing cannot
+    see.
     """
+
+    model = MODEL_IDENTIFIER
+    model_version = MODEL_IDENTIFIER
+    dimensions = EXPECTED_DIMENSIONS
 
     async def embed(self, texts: Sequence[str]) -> list[EmbeddingVector]:
         if not texts:

@@ -191,6 +191,23 @@ class ConfigurationError(RuntimeError):
     """
 
 
+_PA_WRITE_CONTRACT_ENV_VAR = "SLOPANOC_PA_WRITE_CONTRACT"
+"""Selects a supported write response contract -- see
+`Settings.power_automate_write_envelope_mode`."""
+
+_AUTH_MODE_ENV_VAR = "SLOPANOC_AUTH_MODE"
+"""`development` (default) or `oidc` -- see `Settings.auth_mode`."""
+
+_GOVERNANCE_DEV_MODE_ENV_VAR = "SLOPANOC_GOVERNANCE_DEV_MODE"
+"""Explicitly enables governance mutations against the development
+identity boundary. Unset means production-closed -- see
+`Settings.governance_dev_mode`."""
+
+_KNOWLEDGE_GOVERNORS_ENV_VAR = "SLOPANOC_KNOWLEDGE_GOVERNORS"
+"""Comma-separated user ids permitted to approve governed operation
+descriptors. Unset means nobody -- see `Settings.knowledge_governors`."""
+
+
 class Settings:
     """Deterministic, non-caching-of-secrets configuration accessor.
 
@@ -227,6 +244,154 @@ class Settings:
                 f"backend (expected one of {sorted(_VALID_SESSION_BACKENDS)})."
             )
         return raw
+
+    @property
+    def power_automate_write_envelope_mode(self):
+        """POST-6A -- which write RESPONSE CONTRACT to apply
+        (`SLOPANOC_PA_WRITE_CONTRACT`: `default` | `ack_only` |
+        `identifier_only`). See `backend/gateway/write_envelope.py`.
+
+        This SELECTS among supported contracts for a flow that answers
+        differently. There is deliberately no value that makes a response
+        with no positive evidence count as a successful write: an
+        unconfirmed dispatch is always UNKNOWN_OUTCOME, never executed.
+        """
+        from backend.gateway.write_envelope import WriteEnvelopeMode
+
+        selector = self._env.get(_PA_WRITE_CONTRACT_ENV_VAR, "default").strip().lower() or "default"
+        return WriteEnvelopeMode(contract_selector=selector)
+
+    @property
+    def auth_mode(self) -> str:
+        """POST-6A -- `SLOPANOC_AUTH_MODE`: `development` (default) or
+        `oidc`.
+
+        `development` keeps the unverified `X-SLOPANOC-DEV-USER` header,
+        exactly as before, so local work is unaffected. `oidc` requires a
+        verified bearer token on every request and IGNORES that header
+        entirely -- including when it is sent alongside a valid token.
+
+        The default is `development` rather than `oidc` because defaulting
+        to `oidc` with no configuration would make every existing
+        deployment reject every request on upgrade. The production
+        requirement is enforced differently and more honestly: in `oidc`
+        mode, missing issuer/audience configuration rejects requests
+        rather than silently falling back.
+        """
+        raw = self._env.get(_AUTH_MODE_ENV_VAR, "development").strip().lower() or "development"
+        if raw not in {"development", "oidc"}:
+            raise ConfigurationError(
+                f"{_AUTH_MODE_ENV_VAR}={raw!r} is not a supported auth mode (expected 'development' or 'oidc')."
+            )
+        return raw
+
+    @property
+    def auth_issuer(self) -> str:
+        return self._env.get("SLOPANOC_AUTH_ISSUER", "").strip()
+
+    @property
+    def auth_audience(self) -> str:
+        return self._env.get("SLOPANOC_AUTH_AUDIENCE", "").strip()
+
+    @property
+    def auth_jwks_url(self) -> str:
+        """The JWKS endpoint. Configured, never read from a token -- a
+        token that names its own key source verifies itself."""
+        return self._env.get("SLOPANOC_AUTH_JWKS_URL", "").strip()
+
+    @property
+    def auth_algorithms(self) -> tuple[str, ...]:
+        raw = self._env.get("SLOPANOC_AUTH_ALGORITHMS", "RS256")
+        return tuple(part.strip() for part in raw.split(",") if part.strip())
+
+    @property
+    def auth_allowed_tenants(self) -> frozenset[str]:
+        raw = self._env.get("SLOPANOC_AUTH_ALLOWED_TENANTS", "")
+        return frozenset(part.strip() for part in raw.split(",") if part.strip())
+
+    @property
+    def auth_roles_claim(self) -> str:
+        return self._env.get("SLOPANOC_AUTH_ROLES_CLAIM", "roles").strip() or "roles"
+
+    @property
+    def knowledge_governor_roles(self) -> frozenset[str]:
+        """POST-6A -- AUTHORIZATION, kept separate from authentication.
+
+        Roles (from the verified token) that may approve governed
+        operation descriptors. This is what makes production governance
+        usable WITHOUT `SLOPANOC_GOVERNANCE_DEV_MODE`: a verified
+        identity carrying one of these roles is authorized on its own
+        merits, rather than because a deployment declared itself a
+        development environment.
+        """
+        raw = self._env.get("SLOPANOC_KNOWLEDGE_GOVERNOR_ROLES", "")
+        return frozenset(part.strip() for part in raw.split(",") if part.strip())
+
+    @property
+    def admin_actor_id(self) -> str:
+        """POST-6A -- `SLOPANOC_ADMIN_ACTOR_ID`: the name the
+        DEVELOPMENT-ONLY local administrative path records as its actor.
+
+        THIS IS CONFIGURATION, NOT AUTHENTICATED IDENTITY, and it
+        authorizes nothing on its own. An environment variable proves only
+        that someone could set an environment variable on this host -- a
+        deployment account, a CI runner, or any compromised process on the
+        box qualifies. Treating it as a verified governor would stamp a
+        real person's name on an approval they never made, which is worse
+        than an unsigned record because it is trusted.
+
+        It is read ONLY by `descriptor_admin --local`, which additionally
+        requires `SLOPANOC_GOVERNANCE_DEV_MODE`. The normal path is the
+        authenticated API, where the approval record names the identity
+        the server verified from a real token.
+        """
+        return self._env.get("SLOPANOC_ADMIN_ACTOR_ID", "").strip()
+
+    @property
+    def governance_dev_mode(self) -> bool:
+        """POST-6A -- `SLOPANOC_GOVERNANCE_DEV_MODE` (default FALSE).
+
+        Governance MUTATIONS (draft / approve / revoke) are permitted only
+        when this is explicitly enabled. It exists because the identity
+        those routes stand on -- `X-SLOPANOC-DEV-USER`, an unverified
+        request header (identity.py) -- is caller-controlled: anyone able
+        to reach the API can claim to be a governor simply by setting it.
+        A governor allowlist behind a caller-controlled header is not
+        verified human authorization, and must not be mistaken for one.
+
+        So the default is CLOSED. With this unset, every governance
+        mutation returns a deployment-configuration failure rather than
+        performing a privileged act on an unverified claim. Turning it on
+        is an explicit, auditable statement that this deployment is a
+        development environment.
+
+        Removing this flag is a Phase 4H deliverable: it should be
+        replaced by a real authenticated identity, not simply defaulted
+        to true.
+        """
+        raw = self._env.get(_GOVERNANCE_DEV_MODE_ENV_VAR, "").strip().lower()
+        return raw in {"1", "true", "yes", "on"}
+
+    @property
+    def knowledge_governors(self) -> frozenset[str]:
+        """POST-6A -- the closed set of user ids permitted to APPROVE a
+        governed operation descriptor (`SLOPANOC_KNOWLEDGE_GOVERNORS`, a
+        comma-separated list).
+
+        DENY BY DEFAULT: unset or empty means NOBODY may approve. An
+        approval capability that defaults to "everyone" is not a
+        governance boundary, and the whole point of this gate is that a
+        caller cannot grant itself approval authority -- so the absence
+        of configuration must fail closed, not open.
+
+        This is a CONFIGURATION-based permission check standing on the
+        current development identity boundary (`backend/api/identity.py`,
+        an unverified header). It is genuinely server-side -- the actor
+        cannot assert membership -- but it is only as strong as the
+        identity underneath it, which remains a Phase 4H gap.
+        """
+        raw = self._env.get(_KNOWLEDGE_GOVERNORS_ENV_VAR, "")
+        return frozenset(part.strip() for part in raw.split(",") if part.strip())
 
     @property
     def log_level(self) -> str:

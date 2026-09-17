@@ -122,6 +122,23 @@ class KnowledgeRetrievalService:
         corpus = await self._repository.list_all()
         families = _group_by_knowledge_id(corpus)
 
+        # POST-6A -- PERMITTED VERSION IDENTITY, ENFORCED BEFORE RANKING.
+        # `query.permitted_version_keys` is narrowing's own per-VERSION
+        # authorization. Applying it here -- inside the retrieval loop,
+        # before any section is scored -- is what makes it an
+        # AUTHORIZATION rather than a presentation filter: a disallowed
+        # version never becomes a candidate, never competes for a ranking
+        # position, and can never displace a permitted one out of the
+        # limit. Post-filtering the ranked list would do none of those.
+        # `None` preserves the pre-existing behavior for every caller
+        # that supplies no narrowing decision; an EMPTY list means
+        # "nothing permitted" and correctly yields no items.
+        permitted_versions = (
+            {tuple(key) for key in query.permitted_version_keys}
+            if query.permitted_version_keys is not None
+            else None
+        )
+
         items: list[KnowledgeRetrievalItem] = []
         diagnostics: list[KnowledgeRetrievalDiagnostic] = []
 
@@ -158,6 +175,11 @@ class KnowledgeRetrievalService:
             # RESOLVED -- the only outcome that ever contributes items.
             current = resolution.current
             assert current is not None  # RESOLVED always carries `current` (governance/contracts.py's own invariant)
+
+            if permitted_versions is not None and (current.knowledge_id, current.version.label) not in permitted_versions:
+                # Not authorized for this request. Skipped before scoring
+                # -- see this method's own `permitted_versions` comment.
+                continue
 
             applicability_evaluation = evaluate_applicability(current.applicability, query.applicability_context)
             if applicability_evaluation.outcome is ApplicabilityOutcome.NOT_APPLICABLE:

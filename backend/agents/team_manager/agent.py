@@ -99,6 +99,9 @@ from __future__ import annotations
 from google.adk.agents import Agent
 
 from backend.agents.team_manager.case_context import (
+    operational_team_manager_incident_only_instruction_provider,
+    operational_team_manager_instruction_provider,
+    operational_team_manager_troubleshooting_only_instruction_provider,
     presentation_team_manager_instruction_provider,
     team_manager_instruction_provider,
 )
@@ -260,6 +263,13 @@ operational_team_manager = team_manager.model_copy(
             for tool in team_manager.tools
             if tool not in (record_request_contract, record_source_requirements)
         ],
+        # POST-6A REPAIR 5: a dedicated instruction provider, never the
+        # shared `team_manager_instruction_provider` (which renders the
+        # full `TEAM_MANAGER_INSTRUCTION`, unconditionally demanding the
+        # two `record_*` calls this variant's schema no longer has) --
+        # the SAME remedy LIVE-CORR-13 already applied to
+        # `presentation_team_manager`. See that provider's own docstring.
+        "instruction": operational_team_manager_instruction_provider,
     }
 )
 """CONTROL-PLANE-SEQ-03 -- the NORMAL-turn runner used AFTER mandatory
@@ -298,7 +308,12 @@ gate (CONTROL-PLANE-SEQ-03) -- never by the model, never by user text.
 """
 
 operational_team_manager_incident_manager_only = operational_team_manager.model_copy(
-    update={"tools": [tool for tool in operational_team_manager.tools if tool is not troubleshooting_manager]}
+    update={
+        "tools": [tool for tool in operational_team_manager.tools if tool is not troubleshooting_manager],
+        # POST-6A REPAIR 5: also drops the TROUBLESHOOTING DELEGATION
+        # instruction, whose tool this variant does not have.
+        "instruction": operational_team_manager_incident_only_instruction_provider,
+    }
 )
 """CONTROL-PLANE-SEQ-04 -- section 14's own explicit "if work_envelope.
 may_route_troubleshooting_manager == False, Troubleshooting Manager is
@@ -314,7 +329,13 @@ callback is identical to `operational_team_manager` -- see that agent's
 own docstring for the full rationale."""
 
 operational_team_manager_troubleshooting_manager_only = operational_team_manager.model_copy(
-    update={"tools": [tool for tool in operational_team_manager.tools if tool is not incident_manager_tool]}
+    update={
+        "tools": [tool for tool in operational_team_manager.tools if tool is not incident_manager_tool],
+        # POST-6A REPAIR 5: drops every Teams/`incident_manager`
+        # orchestration instruction and states plainly that this turn has
+        # no Teams capability at all.
+        "instruction": operational_team_manager_troubleshooting_only_instruction_provider,
+    }
 )
 """CONTROL-PLANE-SEQ-04 -- the mirror-image sibling of `operational_team_
 manager_incident_manager_only`, immediately above: `may_route_incident_

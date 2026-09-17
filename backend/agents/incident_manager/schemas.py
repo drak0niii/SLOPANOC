@@ -199,6 +199,45 @@ class TroubleshootingOperationalEffect(str, Enum):
     STATE_CHANGE_RECOMMENDATION = "state_change_recommendation"
 
 
+class ObservationInterpretation(BaseModel):
+    """POST-6A -- the specialist's typed reading of evidence the engineer
+    actually reported back.
+
+    THE GAP THIS CLOSES: an investigation may only advance once a
+    requested check has produced a real result AND that result has been
+    interpreted. Before this field existed there was no structured place
+    for the interpretation, so the runtime had nothing to validate and
+    nothing to record -- which meant "what next?" could only either stall
+    or advance on prose.
+
+    `observation_reference` is what makes it checkable: the specialist
+    must quote the part of the ENGINEER'S OWN reported observation it is
+    interpreting. Deterministic code verifies that quote actually appears
+    in the recorded observation before the interpretation is trusted, so
+    an interpretation of something nobody reported cannot advance a
+    procedure.
+    """
+
+    observation_reference: str = Field(
+        description=(
+            "A short, verbatim excerpt of the engineer's own reported output that this interpretation is "
+            "about. Must appear literally in what they reported -- never paraphrased, never invented, never "
+            "quoted from the procedure instead of from their result."
+        )
+    )
+    meaning: str = Field(
+        description="What that observation indicates for the current investigation, in one or two sentences."
+    )
+    concludes_step: bool = Field(
+        default=False,
+        description=(
+            "True only when this observation genuinely completes the check that was requested. False when the "
+            "output is partial, ambiguous, or about something else -- in which case the investigation stays on "
+            "the same step rather than moving on."
+        ),
+    )
+
+
 class TroubleshootingStep(BaseModel):
     """One grounded step, used only inside `full_procedure_steps` (never
     for `NEXT_STEP` mode, which uses `next_action`/`command` directly).
@@ -299,6 +338,18 @@ class TroubleshootingGuidance(BaseModel):
             "`next_action`/`command` is drawn from (NEXT_STEP mode only; ignored for FULL_PROCEDURE, which uses "
             "each `TroubleshootingStep.source_section_id` instead). Same meaning/consequence as "
             "`TroubleshootingStep.source_section_id` -- see that field's own description."
+        ),
+    )
+    observation_interpretation: Optional["ObservationInterpretation"] = Field(
+        default=None,
+        description=(
+            "POST-6A -- populate this ONLY when the engineer has just reported the result of a check that was "
+            "previously requested. Quote a short, VERBATIM excerpt of their own reported output in "
+            "`observation_reference` -- deterministic code verifies it literally appears in what they said, and "
+            "rejects the interpretation otherwise. Set `concludes_step=false` when their output is partial, "
+            "ambiguous or about something else: the investigation then stays on the same step instead of "
+            "advancing. Never populate this from your own suggestion, from the procedure text, or from an "
+            "approval -- none of those are evidence that anything was actually run."
         ),
     )
 

@@ -107,6 +107,37 @@ def current_run_id() -> Optional[str]:
     return _CURRENT_RUN_ID.get()
 
 
+_CURRENT_USER_ID: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar(
+    "slopanoc_current_user_id", default=None
+)
+"""POST-6A -- the trusted request identity for the turn currently
+running on this task.
+
+Bound by `chat_service.py` alongside `run_id`, from the identity the API
+already resolved -- never from a model, never from a tool argument,
+never from a request body. Read by the shared evidence cache so two
+users can never share a cached retrieval result: what each is permitted
+to see can differ, so identity is part of the cache key, not an
+afterthought."""
+
+
+def current_user_id() -> Optional[str]:
+    """`None` outside a `chat_service.py`-driven turn (a standalone
+    `adk run`/test invocation), in which case callers treat the scope as
+    empty rather than guessing an identity."""
+    return _CURRENT_USER_ID.get()
+
+
+def bind_user_id(user_id: str) -> "contextvars.Token":
+    """Bound and reset in the SAME `try`/`finally` as `bind_run_id`, so a
+    later turn on the same task pool can never inherit a stale identity."""
+    return _CURRENT_USER_ID.set(user_id)
+
+
+def reset_user_id(token: "contextvars.Token") -> None:
+    _CURRENT_USER_ID.reset(token)
+
+
 def bind_run_id(run_id: str) -> "contextvars.Token":
     """Called by `chat_service.py` immediately before starting the
     Runner for this turn. Returns a token for `reset_run_id` -- callers

@@ -42,6 +42,8 @@ from typing import Optional
 
 from fastapi import Header
 
+from backend.gateway.safe_error import SafeError, SafeErrorException
+
 from backend.api.session_service import DEFAULT_USER_ID
 
 DEV_USER_HEADER_NAME = "X-SLOPANOC-DEV-USER"
@@ -62,21 +64,88 @@ _DEFAULT_DEV_USER_ID = DEFAULT_USER_ID
 
 @dataclass(frozen=True)
 class UserContext:
-    """The resolved identity for one request. Deliberately minimal --
-    just `user_id` (instruction: "Do not over-engineer roles/permissions
-    yet.").
+    """The resolved identity for one request.
+
+    POST-6A: `user_id` remains the single ownership key every downstream
+    layer already uses, so nothing about session/case/attachment
+    isolation changes shape. What changed is where it comes from: in
+    `oidc` mode it is DERIVED from verified, stable token claims
+    (issuer+subject, or tenant+object id), not asserted by the caller.
+
+    `roles` and `verified` are additive. Roles carry AUTHORIZATION
+    (deliberately separate from authentication -- who you are and what
+    you may do are different questions); `verified` lets a privileged
+    operation require a genuinely authenticated caller rather than merely
+    a named one.
     """
 
     user_id: str
+    roles: tuple[str, ...] = ()
+    verified: bool = False
+    tenant_id: Optional[str] = None
 
 
 async def resolve_user_context(
     x_slopanoc_dev_user: Optional[str] = Header(default=None, alias=DEV_USER_HEADER_NAME),
+    authorization: Optional[str] = Header(default=None),
 ) -> UserContext:
     """FastAPI dependency: the ONE place identity is resolved for the
-    whole API (instruction: "identity logic is centralized"). See module
-    docstring -- this is a development-only mechanism with no
-    verification.
+    whole API.
+
+    POST-6A -- TWO MODES, AND ONLY ONE IS EVER ACTIVE:
+
+    `SLOPANOC_AUTH_MODE=oidc` (production): a verified bearer token is
+    REQUIRED. `X-SLOPANOC-DEV-USER` is ignored completely -- including
+    when sent alongside a valid token, which is exactly the case a
+    "prefer the token" implementation would still get wrong if it left
+    the header readable anywhere downstream. Missing issuer/audience/JWKS
+    configuration REJECTS the request; it never degrades to development
+    identity, because a deployment that asks for verified identity and
+    cannot do it must fail closed.
+
+    `SLOPANOC_AUTH_MODE=development` (default): the pre-existing
+    unverified header, unchanged, so local work and existing tests are
+    unaffected. The resulting context is marked `verified=False`, which
+    is what privileged operations check.
     """
-    user_id = (x_slopanoc_dev_user or "").strip() or _DEFAULT_DEV_USER_ID
-    return UserContext(user_id=user_id)
+    from backend.config.settings import get_settings
+
+    settings = get_settings()
+    if settings.auth_mode != "oidc":
+        user_id = (x_slopanoc_dev_user or "").strip() or _DEFAULT_DEV_USER_ID
+        return UserContext(user_id=user_id, verified=False)
+
+    from backend.api.auth import verify_bearer_token
+
+    if not (settings.auth_issuer and settings.auth_audience and settings.auth_jwks_url):
+        raise SafeErrorException(
+            SafeError(
+                error_code="internal_error",
+                user_message="This deployment is not configured for authentication.",
+            )
+        )
+
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        # 401, not 403 -- see `backend.api.auth._unauthenticated`. The
+        # browser client clears its token and restarts sign-in on a
+        # 401; a 403 here would strand an expired session.
+        raise SafeErrorException(
+            SafeError(error_code="authentication_error", user_message="Sign-in is required.")
+        )
+
+    identity = verify_bearer_token(
+        token.strip(),
+        issuer=settings.auth_issuer,
+        audience=settings.auth_audience,
+        jwks_url=settings.auth_jwks_url,
+        algorithms=settings.auth_algorithms,
+        allowed_tenants=settings.auth_allowed_tenants,
+        roles_claim=settings.auth_roles_claim,
+    )
+    return UserContext(
+        user_id=identity.user_id,
+        roles=identity.roles,
+        verified=True,
+        tenant_id=identity.tenant_id,
+    )

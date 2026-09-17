@@ -161,6 +161,10 @@ class FakeRunner:
         # path correctly avoid calling this at all?) without duplicating
         # ADK's already-shipped, already-correct algorithm in a fake.
         self.rewind_calls: list[dict[str, Any]] = []
+        # POST-6A REPAIR 1: what each `run_async` call was handed as its
+        # per-invocation `state_delta` (`None` when the orchestrator
+        # supplied nothing), in call order.
+        self.state_deltas: list[Optional[dict[str, Any]]] = []
 
     async def rewind_async(
         self, *, user_id: str, session_id: str, rewind_before_invocation_id: str, run_config: Any = None
@@ -173,12 +177,20 @@ class FakeRunner:
             }
         )
 
-    async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+    async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
         text = new_message.parts[0].text
         session = await self._session_service.get_session(session_id, user_id)
         if self._side_effect is not None:
             await self._side_effect(self._session_service, session, text)
-        await self._session_service.persist_state_delta(session, {})
+        # POST-6A REPAIR 1: mirrors ADK's own `_append_new_message_to_
+        # session`, which carries `run_async(state_delta=...)` on the
+        # SAME user-message event it always appends -- so a `temp:`-
+        # prefixed invocation value is applied to the live session and
+        # trimmed from durable state by exactly the real mechanism.
+        # Recorded too, so a test can assert what the orchestrator
+        # supplied without reaching into ADK internals.
+        self.state_deltas.append(dict(state_delta) if state_delta else None)
+        await self._session_service.persist_state_delta(session, dict(state_delta or {}))
         if self._events is not None:
             # 6A.14A -- an explicitly-authored `events=[...]` list almost
             # always leaves every `FakeEvent` at its own default
@@ -249,7 +261,7 @@ class NoFinalTextRunner:
     used to test the "no final text produced" failure path.
     """
 
-    async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+    async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
         yield FakeEvent(text=None, final=False, function_calls=[object()])
 
 
@@ -261,7 +273,7 @@ class RaisingRunner:
     def __init__(self, exc: BaseException) -> None:
         self._exc = exc
 
-    async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+    async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
         raise self._exc
         yield  # pragma: no cover -- makes this an async generator
 

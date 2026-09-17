@@ -33,6 +33,7 @@ import {
   MenuTrigger,
 } from "../ui/Menu";
 import { ProfileDialog } from "./ProfileDialog";
+import { isOidcMode, logout } from "../../api/auth";
 
 function SidebarActionRow({
   icon,
@@ -565,7 +566,15 @@ export function Sidebar() {
                 Profile
               </MenuItem>
               <MenuSeparator />
-              <MenuItem disabled>Log out</MenuItem>
+              {/* POST-6A — real sign-out, enabled only where there is a
+                  session to end. In development mode identity comes from
+                  a configured header, so this stays disabled rather than
+                  offering an action that would do nothing. */}
+              {isOidcMode() ? (
+                <MenuItem onSelect={() => void logout()}>Log out</MenuItem>
+              ) : (
+                <MenuItem disabled>Log out</MenuItem>
+              )}
             </MenuContent>
           </MenuRoot>
           <SidebarBackToSiteLink />

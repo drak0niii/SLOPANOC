@@ -113,3 +113,22 @@ PyYAML==6.0.2
 # for pypdf/openpyxl/olefile above. No other semver/versioning library is
 # introduced.
 packaging==24.2
+
+# --- Authentication (POST-6A) ---------------------------------------------
+# OIDC/JWT bearer-token verification for `SLOPANOC_AUTH_MODE=oidc`
+# (backend/api/auth.py). Both are DIRECT imports, not transitive
+# conveniences, and were previously used without being declared here --
+# a deployment installing only this manifest would have failed at import
+# time the moment authentication was switched on.
+#
+# PyJWT is the decode/verify implementation. It is used ONLY with an
+# explicit `algorithms=` allowlist and a key resolved from the configured
+# JWKS endpoint -- never with `verify_signature=False`, and never with an
+# algorithm or key source taken from the token's own header.
+PyJWT==2.10.1
+# The asymmetric-signature backend PyJWT needs for RS256/ES256. Without
+# it PyJWT can only do HMAC, and every RS256 token fails to verify with
+# an error that looks like a configuration problem rather than a missing
+# package. Pinned deliberately: this library sits directly on the
+# unauthenticated request boundary.
+cryptography==48.0.0

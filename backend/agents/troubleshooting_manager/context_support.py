@@ -102,6 +102,7 @@ from backend.knowledge.hybrid_retrieval.repository import EvidenceIndexRepositor
 from backend.knowledge.hybrid_retrieval.service import hybrid_retrieve
 from backend.knowledge.narrowing.service import narrow_knowledge
 from backend.knowledge_hybrid_retrieval.vertex_embedding_provider import VertexTextEmbeddingProvider
+from backend.api.turn_context import current_run_id, current_user_id
 from backend.tools.knowledge.runtime import get_knowledge_repository
 
 _logger = logging.getLogger(__name__)
@@ -252,24 +253,92 @@ async def query_selected_evidence(
     empty, honest selection -- never "search everything" (6A.4's own
     frozen invariant, preserved here by construction: `narrow_knowledge`
     itself, unmodified, already enforces this)."""
-    try:
-        repository = get_knowledge_repository()
-        narrowing_result = await narrow_knowledge(repository, context_state, as_of=datetime.now(timezone.utc))
-        if not narrowing_result.permitted_knowledge_ids:
-            return EvidenceSelectionResult(query_text=query_text, selected=[], selection_reason="no_permitted_knowledge")
+    # POST-6A -- BOTH SPECIALISTS NOW REACH THE SAME SHARED EVIDENCE
+    # SERVICE. This used to compose narrowing/hybrid-retrieval/selection
+    # independently of Incident Manager's `knowledge_search`, so the same
+    # turn could run narrowing and retrieval twice, and this path's own
+    # `except Exception -> empty selection` turned every infrastructure
+    # failure into something indistinguishable from "nothing applicable".
+    #
+    # `SharedEvidenceService` owns narrowing, per-VERSION authorization,
+    # provenance revalidation, the per-turn cache and the typed
+    # availability outcome. It composes the SAME underlying services --
+    # nothing is re-implemented here, and the hybrid index remains
+    # available below for the semantic channel.
+    from backend.knowledge.shared_evidence import (
+        EvidenceAvailability,
+        EvidenceRequest,
+        applicability_fingerprint,
+    )
+    from backend.tools.knowledge.runtime import get_shared_evidence_service
 
-        evidence_repository = get_evidence_index_repository()
-        embedding_provider = get_embedding_provider()
-        retrieval_query = HybridRetrievalQuery(
+    run_id = current_run_id() or ""
+    shared = get_shared_evidence_service()
+    result = await shared.acquire(
+        EvidenceRequest(
+            run_id=run_id,
             query_text=query_text,
-            permitted_knowledge_ids=narrowing_result.permitted_knowledge_ids,
+            as_of=datetime.now(timezone.utc),
             limit=max_evidence_units,
+            requested_by="troubleshooting_manager",
+            user_id=current_user_id() or "",
+            applicability_fingerprint=applicability_fingerprint(None, context_state),
+        ),
+        context_state,
+    )
+
+    if result.availability is EvidenceAvailability.AVAILABLE:
+        return _selection_from_shared_evidence(query_text, result, max_evidence_units)
+
+    # Every non-AVAILABLE outcome keeps its own typed identity in the
+    # selection reason, so the specialist's own bounded context package
+    # -- and ultimately the user-facing answer -- can say WHY there is no
+    # evidence. `retrieval_unavailable` in particular must never be
+    # phrased as a request for more context from the user.
+    _logger.info(
+        "context_support: shared evidence unavailable availability=%s degradation=%s run_id=%s",
+        result.availability.value,
+        result.degradation.value,
+        run_id,
+    )
+    return EvidenceSelectionResult(
+        query_text=query_text, selected=[], selection_reason=result.availability.value
+    )
+
+
+def _selection_from_shared_evidence(
+    query_text: str, result, max_evidence_units: int
+) -> EvidenceSelectionResult:
+    """Adapts the shared service's validated evidence into this module's
+    existing `EvidenceSelectionResult` shape, preserving order and the
+    unit budget. Deliberately NOT a second ranking: the shared service
+    already applied narrowing, authorization and the limit -- this only
+    reshapes what it returned."""
+    from backend.knowledge.hybrid_retrieval.contracts import EvidenceIndexRecord, HybridRetrievalCandidate
+    from backend.knowledge.hybrid_retrieval.indexing import evidence_id_for_section
+
+    candidates = []
+    for item in result.items[:max_evidence_units]:
+        reference = item.reference
+        candidates.append(
+            HybridRetrievalCandidate(
+                record=EvidenceIndexRecord(
+                    evidence_id=evidence_id_for_section(
+                        reference.knowledge_id, reference.version_label, reference.section_id
+                    ),
+                    knowledge_id=reference.knowledge_id,
+                    version_label=reference.version_label,
+                    section_id=reference.section_id,
+                    artifact_id=item.section.artifact_id,
+                    is_derived=item.artifact is not None and bool(getattr(item.artifact, "derived", False)),
+                    indexable_text=item.section.content,
+                    content_hash="",
+                ),
+                channel_hits=[],
+                fusion_score=1.0,
+                rerank_score=1.0,
+            )
         )
-        retrieval_result = await hybrid_retrieve(retrieval_query, evidence_repository, embedding_provider)
-        return select_evidence(query_text, retrieval_result.candidates, max_evidence_units=max_evidence_units)
-    except Exception:
-        _logger.warning(
-            "context_support: live evidence retrieval failed -- falling back to an empty, honest selection",
-            exc_info=True,
-        )
-        return EvidenceSelectionResult(query_text=query_text, selected=[], selection_reason="live_retrieval_error")
+    return EvidenceSelectionResult(
+        query_text=query_text, selected=candidates, selection_reason="shared_evidence_service"
+    )

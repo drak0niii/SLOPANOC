@@ -546,6 +546,38 @@ Note: LIVE-CORR-3A (a prior, undocumented pass) had already replaced DEF-0040's 
 
 6A.15: NOT STARTED
 
+POST-6A REPAIR CAMPAIGN (prompts 1-6): IMPLEMENTED, NOT LIVE-ACCEPTED.
+See docs/MASTER_ROADMAP.md §7b for the full table. The short version a
+fresh session needs:
+
+- Authentication is REAL and WIRED. `SLOPANOC_AUTH_MODE=oidc` requires a
+  verified bearer token and ignores `X-SLOPANOC-DEV-USER` completely;
+  `development` (the default) keeps the old unverified header. The
+  browser side is `oidc-client-ts` (`src/api/auth.ts`), with the
+  `/auth/callback` route wired in `src/App.tsx` and `AuthGate` around the
+  product app. An unverifiable token is 401 (not 403) so the client can
+  recover. Access token, never an ID token: the configured scope must
+  include this API's own scope.
+- Governance mutations are ALL permission-gated, drafting included --
+  drafting withdraws a live approval, so it is a governance act. The
+  descriptor CLI's normal path is the authenticated API and takes no
+  `--actor`; `--local` is development-only (DEF-0046).
+- Concurrency is advisory locks (LIVENESS) PLUS a durable ownership
+  generation in `slopanoc_operation_claims` (FENCING). A superseded
+  worker's write is refused by the database, not by its own honesty.
+  Turn reconciliation is ownership-based, never age-based (DEF-0047).
+- TWO MIGRATIONS ARE PENDING AND UNAPPLIED: `f1b6c3d05a27`
+  (operation approvals) and `b7c4e1a95d60` (operation claims). In a
+  PostgreSQL deployment, dispatch REFUSES rather than running unfenced
+  when the claims table is absent.
+- DISTRIBUTED CORRECTNESS IS UNVERIFIED. Every concurrency check ran on
+  SQLite in one process. That proves the fencing rules; it proves
+  nothing about two workers. Do not cite those tests as evidence of
+  multi-worker safety.
+- `pytest.ini` now exists: externally-dependent tests are marked `live`
+  and DESELECTED by default (`pytest -m live` to run them), so nothing
+  is silently skipped in an ordinary run.
+
 Other known open/planned items remain tracked in DEFECT_REGISTER.md, including:
 
 DEF-0023: evidence-index/specialist-routing alignment gap

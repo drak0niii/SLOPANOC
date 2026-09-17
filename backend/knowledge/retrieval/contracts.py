@@ -29,6 +29,17 @@ class KnowledgeRetrievalQuery(BaseModel):
     applicability_context: ApplicabilityContext = Field(default_factory=ApplicabilityContext)
     as_of: datetime
     limit: int
+    permitted_version_keys: Optional[list[tuple[str, str]]] = Field(
+        default=None,
+        description=(
+            "POST-6A -- the (knowledge_id, version_label) pairs narrowing authorized for THIS request. When "
+            "supplied, `retrieve()` drops a resolved version that is not in this set BEFORE scoring, ranking or "
+            "the limit is applied -- so a disallowed version can never occupy a candidate slot, never influence "
+            "ranking, and never be pushed out of view by the limit instead of being excluded. `None` means the "
+            "caller supplied no narrowing decision and the pre-existing behavior applies unchanged; an EMPTY "
+            "list means 'nothing was permitted' and is never read as 'no filter'."
+        ),
+    )
 
     @field_validator("query_text")
     @classmethod

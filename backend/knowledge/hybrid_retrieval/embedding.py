@@ -35,6 +35,17 @@ class EmbeddingProvider(Protocol):
     """Generic embedding boundary -- deliberately async (a real provider
     makes a network call); a test double may still be synchronous-in-
     effect by resolving immediately. Batches (`texts`) to avoid one
-    network round-trip per evidence unit (§45 cost control)."""
+    network round-trip per evidence unit (§45 cost control).
+
+    POST-6A -- OPTIONAL SELF-DESCRIPTION: a provider MAY expose `model`/
+    `model_version`/`dimensions` attributes describing the vectors it
+    currently produces. `index_knowledge_object` reads them (via
+    `getattr`, so a provider that omits them keeps working exactly as
+    before) to decide whether an ALREADY-EMBEDDED row needs re-embedding
+    because the model/version/dimensionality changed -- a reconciliation
+    need that content hashing structurally cannot detect. A provider that
+    does not describe itself simply cannot trigger that particular
+    retry; the missing-vector and changed-content retries are unaffected.
+    """
 
     async def embed(self, texts: Sequence[str]) -> list[EmbeddingVector]: ...

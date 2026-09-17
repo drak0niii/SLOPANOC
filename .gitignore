@@ -24,3 +24,33 @@ __pycache__/
 *.db-wal
 *.db-shm
 request.json
+
+# ---------------------------------------------------------------------
+# POST-6A -- generated logs, downloaded binaries and working artifacts.
+#
+# Everything below is produced BY running this project, never edited as
+# source. Committing any of it is how a repository ends up carrying a
+# 40 MB vendor binary and a month of debug logs that describe one
+# developer's machine -- and debug logs in particular are the wrong thing
+# to keep in version control: they are written from real runs and can
+# contain real session, chat and identity detail.
+# ---------------------------------------------------------------------
+
+# Backend run logs and the Cloud SQL Auth Proxy's own output.
+logs/
+*.log
+
+# The Cloud SQL Auth Proxy binary. A downloaded vendor executable, not
+# source -- see README.md for how to fetch it.
+cloud-sql-proxy
+cloud-sql-proxy.exe
+
+# Working artifacts from local development (patch exports, zipped
+# scratch test bundles, test images pasted into the UI).
+*.patch
+*.zip
+teams-test-image.png
+
+# TypeScript incremental build state (already covered by *.tsbuildinfo
+# above; named here because it appears at the repository root).
+tsconfig.tsbuildinfo

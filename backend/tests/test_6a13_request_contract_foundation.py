@@ -427,10 +427,14 @@ def test_prior_session_state_never_leaks_into_a_fresh_session() -> None:
     )
     stored_b = _stored(ctx_b)
     assert stored_b is not None
-    # session_a's own dict must be completely unaffected
-    assert session_a_state[VALIDATED_REQUEST_CONTRACT_STATE_KEY]["provided_context"] == [
-        {"name": "unit_type", "value": "RRU", "provenance": "user"}
-    ]
+    # session_a's own dict must be completely unaffected.
+    # POST-6A REPAIR 1 added two optional, server-populated fields
+    # (`source_span`/`corrects_prior_value`) to `RequestParameter`, so this
+    # compares the meaningful identity of the stored entry rather than the
+    # exact serialized dict shape -- the property under test (a write to
+    # session B never touches session A) is unchanged.
+    stored_a = session_a_state[VALIDATED_REQUEST_CONTRACT_STATE_KEY]["provided_context"]
+    assert [(p["name"], p["value"], p["provenance"]) for p in stored_a] == [("unit_type", "RRU", "user")]
 
 
 def test_malformed_contract_fails_closed_state_left_untouched() -> None:

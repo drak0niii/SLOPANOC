@@ -116,11 +116,24 @@ documents the boundary rather than renaming the fields.
 from __future__ import annotations
 
 import logging
+from enum import Enum
 from typing import Any, Mapping, Optional, Sequence
 
 from google.adk.tools import ToolContext
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from backend.agents.team_manager.identifier_verification import (
+    IdentifierVerificationStatus,
+    TextSpan,
+    canonical_identifier,
+    is_identifier_shaped,
+    verify_identifier_against_text,
+)
+from backend.knowledge.domain.operation_descriptor import (
+    GovernedOperationDescriptor,
+    OperationEffect,
+    required_parameter_names_for_scope,
+)
 from backend.api.turn_context import current_run_id
 from backend.gateway.safe_error import validation_error
 
@@ -232,6 +245,86 @@ _VALID_REQUESTED_OUTPUTS = frozenset(
 )
 
 
+class PendingRequestRelationship:
+    """POST-6A REPAIR 4 -- the closed vocabulary for the model's OWN
+    declaration of how the CURRENT message relates to a governed request
+    the runtime is still waiting on (a `PendingGovernedRequest`, below).
+
+    A DECLARATION, NEVER AN AUTHORITY: this value can only ever NARROW
+    what happens, never widen it. `resolve_pending_continuation`
+    (request_execution_policy.py) grants continuation authority strictly
+    from its own deterministic structural signals -- `ANSWERS_PENDING`
+    alone never resumes anything, and a declaration that contradicts
+    those signals resolves to "unresolved" (ask the user), never to a
+    silent resume. `CANCELS_PENDING`/`NEW_REQUEST` only ever DROP pending
+    authority, which is the fail-safe direction, so they are honored
+    directly.
+
+    UNKNOWN (the default, and what every pre-existing caller/contract
+    produces) means the model said nothing -- identical behavior to
+    before this repair for every shape where the structural signals
+    already agree.
+    """
+
+    ANSWERS_PENDING = "answers_pending"
+    """This message supplies or corrects information the assistant asked
+    for in order to finish the pending request."""
+
+    CANCELS_PENDING = "cancels_pending"
+    """The user explicitly abandoned/withdrew the pending request."""
+
+    NEW_REQUEST = "new_request"
+    """A genuinely new, self-contained request -- whatever it mentions,
+    it is not continuing the pending one."""
+
+    UNKNOWN = "unknown"
+    """Not declared (no pending request described to the model, or the
+    model could not tell)."""
+
+
+VALID_PENDING_REQUEST_RELATIONSHIPS = frozenset(
+    {
+        PendingRequestRelationship.ANSWERS_PENDING,
+        PendingRequestRelationship.CANCELS_PENDING,
+        PendingRequestRelationship.NEW_REQUEST,
+        PendingRequestRelationship.UNKNOWN,
+    }
+)
+
+
+class TargetConfirmation(str, Enum):
+    """POST-6A PROMPT 3 -- how strongly this turn established that the
+    parameter names the target the user actually intends to act on.
+
+    THE GAP THIS CLOSES: repair 1 made mention-matching exact and removed
+    negated/excluded/quoted mentions. But "the text mentions RRU-3 and we
+    recognized no negation marker" is evidence that the value APPEARS --
+    it is NOT evidence that the user INTENDS this unit as the target of a
+    state-changing operation. Treating the absence of a recognized
+    negation marker as positive confirmation is precisely the fail-open
+    this vocabulary removes: the closed marker table is bounded, so
+    absence of a marker means "we recognized nothing", never "we verified
+    intent".
+
+    MENTIONED -- the value is genuinely, exactly present in the user's own
+      text (or carried forward from a same-subject turn), with no
+      recognized exclusion. Enough for read-only/diagnostic use, and
+      enough to carry the value forward. NOT enough to act on.
+    CONFIRMED -- the runtime ASKED for this specific parameter and the
+      user ANSWERED. That is a structured confirmation event the runtime
+      itself originated, not an inference over prose. Required before a
+      governed STATE_CHANGE operation may be authorized.
+
+    A model DECLARATION alone never reaches CONFIRMED -- see
+    `resolve_pending_continuation`, which is the only place the upgrade
+    happens, and only for a parameter the runtime's own outstanding
+    clarification actually named.
+    """
+
+    MENTIONED = "mentioned"
+    CONFIRMED = "confirmed"
+
+
 class ParameterProvenance:
     """Closed set of trust origins for one `RequestParameter`. `USER`
     covers a fact stated ANYWHERE by the user (this turn or an earlier
@@ -262,6 +355,36 @@ class RequestParameter(BaseModel):
     name: str
     value: str
     provenance: str
+    source_span: Optional[TextSpan] = Field(
+        default=None,
+        description=(
+            "POST-6A REPAIR 1 -- character offsets of the exact mention in the CURRENT turn's own user text that "
+            "verified this value, when verification came from that text. Populated ONLY by "
+            "`validate_and_persist_request_contract`'s own deterministic verification (never by the model, which "
+            "has no way to set it: it is not a `record_request_contract` parameter). `None` for a value carried "
+            "forward from a prior same-subject turn, and for any non-identifier value whose verification path does "
+            "not produce a span."
+        ),
+    )
+    confirmation: TargetConfirmation = Field(
+        default=TargetConfirmation.MENTIONED,
+        description=(
+            "POST-6A PROMPT 3 -- whether this parameter is merely present in the user's own words "
+            "(MENTIONED) or was explicitly confirmed in answer to the runtime's own request for it "
+            "(CONFIRMED). Server-populated only; the model cannot set it (it is not a "
+            "`record_request_contract` parameter). A governed STATE_CHANGE operation requires CONFIRMED."
+        ),
+    )
+    corrects_prior_value: Optional[str] = Field(
+        default=None,
+        description=(
+            "POST-6A REPAIR 1/5 -- the DIFFERENT value previously confirmed for this same parameter name in this "
+            "same conversation, when this turn's own verified value replaces it (e.g. `unit_id` corrected from "
+            "`RRU-3` to `RRU-10`). Server-populated only. Downstream, this is what lets a command candidate or a "
+            "pending approval bound to the OLD target be deterministically invalidated rather than silently reused "
+            "-- see `command_candidate_binding.py`."
+        ),
+    )
 
     @field_validator("name", "value")
     @classmethod
@@ -297,6 +420,15 @@ class RequestContract(BaseModel):
     action_requested: bool = False
     approval_required: bool = False
     ambiguity: bool = False
+    pending_request_relationship: str = PendingRequestRelationship.UNKNOWN
+    """POST-6A REPAIR 4 -- the model's OWN declaration of how this
+    message relates to a still-pending governed request it was shown (see
+    `PendingRequestRelationship`). Purely a narrowing signal: it can
+    cancel or disown a pending request, and it can disambiguate an
+    otherwise-unresolvable relationship, but it can NEVER by itself cause
+    an old operation to be resumed -- that remains the exclusive job of
+    `resolve_pending_continuation`'s own deterministic structural
+    signals (request_execution_policy.py)."""
     request_class: Optional[str] = None
     """LIVE-CORR-8 -- the authoritative governance class. Mirrors `run_id`
     's own established "deliberately NOT a parameter of `record_request_
@@ -353,6 +485,15 @@ class RequestContract(BaseModel):
         # across genuinely different requests.
         if value is not None and not value.strip():
             return None
+        return value
+
+    @field_validator("pending_request_relationship")
+    @classmethod
+    def _valid_pending_request_relationship(cls, value: str) -> str:
+        if value not in VALID_PENDING_REQUEST_RELATIONSHIPS:
+            raise ValueError(
+                f"pending_request_relationship must be one of: {sorted(VALID_PENDING_REQUEST_RELATIONSHIPS)}"
+            )
         return value
 
     @field_validator("missing_context")
@@ -697,6 +838,7 @@ def build_deterministic_read_continuation_contract(run_id: str) -> RequestContra
 
 TARGET_TYPE_PARAMETER_NAME = "unit_type"
 TARGET_IDENTIFIER_PARAMETER_NAME = "unit_id"
+_TARGET_PARAMETER_NAMES = frozenset({TARGET_TYPE_PARAMETER_NAME, TARGET_IDENTIFIER_PARAMETER_NAME})
 """Section 4/5's own explicit instruction: reuse the ALREADY-ESTABLISHED
 `unit_type`/`unit_id` vocabulary (the only parameter names this codebase's
 own prompt/tests currently use for a live operational target), rather
@@ -878,6 +1020,7 @@ def required_target_parameter_gaps(
     requested_output: str,
     provided_context: Sequence[RequestParameter],
     grounded_command_candidate: Optional[str] = None,
+    operation_descriptor: Optional[GovernedOperationDescriptor] = None,
 ) -> list[str]:
     """Section 4/5's own deterministic target-parameter rule: for an
     operationally-shaped request (`is_operationally_shaped_request`)
@@ -978,6 +1121,44 @@ def required_target_parameter_gaps(
     if not is_operationally_shaped_request(intent, requested_output):
         return []
     provided_names = {param.name for param in provided_context}
+
+    # POST-6A PROMPT 3 -- A STATE-CHANGING GOVERNED OPERATION REQUIRES AN
+    # EXPLICIT, STRUCTURED TARGET CONFIRMATION, NOT A MENTION.
+    #
+    # `TargetConfirmation.MENTIONED` means the value is exactly present in
+    # the user's own words with no recognized exclusion marker. That is a
+    # statement about the TEXT, not about INTENT -- and because the
+    # exclusion vocabulary is deliberately closed and bounded, "no marker
+    # recognized" can never be read as "intent verified". For an operation
+    # governance positively classifies as `STATE_CHANGE`, the target must
+    # instead have been CONFIRMED: the runtime asked for this specific
+    # parameter and the user answered (see `resolve_pending_continuation`,
+    # the only place that upgrade happens). Anything less keeps the
+    # parameter in `missing_context`, which routes the turn to an explicit
+    # confirmation request rather than to a command.
+    #
+    # Scoped deliberately: READ_ONLY and unknown-effect operations are
+    # UNCHANGED -- a diagnostic read against a mentioned unit stays
+    # available, and this never widens any existing permission.
+    if (
+        operation_descriptor is not None
+        and operation_descriptor.is_approved
+        and operation_descriptor.effect == OperationEffect.STATE_CHANGE
+    ):
+        unconfirmed = sorted(
+            {
+                param.name
+                for param in provided_context
+                if param.name in _TARGET_PARAMETER_NAMES
+                and param.confirmation != TargetConfirmation.CONFIRMED
+            }
+        )
+        missing_targets = sorted(_TARGET_PARAMETER_NAMES - provided_names)
+        gaps = sorted(set(unconfirmed) | set(missing_targets))
+        if gaps:
+            return gaps
+        return []
+
     if TARGET_IDENTIFIER_PARAMETER_NAME in provided_names:
         return []
     unit_type_value = next(
@@ -1001,17 +1182,35 @@ def required_target_parameter_gaps(
         # because it fails to match the identifier-bearing class.
         return [TARGET_IDENTIFIER_PARAMETER_NAME]
     if requested_output == RequestedOutput.EXACT_COMMAND:
-        # LIVE-CORR-7: a real, already-grounded command candidate whose
-        # own verbatim text contains NO recognized unit-class identifier
-        # positively proves this specific operation is not per-unit --
-        # see this function's own docstring, and `command_text_
-        # references_target_identifier_class`'s own docstring for why a
-        # SEPARATE recognizer (rather than `extract_canonical_
-        # identifiers`) is used for command text specifically. Absence of
-        # a candidate fails closed to the original, unchanged blanket
-        # requirement.
-        if grounded_command_candidate is not None and not command_text_references_target_identifier_class(grounded_command_candidate):
-            return []
+        # POST-6A REPAIR 2 -- TARGET INDEPENDENCE MUST BE POSITIVELY
+        # GOVERNED, NEVER INFERRED FROM ABSENCE.
+        #
+        # REMOVED: LIVE-CORR-7's own inference that "the grounded command
+        # candidate contains no recognized RRU/AAS token, therefore this
+        # operation does not concern a physical unit". That reasoning is
+        # invalid in the one direction that matters: it cannot distinguish
+        # "this operation is genuinely system-wide" from "this operation's
+        # target syntax is one our closed two-prefix recognizer was never
+        # given" (a different equipment family, a name-based target, an
+        # index-based target, a template placeholder, ...). Absence of
+        # evidence became evidence of safety, and the failure mode is a
+        # state-changing command emitted with no confirmed target at all.
+        # `grounded_command_candidate` is retained in the signature for
+        # every existing caller, and is deliberately no longer consulted
+        # for this decision.
+        #
+        # REPLACED BY: `required_parameter_names_for_scope`, which answers
+        # ONLY from an APPROVED `GovernedOperationDescriptor` bound to the
+        # governed section actually selected this turn. Its three outcomes
+        # are distinct on purpose -- `()` is a positive "no target needed",
+        # a tuple is the operation's own declared requirements, and `None`
+        # means nothing was established (no descriptor, a CANDIDATE one,
+        # or `UNKNOWN` scope), which falls through to the unchanged,
+        # conservative blanket rule below. Unknown scope therefore stays
+        # unresolved; it never becomes permissive.
+        governed_required = required_parameter_names_for_scope(operation_descriptor)
+        if governed_required is not None:
+            return sorted({name for name in governed_required if name not in provided_names})
         return sorted([TARGET_TYPE_PARAMETER_NAME, TARGET_IDENTIFIER_PARAMETER_NAME])
     return []
 
@@ -1201,6 +1400,7 @@ async def record_request_contract(
     action_requested: bool = False,
     approval_required: bool = False,
     ambiguity: bool = False,
+    pending_request_relationship: str = PendingRequestRelationship.UNKNOWN,
     tool_context: Optional[ToolContext] = None,
 ) -> dict[str, Any]:
     """Record your own structured interpretation of the CURRENT request --
@@ -1248,6 +1448,15 @@ async def record_request_contract(
       ambiguity: True when you genuinely cannot resolve the subject/
         procedure this request concerns (e.g. "give me the command" with
         no active procedure) -- set this rather than guessing.
+      pending_request_relationship: Only meaningful when an OUTSTANDING
+        REQUEST block was supplied to you for this message. Exactly one
+        of "answers_pending" (this message supplies or corrects what was
+        asked for, so that request should continue), "cancels_pending"
+        (the user explicitly dropped it), "new_request" (a genuinely
+        separate request -- use this even when the message happens to
+        mention a similar-looking identifier), or "unknown" (default --
+        you were shown no outstanding request, or genuinely cannot tell;
+        the application will ask the user rather than guess).
       tool_context: Auto-injected by ADK in real use (never supplied by
         the model).
 
@@ -1273,6 +1482,7 @@ async def record_request_contract(
             action_requested=bool(action_requested),
             approval_required=bool(approval_required),
             ambiguity=bool(ambiguity),
+            pending_request_relationship=pending_request_relationship,
         )
     except ValidationError as exc:
         message = exc.errors()[0]["msg"] if exc.errors() else "Invalid request contract."
@@ -1653,11 +1863,56 @@ def _verify_semantic_context_entry(param: RequestParameter, current_turn_text: O
     return None
 
 
-def _verify_and_filter_provided_context(
+def _verify_and_filter_provided_context_list(
     provided_context: Sequence[RequestParameter],
     current_turn_text: Optional[str],
     session_confirmed: Mapping[str, str],
 ) -> list[RequestParameter]:
+    """POST-6A REPAIR 1 -- the surviving-parameters-only projection of
+    `_verify_and_filter_provided_context`, kept so every caller that only
+    ever needed the list (and every test written against the original
+    2-value semantics) keeps working unchanged after that function grew
+    its second, `unresolved_target_parameter_names` result."""
+    return _verify_and_filter_provided_context(provided_context, current_turn_text, session_confirmed).verified
+
+
+def _with_correction_status(param: RequestParameter, confirmed_value: Optional[str]) -> RequestParameter:
+    """POST-6A REPAIR 1/5 -- stamps `corrects_prior_value` when THIS
+    turn's own freshly-verified value replaces a DIFFERENT value the same
+    parameter name already carried in this same conversation. Purely a
+    record of what happened (never itself a permission); `command_
+    candidate_binding.py` is what turns it into invalidation of a command
+    candidate or approval bound to the superseded target."""
+    if confirmed_value is None or confirmed_value == param.value:
+        return param
+    return param.model_copy(update={"corrects_prior_value": confirmed_value})
+
+
+class _VerificationOutcome(BaseModel):
+    """POST-6A REPAIR 1 -- what `_verify_and_filter_provided_context`
+    concluded, beyond the surviving parameter list alone.
+
+    `unresolved_target_parameter_names` is the deterministic bridge to
+    "require explicit confirmation when the intended target cannot be
+    established safely": a parameter whose claimed identifier was
+    POSITIVELY refuted by the current turn's own text (negated, excluded,
+    quoted as an example, or contested by a competing identifier) is not
+    merely dropped -- its canonical name is reported here so the caller
+    forces it into `missing_context` regardless of what the model
+    declared, and regardless of whether any other rule would have
+    required it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    verified: list[RequestParameter] = Field(default_factory=list)
+    unresolved_target_parameter_names: list[str] = Field(default_factory=list)
+
+
+def _verify_and_filter_provided_context(
+    provided_context: Sequence[RequestParameter],
+    current_turn_text: Optional[str],
+    session_confirmed: Mapping[str, str],
+) -> _VerificationOutcome:
     """THE direct fix for the live RRU-9 defect. A `provided_context`
     entry is kept ONLY if its `value` is independently verifiable --
     a literal, case-insensitive substring of THIS turn's own real user
@@ -1713,44 +1968,71 @@ def _verify_and_filter_provided_context(
     as before this pass.
     """
     current_lower = current_turn_text.lower() if current_turn_text else ""
-    current_turn_identifiers = extract_canonical_identifiers(current_turn_text)
     verified: list[RequestParameter] = []
+    unresolved_targets: set[str] = set()
     for param in provided_context:
         value_lower = param.value.lower()
-        canonical_candidate = _canonicalize_if_identifier(param.value)
         is_semantic_context_param = param.name in SEMANTIC_CONTEXT_PARAMETER_NAMES
+        confirmed_value = session_confirmed.get(param.name)
 
-        if not is_semantic_context_param and value_lower and value_lower in current_lower:
-            verified.append(param.model_copy(update={"value": canonical_candidate}))
+        # POST-6A REPAIR 1 -- IDENTIFIER-SHAPED VALUES TAKE A COMPLETELY
+        # SEPARATE, EXACT PATH. The substring test below is never reached
+        # for them: `"RRU-9" in "restart rru-90"` is `True`, and a wrong
+        # physical unit is the worst outcome this system can produce.
+        if not is_semantic_context_param and is_identifier_shaped(param.value):
+            canonical_value = canonical_identifier(param.value) or param.value
+            verification = verify_identifier_against_text(param.value, current_turn_text)
+            if verification.status == IdentifierVerificationStatus.VERIFIED:
+                verified.append(
+                    _with_correction_status(
+                        param.model_copy(update={"value": canonical_value, "source_span": verification.span}),
+                        confirmed_value,
+                    )
+                )
+                continue
+            if verification.requires_explicit_confirmation:
+                # POSITIVELY refuted (negated/excluded/quoted example) or
+                # genuinely contested. Never silently dropped: the caller
+                # turns this into an explicit confirmation request.
+                canonical_name = canonical_parameter_name(param.name) or param.name
+                unresolved_targets.add(canonical_name)
+                _logger.info(
+                    "request_contract: refusing an identifier-shaped provided_context entry name=%r "
+                    "status=%s -- explicit user confirmation required",
+                    param.name,
+                    verification.status.value,
+                )
+                continue
+            # NOT_PRESENT in this turn's text: the unchanged same-subject
+            # session-confirmed carry-forward remains the only other way
+            # this value can be trusted -- compared on CANONICAL form, so
+            # a differently-spelled but identical identifier still matches,
+            # and a merely prefix-overlapping one still does not.
+            if confirmed_value is not None and canonical_value == (
+                canonical_identifier(confirmed_value) or confirmed_value
+            ):
+                verified.append(param.model_copy(update={"value": canonical_value}))
+                continue
+            _logger.info(
+                "request_contract: dropping unverifiable identifier-shaped provided_context entry name=%r",
+                param.name,
+            )
             continue
 
-        confirmed_value = session_confirmed.get(param.name)
+        canonical_candidate = _canonicalize_if_identifier(param.value)
+
+        if not is_semantic_context_param and value_lower and value_lower in current_lower:
+            verified.append(_with_correction_status(param.model_copy(update={"value": canonical_candidate}), confirmed_value))
+            continue
+
         if confirmed_value is not None and confirmed_value.lower() == value_lower:
             verified.append(param.model_copy(update={"value": canonical_candidate}))
             continue
 
-        # Identifier-class matching applies whenever `param.value` is
-        # itself unambiguously identifier-shaped -- regardless of whether
-        # canonicalization happened to change the spelling (the model may
-        # already have submitted the canonical form directly, e.g.
-        # "RRU-5", in which case `canonical_candidate == param.value`, but
-        # this path must still run: the substring check above only fails
-        # because the USER's own raw text used a DIFFERENT, equally valid
-        # spelling, e.g. "RRU 5"). Skipped entirely for a semantic-context
-        # parameter name -- see this function's own docstring.
-        is_identifier_shaped_value = not is_semantic_context_param and len(extract_canonical_identifiers(param.value)) == 1
-        if is_identifier_shaped_value:
-            if canonical_candidate in current_turn_identifiers:
-                verified.append(param.model_copy(update={"value": canonical_candidate}))
-                continue
-            if confirmed_value is not None and canonical_candidate == _canonicalize_if_identifier(confirmed_value):
-                verified.append(param.model_copy(update={"value": canonical_candidate}))
-                continue
-
         if param.name in SEMANTIC_CONTEXT_PARAMETER_NAMES:
             semantically_verified = _verify_semantic_context_entry(param, current_turn_text)
             if semantically_verified is not None:
-                verified.append(semantically_verified)
+                verified.append(_with_correction_status(semantically_verified, confirmed_value))
                 continue
 
         _logger.info(
@@ -1759,7 +2041,9 @@ def _verify_and_filter_provided_context(
             "normalization, nor evidence-bound semantic verification could establish it)",
             param.name,
         )
-    return verified
+    return _VerificationOutcome(
+        verified=verified, unresolved_target_parameter_names=sorted(unresolved_targets)
+    )
 
 
 def validate_and_persist_request_contract(
@@ -1833,7 +2117,10 @@ def validate_and_persist_request_contract(
     canonical_provided_context = canonicalize_provided_context(contract.provided_context)
 
     current_turn_text = _extract_current_turn_user_text(tool_context)
-    verified_this_turn = _verify_and_filter_provided_context(canonical_provided_context, current_turn_text, session_confirmed)
+    verification_outcome = _verify_and_filter_provided_context(
+        canonical_provided_context, current_turn_text, session_confirmed
+    )
+    verified_this_turn = verification_outcome.verified
 
     merged_by_name: dict[str, RequestParameter] = {
         name: RequestParameter(name=name, value=value, provenance=ParameterProvenance.SESSION)
@@ -1889,6 +2176,27 @@ def validate_and_persist_request_contract(
         final_provided_context,
         _canonicalize_missing_context_names(contract.missing_context),
     )
+
+    # POST-6A REPAIR 1 -- EXPLICIT CONFIRMATION FOR A REFUTED TARGET.
+    # `unresolved_target_parameter_names` names a parameter the CURRENT
+    # turn's own text POSITIVELY refuted (negated, excluded, quoted as a
+    # source example) or left genuinely contested between competing
+    # units. That is categorically different from "not mentioned": a
+    # merely-absent parameter may still be satisfied by the same-subject
+    # carry-forward or by a target-independent operation, but a refuted
+    # one must be confirmed by the user before anything may act on it.
+    # Forced in here, AFTER reconciliation, so no other rule can remove
+    # it -- and the corresponding carried-forward value is dropped too,
+    # since a target the user just excluded must not survive from an
+    # earlier turn either.
+    if verification_outcome.unresolved_target_parameter_names:
+        unresolved_names = set(verification_outcome.unresolved_target_parameter_names)
+        final_provided_context = [param for param in final_provided_context if param.name not in unresolved_names]
+        reconciled_missing_context = sorted(set(reconciled_missing_context) | unresolved_names)
+        _logger.info(
+            "request_contract: explicit target confirmation required for %s",
+            sorted(unresolved_names),
+        )
 
     # LIVE-CORR-8 -- Request Class Must Be the Authoritative Governance
     # Boundary: computed here, ALWAYS from `derive_request_class`'s own

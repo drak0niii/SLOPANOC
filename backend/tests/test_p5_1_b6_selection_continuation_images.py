@@ -257,7 +257,7 @@ async def test_execute_read_continuation_appends_the_resolved_linked_image(monke
         def __init__(self, *, app_name: str, agent: Any, session_service: Any, memory_service: Any = None) -> None:
             assert agent is _SYNTHESIS_ONLY_INCIDENT_MANAGER
 
-        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
             captured_content["content"] = new_message
             payload = {"outcome": "ok", "chat_id": "irrelevant", "chat_title": "irrelevant", "summary": "ok"}
             yield type("E", (), {"content": _text_content(json.dumps(payload))})()

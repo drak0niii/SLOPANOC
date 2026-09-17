@@ -24,6 +24,22 @@ class FakeIndexRepository:
     async def get(self, evidence_id):
         return self.rows.get(evidence_id)
 
+    async def delete_missing_for_version(self, knowledge_id, version_label, *, keep_evidence_ids):
+        """POST-6A: mirrors the real repository's own reconciliation
+        delete -- scoped to ONE (knowledge_id, version_label), returning
+        how many stale rows were removed."""
+        keep = set(keep_evidence_ids)
+        stale = [
+            evidence_id
+            for evidence_id, record in self.rows.items()
+            if record.knowledge_id == knowledge_id
+            and record.version_label == version_label
+            and evidence_id not in keep
+        ]
+        for evidence_id in stale:
+            self.rows.pop(evidence_id, None)
+        return len(stale)
+
     async def upsert(self, record, embedding, *, now):
         existing = self.rows.get(record.evidence_id)
         self.upsert_calls.append((record.evidence_id, embedding))
@@ -67,7 +83,14 @@ async def test_new_object_inserts_all_sections() -> None:
     repo = FakeIndexRepository()
     provider = FakeEmbeddingProvider()
     stats = await index_knowledge_object(_obj("K1", ["first section", "second section"]), repo, provider)
-    assert stats == {"inserted_or_updated": 2, "skipped_unchanged": 0, "embedding_failed": 0}
+    # POST-6A added reconciliation counters (/);
+    # the pre-existing counters are asserted unchanged.
+    assert {k: stats[k] for k in ("inserted_or_updated", "skipped_unchanged", "embedding_failed")} == {
+        "inserted_or_updated": 2,
+        "skipped_unchanged": 0,
+        "embedding_failed": 0,
+    }
+    assert stats["removed_sections"] == 0
     assert len(repo.rows) == 2
 
 
@@ -138,5 +161,10 @@ async def test_no_sections_produces_zero_counters_without_error() -> None:
         source=KnowledgeSource(source_system="x", source_id="K1"), sections=[],
     )
     stats = await index_knowledge_object(empty_obj, repo, provider)
-    assert stats == {"inserted_or_updated": 0, "skipped_unchanged": 0, "embedding_failed": 0}
+    assert {k: stats[k] for k in ("inserted_or_updated", "skipped_unchanged", "embedding_failed")} == {
+        "inserted_or_updated": 0,
+        "skipped_unchanged": 0,
+        "embedding_failed": 0,
+    }
+    assert stats["removed_sections"] == 0
     assert provider.embed_calls == []

@@ -557,14 +557,11 @@ def test_general_conversation_after_operational_flow_has_no_pending_leakage():
 # ---------------------------------------------------------------------------
 
 
-def test_livecorr9_alarm_listing_continuation_unaffected_by_pending_request_default():
-    """Backward-compatibility proof: LIVE-CORR-9's own real, live-
-    reproduced scenario ("no, i just need a cmd to run a check on alarms
-    for ericsson", provided_context=[vendor], model-declared missing_
-    context=[unit_id, unit_type]) must resolve identically with `pending_
-    governed_request` omitted entirely (the default `None`, exactly as
-    every pre-LIVE-CORR-11 call site still does)."""
-    contract = RequestContract(
+def _alarm_listing_contract() -> RequestContract:
+    """LIVE-CORR-9's own real, live-reproduced scenario ("no, i just need
+    a cmd to run a check on alarms for ericsson", provided_context=
+    [vendor], model-declared missing_context=[unit_id, unit_type])."""
+    return RequestContract(
         intent=RequestIntent.COMMAND,
         subject="check alarms",
         requested_output=RequestedOutput.EXACT_COMMAND,
@@ -575,13 +572,87 @@ def test_livecorr9_alarm_listing_continuation_unaffected_by_pending_request_defa
         run_id=_RUN_ID,
     )
 
+
+def test_livecorr9_alarm_listing_no_longer_inferred_target_independent_from_token_absence():
+    """POST-6A REPAIR 2 -- DELIBERATE BEHAVIOR CHANGE, recorded here
+    rather than deleted.
+
+    LIVE-CORR-9 granted `may_emit_command=True` for this scenario because
+    the grounded candidate (`"alt"`) contained no recognized RRU/AAS
+    token, which it read as proof the operation was target-independent.
+    That inference is invalid in the direction that matters: it cannot
+    distinguish "genuinely system-wide" from "this target syntax is not
+    one our closed two-prefix recognizer was ever given", so absence of
+    evidence became evidence of safety.
+
+    With the inference removed and no governed metadata supplied, the
+    turn correctly resolves UNRESOLVED -- the conservative blanket rule,
+    unchanged, still requires the target parameters. The legitimate
+    alarm-listing case is now served by positive metadata instead; see
+    the next test.
+    """
+    decision = derive_execution_decision(_alarm_listing_contract(), _RUN_ID, grounded_command_candidate="alt")
+
+    assert decision.status == RequestExecutionStatus.NEEDS_INFORMATION
+    assert decision.may_emit_command is False
+    assert set(decision.missing_context) == {"unit_id", "unit_type"}
+
+
+def test_livecorr9_alarm_listing_is_permitted_by_positive_governed_metadata():
+    """The same scenario, with an APPROVED, positively TARGET_INDEPENDENT
+    governed operation descriptor for the section actually selected --
+    which is what a genuinely system-wide listing now needs in order to
+    be permitted. Proves the repair replaced the inference rather than
+    simply removing the capability."""
+    from backend.knowledge.domain.operation_descriptor import (
+        GovernedOperationDescriptor,
+        OperationEffect,
+        OperationTargetScope,
+    )
+    from backend.tests._governed_operation_fixtures import approved_descriptor
+
+    descriptor = approved_descriptor(
+        GovernedOperationDescriptor(
+            operation_id="list-alarms",
+            target_scope=OperationTargetScope.TARGET_INDEPENDENT,
+            effect=OperationEffect.READ_ONLY,
+        )
+    )
+
     decision = derive_execution_decision(
-        contract, _RUN_ID, grounded_command_candidate="alt"  # target-independent, per LIVE-CORR-9
+        _alarm_listing_contract(),
+        _RUN_ID,
+        grounded_command_candidate="alt",
+        operation_descriptor=descriptor,
     )
 
     assert decision.status == RequestExecutionStatus.ALLOW
     assert decision.request_class == RequestClass.EXACT_COMMAND
     assert decision.may_emit_command is True
+
+
+def test_candidate_descriptor_never_grants_target_independence():
+    """A descriptor that has not been through the human-gated governance
+    transition is CANDIDATE, and CANDIDATE authority establishes
+    nothing -- the conservative rule still applies."""
+    from backend.knowledge.domain.operation_descriptor import (
+        GovernedOperationDescriptor,
+        OperationTargetScope,
+        from_model_extraction,
+    )
+
+    candidate = from_model_extraction(
+        GovernedOperationDescriptor(
+            operation_id="list-alarms", target_scope=OperationTargetScope.TARGET_INDEPENDENT
+        )
+    )
+
+    decision = derive_execution_decision(
+        _alarm_listing_contract(), _RUN_ID, operation_descriptor=candidate
+    )
+
+    assert decision.status == RequestExecutionStatus.NEEDS_INFORMATION
+    assert decision.may_emit_command is False
 
 
 # ---------------------------------------------------------------------------

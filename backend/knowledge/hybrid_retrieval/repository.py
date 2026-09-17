@@ -78,6 +78,28 @@ class EvidenceIndexTable(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime)
 
 
+
+_VERSION_KEY_CLAUSE = " AND (knowledge_id, version_label) IN (SELECT * FROM UNNEST(CAST(:vk_ids AS text[]), CAST(:vk_labels AS text[])))"
+"""POST-6A -- the per-VERSION authorization constraint, applied INSIDE
+each channel's own SQL exactly like the knowledge_id constraint already
+is (never a post-hoc Python filter, so an unauthorized version can never
+appear even as an intermediate hit). Uses paired arrays rather than a
+composite `IN` list so it binds as ordinary parameters on every driver.
+Omitted entirely when the caller supplies no version keys, preserving the
+pre-existing behavior byte-for-byte."""
+
+
+def _version_key_params(permitted_version_keys: Optional[list[tuple[str, str]]]) -> tuple[str, dict[str, Any]]:
+    """Returns `(sql_fragment, extra_params)` -- empty fragment and no
+    params when there are no version keys to constrain by."""
+    if not permitted_version_keys:
+        return "", {}
+    return _VERSION_KEY_CLAUSE, {
+        "vk_ids": [key[0] for key in permitted_version_keys],
+        "vk_labels": [key[1] for key in permitted_version_keys],
+    }
+
+
 def _row_to_record(row: Any) -> EvidenceIndexRecord:
     return EvidenceIndexRecord(
         evidence_id=row.evidence_id,
@@ -263,7 +285,12 @@ class EvidenceIndexRepository:
             row = (await session.execute(text(f"SELECT * FROM {_TABLE_NAME} WHERE evidence_id = :id"), {"id": evidence_id})).first()
         return _row_to_record(row) if row is not None else None
 
-    async def exact_match(self, permitted_knowledge_ids: list[str], query_text: str) -> list[ChannelHit]:
+    async def exact_match(
+        self,
+        permitted_knowledge_ids: list[str],
+        query_text: str,
+        permitted_version_keys: Optional[list[tuple[str, str]]] = None,
+    ) -> list[ChannelHit]:
         """Deterministic exact-substring match (case-insensitive `ILIKE`),
         constrained to `permitted_knowledge_ids` INSIDE the SQL query
         itself (never after retrieval -- §4/§65.A). An empty `permitted_
@@ -274,13 +301,23 @@ class EvidenceIndexRepository:
             return []
         await self.ensure_schema()
         async with self._session_factory() as session:
+            version_clause, version_params = _version_key_params(permitted_version_keys)
             result = await session.execute(
-                text(f"SELECT evidence_id FROM {_TABLE_NAME} WHERE knowledge_id = ANY(:ids) AND indexable_text ILIKE :pattern"),
-                {"ids": permitted_knowledge_ids, "pattern": f"%{query_text}%"},
+                text(
+                    f"SELECT evidence_id FROM {_TABLE_NAME} WHERE knowledge_id = ANY(:ids)"
+                    f"{version_clause} AND indexable_text ILIKE :pattern"
+                ),
+                {"ids": permitted_knowledge_ids, "pattern": f"%{query_text}%", **version_params},
             )
             return [ChannelHit(evidence_id=row.evidence_id, channel=RetrievalChannel.EXACT, raw_score=1.0) for row in result.all()]
 
-    async def lexical_search(self, permitted_knowledge_ids: list[str], query_text: str, limit: int) -> list[ChannelHit]:
+    async def lexical_search(
+        self,
+        permitted_knowledge_ids: list[str],
+        query_text: str,
+        limit: int,
+        permitted_version_keys: Optional[list[tuple[str, str]]] = None,
+    ) -> list[ChannelHit]:
         """Real PostgreSQL full-text search (`plainto_tsquery`/`ts_rank`)
         constrained to `permitted_knowledge_ids` INSIDE the query itself.
         """
@@ -288,19 +325,27 @@ class EvidenceIndexRepository:
             return []
         await self.ensure_schema()
         async with self._session_factory() as session:
+            version_clause, version_params = _version_key_params(permitted_version_keys)
             result = await session.execute(
                 text(
                     f"SELECT evidence_id, ts_rank(text_search_vector, plainto_tsquery('english', :q)) AS rank "
                     f"FROM {_TABLE_NAME} "
                     "WHERE knowledge_id = ANY(:ids) "
+                    f"{version_clause} "
                     "AND text_search_vector @@ plainto_tsquery('english', :q) "
                     "ORDER BY rank DESC LIMIT :limit"
                 ),
-                {"q": query_text, "ids": permitted_knowledge_ids, "limit": limit},
+                {"q": query_text, "ids": permitted_knowledge_ids, "limit": limit, **version_params},
             )
             return [ChannelHit(evidence_id=row.evidence_id, channel=RetrievalChannel.LEXICAL, raw_score=float(row.rank)) for row in result.all()]
 
-    async def semantic_search(self, permitted_knowledge_ids: list[str], query_embedding: list[float], limit: int) -> list[ChannelHit]:
+    async def semantic_search(
+        self,
+        permitted_knowledge_ids: list[str],
+        query_embedding: list[float],
+        limit: int,
+        permitted_version_keys: Optional[list[tuple[str, str]]] = None,
+    ) -> list[ChannelHit]:
         """Real pgvector cosine-distance search (`<=>`) constrained to
         `permitted_knowledge_ids` INSIDE the query itself -- exact scan,
         no ANN index (§25: current corpus scale does not justify one).
@@ -319,16 +364,42 @@ class EvidenceIndexRepository:
         if not self._vector_available:
             return []
         async with self._session_factory() as session:
+            version_clause, version_params = _version_key_params(permitted_version_keys)
             result = await session.execute(
                 text(
                     f"SELECT evidence_id, 1 - (embedding <=> CAST(:qvec AS vector)) AS similarity "
                     f"FROM {_TABLE_NAME} "
                     "WHERE knowledge_id = ANY(:ids) AND embedding IS NOT NULL "
+                    f"{version_clause} "
                     "ORDER BY embedding <=> CAST(:qvec AS vector) LIMIT :limit"
                 ),
-                {"qvec": str(list(query_embedding)), "ids": permitted_knowledge_ids, "limit": limit},
+                {"qvec": str(list(query_embedding)), "ids": permitted_knowledge_ids, "limit": limit, **version_params},
             )
             return [ChannelHit(evidence_id=row.evidence_id, channel=RetrievalChannel.SEMANTIC, raw_score=float(row.similarity)) for row in result.all()]
+
+    async def delete_missing_for_version(
+        self, knowledge_id: str, version_label: str, *, keep_evidence_ids: list[str]
+    ) -> int:
+        """POST-6A -- remove index rows for sections that no longer exist
+        in the governed object.
+
+        Scoped to exactly ONE (knowledge_id, version_label): another
+        version's rows are a separate, still-valid index and are never
+        touched. Returns the number of rows deleted, for the caller's own
+        reconciliation counters.
+        """
+        await self.ensure_schema()
+        async with self._session_factory() as session:
+            result = await session.execute(
+                text(
+                    f"DELETE FROM {_TABLE_NAME} "
+                    "WHERE knowledge_id = :knowledge_id AND version_label = :version_label "
+                    "AND NOT (evidence_id = ANY(:keep))"
+                ),
+                {"knowledge_id": knowledge_id, "version_label": version_label, "keep": list(keep_evidence_ids)},
+            )
+            await session.commit()
+            return int(result.rowcount or 0)
 
     async def get_many(self, evidence_ids: list[str]) -> dict[str, EvidenceIndexRecord]:
         if not evidence_ids:

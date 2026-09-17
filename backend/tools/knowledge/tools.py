@@ -15,11 +15,14 @@ from google.adk.tools import ToolContext
 from pydantic import ValidationError
 
 from backend.api.activity_queue import ActivityKind, report_activity
-from backend.api.turn_context import current_run_id
+from backend.api.turn_context import current_run_id, current_user_id
 from backend.gateway.safe_error import internal_error, validation_error
 from backend.knowledge.provenance.contracts import KnowledgeEvidenceSelectionError, KnowledgeEvidenceSelectionKey
 from backend.knowledge.repository.contracts import KnowledgeRepositoryCorruptionError
-from backend.knowledge.tools.contracts import KnowledgeSearchToolRequest
+from backend.knowledge.tools.contracts import (
+    KnowledgeSearchToolRequest,
+    KnowledgeToolRetrievalUnavailableError,
+)
 from backend.tools.knowledge.runtime import (
     KnowledgeRuntimeError,
     get_knowledge_tool_service,
@@ -132,8 +135,32 @@ async def knowledge_search(
     report_activity(ActivityKind.KNOWLEDGE_SEARCH_STARTED)
 
     try:
-        execution = await service.search(request, run_state.execution_context)
+        # POST-6A: the trusted run identity and request identity are
+        # passed INTO the search so the shared evidence cache is keyed by
+        # them. `current_user_id()` is the same trusted, already-resolved
+        # identity the turn was started with -- never a model-supplied
+        # value, never a request body field.
+        execution = await service.search(
+            request,
+            run_state.execution_context,
+            run_id=run_id,
+            user_id=current_user_id() or "",
+            context_state=run_state.context_state,
+        )
         record_search_result(run_id, execution)
+    except KnowledgeToolRetrievalUnavailableError:
+        # POST-6A -- AN OUTAGE IS NEVER REPORTED AS A KNOWLEDGE GAP.
+        # Returning an empty result here would reach the model as
+        # "nothing matched", which it would faithfully relay to the user
+        # as an absence of knowledge. This is an internal error, and the
+        # orchestration layer additionally carries the typed availability
+        # so the final response says so plainly.
+        _perf_logger.info("perf stage=knowledge_search_complete run_id=%s status=error error=retrieval_unavailable", run_id)
+        report_activity(ActivityKind.KNOWLEDGE_SEARCH_FAILED)
+        return _internal_error_result(
+            "Governed knowledge could not be retrieved right now -- this is a problem on our side, "
+            "not missing information from you."
+        )
     except KnowledgeRepositoryCorruptionError:
         _perf_logger.info("perf stage=knowledge_search_complete run_id=%s status=error error=repository_corruption", run_id)
         report_activity(ActivityKind.KNOWLEDGE_SEARCH_FAILED)

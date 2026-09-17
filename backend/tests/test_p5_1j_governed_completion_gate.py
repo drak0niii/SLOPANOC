@@ -784,7 +784,7 @@ async def test_part21h_buffered_provisional_text_never_leaks_across_turns_on_fai
         def __init__(self, session_service: Any) -> None:
             self._session_service = session_service
 
-        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
             session = await self._session_service.get_session(session_id, user_id)
             await self._session_service.persist_state_delta(session, {})
             yield FakeEvent(text="Secret first-turn provisional text 12345", final=False, partial=True)

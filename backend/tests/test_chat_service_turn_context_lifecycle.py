@@ -48,7 +48,7 @@ class _RecordingRunner:
         self._texts = texts
         self._raise_after = raise_after
 
-    async def run_async(self, *, user_id, session_id, new_message, run_config=None):
+    async def run_async(self, *, user_id, session_id, new_message, state_delta=None, run_config=None):
         yield FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")])
         record_message_texts(current_run_id(), self._texts)
         if self._raise_after is not None:
@@ -78,7 +78,7 @@ class _GatedRecordingRunner:
         self._resume = resume
         self.finished = False
 
-    async def run_async(self, *, user_id, session_id, new_message, run_config=None):
+    async def run_async(self, *, user_id, session_id, new_message, state_delta=None, run_config=None):
         yield FakeEvent(final=False, function_calls=[FakeFunctionCall("incident_manager")])
         record_message_texts(current_run_id(), self._texts)
         yield FakeEvent(text="partial", final=False, partial=True)

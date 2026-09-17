@@ -1,3 +1,4 @@
+import { handleUnauthenticated, withAuth } from "./auth";
 import { getApiBaseUrl } from "./config";
 import { ApiError } from "./client";
 import { appendAndSplitFrames, extractDataPayload, parseSSEEvent } from "./sseParser";
@@ -35,16 +36,28 @@ export async function streamChatMessage({
   signal,
   onEvent,
 }: StreamChatMessageParams): Promise<void> {
-  const response = await fetch(`${getApiBaseUrl()}/api/sessions/${encodeURIComponent(sessionId)}/messages/stream`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, attachment_ids: attachmentIds ?? [] }),
-    signal,
-  });
+  // POST-6A — the SSE stream is a plain `fetch`, so it needs the same
+  // credential every other request carries. `withAuth` merges it into
+  // the headers this call already sets rather than replacing them.
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/sessions/${encodeURIComponent(sessionId)}/messages/stream`,
+    withAuth({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, attachment_ids: attachmentIds ?? [] }),
+      signal,
+    }),
+  );
 
   if (!response.ok) {
     if (import.meta.env.DEV) {
       console.debug(`[sse] stream request failed with status ${response.status}`);
+    }
+    // POST-6A — same expired-session handling as every other request;
+    // the stream endpoint is authenticated identically, so a 401 here
+    // means the same thing and gets the same recovery.
+    if (response.status === 401) {
+      void handleUnauthenticated();
     }
     throw new ApiError("The assistant could not be reached. Please try again.", response.status);
   }

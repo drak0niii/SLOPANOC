@@ -81,6 +81,17 @@ class HybridRetrievalQuery(BaseModel):
 
     query_text: str
     permitted_knowledge_ids: list[str] = Field(description="6A.4's own permitted set -- an empty list means the caller has nothing to search, never 'search everything' (instruction section 41).")
+    permitted_version_keys: list[tuple[str, str]] = Field(
+        default_factory=list,
+        description=(
+            "POST-6A -- the (knowledge_id, version_label) pairs narrowing actually authorized. Narrowing "
+            "resolves a CURRENT VERSION per family, so authorization is per-VERSION; collapsing it to "
+            "knowledge_id alone silently widens it to every version sharing that id, including ARCHIVE and "
+            "superseded ones whose sections are still in the index. When non-empty this is the authoritative "
+            "constraint and is applied INSIDE each channel's own SQL. Empty preserves the pre-existing "
+            "knowledge_id-only behavior for callers that have not been migrated."
+        ),
+    )
     limit: int = 10
 
 

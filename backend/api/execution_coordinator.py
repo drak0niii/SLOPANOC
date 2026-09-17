@@ -34,11 +34,94 @@ class's public shape.
 from __future__ import annotations
 
 import asyncio
+import logging
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:  # pragma: no cover -- typing only
+    from backend.api.distributed_lock import AdvisoryLockManager
+    from backend.api.operation_claims import OperationClaimStore
+
+_logger = logging.getLogger(__name__)
 
 
 class SessionExecutionCoordinator:
-    def __init__(self) -> None:
+    """POST-6A -- process-local lock PLUS a PostgreSQL session advisory
+    lock when one is available.
+
+    `lock_for` is unchanged and remains the in-process serialization every
+    existing caller uses. `distributed_lock_for` is the additional,
+    cross-process boundary: held for the same critical section, released
+    with it, and answerable (`still_holds`) so a worker that lost its
+    connection can be stopped before it publishes anything.
+
+    Against SQLite/local development the manager reports itself
+    unavailable and this degrades to exactly the previous behaviour --
+    which is correct for a single process, and never pretends otherwise.
+    """
+
+    def __init__(self, database_url: Optional[str] = None) -> None:
         self._locks: dict[tuple[str, str], asyncio.Lock] = {}
+        self._manager: Optional["AdvisoryLockManager"] = None
+        self._claims: Optional["OperationClaimStore"] = None
+        self._database_url = database_url
+
+    def _resolved_database_url(self) -> str:
+        if self._database_url:
+            return self._database_url
+        from backend.config.settings import get_settings
+
+        return get_settings().resolve_database_url()
+
+    @property
+    def operation_claims(self) -> "OperationClaimStore":
+        """POST-6A -- the DURABLE ownership generation store.
+
+        Deliberately a sibling of the advisory lock rather than a
+        replacement for it, because the two answer different questions.
+        The lock answers "is the holder still alive?" -- which the
+        database can decide instantly and without a lease, by noticing
+        the connection is gone. The claim answers "is this writer still
+        the owner?" -- which the lock cannot decide, because ownership
+        can change AFTER a worker's last check and before its next write.
+        Liveness plus fencing; neither one alone is sufficient.
+        """
+        if self._claims is None:
+            from backend.api.operation_claims import OperationClaimStore
+
+            self._claims = OperationClaimStore(self._resolved_database_url())
+        return self._claims
+
+    def _distributed_manager(self):
+        if self._manager is None:
+            from backend.api.distributed_lock import AdvisoryLockManager
+
+            self._manager = AdvisoryLockManager(self._resolved_database_url())
+        return self._manager
+
+    @property
+    def distributed_available(self) -> bool:
+        """Whether cross-process mutual exclusion is genuinely in force.
+        Callers that need to know (and tests that must not claim
+        PostgreSQL behaviour was proven on SQLite) read this rather than
+        assuming."""
+        try:
+            return self._distributed_manager().available
+        except Exception:
+            return False
+
+    async def distributed_lock_for(self, namespace: str, identity: str, *, wait: bool = True):
+        """The cross-process lock, or `None` when unavailable.
+
+        `wait=False` is what dispatch uses: a worker that cannot take the
+        lock must learn it lost and stop, never queue and then re-send.
+        """
+        try:
+            return await self._distributed_manager().acquire(namespace, identity, wait=wait)
+        except Exception:
+            _logger.warning(
+                "coordinator: could not acquire a distributed lock for %s/%s", namespace, identity, exc_info=True
+            )
+            return None
 
     def lock_for(self, user_id: str, session_id: str) -> asyncio.Lock:
         """Returns the one lock for this `(user_id, session_id)` pair,

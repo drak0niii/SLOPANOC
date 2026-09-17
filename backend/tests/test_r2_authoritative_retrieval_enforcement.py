@@ -66,7 +66,7 @@ def _hallucinated_ok_runner(summary: str):
             self._app_name = app_name
             self._session_service = session_service
 
-        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
             request = json.loads(new_message.parts[0].text)
             session = await self._session_service.get_session(
                 app_name=self._app_name, user_id=user_id, session_id=session_id
@@ -103,7 +103,7 @@ def _real_retrieval_runner(get_messages_by_chat_id: dict):
             self._app_name = app_name
             self._session_service = session_service
 
-        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+        async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
             request = json.loads(new_message.parts[0].text)
             session = await self._session_service.get_session(
                 app_name=self._app_name, user_id=user_id, session_id=session_id

@@ -52,6 +52,9 @@ from google.adk.utils.instructions_utils import inject_session_state
 
 from backend.agents.team_manager.prompts import (
     CASE_CONTEXT_TEAM_MANAGER_ADDENDUM,
+    OPERATIONAL_TEAM_MANAGER_INCIDENT_ONLY_INSTRUCTION,
+    OPERATIONAL_TEAM_MANAGER_INSTRUCTION,
+    OPERATIONAL_TEAM_MANAGER_TROUBLESHOOTING_ONLY_INSTRUCTION,
     TEAM_MANAGER_CONVERSATIONAL_PRESENTATION_INSTRUCTION,
     TEAM_MANAGER_INSTRUCTION,
     TEAM_MANAGER_TRUSTED_RESULT_INSTRUCTION,
@@ -182,3 +185,63 @@ async def presentation_team_manager_instruction_provider(ctx: ReadonlyContext) -
         else TEAM_MANAGER_CONVERSATIONAL_PRESENTATION_INSTRUCTION
     )
     return await _finalize_instruction(base, ctx)
+
+
+def _build_operational_instruction_provider(base_instruction: str):
+    """POST-6A REPAIR 5 -- the shared factory for the three capability-
+    filtered operational variants' own `InstructionProvider`s.
+
+    THE GAP THIS CLOSES: `operational_team_manager` and its two
+    capability-filtered siblings (agent.py) all shared `team_manager_
+    instruction_provider` above, which renders the FULL `TEAM_MANAGER_
+    INSTRUCTION` -- an instruction that unconditionally demands
+    `record_source_requirements`/`record_request_contract` calls those
+    variants structurally cannot make (both tools are removed from their
+    schema; the preflight owns those declarations), and that describes
+    delegating to a specialist the incident-only/troubleshooting-only
+    variants do not have either. This is EXACTLY the mismatch LIVE-CORR-13
+    already closed for `presentation_team_manager`, whose own docstring
+    records what a model does with an unfulfillable tool instruction: it
+    narrates the attempt to the user as plain text.
+
+    THE FIX: the same, already-established remedy -- a dedicated provider
+    per real toolset, rendering the matching composition from prompts.py.
+    The trusted-result branch is kept identical to `team_manager_
+    instruction_provider`'s own (defense in depth: `chat_service.py`
+    never selects an operational variant for a trusted-result
+    presentation turn, but if that ever changed, the narrower instruction
+    is still the correct one). `_finalize_instruction` -- session-state
+    templating, the authoritative-context block, and the Case addendum --
+    is completely unchanged and shared by every provider in this module.
+
+    DETERMINISTIC ORCHESTRATION IS UNTOUCHED: which variant (and
+    therefore which instruction) a turn gets is still decided entirely by
+    `chat_service.py` from that turn's own already-derived `WorkEnvelope`
+    -- never by the model, never from user text.
+    """
+
+    async def _provider(ctx: ReadonlyContext) -> str:
+        pending_specialist_result = ctx.state.get(PENDING_SPECIALIST_RESULT_STATE_KEY)
+        base = TEAM_MANAGER_TRUSTED_RESULT_INSTRUCTION if pending_specialist_result else base_instruction
+        return await _finalize_instruction(base, ctx)
+
+    return _provider
+
+
+operational_team_manager_instruction_provider = _build_operational_instruction_provider(
+    OPERATIONAL_TEAM_MANAGER_INSTRUCTION
+)
+"""POST-6A REPAIR 5 -- for `operational_team_manager` (both specialists,
+neither declaration tool)."""
+
+operational_team_manager_incident_only_instruction_provider = _build_operational_instruction_provider(
+    OPERATIONAL_TEAM_MANAGER_INCIDENT_ONLY_INSTRUCTION
+)
+"""POST-6A REPAIR 5 -- for `operational_team_manager_incident_manager_
+only` (no `troubleshooting_manager`)."""
+
+operational_team_manager_troubleshooting_only_instruction_provider = _build_operational_instruction_provider(
+    OPERATIONAL_TEAM_MANAGER_TROUBLESHOOTING_ONLY_INSTRUCTION
+)
+"""POST-6A REPAIR 5 -- for `operational_team_manager_troubleshooting_
+manager_only` (no `incident_manager_tool`)."""

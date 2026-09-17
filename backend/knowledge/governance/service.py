@@ -127,6 +127,14 @@ def materialize_candidate(
             content=section.content,
             source_locator=section.source_locator,
             artifact_id=section.artifact_id,
+            # POST-6A PROMPT 3: a governed materialization NEVER carries an
+            # operation descriptor in. Ingestion produces content, never
+            # operational authority -- a descriptor is authored and approved
+            # separately (`operation_approval.py`), exactly as the object's
+            # own lifecycle is. This is also what guarantees the existing
+            # corpus is not auto-approved: re-materializing it attaches no
+            # descriptor at all.
+            operation=None,
         )
         for section in structured_document.sections
     ]

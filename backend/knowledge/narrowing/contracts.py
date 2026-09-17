@@ -167,6 +167,28 @@ class KnowledgeNarrowingResult(BaseModel):
 
     input_count: int
     permitted_knowledge_ids: list[str] = Field(default_factory=list)
+    permitted_version_keys: list[tuple[str, str]] = Field(
+        default_factory=list,
+        description=(
+            "POST-6A -- the (knowledge_id, version_label) pairs actually permitted. Narrowing already decides "
+            "per VERSION (`items` carries a version_label for every decision); `permitted_knowledge_ids` "
+            "projects that decision down to bare ids, which is lossy: two versions of one document can differ "
+            "in lifecycle, expiry, AI-approval and applicability, so an id alone can authorize a version that "
+            "was itself excluded. Downstream retrieval constrains on THIS field so authorization never widens "
+            "from an approved version to every version sharing its knowledge_id."
+        ),
+    )
+    indeterminate_version_keys: list[tuple[str, str]] = Field(
+        default_factory=list,
+        description=(
+            "POST-6A -- the (knowledge_id, version_label) pairs whose applicability could NOT be determined "
+            "from the context known so far. Deliberately separate from `permitted_version_keys`: these are "
+            "NOT excluded (an applicability MISMATCH is), they are simply unproven. A consumer that treats "
+            "them as excluded hides the entire corpus whenever no TELCO context has been established yet, "
+            "which is the common case; a consumer that treats them as permitted must carry the uncertainty "
+            "forward, exactly as retrieval already does by retaining PARTIAL_MATCH/UNKNOWN outcomes."
+        ),
+    )
     excluded_knowledge_ids: list[str] = Field(default_factory=list)
     indeterminate_knowledge_ids: list[str] = Field(default_factory=list)
     items: list[KnowledgeNarrowingItem] = Field(default_factory=list)

@@ -1,3 +1,4 @@
+import { handleUnauthenticated, withAuth } from "./auth";
 import { getApiBaseUrl } from "./config";
 
 /** The backend's `SafeError.to_dict()` shape (backend/gateway/safe_error.py).
@@ -58,8 +59,14 @@ export class ApiError extends Error {
   }
 }
 
+/** POST-6A — every ordinary request, JSON or multipart, goes through
+ * here, and `withAuth` is what attaches the configured credential. A new
+ * call site therefore cannot forget authentication: it would have to
+ * bypass this function entirely to do so. `withAuth` preserves whatever
+ * headers the caller set, including deliberately omitting `Content-Type`
+ * for multipart uploads so the browser sets its own boundary. */
 export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(`${getApiBaseUrl()}${path}`, init);
+  return fetch(`${getApiBaseUrl()}${path}`, withAuth(init));
 }
 
 /** Shared by every request helper below — parses a non-OK response into
@@ -69,6 +76,15 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
 async function throwForFailedResponse(path: string, response: Response): Promise<never> {
   if (import.meta.env.DEV) {
     console.debug(`[api] ${path} failed with status ${response.status}`);
+  }
+  // POST-6A — an expired or rejected token surfaces here first, on
+  // whichever request happened to be in flight. Clearing it and
+  // restarting sign-in turns a session expiry into one redirect rather
+  // than a cascade of identical failures the user cannot act on. The
+  // throw below still happens, so the caller's own error path is
+  // unchanged; in development mode this is a no-op.
+  if (response.status === 401) {
+    void handleUnauthenticated();
   }
   let safe: SafeErrorBody | null = null;
   try {

@@ -293,6 +293,13 @@ class ApiSessionService:
         )
         await self._adk.append_event(session, event)
 
+    @property
+    def coordinator(self) -> SessionExecutionCoordinator:
+        """POST-6A -- exposed so callers that need the CROSS-PROCESS lock
+        (dispatch, in particular) can reach it without constructing a
+        second coordinator with its own, separate lock map."""
+        return self._coordinator
+
     def lock_for(self, session_id: str, user_id: str = DEFAULT_USER_ID):
         return self._coordinator.lock_for(user_id, session_id)
 

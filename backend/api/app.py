@@ -172,7 +172,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import Depends, FastAPI, File, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import Response, StreamingResponse
 from google.adk.utils.context_utils import Aclosing
@@ -186,6 +186,17 @@ from backend.api import source_images
 from backend.api.chat_service import ChatService, get_chat_service
 from backend.api.errors import handle_request_validation_error, handle_safe_error, handle_unexpected_error
 from backend.api.identity import UserContext, resolve_user_context
+from backend.api.knowledge_governance_service import (
+    GovernancePermissionError,
+    GovernanceUnavailableError,
+    KnowledgeGovernanceService,
+    draft_descriptor_from_section,
+    get_knowledge_governance_service,
+)
+from backend.api.schemas import ApproveOperationRequest, DraftOperationRequest
+from backend.config.settings import get_settings
+from backend.knowledge.governance.contracts import KnowledgeGovernanceError
+from backend.knowledge.governance.operation_approval import descriptor_fingerprint
 from backend.api import session_history_service
 from backend.api.streaming_events import format_sse
 from backend.api.schemas import (
@@ -347,6 +358,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     await warmup_shared_model()
     yield
+
+
+def _may_approve(user: "UserContext") -> bool:
+    """POST-6A -- the review surface's own read of the SAME two-part rule
+    the store enforces: authenticated (verified, or an explicit dev-mode
+    deployment) AND authorized (a governor role from the verified token,
+    or the configured governor user list). Advisory only -- the store's
+    own gate is what actually decides."""
+    settings = get_settings()
+    if not (user.verified or settings.governance_dev_mode):
+        return False
+    if user.verified and settings.knowledge_governor_roles and set(user.roles) & settings.knowledge_governor_roles:
+        return True
+    return user.user_id in settings.knowledge_governors
 
 
 def create_app() -> FastAPI:
@@ -582,6 +607,206 @@ def create_app() -> FastAPI:
         return await selection_service.skip(session_service, session_id, selection_id, user.user_id)
 
     # --- Cases (Phase 4D) -------------------------------------------------
+
+    @app.get("/api/sessions/{session_id}/operational-status")
+    async def operational_status(
+        session_id: str,
+        user: UserContext = Depends(resolve_user_context),
+        session_service: ApiSessionService = Depends(get_session_service),
+    ) -> dict:
+        """POST-6A -- the minimal recovery surface: which turns in THIS
+        session never reached a terminal state, and whether an execution
+        was left with an unknown outcome.
+
+        Scoped to the caller's own session by the SAME ownership boundary
+        every other session route uses -- `user.user_id` is the ADK
+        lookup key, so a foreign session simply is not found. No
+        dashboard, no cross-tenant listing, no bulk view.
+
+        `unknown_execution` is the one an operator must act on: a
+        dispatch that may have reached Teams and cannot be confirmed.
+        Deliberately reported rather than auto-resolved -- resolving it
+        means a human checking Teams.
+        """
+        from backend.approval.execution_identity import (
+            EXECUTION_RECORD_STATE_KEY,
+            ExecutionStatus,
+            parse_execution_record,
+        )
+        from backend.api.turn_lifecycle import TURN_LIFECYCLE_STATE_KEY, TurnStatus, parse_turn_lifecycle
+
+        session = await session_service.get_session(session_id, user.user_id)
+        records = parse_turn_lifecycle(session.state.get(TURN_LIFECYCLE_STATE_KEY))
+        execution = parse_execution_record(session.state.get(EXECUTION_RECORD_STATE_KEY))
+        return {
+            "session_id": session_id,
+            "interrupted_turns": [
+                {"turn_key": r.turn_key, "worker_id": r.worker_id, "detail": r.detail,
+                 "updated_at": r.updated_at.isoformat() if r.updated_at else None}
+                for r in records.values()
+                if r.status in (TurnStatus.INTERRUPTED, TurnStatus.ACCEPTED)
+            ],
+            "unknown_execution": (
+                {
+                    "operation_id": execution.operation_id,
+                    "operation": execution.operation,
+                    "attempts": execution.attempts,
+                    "detail": execution.detail,
+                }
+                if execution is not None and execution.status is ExecutionStatus.UNKNOWN_OUTCOME
+                else None
+            ),
+        }
+
+    # =================================================================
+    # POST-6A -- GOVERNED OPERATION DESCRIPTOR AUTHORING AND APPROVAL
+    # =================================================================
+    #
+    # The human governance surface for `GovernedOperationDescriptor`.
+    # Every route resolves identity through the SAME `resolve_user_context`
+    # dependency the rest of this API uses -- identity is never read from
+    # a request body -- and the two authority-bearing routes additionally
+    # require GOVERNANCE PERMISSION, verified server-side inside
+    # `OperationApprovalStore.require_governance_permission` against
+    # configuration (`SLOPANOC_KNOWLEDGE_GOVERNORS`) the caller cannot
+    # influence. Drafting is deliberately NOT gated: a draft is CANDIDATE
+    # and grants nothing.
+    #
+    # HONEST LIMIT: this stands on the current development identity
+    # boundary (an unverified header, see identity.py). The permission
+    # check is genuinely server-side, but it is only as strong as the
+    # identity beneath it -- real authentication remains Phase 4H.
+
+    @app.get("/api/knowledge/{knowledge_id}/versions/{version_label}/operations")
+    async def list_governed_operations(
+        knowledge_id: str,
+        version_label: str,
+        user: UserContext = Depends(resolve_user_context),
+        service: KnowledgeGovernanceService = Depends(get_knowledge_governance_service),
+    ) -> dict:
+        """The authoring/review listing: every section, its descriptor
+        state, and whether a live approval currently backs it."""
+        try:
+            sections = await service.list_sections(knowledge_id, version_label)
+        except KnowledgeGovernanceError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return {
+            "knowledge_id": knowledge_id,
+            "version_label": version_label,
+            "may_approve": _may_approve(user),
+            "sections": sections,
+        }
+
+    @app.post("/api/knowledge/{knowledge_id}/versions/{version_label}/operations/{section_id}/draft")
+    async def draft_governed_operation(
+        knowledge_id: str,
+        version_label: str,
+        section_id: str,
+        body: DraftOperationRequest,
+        user: UserContext = Depends(resolve_user_context),
+        service: KnowledgeGovernanceService = Depends(get_knowledge_governance_service),
+    ) -> dict:
+        """Draft or replace a section's descriptor as CANDIDATE.
+
+        Replacing an APPROVED descriptor is allowed and is the edit case:
+        the new content has a different fingerprint, so the stored
+        approval stops matching and the section is CANDIDATE again until
+        re-reviewed.
+        """
+        try:
+            descriptor = (
+                body.descriptor
+                if body.descriptor is not None
+                else draft_descriptor_from_section(
+                    await service._require_object(knowledge_id, version_label), section_id
+                )
+            )
+            authored = await service.author_operation(
+                knowledge_id,
+                version_label,
+                section_id,
+                descriptor,
+                actor_user_id=user.user_id,
+                verified=user.verified,
+                roles=user.roles,
+            )
+        except GovernanceUnavailableError as exc:
+            # 503, not 403: the deployment cannot verify identity, so this
+            # is a configuration state rather than a permission decision.
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except GovernancePermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except KnowledgeGovernanceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "section_id": section_id,
+            "authority": authored.authority.value,
+            "operation_id": authored.operation_id,
+            "descriptor_fingerprint": descriptor_fingerprint(authored),
+        }
+
+    @app.post("/api/knowledge/{knowledge_id}/versions/{version_label}/operations/{section_id}/approve")
+    async def approve_governed_operation(
+        knowledge_id: str,
+        version_label: str,
+        section_id: str,
+        body: ApproveOperationRequest,
+        user: UserContext = Depends(resolve_user_context),
+        service: KnowledgeGovernanceService = Depends(get_knowledge_governance_service),
+    ) -> dict:
+        """Approve a section's descriptor. The approval record is built
+        SERVER-SIDE from the descriptor actually on the section -- the
+        request body carries only an optional reviewer note, never a
+        fingerprint, an identity, or any other field of the record."""
+        try:
+            record = await service.approve_operation(
+                knowledge_id,
+                version_label,
+                section_id,
+                actor_user_id=user.user_id,
+                verified=user.verified,
+                roles=user.roles,
+                note=body.note,
+            )
+        except GovernanceUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except GovernancePermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except KnowledgeGovernanceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "section_id": record.section_id,
+            "approved_by": record.approved_by,
+            "approved_at": record.approved_at.isoformat() if record.approved_at else None,
+            "descriptor_fingerprint": record.descriptor_fingerprint,
+        }
+
+    @app.post("/api/knowledge/{knowledge_id}/versions/{version_label}/operations/{section_id}/revoke")
+    async def revoke_governed_operation(
+        knowledge_id: str,
+        version_label: str,
+        section_id: str,
+        user: UserContext = Depends(resolve_user_context),
+        service: KnowledgeGovernanceService = Depends(get_knowledge_governance_service),
+    ) -> dict:
+        """Withdraw an approval and demote the descriptor to CANDIDATE in
+        the same operation."""
+        try:
+            revoked = await service.revoke_operation(
+                knowledge_id,
+                version_label,
+                section_id,
+                actor_user_id=user.user_id,
+                verified=user.verified,
+                roles=user.roles,
+            )
+        except GovernanceUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except GovernancePermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except KnowledgeGovernanceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"section_id": section_id, "revoked": revoked}
 
     @app.post("/api/cases", response_model=CaseResponse, status_code=201)
     async def create_case(

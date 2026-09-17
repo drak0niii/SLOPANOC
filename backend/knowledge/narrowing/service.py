@@ -90,6 +90,11 @@ def narrow_corpus(
 
     items: list[KnowledgeNarrowingItem] = []
     permitted: list[str] = []
+    # POST-6A: the per-VERSION permitted set, kept alongside the (lossy)
+    # id-only projection so downstream retrieval can constrain on real
+    # version identity rather than on a bare knowledge_id.
+    permitted_version_keys: list[tuple[str, str]] = []
+    indeterminate_version_keys: list[tuple[str, str]] = []
     excluded: list[str] = []
     indeterminate: list[str] = []
     exclusion_reason_counts: dict[str, int] = {}
@@ -122,9 +127,11 @@ def narrow_corpus(
         elif applicability.outcome == "indeterminate":
             bucket = "indeterminate"
             indeterminate.append(knowledge_object.knowledge_id)
+            indeterminate_version_keys.append((knowledge_object.knowledge_id, knowledge_object.version.label))
         else:
             bucket = "permitted"
             permitted.append(knowledge_object.knowledge_id)
+            permitted_version_keys.append((knowledge_object.knowledge_id, knowledge_object.version.label))
 
         items.append(
             KnowledgeNarrowingItem(
@@ -139,6 +146,8 @@ def narrow_corpus(
     return KnowledgeNarrowingResult(
         input_count=len(corpus),
         permitted_knowledge_ids=permitted,
+        permitted_version_keys=permitted_version_keys,
+        indeterminate_version_keys=indeterminate_version_keys,
         excluded_knowledge_ids=excluded,
         indeterminate_knowledge_ids=indeterminate,
         items=items,

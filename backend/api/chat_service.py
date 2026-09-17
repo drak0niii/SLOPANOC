@@ -133,7 +133,50 @@ from backend.agents.team_manager.authorized_response import (
     build_authorized_response_context,
     extract_known_commands_from_guidance,
 )
+from backend.agents.team_manager.command_construction import (
+    AuthorizedCommand,
+    canonical_identifier,
+    binding_for_verbatim_command,
+    construct_command_from_template,
+    enforce_verified_command_targets,
+    invalidation_reasons,
+    target_correction_invalidates,
+)
+from backend.agents.team_manager.command_candidate_state import (
+    COMMAND_CANDIDATE_BINDING_STATE_KEY,
+    parse_command_candidate_binding,
+)
 from backend.agents.team_manager.final_output_validator import validate_final_output
+from backend.knowledge.shared_evidence import (
+    discard_turn_evidence,
+    get_run_availability,
+    is_version_authorized,
+)
+from backend.agents.team_manager.governed_operation_resolution import (
+    resolve_governed_operation_descriptor,
+)
+from backend.agents.team_manager.target_confirmation import (
+    TARGET_CONFIRMATION_STATE_KEY,
+    apply_confirmations,
+    build_confirmation,
+    build_target_confirmation_state_update,
+    parse_target_confirmations,
+)
+from backend.agents.team_manager.investigation_state import (
+    INVESTIGATION_STATE_KEY,
+    InvestigationState,
+    PrerequisiteStatus,
+    StepLifecycle,
+    advance_after_observation,
+    build_investigation_state_update,
+    may_advance_to_next_step,
+    parse_investigation_state,
+    record_requested_evidence,
+    record_candidate_observation,
+    record_validated_interpretation,
+    render_investigation_context,
+)
+from backend.agents.team_manager.response_plan import build_response_plan, render_response_plan
 from backend.agents.team_manager.request_contract import (
     PENDING_GOVERNED_REQUEST_STATE_KEY,
     VALIDATED_REQUEST_CONTRACT_STATE_KEY,
@@ -143,9 +186,14 @@ from backend.agents.team_manager.request_contract import (
     safe_request_contract_observability_fields,
 )
 from backend.agents.team_manager.request_contract_completion import request_current_turn_contract
+from backend.agents.team_manager.request_extraction_context import (
+    RequestExtractionContext,
+    build_request_extraction_context,
+)
 from backend.agents.team_manager.request_execution_policy import (
     FULL_PROCEDURE_NOT_PERMITTED_FALLBACK_TEXT,
     KNOWLEDGE_INVENTORY_UNSUPPORTED_TEXT,
+    PendingContinuationRelation,
     RequestExecutionDecision,
     RequestExecutionStatus,
     WorkAuthority,
@@ -158,14 +206,17 @@ from backend.agents.team_manager.request_execution_policy import (
     expire_completed_pending_on_invalid_contract,
     is_governed_evidence_continuity_permitted,
     load_current_turn_contract,
+    EVIDENCE_RETRIEVAL_UNAVAILABLE_TEXT,
+    command_suppression_fallback_text,
     requires_unstructured_response_backstop,
-    resolve_effective_governed_contract,
+    resolve_pending_continuation,
 )
 from backend.agents.team_manager.source_requirements_completion import (
     SAFE_DECLARATION_FAILURE_TEXT,
     request_source_requirements_declaration,
 )
 from backend.agents.team_manager.state_sync import compute_state_updates
+from backend.approval.service import PENDING_ACTION_PROPOSAL_STATE_KEY
 from backend.api.activity_translator import (
     RunTraceTranslator,
     StatusTranslator,
@@ -224,9 +275,23 @@ from backend.api.streaming_events import EventSequencer, Stage, StreamEvent, Str
 from backend.api.troubleshooting_guidance_context import (
     discard_troubleshooting_guidance,
     pop_troubleshooting_guidance,
-    render_troubleshooting_guidance,
 )
-from backend.api.turn_context import bind_run_id, pop_message_texts, reset_run_id
+from backend.api.turn_lifecycle import (
+    TURN_LIFECYCLE_STATE_KEY,
+    WORKER_ID,
+    TurnStatus,
+    build_turn_lifecycle_delta,
+    parse_turn_lifecycle,
+    reconcile_interrupted_turns,
+    turn_ownership_identity,
+)
+from backend.api.turn_context import (
+    bind_run_id,
+    bind_user_id,
+    pop_message_texts,
+    reset_run_id,
+    reset_user_id,
+)
 from backend.api.turn_source_references import (
     CANONICAL_RESULT_ENFORCEMENT_STATE_KEY,
     TURN_SOURCE_REFERENCES_STATE_KEY,
@@ -252,6 +317,15 @@ from backend.tools.teams.state_keys import (
 )
 
 _logger = logging.getLogger(__name__)
+
+_TERMINAL_TRANSITION_ATTEMPTS = 3
+"""POST-6A -- bounded compare-and-set attempts for a turn's terminal
+status write.
+
+Bounded, not unbounded: a write that keeps conflicting is contention we
+cannot resolve by trying harder, and a turn must never hang on its own
+bookkeeping. Three is enough to absorb a genuine concurrent write while
+still failing promptly and reporting it honestly to the caller."""
 
 # Sentinel put on a turn's relay queue to mark "no more events, the
 # logical turn -- and its hold on the session lock -- is over" (see
@@ -320,7 +394,18 @@ class _EventStream(Protocol):
 
 class _Runner(Protocol):
     def run_async(
-        self, *, user_id: str, session_id: str, new_message: types.Content, run_config: Optional[RunConfig] = None
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        new_message: types.Content,
+        # POST-6A REPAIR 1: ADK's own documented `Runner.run_async`
+        # parameter (installed 1.33.0) -- the ONE supported way to make
+        # per-invocation state visible to the agent that is about to run,
+        # applied by ADK to the SAME session object it builds the
+        # invocation context from.
+        state_delta: Optional[dict[str, Any]] = None,
+        run_config: Optional[RunConfig] = None,
     ): ...
 
     async def rewind_async(
@@ -1078,6 +1163,28 @@ class ChatService:
         queue: "asyncio.Queue[Any]" = asyncio.Queue()
 
         async def _drive() -> None:
+            # POST-6A -- TURN OWNERSHIP, HELD FOR THE WHOLE TURN.
+            #
+            # This is what makes another worker's reconciliation
+            # ownership-based instead of age-based. While this turn runs,
+            # its ownership lock is held on a dedicated connection; a
+            # worker elsewhere probing that key cannot take it and
+            # therefore leaves the turn ACCEPTED, however long it runs.
+            # If this process dies, PostgreSQL releases the lock the
+            # moment the connection goes -- no lease, no timer, no
+            # threshold -- and the next probe finds it free and correctly
+            # reconciles the turn to INTERRUPTED.
+            #
+            # `wait=False`: ownership of a turn is never queued for. A
+            # `None` here means either no cross-process locking is
+            # available (single-process development, which is exactly the
+            # `single_worker` case reconciliation already handles) or the
+            # key is somehow already held; neither is a reason to block
+            # the turn, so the turn proceeds without a durable ownership
+            # claim rather than hanging.
+            ownership = await self._session_service.coordinator.distributed_lock_for(
+                "turn", turn_ownership_identity(session_id, sequencer.run_id), wait=False
+            )
             try:
                 async with self._session_service.lock_for(session_id, user_id):
                     async with Aclosing(
@@ -1086,6 +1193,12 @@ class ChatService:
                         async for event in events:
                             await queue.put(event)
             finally:
+                if ownership is not None:
+                    # Released on EVERY exit including cancellation
+                    # (`release` shields its own cleanup), so a dedicated
+                    # connection holding an advisory lock is never
+                    # abandoned or returned to the pool still held.
+                    await ownership.release()
                 # Always signals completion, even on an unexpected
                 # exception OR a cancellation (see `cancel_run` below) --
                 # so a caller still draining this generator (e.g.
@@ -1177,6 +1290,79 @@ class ChatService:
         # final-response event can ever be appended for this attempt,
         # closing the fail-open history gap structurally rather than
         # relying on a second best-effort write after the fact.
+        # ============================================================
+        # POST-6A -- ONE FAILURE BOUNDARY FOR THE WHOLE TURN
+        # ============================================================
+        #
+        # Recorded ACCEPTED here, before any generation, finalization or
+        # persistence can fail. A turn that dies between "text produced"
+        # and "canonical result stored" previously left NOTHING behind --
+        # indistinguishable from a turn that never happened. Now it leaves
+        # an ACCEPTED record, which the NEXT turn reconciles to
+        # INTERRUPTED: accepted, never completed, outcome unknown.
+        #
+        # INTERRUPTED rather than FAILED is deliberate. Claiming failure
+        # asserts the turn's work did not take effect; after a storage
+        # outage mid-finalization we cannot assert that.
+        #
+        # Keyed by `run_id`, which exists at acceptance -- the ADK
+        # `invocation_id` does not exist until the Runner's first event,
+        # far too late to be the acceptance marker.
+        try:
+            coordinator = self._session_service.coordinator
+            distributed = coordinator.distributed_available
+
+            async def _turn_ownership_is_valid(turn_key: str) -> bool:
+                """`True` while some worker still owns that turn.
+
+                Implemented by TRYING TO TAKE the turn's ownership lock.
+                Taking it means the previous holder's connection is gone
+                and the database already released it -- the only evidence
+                that actually establishes "no longer owned". Failing to
+                take it means the owner is alive and the turn is running,
+                regardless of how long it has been.
+
+                The probe releases immediately: it is asking a question,
+                not claiming the turn.
+                """
+                probe = await coordinator.distributed_lock_for(
+                    "turn", turn_ownership_identity(session_id, turn_key), wait=False
+                )
+                if probe is None:
+                    return True
+                await probe.release()
+                return False
+
+            lifecycle_delta = await reconcile_interrupted_turns(
+                session.state.get(TURN_LIFECYCLE_STATE_KEY),
+                current_turn_key=sequencer.run_id,
+                # Only THIS worker's own abandoned turns, plus turns whose
+                # ownership has been SHOWN to be gone -- never another
+                # worker's turn merely because it has been running a
+                # while.
+                worker_id=WORKER_ID,
+                ownership_probe=_turn_ownership_is_valid if distributed else None,
+                # No cross-process locking means no other process: a
+                # record naming a different worker id is from an earlier,
+                # now-dead process on this host.
+                single_worker=not distributed,
+            )
+            lifecycle_delta.update(
+                build_turn_lifecycle_delta(
+                    lifecycle_delta.get(TURN_LIFECYCLE_STATE_KEY, session.state.get(TURN_LIFECYCLE_STATE_KEY)),
+                    sequencer.run_id,
+                    TurnStatus.ACCEPTED,
+                    worker_id=WORKER_ID,
+                )
+            )
+            await self._session_service.persist_state_delta(session, lifecycle_delta)
+        except Exception:
+            # Bookkeeping must never block a turn; the canonical-result
+            # enforcement marker below is the hard gate, not this.
+            _logger.warning(
+                "chat_service: could not record turn acceptance run_id=%s", sequencer.run_id, exc_info=True
+            )
+
         if session.state.get(CANONICAL_RESULT_ENFORCEMENT_STATE_KEY) is not True:
             try:
                 await self._session_service.persist_state_delta(
@@ -1189,6 +1375,9 @@ class ChatService:
                     sequencer.run_id,
                 )
                 yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
+                await self._record_turn_status(
+                    session_id, user_id, sequencer.run_id, TurnStatus.FAILED, "enforcement_marker_unavailable"
+                )
                 yield sequencer.build(
                     StreamEventType.ERROR,
                     {
@@ -1498,6 +1687,11 @@ class ChatService:
         # side-channel, never a new grounding judgment" design.
         known_rejected_commands_this_turn: set[str] = set()
         run_id_token = bind_run_id(sequencer.run_id)
+        # POST-6A -- the trusted request identity for this turn, bound in
+        # the SAME place and reset in the SAME `finally` as `run_id`. The
+        # shared evidence cache keys on it, so one user's authorized
+        # evidence can never be served to another from a warm cache.
+        user_id_token = bind_user_id(user_id)
         # Phase 2 (Runtime Activity Truthfulness): registered in the SAME
         # place, for the SAME reason, as `bind_run_id` above -- this
         # turn's own bounded activity channel must exist before the
@@ -1721,14 +1915,101 @@ class ChatService:
             # for a NEXT turn's own continuity even though THIS turn's own
             # operational orchestration is correctly skipped.
             work_envelope = WorkEnvelope()
+            # POST-6A REPAIR 1 -- AUTHORITATIVE TEMPORARY CONTEXT IS
+            # INVOCATION STATE, NEVER A PRE-RUNNER PERSISTED WRITE.
+            #
+            # THE GAP THIS CLOSES: the CONTROL-PLANE-SEQ-04 §17
+            # authoritative current-turn request context was written via
+            # `persist_state_delta(session, {AUTHORITATIVE_REQUEST_
+            # CONTEXT_STATE_KEY: ...})` BEFORE `turn_runner.run_async`.
+            # That key is `temp:`-prefixed, so ADK's own `append_event`
+            # applies it to THIS method's in-memory `session` object and
+            # then trims it from everything durable -- but `Runner.run_
+            # async` immediately RELOADS its own, separate `Session` from
+            # the session service (`_get_or_create_session`, verified
+            # against the installed ADK 1.33.0 source), so the running
+            # agent's `ctx.state` never contained the block at all:
+            # `team_manager_instruction_provider` (case_context.py) read
+            # back nothing, every turn.
+            #
+            # THE FIX: accumulate the turn's own authoritative temporary
+            # context here and hand it to the Runner through its OWN
+            # documented `run_async(state_delta=...)` parameter. ADK
+            # applies that delta, via `_append_new_message_to_session`,
+            # to the SAME session object the invocation context is built
+            # from -- so the value is live for the whole invocation, and
+            # `temp:`-prefixed keys are still stripped by `append_event`'s
+            # own "apply, then trim" path before anything is persisted.
+            # Other invocation state is untouched: a state delta is a
+            # merge on top of the loaded session, never a replacement.
+            turn_invocation_state_delta: dict[str, Any] = {}
+            # POST-6A: this turn's own investigation state (see the load
+            # below). `None` for a turn that is not part of an
+            # investigation, which is the overwhelmingly common case.
+            active_investigation: Optional[InvestigationState] = None
+            # POST-6A REPAIR 2: built once (below) and reused by BOTH of
+            # this turn's contract-extraction calls -- the preflight one
+            # and the post-run remediation fallback. `None` for a resumed
+            # read-continuation turn, which synthesizes its own fully
+            # deterministic contract and never extracts one.
+            extraction_context: Optional[RequestExtractionContext] = None
             if error is None and not specialist_result_state_written:
                 preflight_question = _remediation_question(message_text)
+                # POST-6A REPAIR 2 -- BOUNDED CANONICAL CONTEXT FOR
+                # EXTRACTION: built ONCE here, from this session's own
+                # already-trusted state plus its ALREADY rewind-filtered
+                # active event list (`_active_events`, this module's own
+                # existing, tested helper -- never a second rewind
+                # implementation), and reused for both of this turn's own
+                # contract-extraction calls. Bounded and closed by
+                # construction; see request_extraction_context.py for
+                # exactly what it may contain, and why prior model prose
+                # can never become a verified fact through it.
+                extraction_context = build_request_extraction_context(
+                    dict(session.state), _active_events(list(getattr(session, "events", None) or []))
+                )
+                # POST-6A -- ITERATIVE TROUBLESHOOTING CONTINUITY. Loaded
+                # once, before any reasoning, so a topic-free follow-up
+                # ("what next?") keeps the objective, the active
+                # procedure/version/step and -- critically -- whether the
+                # runtime is still WAITING for evidence it asked for.
+                # Read-only here; the end-of-turn write below is the only
+                # place it changes.
+                active_investigation = parse_investigation_state(session.state.get(INVESTIGATION_STATE_KEY))
+                # POST-6A -- HOLD THIS MESSAGE AS A *CANDIDATE* RESULT.
+                #
+                # An outstanding check does NOT make every subsequent
+                # message a result for that check. The message may be a
+                # question, a correction, a topic change, a cancellation,
+                # or an ambiguous "yes". So it is held as a candidate,
+                # with provenance, and the step lifecycle deliberately
+                # does not move.
+                #
+                # Association is EARNED later, in `record_validated_
+                # interpretation`, which requires the specialist to quote
+                # real content out of this text. Only then is the
+                # candidate promoted to `received_observation`. There is
+                # nothing in "yes" to quote, so "yes" never associates and
+                # never advances anything.
+                if active_investigation is not None and active_investigation.is_awaiting_evidence and message_text.strip():
+                    active_investigation = record_candidate_observation(
+                        active_investigation,
+                        message_text.strip(),
+                        source_turn_id=None,
+                        attachment_ids=[a.attachment_id for a in prepared_attachments],
+                    )
+                    _logger.info(
+                        "chat_service: holding this message as a candidate observation for the outstanding "
+                        "check run_id=%s",
+                        sequencer.run_id,
+                    )
                 try:
                     preflight_contract = await request_current_turn_contract(
                         question=preflight_question,
                         user_content=content,
                         run_id=f"{sequencer.run_id}::preflight-contract",
                         current_run_id=sequencer.run_id,
+                        extraction_context=extraction_context,
                     )
                 except Exception:
                     _logger.warning(
@@ -1741,21 +2022,60 @@ class ChatService:
                         session, {VALIDATED_REQUEST_CONTRACT_STATE_KEY: preflight_contract.model_dump(mode="json")}
                     )
 
-                try:
-                    preflight_declaration = await request_source_requirements_declaration(
-                        question=preflight_question, run_id=f"{sequencer.run_id}::preflight-declaration"
+                # POST-6A -- THE SECOND MODEL CALL IS GONE WHEN THE
+                # CONTRACT ALREADY ANSWERS IT.
+                #
+                # `RequestContract` carries `requires_governed_knowledge`
+                # and `requires_operational_context` as validated typed
+                # fields. Asking a second, separate model turn the same
+                # question about the same message added a full round trip
+                # to every substantive turn and could only agree or
+                # disagree -- and disagreement would be worse, because
+                # then two authorities describe one turn's source
+                # requirements and nothing says which wins.
+                #
+                # An earlier pass kept them separate on the stated
+                # grounds that "correct sequencing, not call-count
+                # reduction" was that milestone's priority. Sequencing is
+                # unaffected here: the declaration is consumed at exactly
+                # the same point, by exactly the same
+                # `SourceRequirementsCapture`, before `derive_work_
+                # envelope` reads it. Only the redundant round trip is
+                # removed.
+                #
+                # THE FALLBACK REMAINS. When contract extraction itself
+                # failed there is no typed answer, so the separate
+                # declaration call still runs -- that is the case it was
+                # actually needed for.
+                preflight_declaration = None
+                if preflight_contract is not None:
+                    source_requirements_capture.record_external_declaration(
+                        bool(preflight_contract.requires_operational_context),
+                        bool(preflight_contract.requires_governed_knowledge),
                     )
-                except Exception:
-                    _logger.warning(
-                        "chat_service: source-requirements preflight raised -- failing closed run_id=%s",
+                    _logger.info(
+                        "chat_service: source requirements taken from the validated contract "
+                        "(no separate declaration call) requires_teams=%s requires_governed_knowledge=%s run_id=%s",
+                        preflight_contract.requires_operational_context,
+                        preflight_contract.requires_governed_knowledge,
                         sequencer.run_id,
                     )
-                    preflight_declaration = None
-                if preflight_declaration is not None:
-                    requires_teams_declared, requires_governed_knowledge_declared = preflight_declaration
-                    source_requirements_capture.record_external_declaration(
-                        requires_teams_declared, requires_governed_knowledge_declared
-                    )
+                else:
+                    try:
+                        preflight_declaration = await request_source_requirements_declaration(
+                            question=preflight_question, run_id=f"{sequencer.run_id}::preflight-declaration"
+                        )
+                    except Exception:
+                        _logger.warning(
+                            "chat_service: source-requirements preflight raised -- failing closed run_id=%s",
+                            sequencer.run_id,
+                        )
+                        preflight_declaration = None
+                    if preflight_declaration is not None:
+                        requires_teams_declared, requires_governed_knowledge_declared = preflight_declaration
+                        source_requirements_capture.record_external_declaration(
+                            requires_teams_declared, requires_governed_knowledge_declared
+                        )
                 # `declared=False` here (preflight declaration failed) is
                 # NOT itself a hard gate -- the EXISTING, unmodified post-
                 # run source-requirements remediation (below, later in this
@@ -1766,13 +2086,38 @@ class ChatService:
                 preflight_pending_governed_request = parse_pending_governed_request(
                     session.state.get(PENDING_GOVERNED_REQUEST_STATE_KEY)
                 )
+                # POST-6A REPAIR 3 -- ONE EFFECTIVE CURRENT REQUEST.
+                # `preflight_contract` stays the RAW extraction proposal
+                # (it, and only it, is what was persisted under
+                # `VALIDATED_REQUEST_CONTRACT_STATE_KEY` above -- never
+                # the resolved value; see `resolve_pending_continuation`'s
+                # own "in-memory only" contract). `preflight_effective_
+                # request` is the EFFECTIVE authority this turn actually
+                # operates under, and is what every consumer below uses:
+                # the governed-retrieval subject and the authoritative
+                # prompt block here, and -- via the SAME pure function,
+                # called again internally with the SAME inputs --
+                # `derive_work_envelope`'s own work permissions plus the
+                # final policy decision further down this method. Raw
+                # proposal and effective authority are deliberately kept
+                # as two separate values, never conflated.
+                preflight_effective_request = (
+                    resolve_pending_continuation(preflight_contract, preflight_pending_governed_request)
+                    if preflight_contract is not None
+                    else None
+                )
+                preflight_effective_contract = (
+                    preflight_effective_request.contract if preflight_effective_request is not None else None
+                )
                 preflight_governed_evidence_continuity_permitted = is_governed_evidence_continuity_permitted(
                     preflight_contract, sequencer.run_id, preflight_pending_governed_request
                 )
                 _logger.info(
-                    "chat_service: preflight contract_run_id=%s fresh=%s governed_evidence_continuity=%s run_id=%s",
+                    "chat_service: preflight contract_run_id=%s fresh=%s pending_relationship=%s "
+                    "governed_evidence_continuity=%s run_id=%s",
                     preflight_contract.run_id if preflight_contract is not None else None,
                     preflight_contract is not None and preflight_contract.run_id == sequencer.run_id,
+                    preflight_effective_request.relation if preflight_effective_request is not None else None,
                     "reused_same_request" if preflight_governed_evidence_continuity_permitted else "superseded_new_request",
                     sequencer.run_id,
                 )
@@ -1882,9 +2227,17 @@ class ChatService:
                             if preflight_governed_evidence_continuity_permitted
                             else None
                         )
+                        # POST-6A REPAIR 3: the EFFECTIVE request's own
+                        # subject, never the raw extraction's -- a
+                        # value-only clarification answer has no subject
+                        # of its own (or only a throwaway placeholder like
+                        # "RRU ID"), while the effective request carries
+                        # the real operation the user is still completing,
+                        # which is what governed narrowing must retrieve
+                        # against.
                         preflight_request_contract_subject = (
-                            preflight_contract.subject
-                            if preflight_contract is not None and not preflight_contract.ambiguity
+                            preflight_effective_contract.subject
+                            if preflight_effective_contract is not None and not preflight_effective_contract.ambiguity
                             else None
                         )
                         (
@@ -1951,16 +2304,37 @@ class ChatService:
                 # re-requesting the same retrieval it can no longer even
                 # reach (§6, below).
                 authoritative_context_block = render_authoritative_current_turn_request_context(
-                    preflight_contract,
+                    # POST-6A REPAIR 3: the operational turn is told what
+                    # it is ACTUALLY working on -- the effective request,
+                    # the same one `work_envelope` was derived from --
+                    # never the raw extraction proposal, which for a
+                    # clarification-answer turn describes only the bare
+                    # value the user just typed.
+                    preflight_effective_contract,
                     work_envelope,
                     governed_specialist_result=(
                         preflight_governed_final_text if preflight_governed_read_performed else None
                     ),
                 )
-                if authoritative_context_block:
-                    await self._session_service.persist_state_delta(
-                        session, {AUTHORITATIVE_REQUEST_CONTEXT_STATE_KEY: authoritative_context_block}
+                # POST-6A: the investigation block rides the SAME
+                # already-established authoritative-context channel --
+                # deterministic, `temp:`-scoped, never persisted, and never
+                # model-writable. It is what stops a follow-up turn
+                # describing an outstanding request as a completed step.
+                investigation_block = render_investigation_context(active_investigation)
+                if investigation_block:
+                    authoritative_context_block = (
+                        f"{authoritative_context_block}\n\n{investigation_block}"
+                        if authoritative_context_block
+                        else investigation_block
                     )
+                if authoritative_context_block:
+                    # POST-6A REPAIR 1: carried into the turn through
+                    # `run_async(state_delta=...)` below -- never a
+                    # separate `persist_state_delta` call whose `temp:`
+                    # value the Runner's own session reload would discard
+                    # before the agent ever saw it.
+                    turn_invocation_state_delta[AUTHORITATIVE_REQUEST_CONTEXT_STATE_KEY] = authoritative_context_block
 
             if error is None:
                 # R1 FIX (correctness-regression pass): `specialist_result_
@@ -2048,7 +2422,17 @@ class ChatService:
                 response_generation_started = True
                 async with Aclosing(
                     turn_runner.run_async(
-                        user_id=user_id, session_id=session_id, new_message=content, run_config=run_config
+                        user_id=user_id,
+                        session_id=session_id,
+                        new_message=content,
+                        # POST-6A REPAIR 1 -- see `turn_invocation_state_
+                        # delta`'s own comment above. `None` (never an
+                        # empty dict) when this turn has nothing to
+                        # supply, so ADK builds exactly the same
+                        # action-free user event it always did for every
+                        # turn that carries no authoritative context.
+                        state_delta=turn_invocation_state_delta or None,
+                        run_config=run_config,
                     )
                 ) as agen:
                     async for _merged in _merge_adk_and_activity_events(
@@ -2360,6 +2744,7 @@ class ChatService:
             # test_chat_service_turn_context_lifecycle.py.
             message_texts_by_id = pop_message_texts(sequencer.run_id)
             reset_run_id(run_id_token)
+            reset_user_id(user_id_token)
             # POST-5.1 B6 -- same unconditional, every-exit-path cleanup
             # discipline as the mailbox above (success, a caught
             # exception, or asyncio.CancelledError -- a `finally` runs on
@@ -2453,6 +2838,12 @@ class ChatService:
             # exit path, exactly like every other piece of this turn's
             # own per-run bookkeeping cleaned up in this same block.
             discard_knowledge_run_evidence_state(sequencer.run_id)
+            # POST-6A -- the shared evidence per-turn cache AND this
+            # run's recorded availability, discarded on EVERY exit path:
+            # normal completion, an exception, and `asyncio.CancelledError`
+            # all reach this same `finally`. A cached evidence result must
+            # never outlive the turn that was authorized to retrieve it.
+            discard_turn_evidence(sequencer.run_id)
             # Phase 2 (Runtime Activity Truthfulness): same unconditional
             # discard discipline as every other run-scoped store cleaned
             # up in this block -- success, exception, and
@@ -2607,11 +2998,62 @@ class ChatService:
         pending_governed_request = parse_pending_governed_request(
             refreshed_session.state.get(PENDING_GOVERNED_REQUEST_STATE_KEY)
         )
-        request_contract_subject = (
-            current_turn_request_contract.subject
+        # POST-6A REPAIR 3 -- the SAME single resolution the preflight
+        # already performed, recomputed here from the SAME inputs (the
+        # persisted RAW contract plus the persisted pending record) now
+        # that this turn's own state has been refreshed. `current_turn_
+        # request_contract` remains the RAW extraction; `effective_
+        # request`/`effective_request_contract` are the effective
+        # authority every consumer below uses.
+        effective_request = (
+            resolve_pending_continuation(current_turn_request_contract, pending_governed_request)
             if current_turn_request_contract is not None
+            else None
+        )
+        effective_request_contract = effective_request.contract if effective_request is not None else None
+
+        # ============================================================
+        # POST-6A -- STRUCTURED TARGET CONFIRMATION, RE-VERIFIED
+        # ============================================================
+        #
+        # Parameters arrive MENTIONED. They become CONFIRMED only where a
+        # stored `TargetConfirmationRecord` still matches the pending
+        # request, the governed operation, the candidate revision and the
+        # value itself. A confirmation taken against a different
+        # operation, an edited descriptor, or a value the user has since
+        # corrected is REJECTED here -- never reinterpreted as still
+        # applying.
+        #
+        # This deliberately runs BEFORE `derive_execution_decision`, so
+        # the STATE_CHANGE target gate (`required_target_parameter_gaps`)
+        # sees real confirmation state rather than an assumption.
+        stored_confirmations = parse_target_confirmations(
+            refreshed_session.state.get(TARGET_CONFIRMATION_STATE_KEY)
+        )
+        confirmation_rejections: dict[str, str] = {}
+        if effective_request_contract is not None:
+            confirmed_context, confirmation_rejections = apply_confirmations(
+                effective_request_contract.provided_context,
+                stored_confirmations,
+                pending_governed_request,
+                operation_id=None,
+                candidate_revision=None,
+            )
+            effective_request_contract = effective_request_contract.model_copy(
+                update={"provided_context": confirmed_context}
+            )
+            if confirmation_rejections:
+                _logger.info(
+                    "chat_service: rejected stale target confirmation(s) %s run_id=%s",
+                    sorted(confirmation_rejections.items()),
+                    sequencer.run_id,
+                )
+        request_contract_subject = (
+            effective_request_contract.subject
+            if effective_request_contract is not None
+            and current_turn_request_contract is not None
             and current_turn_request_contract.run_id == sequencer.run_id
-            and not current_turn_request_contract.ambiguity
+            and not effective_request_contract.ambiguity
             else None
         )
         # LIVE-CORR-12D -- Request-Scoped Governed Evidence Continuity:
@@ -2673,6 +3115,10 @@ class ChatService:
                     user_content=content,
                     run_id=f"{sequencer.run_id}::contract-remediation",
                     current_run_id=sequencer.run_id,
+                    # POST-6A REPAIR 2: the SAME bounded context the
+                    # preflight call used -- never a second, differently
+                    # assembled view of the conversation.
+                    extraction_context=extraction_context,
                 )
             except Exception:
                 _logger.warning(
@@ -2690,8 +3136,12 @@ class ChatService:
                 # original computations above did -- never a duplicate,
                 # independently-drifting derivation.
                 current_turn_request_contract = remediated_contract
+                effective_request = resolve_pending_continuation(
+                    current_turn_request_contract, pending_governed_request
+                )
+                effective_request_contract = effective_request.contract
                 request_contract_subject = (
-                    current_turn_request_contract.subject if not current_turn_request_contract.ambiguity else None
+                    effective_request_contract.subject if not effective_request_contract.ambiguity else None
                 )
                 governed_evidence_continuity_permitted = is_governed_evidence_continuity_permitted(
                     current_turn_request_contract, sequencer.run_id, pending_governed_request
@@ -3138,20 +3588,78 @@ class ChatService:
                     ):
                         grounded_command_candidate = item.section.content
                         break
+        # POST-6A REPAIR 2/3 -- POSITIVE GOVERNED OPERATION METADATA.
+        # Resolved from the ALREADY-revalidated active procedure anchor
+        # and this run's own trusted selected evidence -- never from model
+        # output, never from scanning command text. `None` whenever the
+        # section carries no descriptor, the descriptor is CANDIDATE, or
+        # the owning knowledge is not APPROVED: every consumer treats that
+        # as "nothing established", never as "no target needed".
+        active_governed_section_key = compute_fresh_active_procedure_anchor(
+            selected_knowledge_evidence, _remediation_question(message_text)
+        ) or parse_active_governed_procedure(refreshed_session.state.get(ACTIVE_GOVERNED_PROCEDURE_STATE_KEY))
+        governed_operation_descriptor = resolve_governed_operation_descriptor(
+            selected_knowledge_evidence,
+            knowledge_id=active_governed_section_key.knowledge_id if active_governed_section_key else None,
+            version_label=active_governed_section_key.version_label if active_governed_section_key else None,
+            section_id=active_governed_section_key.section_id if active_governed_section_key else None,
+        )
+        # POST-6A -- IS THE EVIDENCE WE ARE STANDING ON ACTUALLY
+        # AUTHORIZED? Narrowing keeps PERMITTED and INDETERMINATE apart;
+        # `is_version_authorized` answers only for the POSITIVELY
+        # permitted set. A turn whose active governed section could not be
+        # proven applicable may still explain and clarify, but it may not
+        # direct: `evidence_authorized=False` withdraws command,
+        # operational-step and action permission at the final policy
+        # boundary.
+        #
+        # `True` when there is no active governed section at all -- an
+        # ordinary non-governed turn is not "unauthorized evidence", it is
+        # no evidence, and every existing non-governed path is unaffected.
+        evidence_authorized = True
+        if active_governed_section_key is not None:
+            evidence_authorized = is_version_authorized(
+                sequencer.run_id,
+                active_governed_section_key.knowledge_id,
+                active_governed_section_key.version_label,
+            )
+            if not evidence_authorized:
+                _logger.warning(
+                    "chat_service: active governed section is of UNPROVEN applicability -- withdrawing "
+                    "operational authority for this turn run_id=%s",
+                    sequencer.run_id,
+                )
+                # A descriptor on unproven-applicability knowledge confers
+                # nothing either; dropped so no later layer can read it as
+                # authorization.
+                governed_operation_descriptor = None
         execution_decision = derive_execution_decision(
             current_turn_request_contract,
             sequencer.run_id,
             grounded_command_candidate=grounded_command_candidate,
             pending_governed_request=pending_governed_request,
+            operation_descriptor=governed_operation_descriptor,
+            evidence_authorized=evidence_authorized,
         )
         _logger.info(
-            "request_execution_decision status=%s request_class=%s may_emit_command=%s may_execute_action=%s run_id=%s",
+            "request_execution_decision status=%s request_class=%s may_emit_command=%s may_execute_action=%s "
+            "pending_relationship=%s run_id=%s",
             execution_decision.status,
             execution_decision.request_class,
             execution_decision.may_emit_command,
             execution_decision.may_execute_action,
+            # POST-6A REPAIR 4 -- safe diagnostic only: a closed-vocabulary
+            # label (`PendingContinuationRelation`), never a subject, a
+            # parameter value, or any user text.
+            execution_decision.pending_relationship,
             sequencer.run_id,
         )
+        if execution_decision.pending_relationship == PendingContinuationRelation.CANCELLED:
+            _logger.info(
+                "chat_service: pending governed request explicitly cancelled by the user -- "
+                "not inherited, and cleared by this turn's own continuity write run_id=%s",
+                sequencer.run_id,
+            )
         # LIVE-CORR-11 -- computed here (where `execution_decision`/
         # `current_turn_request_contract` are both available) but MERGED
         # into `end_of_turn_state_delta` further below, alongside this
@@ -3190,12 +3698,15 @@ class ChatService:
         # `UNRESOLVED` record (or no pending state at all) is still left
         # completely untouched, preserving genuine clarification recovery
         # across a transient contract-recording glitch.
+        # POST-6A REPAIR 3: reuses THIS turn's own already-resolved
+        # effective request rather than resolving it a third time --
+        # `resolve_effective_governed_contract` is still the same pure
+        # function underneath (`effective_request_contract` is exactly
+        # what it would return), this call site simply no longer
+        # re-derives what it already has.
         pending_governed_request_state_update: dict[str, object] = (
-            build_pending_governed_request_state_update(
-                execution_decision,
-                resolve_effective_governed_contract(current_turn_request_contract, pending_governed_request),
-            )
-            if current_turn_request_contract is not None
+            build_pending_governed_request_state_update(execution_decision, effective_request_contract)
+            if current_turn_request_contract is not None and effective_request_contract is not None
             else expire_completed_pending_on_invalid_contract(pending_governed_request)
         )
 
@@ -3389,6 +3900,16 @@ class ChatService:
         # specialist delegation; `_extract_final_text` correctly returns
         # `None` for such an event). Every branch below already tolerates a
         # `None` starting `final_text`.
+        # POST-6A REPAIR 4/5 -- declared at METHOD scope (not inside the
+        # `error is None` stage below) because this turn's end-of-turn
+        # state write consults them on every exit path, including a turn
+        # that failed before stage 1 ever ran. Empty/`None` is the
+        # correct, fail-closed value for such a turn: nothing was
+        # authorized, so there is nothing to bind.
+        verified_request_parameters: list[Any] = list(
+            effective_request_contract.provided_context if effective_request_contract is not None else ()
+        )
+        current_command_binding = None
         if error is None:
             # ============================================================
             # STAGE 1 -- CONTENT PREPARATION (never authority)
@@ -3419,10 +3940,69 @@ class ChatService:
             )
             command_suppressed_by_policy = False
             rendered_guidance_text = ""
+            authorized_command_objects: list[AuthorizedCommand] = []
+            wrong_target_identifiers: tuple[str, ...] = ()
             if captured_troubleshooting_guidance is not None:
                 corrected_guidance, command_suppressed_by_policy = enforce_execution_decision_on_guidance(
                     captured_troubleshooting_guidance, execution_decision
                 )
+                # POST-6A REPAIR 4 -- WRONG-TARGET ENFORCEMENT ON THE
+                # VERBATIM PATH. Verbatim grounding proves a command is
+                # genuinely present in the active governed section; it
+                # does NOT prove the target it names is the user's. A
+                # governed procedure states its command with the SOURCE's
+                # own example unit, so this is exactly where "a source
+                # example for RRU-9 reaches a user whose target is RRU-3"
+                # would otherwise happen. The command is STRIPPED, never
+                # rewritten -- rewriting governed prose is precisely what
+                # this repair forbids; the correct route to a correctly-
+                # targeted command is the template path immediately below.
+                corrected_guidance, wrong_target_stripped, wrong_target_identifiers = (
+                    enforce_verified_command_targets(corrected_guidance, verified_request_parameters)
+                )
+                if wrong_target_stripped:
+                    command_suppressed_by_policy = True
+                    _logger.warning(
+                        "chat_service: stripped %d command(s) naming a target the user never verifiably "
+                        "supplied run_id=%s",
+                        len(wrong_target_identifiers),
+                        sequencer.run_id,
+                    )
+                # POST-6A REPAIR 4 -- THE EXPLICIT TEMPLATE-GROUNDING
+                # PATH. Only reachable with an APPROVED governed operation
+                # descriptor, an APPROVED command template, and fully
+                # verified parameters; it constructs from a placeholder
+                # form, so no source example ever exists to survive. Never
+                # weakens verbatim grounding -- it is an additional,
+                # separately-authorized route, and its own output is
+                # re-checked by the SAME target rule.
+                if (
+                    execution_decision.may_emit_command
+                    and governed_operation_descriptor is not None
+                    and not corrected_guidance.command
+                ):
+                    for template in governed_operation_descriptor.command_templates:
+                        constructed = construct_command_from_template(
+                            governed_operation_descriptor, template.template_id, verified_request_parameters
+                        )
+                        if constructed.authorized:
+                            corrected_guidance = corrected_guidance.model_copy(
+                                update={"command": constructed.command}
+                            )
+                            current_command_binding = constructed.binding
+                            command_suppressed_by_policy = False
+                            _logger.info(
+                                "chat_service: command constructed from approved governed template "
+                                "operation_id=%s run_id=%s",
+                                governed_operation_descriptor.operation_id,
+                                sequencer.run_id,
+                            )
+                            break
+                        _logger.info(
+                            "chat_service: template construction refused status=%s run_id=%s",
+                            constructed.status.value,
+                            sequencer.run_id,
+                        )
                 enforced_guidance_present = bool(
                     corrected_guidance.command
                     or corrected_guidance.interpretation
@@ -3445,13 +4025,124 @@ class ChatService:
                     if execution_decision.may_emit_command
                     else set()
                 )
-                rendered_guidance_text = render_troubleshooting_guidance(corrected_guidance)
+                # POST-6A REPAIR 5 -- every authorized command carries the
+                # binding it was authorized FOR. A command that reached
+                # here through verbatim grounding gets an equivalent
+                # binding, so invalidation behaves identically whichever
+                # path produced it.
+                if current_command_binding is None and authorized_commands_this_turn:
+                    current_command_binding = binding_for_verbatim_command(
+                        governed_operation_descriptor,
+                        sorted(authorized_commands_this_turn)[0],
+                        verified_request_parameters,
+                    )
+                authorized_command_objects = [
+                    AuthorizedCommand(
+                        command=value,
+                        binding=current_command_binding
+                        or binding_for_verbatim_command(
+                            governed_operation_descriptor, value, verified_request_parameters
+                        ),
+                        grounding="template" if current_command_binding is not None and current_command_binding.template_id else "verbatim",
+                    )
+                    for value in sorted(authorized_commands_this_turn)
+                ]
+                # POST-6A REPAIR 6 -- THE TYPED PLAN IS NOW THE PRIMARY
+                # OUTPUT AUTHORITY. Command text is rendered ONLY from a
+                # validated `AuthorizedCommand` object referenced by a
+                # COMMAND/OPERATIONAL_STEP block; narrative blocks are
+                # drawn only from typed, already-grounded guidance fields
+                # and are dropped outright if they restate an
+                # unauthorized command. The known-command blacklist
+                # (`validate_final_output`, unchanged) still runs
+                # afterwards as defense in depth.
+                response_plan = build_response_plan(
+                    corrected_guidance,
+                    may_emit_command=execution_decision.may_emit_command,
+                    authorized_commands=authorized_command_objects,
+                    unauthorized_command_values=frozenset(
+                        known_commands_this_turn - authorized_commands_this_turn
+                    ),
+                    # POST-6A PROMPT 3: the validated operation objects the
+                    # narrative boundary derives its structural checks from.
+                    descriptors=(governed_operation_descriptor,),
+                    # POST-6A -- A WITHHELD COMMAND MUST NOT REAPPEAR AS
+                    # PROSE. Scoped precisely to the real risk: when this
+                    # turn's command was SUPPRESSED (policy refused it, or
+                    # it named a target the user never confirmed), the
+                    # instruction fields `next_action`/`step.action` are
+                    # not rendered, because they are exactly where an
+                    # equivalent instruction would otherwise reappear in
+                    # words -- and no syntax check can prove a sentence
+                    # like "power-cycle the unit" carries no instruction.
+                    # `interpretation` and `evidence_requested` still
+                    # render, so the user gets the reasoning and the ask.
+                    #
+                    # Deliberately NOT applied to an ordinary grounded
+                    # next-step turn: a troubleshooting answer whose step
+                    # legitimately needs no command at all is the normal
+                    # product behaviour, and suppressing its next action
+                    # would remove the answer rather than the risk.
+                    operational_narrative_permitted=not command_suppressed_by_policy,
+                    # POST-6A -- the SAME boundary applies to every
+                    # rendered field, not just the instruction fields.
+                    # When a command for this target was withheld, the
+                    # target's own identifier is restricted from ALL
+                    # narrative blocks (`interpretation`,
+                    # `evidence_requested`, step actions) -- naming the
+                    # unit in prose next to a suppressed command is how
+                    # the instruction reappears in words.
+                    restricted_target_values=(
+                        frozenset(
+                            canonical
+                            for parameter in verified_request_parameters
+                            if (canonical := canonical_identifier(parameter.value)) is not None
+                        )
+                        if command_suppressed_by_policy
+                        else frozenset()
+                    ),
+                )
+                rendered_guidance_text = render_response_plan(response_plan)
+                if response_plan.dropped_narrative_blocks:
+                    _logger.warning(
+                        "chat_service: response plan dropped %d narrative block(s) restating an "
+                        "unauthorized command run_id=%s",
+                        response_plan.dropped_narrative_blocks,
+                        sequencer.run_id,
+                    )
                 rendered_guidance_present = bool(rendered_guidance_text)
 
             # ============================================================
             # STAGE 2 -- MODE DISPATCH (status already decided this)
             # ============================================================
-            if response_mode == _ResponseMode.CLARIFICATION:
+            # ============================================================
+            # POST-6A -- EVIDENCE OUTAGE OUTRANKS EVERY OTHER RESPONSE MODE
+            # ============================================================
+            #
+            # If this turn tried to acquire governed evidence and the
+            # retrieval INFRASTRUCTURE could not answer, no other branch
+            # below may speak for the turn. In particular the
+            # CLARIFICATION branch must not: it would render "please
+            # confirm the following..." for a failure the user cannot fix,
+            # which is exactly the "retrieval failure becomes 'please
+            # supply more context'" outcome this repair closes.
+            #
+            # The signal is the TYPED availability the shared evidence
+            # service recorded for this run -- never an inference from
+            # empty results, never a string match on an error message.
+            # `None` means no evidence was acquired at all, which is not a
+            # failure and leaves every branch below untouched.
+            run_evidence = get_run_availability(sequencer.run_id)
+            if run_evidence is not None and run_evidence.is_infrastructure_failure:
+                _logger.warning(
+                    "chat_service: governed evidence retrieval unavailable -- reporting the outage rather "
+                    "than requesting more context run_id=%s detail=%s",
+                    sequencer.run_id,
+                    run_evidence.detail,
+                )
+                final_text = EVIDENCE_RETRIEVAL_UNAVAILABLE_TEXT
+                final_response_path = "evidence_retrieval_unavailable"
+            elif response_mode == _ResponseMode.CLARIFICATION:
                 # LIVE-CORR-14 section 4/5 -- ABSOLUTE. `NEEDS_INFORMATION`
                 # and `AMBIGUOUS` always render clarification/
                 # disambiguation from AUTHORITATIVE context, with ZERO
@@ -3670,15 +4361,55 @@ class ChatService:
                     final_text = SAFE_DECLARATION_FAILURE_TEXT
                     final_response_path = "authorized_response_empty_fallback"
             else:
-                # `UNRESOLVED_CONTRACT` (`INVALID_CONTRACT`) -- see
-                # `_ResponseMode.UNRESOLVED_CONTRACT`'s own docstring: the
-                # pre-existing conservative pass-through is retained
-                # deliberately (both candidate deterministic-restriction
-                # designs were already audited and rejected against this
-                # repository's own real test suite, and a turn that
-                # produced no model output at all resolves to this status
-                # and must keep failing closed as a genuine non-response).
-                final_response_path = "unresolved_contract"
+                # ========================================================
+                # POST-6A REPAIR 7 -- `UNRESOLVED_CONTRACT`
+                # (`INVALID_CONTRACT`) MUST NOT PASS RAW OPERATIONAL PROSE
+                # ========================================================
+                #
+                # The pre-existing behavior was an unconditional
+                # pass-through of whatever the model produced, on the
+                # reasoning that a missing/stale contract says nothing
+                # about what the user asked, so replacing an ordinary
+                # conversational answer would be a regression. That half
+                # is still true and is preserved below.
+                #
+                # What was NOT safe is the other half: when the SAME turn
+                # also produced operational content -- structured
+                # troubleshooting guidance, structurally-known command
+                # values, or selected governed evidence -- the runtime has
+                # positive, STRUCTURAL evidence that this turn was
+                # operational, and it simultaneously has NO validated
+                # contract against which any of the operational gates
+                # (grounding authority, target verification, command
+                # permission) could be evaluated. Passing that prose
+                # through is a fail-OPEN on exactly the turns where every
+                # other safety layer is blind.
+                #
+                # The discriminator below is deliberately STRUCTURAL, not
+                # textual: presence of guidance / known commands /
+                # selected governed evidence. It makes no claim that
+                # unrestricted prose can be proven safe by string
+                # matching -- the opposite: it refuses to reason about the
+                # prose at all, and decides purely on what this turn
+                # structurally did. An ordinary conversational turn
+                # matches none of those and is passed through exactly as
+                # before.
+                operational_turn_without_contract = bool(
+                    captured_troubleshooting_guidance is not None
+                    or known_commands_this_turn
+                    or selected_knowledge_evidence
+                )
+                if operational_turn_without_contract:
+                    _logger.warning(
+                        "chat_service: operational content produced with no validated current-turn contract -- "
+                        "replacing the free-form response deterministically run_id=%s",
+                        sequencer.run_id,
+                    )
+                    final_text = command_suppression_fallback_text(execution_decision)
+                    final_response_path = "unresolved_contract_operational_withheld"
+                    clarification_rendered_present = True
+                else:
+                    final_response_path = "unresolved_contract"
 
             # ============================================================
             # CONTROL-PLANE-SEQ-05 -- ONE FINAL AUTHORITY BOUNDARY (§24)
@@ -3792,6 +4523,14 @@ class ChatService:
             if contributors_task is not None and not contributors_task.done():
                 contributors_task.cancel()
             code, message = error
+            # POST-6A -- a turn that ends in a safe terminal ERROR event
+            # is FAILED, and is recorded as such. Without this it would be
+            # left at ACCEPTED and later reconciled to INTERRUPTED, which
+            # would wrongly imply its outcome was unknown when we know
+            # exactly what happened.
+            await self._record_turn_status(
+                session_id, user_id, sequencer.run_id, TurnStatus.FAILED, code
+            )
             _logger.info(
                 "chat_service: finalization message_completed_emitted=False error_code=%s "
                 "run_failure_reason=%s selected_response_mode=%s decision_status=%s run_id=%s",
@@ -4069,6 +4808,203 @@ class ChatService:
             # case.
             end_of_turn_state_delta.update(pending_governed_request_state_update)
 
+            # ============================================================
+            # POST-6A REPAIR 5 -- COMMAND-CANDIDATE / APPROVAL INVALIDATION
+            # ============================================================
+            #
+            # A command candidate is only ever valid FOR a specific
+            # binding: one operation, one governed source/version/section,
+            # one set of target parameters, one payload. When any of those
+            # changes, a candidate or an approval granted for the OLD one
+            # is not "still roughly right" -- it is wrong, and reusing it
+            # would execute the previous operation against the new target
+            # (or the new operation with the previous payload).
+            #
+            # Two independent triggers, either sufficient:
+            #   - `target_correction_invalidates`: this turn's own verified
+            #     context CORRECTED a previously-confirmed target (repair
+            #     1 stamps `corrects_prior_value` deterministically);
+            #   - `binding_supersedes`: the binding stored for the last
+            #     authorized candidate differs from this turn's own.
+            #
+            # The effect is a CLEAR, never a rewrite: the stored binding
+            # is replaced with this turn's, and any pending action
+            # proposal is dropped so the approval boundary must re-propose
+            # and be re-approved from scratch. Re-authorization is always a
+            # fresh construction, never a reused grant.
+            previous_command_binding = parse_command_candidate_binding(
+                refreshed_session.state.get(COMMAND_CANDIDATE_BINDING_STATE_KEY)
+            )
+            binding_reasons = invalidation_reasons(previous_command_binding, current_command_binding)
+            target_corrected = target_correction_invalidates(verified_request_parameters)
+            if binding_reasons or (target_corrected and previous_command_binding is not None):
+                _logger.info(
+                    "chat_service: invalidating prior command candidate/approval reasons=%s "
+                    "target_corrected=%s run_id=%s",
+                    [reason.value for reason in binding_reasons],
+                    target_corrected,
+                    sequencer.run_id,
+                )
+                end_of_turn_state_delta[PENDING_ACTION_PROPOSAL_STATE_KEY] = None
+            end_of_turn_state_delta[COMMAND_CANDIDATE_BINDING_STATE_KEY] = (
+                current_command_binding.model_dump(mode="json") if current_command_binding is not None else None
+            )
+
+            # ============================================================
+            # POST-6A -- RECORD A STRUCTURED TARGET CONFIRMATION
+            # ============================================================
+            #
+            # Written ONLY when this turn deterministically ANSWERED the
+            # runtime's own outstanding question (`PendingContinuationRelation
+            # .ANSWERS`), and only for the parameters that question
+            # actually asked for. Each record is bound to the pending
+            # request, the governed operation and the candidate revision
+            # in force right now, so it stops authorizing the moment any
+            # of those change.
+            #
+            # A CORRECTION DROPS THE OLD RECORD: a parameter carrying
+            # `corrects_prior_value` supersedes whatever was confirmed
+            # before, and the affected command binding is invalidated by
+            # the block above -- confirmation and command authority are
+            # withdrawn together, never one without the other.
+            if (
+                effective_request is not None
+                and effective_request.relation == PendingContinuationRelation.ANSWERS
+                and pending_governed_request is not None
+            ):
+                asked_for = frozenset(pending_governed_request.missing_context)
+                new_confirmations = [
+                    build_confirmation(
+                        parameter,
+                        pending_governed_request,
+                        operation_id=None,
+                        candidate_revision=None,
+                        source_turn_id=turn_invocation_id,
+                    )
+                    for parameter in verified_request_parameters
+                    if parameter.name in asked_for
+                ]
+                if new_confirmations:
+                    superseded = {
+                        p.corrects_prior_value for p in verified_request_parameters if p.corrects_prior_value
+                    }
+                    retained = [
+                        record
+                        for record in stored_confirmations
+                        if record.parameter_name not in {c.parameter_name for c in new_confirmations}
+                        and record.value not in superseded
+                    ]
+                    end_of_turn_state_delta.update(
+                        build_target_confirmation_state_update(retained + new_confirmations)
+                    )
+                    _logger.info(
+                        "chat_service: recorded %d structured target confirmation(s) run_id=%s",
+                        len(new_confirmations),
+                        sequencer.run_id,
+                    )
+            elif target_corrected:
+                # The user corrected a target without answering an
+                # outstanding question -- every stored confirmation for a
+                # superseded value is dropped outright.
+                superseded = {
+                    p.corrects_prior_value for p in verified_request_parameters if p.corrects_prior_value
+                }
+                retained = [r for r in stored_confirmations if r.value not in superseded]
+                if len(retained) != len(stored_confirmations):
+                    end_of_turn_state_delta.update(build_target_confirmation_state_update(retained))
+
+            # ============================================================
+            # POST-6A -- INVESTIGATION STATE: START / WAIT / DO NOT ADVANCE
+            # ============================================================
+            #
+            # Three deterministic transitions, and deliberately no fourth:
+            #
+            #   START  -- an operationally-shaped request with a resolved
+            #             subject and no investigation yet opens one, with
+            #             the active governed procedure identity stamped
+            #             from the SAME already-revalidated anchor every
+            #             other layer uses.
+            #   WAIT   -- this turn asked the engineer for something
+            #             (`evidence_requested` on the enforced guidance).
+            #             `record_requested_evidence` resets the
+            #             observation half, so the next turn cannot treat
+            #             the previous step as done.
+            #   HOLD   -- otherwise the state is carried forward unchanged.
+            #
+            # ADVANCING IS NOT ONE OF THEM. A step advances only through
+            # `advance_after_observation`, which requires a real received
+            # observation AND an interpretation of it -- neither of which a
+            # turn can produce on its own initiative. The assistant having
+            # SUGGESTED something last turn is not progress; this is the
+            # structural reason "what next?" can no longer walk the
+            # procedure forward on its own.
+            investigation_after_turn = active_investigation
+            guidance_for_investigation = (
+                corrected_guidance if error is None and captured_troubleshooting_guidance is not None else None
+            )
+            if (
+                investigation_after_turn is None
+                and execution_decision.subject
+                and execution_decision.may_emit_operational_steps
+            ):
+                investigation_after_turn = InvestigationState(
+                    objective=execution_decision.subject,
+                    knowledge_id=active_governed_section_key.knowledge_id if active_governed_section_key else None,
+                    version_label=active_governed_section_key.version_label if active_governed_section_key else None,
+                    section_id=active_governed_section_key.section_id if active_governed_section_key else None,
+                    prerequisite_status=PrerequisiteStatus.UNKNOWN,
+                    step_lifecycle=StepLifecycle.SUGGESTED,
+                )
+            if investigation_after_turn is not None and guidance_for_investigation is not None:
+                # POST-6A -- INTERPRET, THEN (ONLY THEN) ADVANCE.
+                #
+                # The specialist's typed `observation_interpretation` is
+                # validated against the observation we actually recorded:
+                # its `observation_reference` must appear literally in the
+                # engineer's own reported text. An interpretation of
+                # something nobody reported -- or of the procedure rather
+                # than the result -- is rejected, and the step stays put.
+                #
+                # `advance_after_observation` is called from HERE, the real
+                # orchestration path, and enforces the rule itself: it
+                # refuses unless the observation was received AND
+                # interpreted, so a missing, ambiguous or unrelated
+                # observation cannot move the procedure forward.
+                interpretation = getattr(guidance_for_investigation, "observation_interpretation", None)
+                if interpretation is not None:
+                    investigation_after_turn, interpretation_outcome = record_validated_interpretation(
+                        investigation_after_turn, interpretation
+                    )
+                    _logger.info(
+                        "chat_service: observation interpretation outcome=%s run_id=%s",
+                        interpretation_outcome,
+                        sequencer.run_id,
+                    )
+                if may_advance_to_next_step(investigation_after_turn):
+                    investigation_after_turn = advance_after_observation(
+                        investigation_after_turn,
+                        next_permitted_check=guidance_for_investigation.next_action,
+                    )
+                    _logger.info(
+                        "chat_service: investigation advanced to step=%s run_id=%s",
+                        investigation_after_turn.step_index,
+                        sequencer.run_id,
+                    )
+                requested = guidance_for_investigation.evidence_requested
+                if requested:
+                    investigation_after_turn = record_requested_evidence(investigation_after_turn, requested)
+            if investigation_after_turn is not None:
+                _logger.info(
+                    "chat_service: investigation step=%s lifecycle=%s awaiting_evidence=%s may_advance=%s run_id=%s",
+                    investigation_after_turn.step_index,
+                    investigation_after_turn.step_lifecycle.value,
+                    investigation_after_turn.is_awaiting_evidence,
+                    may_advance_to_next_step(investigation_after_turn),
+                    sequencer.run_id,
+                )
+            if investigation_after_turn is not active_investigation:
+                end_of_turn_state_delta.update(build_investigation_state_update(investigation_after_turn))
+
             # 6A.14A -- PERSIST BEFORE ANNOUNCE: a failure here (including
             # the conflict case detected above) must never let a live
             # response reach the user that a refresh/reopen could not
@@ -4104,6 +5040,9 @@ class ChatService:
                 # uncorrected text (DEF-0031's own "no contradictory
                 # history" requirement).
                 await self._best_effort_mark_turn_failed(session_id, user_id, turn_invocation_id)
+                await self._record_turn_status(
+                    session_id, user_id, sequencer.run_id, TurnStatus.FAILED, "canonical_persistence_failed"
+                )
                 if contributors_task is not None and not contributors_task.done():
                     contributors_task.cancel()
                 _logger.info(
@@ -4124,6 +5063,37 @@ class ChatService:
                 yield sequencer.build(StreamEventType.RUN_COMPLETED, {"outcome": "error"})
                 perf.log_duration("total_run", perf.elapsed_seconds())
                 return
+
+        # POST-6A -- COMPLETED is recorded BEFORE `message.completed` is
+        # announced, for the same reason the canonical result itself is:
+        # a turn the user has been told succeeded must already be
+        # recorded as having succeeded. If this write fails we do NOT
+        # announce success -- we report the save failure honestly, the
+        # same terminal shape a canonical-persistence failure produces.
+        if not await self._record_turn_status(
+            session_id, user_id, sequencer.run_id, TurnStatus.COMPLETED
+        ):
+            await self._best_effort_mark_turn_failed(session_id, user_id, turn_invocation_id)
+            if contributors_task is not None and not contributors_task.done():
+                contributors_task.cancel()
+            _logger.error(
+                "chat_service: finalization message_completed_emitted=False reason=lifecycle_persistence_failed "
+                "run_id=%s",
+                sequencer.run_id,
+            )
+            yield sequencer.build(
+                StreamEventType.ERROR,
+                {
+                    "code": "run_failure",
+                    "message": "The assistant's response could not be saved. Please try again.",
+                },
+            )
+            failed_trace = trace_recorder.record(**response_failed_trace_step())
+            if failed_trace is not None:
+                yield failed_trace
+            yield sequencer.build(StreamEventType.RUN_COMPLETED, {"outcome": "error"})
+            perf.log_duration("total_run", perf.elapsed_seconds())
+            return
 
         _logger.info("chat_service: finalization message_completed_emitted=True run_id=%s", sequencer.run_id)
         yield sequencer.build(StreamEventType.MESSAGE_COMPLETED, message_completed_data)
@@ -4154,6 +5124,78 @@ class ChatService:
 
         yield sequencer.build(StreamEventType.RUN_COMPLETED, {"outcome": "ok"})
         perf.log_duration("total_run", perf.elapsed_seconds())
+
+    async def _record_turn_status(
+        self, session_id: str, user_id: str, turn_key: str, status: "TurnStatus", detail: str = ""
+    ) -> bool:
+        """POST-6A -- record one terminal (or accepted) turn outcome.
+
+        Best-effort by design: a turn must never fail merely because its
+        own bookkeeping could not be written. But the FAILURE to write is
+        reported honestly to the caller (`False`), which is what lets the
+        finalization path tell the user its result could not be saved
+        rather than pretending otherwise.
+
+        Re-reads the session first, for the same reason every other
+        out-of-band state write in this module does: the Runner has its
+        own session handle, and writing through a stale one corrupts
+        ADK's revision tracking.
+
+        POST-6A -- THE TERMINAL TRANSITION IS ATOMIC AT THE PERSISTENCE
+        BOUNDARY, not merely in memory.
+
+        `build_turn_lifecycle_delta` refuses to overwrite a terminal
+        record, but it can only judge the state it was HANDED. Two
+        workers can each read a non-terminal record and each decide their
+        write is legitimate; the in-memory check sees nothing wrong in
+        either process, and the second write silently rewrites the first
+        outcome -- a cancellation overwriting a completion, say.
+
+        What makes it actually atomic is the storage layer. ADK's
+        `DatabaseSessionService.append_event` compares the session's
+        storage revision marker against the stored value and RAISES
+        rather than overwriting a concurrent write. So this is a
+        compare-and-set: read, decide, write; if the write is rejected
+        because the state moved underneath us, re-read and decide again
+        against what is now there. On the re-read the other worker's
+        terminal record IS visible, `build_turn_lifecycle_delta` declines
+        to overwrite it, and we stop -- reporting success, because the
+        turn does have a durable terminal outcome, just not the one this
+        call proposed.
+        """
+        for attempt in range(_TERMINAL_TRANSITION_ATTEMPTS):
+            try:
+                fresh = await self._session_service.get_session(session_id, user_id)
+                existing = fresh.state.get(TURN_LIFECYCLE_STATE_KEY)
+                current = parse_turn_lifecycle(existing).get(turn_key)
+                if current is not None and current.is_terminal:
+                    # Already finalized -- by an earlier call here, or by
+                    # another worker that won the race. Writing again
+                    # would be the overwrite this whole mechanism exists
+                    # to prevent, and there is nothing left to record.
+                    return True
+                await self._session_service.persist_state_delta(
+                    fresh,
+                    build_turn_lifecycle_delta(existing, turn_key, status, detail=detail),
+                )
+                return True
+            except Exception:
+                if attempt + 1 < _TERMINAL_TRANSITION_ATTEMPTS:
+                    # Most likely a storage-revision conflict: the state
+                    # moved while we were deciding. Re-read and re-decide
+                    # rather than retrying the same stale delta.
+                    _logger.info(
+                        "chat_service: turn lifecycle write conflicted; re-reading turn_key=%s", turn_key
+                    )
+                    continue
+                _logger.error(
+                    "chat_service: could not record turn lifecycle status=%s turn_key=%s",
+                    status.value,
+                    turn_key,
+                    exc_info=True,
+                )
+                return False
+        return False
 
     async def _safe_case_title(self, user_id: str, case_id: str) -> Optional[str]:
         try:
@@ -4469,6 +5511,14 @@ class ChatService:
         if task is None or task.done():
             return False
         task.cancel()
+        # POST-6A -- CANCELLED is a terminal outcome, recorded here rather
+        # than inside the cancelled task. A task receiving `CancelledError`
+        # cannot reliably perform an `await` of its own to record anything,
+        # and this is the one place that positively knows a cancellation
+        # was genuinely issued for a still-running turn.
+        await self._record_turn_status(
+            session_id, user_id, run_id, TurnStatus.CANCELLED, "cancelled by the user"
+        )
         return True
 
 

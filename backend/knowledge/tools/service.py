@@ -7,11 +7,14 @@ rationale.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from backend.knowledge.provenance.contracts import KnowledgeEvidenceItem, KnowledgeEvidenceSelectionKey
 from backend.knowledge.provenance.service import KnowledgeProvenanceService, validate_evidence_selection
 from backend.knowledge.retrieval.contracts import KnowledgeRetrievalItem, KnowledgeRetrievalQuery
 from backend.knowledge.retrieval.service import KnowledgeRetrievalService
 from backend.knowledge.tools.contracts import (
+    KnowledgeToolRetrievalUnavailableError,
     KnowledgeSearchAgentPayload,
     KnowledgeSearchDiagnostic,
     KnowledgeSearchExecutionResult,
@@ -20,6 +23,9 @@ from backend.knowledge.tools.contracts import (
     KnowledgeToolEvidenceItem,
     KnowledgeToolExecutionContext,
 )
+
+if TYPE_CHECKING:  # pragma: no cover -- typing only, avoids an import cycle at runtime
+    from backend.knowledge.shared_evidence import SharedEvidenceService
 
 _Identity = tuple[str, str, "str | None"]
 
@@ -107,19 +113,54 @@ class KnowledgeToolService:
     scorer directly.
     """
 
-    def __init__(self, retrieval_service: KnowledgeRetrievalService, provenance_service: KnowledgeProvenanceService) -> None:
+    def __init__(
+        self,
+        retrieval_service: KnowledgeRetrievalService,
+        provenance_service: KnowledgeProvenanceService,
+        shared_evidence_service: "SharedEvidenceService | None" = None,
+    ) -> None:
         self._retrieval_service = retrieval_service
         self._provenance_service = provenance_service
+        self._shared_evidence_service = shared_evidence_service
 
     async def search(
+        self,
+        request: KnowledgeSearchToolRequest,
+        context: KnowledgeToolExecutionContext,
+        *,
+        run_id: str = "",
+        user_id: str = "",
+        context_state: "dict | None" = None,
+    ) -> KnowledgeSearchExecutionResult:
+        """The one generic `knowledge_search` capability.
+
+        POST-6A -- THIS IS NOW THE SHARED EVIDENCE PATH. When a
+        `SharedEvidenceService` is composed in (production wiring, see
+        `backend/tools/knowledge/runtime.py`), retrieval goes through it:
+        narrowing -> version-constrained retrieval -> provenance
+        revalidation, with the per-turn cache that stops the second
+        specialist re-running the same retrieval, and with a TYPED
+        availability outcome instead of an ambiguous empty list.
+
+        Nothing about the model-facing contract changes: the returned
+        `agent_payload` is built by the SAME `_correlate` over the SAME
+        retrieval/provenance pairs, so `applicability_outcome`/
+        `relevance_score` still come from retrieval and content still
+        comes from validated provenance.
+
+        `shared_evidence_service=None` keeps the original direct path
+        verbatim -- used by the existing unit tests that construct this
+        service with only the two 5.1G/5.1H collaborators.
+        """
+        if self._shared_evidence_service is None:
+            return await self._search_direct(request, context)
+        return await self._search_shared(
+            request, context, run_id=run_id, user_id=user_id, context_state=context_state or {}
+        )
+
+    async def _search_direct(
         self, request: KnowledgeSearchToolRequest, context: KnowledgeToolExecutionContext
     ) -> KnowledgeSearchExecutionResult:
-        """The one generic `knowledge_search` capability: build a 5.1G
-        `KnowledgeRetrievalQuery` from the model-controlled `request` and
-        the trusted `context`, retrieve, build trusted evidence (5.1H),
-        correlate the two by identity, and return both the model-safe
-        `agent_payload` and the trusted `evidence_set` together.
-        """
         query = KnowledgeRetrievalQuery(
             query_text=request.query_text,
             applicability_context=context.applicability_context,
@@ -137,6 +178,57 @@ class KnowledgeToolService:
 
         agent_payload = KnowledgeSearchAgentPayload(items=items, diagnostics=diagnostics)
         return KnowledgeSearchExecutionResult(agent_payload=agent_payload, evidence_set=evidence_set)
+
+    async def _search_shared(
+        self,
+        request: KnowledgeSearchToolRequest,
+        context: KnowledgeToolExecutionContext,
+        *,
+        run_id: str,
+        user_id: str,
+        context_state: dict,
+    ) -> KnowledgeSearchExecutionResult:
+        from backend.knowledge.shared_evidence import (
+            EvidenceAvailability,
+            EvidenceRequest,
+            applicability_fingerprint,
+        )
+
+        result = await self._shared_evidence_service.acquire(
+            EvidenceRequest(
+                run_id=run_id,
+                query_text=request.query_text,
+                as_of=context.as_of,
+                limit=request.limit,
+                requested_by="incident_manager",
+                user_id=user_id,
+                applicability_fingerprint=applicability_fingerprint(context.applicability_context, context_state),
+            ),
+            context_state,
+            applicability_context=context.applicability_context,
+        )
+
+        if result.availability is EvidenceAvailability.RETRIEVAL_UNAVAILABLE:
+            # Raised, never returned as an empty result: an empty result
+            # is indistinguishable from "nothing applicable", and the
+            # caller's own error branch is what keeps an infrastructure
+            # outage from being reported to the user as a knowledge gap.
+            raise KnowledgeToolRetrievalUnavailableError(result.detail or "governed knowledge retrieval unavailable")
+
+        items = _correlate(list(result.retrieval_items), list(result.items))
+        agent_payload = KnowledgeSearchAgentPayload(items=items, diagnostics=[])
+        # `result.evidence_set` is the object `KnowledgeProvenanceService`
+        # itself built -- passed through, never reconstructed here. This
+        # module constructs no evidence type of its own (enforced by
+        # `test_tools_boundaries.py`'s own AST check), because a second
+        # construction would be trusted state assembled outside the one
+        # service allowed to validate it.
+        return KnowledgeSearchExecutionResult(
+            agent_payload=agent_payload,
+            evidence_set=result.evidence_set,
+            availability=result.availability.value,
+            degradation=result.degradation.value,
+        )
 
     def validate_selection(
         self, execution_result: KnowledgeSearchExecutionResult, selections: list[KnowledgeEvidenceSelectionKey]

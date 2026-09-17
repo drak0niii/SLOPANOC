@@ -60,18 +60,24 @@ module's own pre-check denials count as definite ("nothing executed").
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, MutableMapping, cast
 
 from starlette.concurrency import run_in_threadpool
 
+from backend.api.operation_claims import ClaimStatus, ClaimStoreUnavailableError
 from backend.api.pending_action import map_pending_action
 from backend.api.schemas import ExecuteActionResponse, ExecutedActionDTO
 from backend.api.session_service import DEFAULT_USER_ID, ApiSessionService
+from backend.api.turn_lifecycle import WORKER_ID
+from backend.approval.execution_identity import EXECUTION_RECORD_STATE_KEY, derive_operation_id
 from backend.approval.schemas import ApprovalDenialReason, ProposalStatus, WriteOperation
 from backend.approval.service import PENDING_ACTION_PROPOSAL_STATE_KEY, effective_status, load_active_proposal
 from backend.gateway.safe_error import ErrorCode, SafeError, SafeErrorException, internal_error
 from backend.tools.teams.execute_write import teams_create_chat, teams_send_message
+
+_logger = logging.getLogger(__name__)
 
 _DENIAL_MESSAGES: dict[ApprovalDenialReason, str] = {
     ApprovalDenialReason.NO_PENDING_PROPOSAL: "There is no active proposal in this session.",
@@ -134,12 +140,207 @@ async def execute(
         # status == ProposalStatus.APPROVED from here on -- the only
         # remaining possibility given ProposalStatus's 5 closed values.
 
+        # POST-6A -- REVALIDATE IMMEDIATELY BEFORE DISPATCH.
+        #
+        # The checks above ran against the session state as loaded. This
+        # re-reads ownership, approval state, destination and payload from
+        # the authoritative session one more time, right before anything
+        # leaves this process, so a change that landed between the two
+        # (a rejection, an expiry, a replaced proposal, a different
+        # payload) cannot be dispatched on the strength of a stale read.
+        # POST-6A -- ATOMICALLY CLAIM THIS OPERATION BEFORE SENDING IT.
+        #
+        # The per-session lock above is process-local. Two workers each
+        # holding their own copy of it can both reach this point for the
+        # same approved proposal and both dispatch -- one approved
+        # message, sent twice. The claim below is keyed by the DURABLE
+        # operation identity (proposal + destination + payload), taken
+        # with `wait=False`, so the worker that loses does not queue
+        # behind the winner and then send again; it learns it lost and
+        # stops.
+        #
+        # Unavailable (SQLite / single-process development) means the
+        # process-local lock is the whole boundary -- which is correct
+        # there, and is reported rather than assumed.
+        operation_claim = None
+        claim_token = None
+        claim_identity = derive_operation_id(
+            proposal.proposal_id, proposal.operation.value, _destination_of(proposal), proposal.payload
+        )
+        if session_service.coordinator.distributed_available:
+            operation_claim = await session_service.coordinator.distributed_lock_for(
+                "execution", claim_identity, wait=False
+            )
+            if operation_claim is None:
+                raise SafeErrorException(
+                    SafeError(
+                        error_code="action_failure",
+                        user_message="This action is already being executed. Please wait for it to finish.",
+                    )
+                )
+            # POST-6A -- DURABLE OWNERSHIP GENERATION, taken while the
+            # advisory lock is held.
+            #
+            # The lock alone is liveness, not fencing: a worker that
+            # passes `still_holds()` and then loses its connection is
+            # still running, still believes it owns this operation, and
+            # can still write. The generation returned here is the token
+            # every later write must present, so a superseded worker's
+            # write is refused by the database rather than by its own
+            # honesty.
+            #
+            # `None` means the row is no longer claimable -- already
+            # DISPATCHED, SUCCEEDED, FAILED or UNKNOWN_OUTCOME. That is
+            # refused rather than retried: re-dispatching an operation
+            # that may already have taken effect is exactly how one
+            # approved message becomes two.
+            try:
+                claim_token = await session_service.coordinator.operation_claims.claim(claim_identity, WORKER_ID)
+            except ClaimStoreUnavailableError:
+                # Almost always the pending `b7c4e1a95d60` migration.
+                # REFUSE rather than dispatch unfenced: a multi-worker
+                # deployment without the claim table has no protection
+                # against two workers sending the same approved message,
+                # and silently proceeding would hide exactly that.
+                await operation_claim.release()
+                _logger.error(
+                    "execution_service: durable operation claims are unavailable -- refusing to dispatch",
+                    exc_info=True,
+                )
+                raise SafeErrorException(
+                    SafeError(
+                        error_code="action_failure",
+                        user_message="This action cannot be executed safely right now. Please contact support.",
+                    )
+                )
+            if claim_token is None:
+                await operation_claim.release()
+                raise SafeErrorException(
+                    SafeError(
+                        error_code="action_failure",
+                        user_message=(
+                            "This action has already been sent, or its outcome is still unknown. "
+                            "Check Teams before trying again."
+                        ),
+                    )
+                )
+
+        try:
+            return await _execute_claimed(
+                session_service,
+                session,
+                session_id,
+                proposal,
+                proposal_id,
+                user_id,
+                operation_claim,
+                claim_token,
+            )
+        finally:
+            if operation_claim is not None:
+                # `release` is itself shielded, so this still completes
+                # when the surrounding request is cancelled -- a
+                # connection abandoned while holding a session advisory
+                # lock would block every other worker from this operation
+                # until the database reaped the backend.
+                await operation_claim.release()
+
+
+def _claim_status_for(state) -> "ClaimStatus":
+    """Map what the write path recorded onto the durable claim status.
+
+    Reads the session's own `ExecutionRecord` rather than inferring from
+    the error shape, so the durable row and the session state cannot
+    disagree about whether an outcome was ambiguous. Anything
+    unreadable is treated as UNKNOWN_OUTCOME -- the fail-closed reading,
+    because it blocks a retry, whereas guessing FAILED would invite one.
+    """
+    from backend.approval.execution_identity import ExecutionStatus, parse_execution_record
+
+    record = parse_execution_record(state.get(EXECUTION_RECORD_STATE_KEY))
+    if record is None:
+        return ClaimStatus.UNKNOWN_OUTCOME
+    if record.status is ExecutionStatus.FAILED:
+        return ClaimStatus.FAILED
+    if record.status is ExecutionStatus.SUCCEEDED:
+        return ClaimStatus.SUCCEEDED
+    return ClaimStatus.UNKNOWN_OUTCOME
+
+
+def _destination_of(proposal) -> str:
+    """The destination bound into the operation identity: the chat for a
+    send, the title for a create. Never a derived or defaulted value --
+    a different destination is a different operation."""
+    if proposal.operation == WriteOperation.TEAMS_SEND_MESSAGE:
+        return str(proposal.payload.get("chatId", ""))
+    return str(proposal.payload.get("title", ""))
+
+
+async def _execute_claimed(
+    session_service: ApiSessionService,
+    session,
+    session_id: str,
+    proposal,
+    proposal_id: str,
+    user_id: str,
+    operation_claim,
+    claim_token=None,
+) -> ExecuteActionResponse:
+        revalidation = await session_service.get_session(session_id, user_id)
+        revalidated = load_active_proposal(revalidation.state)
+        if revalidated is None or revalidated.proposal_id != proposal_id:
+            raise _denial_exception(ApprovalDenialReason.PROPOSAL_ID_MISMATCH)
+        if effective_status(revalidated) != ProposalStatus.APPROVED:
+            raise _denial_exception(ApprovalDenialReason.PROPOSAL_NOT_APPROVED)
+        if revalidated.operation != proposal.operation or revalidated.payload != proposal.payload:
+            # Destination/payload drifted between the pre-check and now --
+            # the approval we validated is not the action about to be sent.
+            raise _denial_exception(ApprovalDenialReason.PROPOSAL_ID_MISMATCH)
+        proposal = revalidated
+
         tool_context = _ExecutionToolContext(state=session.state)
 
         # PowerAutomateClient uses the blocking `requests` library --
         # run_in_threadpool keeps this off the event loop, exactly the
         # same escape hatch FastAPI/Starlette itself uses for sync path
         # operations.
+        # POST-6A -- FENCING. Between the claim and the dispatch we may
+        # have lost the connection that holds it. A worker that can no
+        # longer prove ownership must not send: the winner of a
+        # re-election may already be sending the same thing.
+        if operation_claim is not None and not await operation_claim.still_holds():
+            raise SafeErrorException(
+                SafeError(
+                    error_code="action_failure",
+                    user_message="This action could not be executed safely. Please try again.",
+                )
+            )
+
+        # POST-6A -- THE FENCED WRITE THAT PRECEDES THE SEND.
+        #
+        # `still_holds()` above is a point-in-time liveness answer, and
+        # the send happens after it; on its own it narrows the race
+        # without closing it. This conditional write closes the part that
+        # can be closed: marking DISPATCHED succeeds only while this
+        # worker still holds the generation it was given, so a worker
+        # that was superseded in the meantime is stopped HERE -- before
+        # anything leaves the process, which is the only point at which
+        # stopping is still honest.
+        #
+        # It also means the durable row says DISPATCHED before the
+        # gateway is called. A crash mid-send therefore leaves DISPATCHED
+        # behind, and `claim()` refuses to re-claim it: no automatic
+        # resend, ever.
+        if claim_token is not None:
+            claims = session_service.coordinator.operation_claims
+            if not await claims.record(claim_token, ClaimStatus.DISPATCHED):
+                raise SafeErrorException(
+                    SafeError(
+                        error_code="action_failure",
+                        user_message="This action is already being executed elsewhere. Please wait for it to finish.",
+                    )
+                )
+
         if proposal.operation == WriteOperation.TEAMS_CREATE_CHAT:
             result = await run_in_threadpool(
                 teams_create_chat,
@@ -158,6 +359,26 @@ async def execute(
             raise internal_error("Unsupported action type.")
 
         if "error" in result:
+            # POST-6A -- mirror the outcome into the DURABLE claim row
+            # first, conditional on still owning the generation.
+            #
+            # UNKNOWN_OUTCOME is carried across verbatim and never
+            # collapsed into FAILED: "the message may have been sent" and
+            # "the message was not sent" are different facts, and only the
+            # second one would make a retry safe.
+            if claim_token is not None:
+                await session_service.coordinator.operation_claims.record(
+                    claim_token, _claim_status_for(session.state)
+                )
+            # POST-6A -- persist whatever the write path recorded about
+            # this attempt (FAILED, or UNKNOWN_OUTCOME after an ambiguous
+            # timeout) BEFORE surfacing the error. Without this the
+            # ambiguity is lost on the next load and a later attempt would
+            # look like a first attempt.
+            if EXECUTION_RECORD_STATE_KEY in session.state:
+                await session_service.persist_state_delta(
+                    session, {EXECUTION_RECORD_STATE_KEY: session.state[EXECUTION_RECORD_STATE_KEY]}
+                )
             # Re-raises the tool layer's own SafeError shape unchanged --
             # same error_code/correlation_id it already generated. Never
             # populates `reason` here: this path only reflects
@@ -177,9 +398,37 @@ async def execute(
         # teams_send_message (the fixed step-5 of execute_write.py's own
         # order), mutating session.state in place. Persist it exactly the
         # way approve()/reject() persist their own transition.
-        await session_service.persist_state_delta(
-            session, {PENDING_ACTION_PROPOSAL_STATE_KEY: session.state[PENDING_ACTION_PROPOSAL_STATE_KEY]}
-        )
+        # POST-6A -- proposal consumption and the durable execution record
+        # are persisted in ONE delta. Writing them separately would leave a
+        # window where the proposal reads as consumed with no record of
+        # what consumed it, or vice versa.
+        # POST-6A -- FENCED BEFORE PUBLISHING THE RESULT. If this write
+        # fails, ownership moved on while we were in the gateway call:
+        # another worker is the authority for this operation now, and
+        # overwriting the session's canonical proposal/execution state
+        # from here would clobber whatever it recorded. We still report
+        # the send we actually made -- suppressing that would be a
+        # different lie -- but we do not overwrite durable state we no
+        # longer own.
+        may_persist = True
+        if claim_token is not None:
+            may_persist = await session_service.coordinator.operation_claims.record(
+                claim_token, ClaimStatus.SUCCEEDED
+            )
+            if not may_persist:
+                _logger.warning(
+                    "execution_service: ownership generation superseded during dispatch; "
+                    "not overwriting session state for proposal_id=%s",
+                    proposal_id,
+                )
+        if may_persist:
+            await session_service.persist_state_delta(
+                session,
+                {
+                    PENDING_ACTION_PROPOSAL_STATE_KEY: session.state[PENDING_ACTION_PROPOSAL_STATE_KEY],
+                    EXECUTION_RECORD_STATE_KEY: session.state.get(EXECUTION_RECORD_STATE_KEY),
+                },
+            )
         refreshed = await session_service.get_session(session_id, user_id)
         pending_action = map_pending_action(refreshed.state)
 
@@ -189,9 +438,9 @@ async def execute(
             web_url=result.get("webUrl"),
         )
 
-    return ExecuteActionResponse(
-        session_id=session_id,
-        result="executed",
-        pending_action=pending_action,
-        executed_action=executed_action,
-    )
+        return ExecuteActionResponse(
+            session_id=session_id,
+            result="executed",
+            pending_action=pending_action,
+            executed_action=executed_action,
+        )

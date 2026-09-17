@@ -85,7 +85,7 @@ class _FakeIncidentManagerRunner:
         self.app_name = app_name
         self.session_service = session_service
 
-    async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+    async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
         request = json.loads(new_message.parts[0].text)
         chat_topic = request.get("chat_topic")
         payload = _FAKE_RESPONSES_BY_TOPIC.get(

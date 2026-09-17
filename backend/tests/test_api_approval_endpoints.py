@@ -409,7 +409,7 @@ def test_approve_endpoint_never_calls_team_manager_runner() -> None:
     calls: list[str] = []
 
     class TrackingRunner:
-        async def run_async(self, *, user_id, session_id, new_message, run_config=None):
+        async def run_async(self, *, user_id, session_id, new_message, state_delta=None, run_config=None):
             calls.append("runner-called")
             yield None
 

@@ -38,6 +38,20 @@ class KnowledgeToolError(Exception):
     """
 
 
+class KnowledgeToolRetrievalUnavailableError(RuntimeError):
+    """POST-6A -- governed knowledge could not be retrieved for
+    INFRASTRUCTURE reasons (database, narrowing, provenance
+    revalidation).
+
+    Deliberately an ERROR rather than an empty result: an empty
+    `agent_payload.items` is indistinguishable from "the corpus contains
+    nothing applicable", and a model handed that will tell the user it
+    found no knowledge -- turning our outage into an apparent gap in
+    THEIR information. Raising forces the adapter onto its error branch,
+    which reports the outage honestly.
+    """
+
+
 class KnowledgeToolConsistencyError(KnowledgeToolError):
     """Raised when a 5.1G `KnowledgeRetrievalResult` and a 5.1H
     `KnowledgeEvidenceSet` do not correlate one-to-one by
@@ -197,3 +211,13 @@ class KnowledgeSearchExecutionResult:
 
     agent_payload: KnowledgeSearchAgentPayload
     evidence_set: KnowledgeEvidenceSet
+    availability: str = "available"
+    """POST-6A -- the typed `EvidenceAvailability` value this search
+    resolved to, carried so orchestration and presentation never have to
+    INFER why there is no evidence. `available` is the default and is
+    what the direct (non-shared) path continues to report."""
+    degradation: str = "none"
+    """POST-6A -- the typed `RetrievalDegradation` value, e.g. a semantic
+    channel that could not run. A degraded success is still a success:
+    authorized exact/lexical evidence is returned, and the loss is
+    reported rather than implied."""

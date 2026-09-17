@@ -295,7 +295,7 @@ class _ManyFindingsFakeRunner:
         self._app_name = app_name
         self._session_service = session_service
 
-    async def run_async(self, *, user_id: str, session_id: str, new_message: Any, run_config: Any = None):
+    async def run_async(self, *, user_id: str, session_id: str, new_message: Any, state_delta: Any = None, run_config: Any = None):
         request = json.loads(new_message.parts[0].text)
         prefetched = request["prefetched_evidence"]
         evidence = [{"message_id": m["message_id"], "author": m["author"], "sent_at": m["sent_at"]} for m in prefetched]
