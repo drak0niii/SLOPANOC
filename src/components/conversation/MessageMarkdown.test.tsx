@@ -274,3 +274,34 @@ describe("MessageMarkdown — long structured response (section 29/38)", () => {
     expect(text).not.toMatch(/^\s*-\s/m);
   });
 });
+
+describe("MessageMarkdown — command parameter highlighting", () => {
+  it("renders substituted command parameter token with highlight styling", () => {
+    const { container } = render(
+      <MessageMarkdown content="Approved Command: `restart board `**`SLOT-4-DUS`**` --graceful`" />
+    );
+    const strong = container.querySelector("strong");
+    expect(strong).not.toBeNull();
+    const codeInStrong = strong?.querySelector("code");
+    expect(codeInStrong).not.toBeNull();
+    expect(codeInStrong?.textContent).toBe("SLOT-4-DUS");
+  });
+});
+
+describe("MessageMarkdown — pseudo-XML sanitization", () => {
+  it("sanitizes leaked <interaction> and <target_selection_request> tags", () => {
+    const raw = `Here are the matching chats:
+<interaction>
+<target_selection_request>
+<option id="1">SLOPANOC Gateway Group Test</option>
+</target_selection_request>
+</interaction>
+Please choose one.`;
+    const { container } = render(<MessageMarkdown content={raw} />);
+    expect(container.textContent).not.toContain("target_selection_request");
+    expect(container.textContent).not.toContain("<interaction>");
+    expect(container.textContent).toContain("Here are the matching chats:");
+    expect(container.textContent).toContain("Please choose one.");
+  });
+});
+

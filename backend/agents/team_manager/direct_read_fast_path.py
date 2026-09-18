@@ -1016,17 +1016,37 @@ def get_fast_path_team_manager() -> Any:
     runner` calls this in place of importing the base `team_manager`
     directly.
     """
+    from backend.agents.team_manager.agent import _build_team_manager_tools, team_manager
+    from backend.config.settings import get_settings
+
+    tae_enabled = get_settings().technical_authority_enabled
     if not _fast_path_team_manager_cache:
-        from backend.agents.team_manager.agent import team_manager
+        update_dict: dict[str, Any] = {
+            "before_model_callback": [
+                _present_fast_path_result_via_trusted_pipeline,
+                before_model_call("team_manager"),
+            ]
+        }
+        if tae_enabled:
+            update_dict["tools"] = _build_team_manager_tools(True)
 
         _fast_path_team_manager_cache.append(
-            team_manager.model_copy(
-                update={
-                    "before_model_callback": [
-                        _present_fast_path_result_via_trusted_pipeline,
-                        before_model_call("team_manager"),
-                    ]
-                }
-            )
+            team_manager.model_copy(update=update_dict)
         )
+    else:
+        current_agent = _fast_path_team_manager_cache[0]
+        has_tae = any(
+            getattr(t, "name", "") in ("technical_authority_engineer", "troubleshooting_manager")
+            for t in current_agent.tools
+        )
+        if has_tae != tae_enabled:
+            update_dict = {
+                "tools": _build_team_manager_tools(tae_enabled),
+                "before_model_callback": [
+                    _present_fast_path_result_via_trusted_pipeline,
+                    before_model_call("team_manager"),
+                ],
+            }
+            _fast_path_team_manager_cache[0] = team_manager.model_copy(update=update_dict)
+
     return _fast_path_team_manager_cache[0]

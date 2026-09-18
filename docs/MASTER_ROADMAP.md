@@ -205,7 +205,7 @@ implemented which of the four.
 | 10 | OOB-01 | Runtime Activity Truthfulness (Phase 2) + chat UI polish | Feature + UI polish | `activity_queue.py`/`activity_translator.py` (truthful mid-turn activity), Sidebar/ScrollingText polish | COMPLETE | 2026-09-09 | `351b65e` | P01–P04 | — | Backend + frontend test suites | CLAUDE.md |
 | 11 | OOB-02 | D1/D2/D3/UX-1 Corrective Passes | Fix | D1: `known_message_ids` rewind-null normalization. D2: OpenTelemetry cross-task context-detach fix (+ deadlock sub-fix). D3: historical action-card audit (no defect). UX-1: "Earlier action completed" presentation refinement | COMPLETE | 2026-09-10 | `f92eb6e` | OOB-01 | DEF-0001, DEF-0002, DEF-0003 (all closed by `f92eb6e`) | Backend + frontend test suites | docs/DEFECT_REGISTER.md |
 | 12 | P10 | 5.X — Teams Rich Content / Media Retrieval | Feature | Inline Teams image discovery/retrieval (first slice), rich-content fast-path routing correction, real Gemini multimodal delivery with full `(chat, message, hosted_content)` provenance binding, multi-image support, Source-drawer visual evidence, deterministic all-image retrieval | **COMPLETE / FROZEN** | 2026-09-11 | `0407808` | P07, P09-M01, P09-M03, OOB-02 | DEF-0009, DEF-0010, DEF-0011, DEF-0012, DEF-0015, DEF-0016 (all closed by `0407808`) | Real-stack live validation (real Power Automate/Teams, real Gemini/Vertex, real browser) | docs/TEAMS_TOOL_CONTRACT.md §4b–§4c |
-| 13 | P11 | Phase 6A — Intelligence Architecture Foundation | Feature (planned) | Context Engineering foundation, Troubleshooting Manager specialist, Skills framework, Experience Memory foundation | **NEXT — NOT STARTED** | — | — | P10 | — | — | docs/BUILD_SEQUENCE.md §2a |
+| 13 | P11 | Phase 6A — Technical Authority Engineer Foundation | Feature | Advisory specialist `technical_authority_engineer` (alias `troubleshooting_manager`), single-step diagnostic discipline, command grounding, server-validated context envelope, feature-flag gated (`SLOPANOC_TECHNICAL_AUTHORITY_ENABLED`) | COMPLETE (Foundation) | 2026-09-16 | working tree | P10 | — | 28/28 unit/integration tests passing (`test_technical_authority_engineer.py`), full suite passing | docs/AGENT_CONTRACT.md §13 |
 | 14 | P12 | Phase 4H — Security Hardening | Feature (planned) | Trust boundaries, prompt-injection isolation, tool authorization/output validation, secret handling, Model Armor, audit events, adversarial regression | PLANNED | — | — | P11 | — | — | docs/BUILD_SEQUENCE.md §2a |
 | 15 | P13 | 5.2–5.7 — Operational Integrations | Feature (planned) | ITSM, Alarm/Fault, Topology/Inventory, KPI/Observability, Change Management, Handover | PLANNED | — | — | P12 | — | — | docs/BUILD_SEQUENCE.md §2a |
 | 16 | P14 | Phase 6B — Context Engineering Expansion | Feature (planned) | Full Operational Context surface, multisource assembly/ranking/budgeting/conflict handling | PLANNED | — | — | P13 | — | — | docs/BUILD_SEQUENCE.md §2a |
@@ -297,12 +297,13 @@ CURRENT reality by any document in this repository:
   retrieval, and Adaptive Cards remain explicitly OUT OF SCOPE of P10 —
   not built, not claimed as built anywhere in this repository's
   corrected documentation.
-- **Phase 6A — Intelligence Architecture Foundation (P11) is NEXT — not
-  started.** Nothing in Phase 6A (Context Engineering Layer,
-  Troubleshooting Manager, Skills framework, Experience Memory,
-  Head of Automated Operations) exists in the codebase today — confirmed
-  by the absence of any `troubleshooting_manager`, `skills`, or
-  `experience_memory` module anywhere under `backend/`.
+- **Phase 6A — Technical Authority Engineer Foundation (P11) is COMPLETE
+  (Foundation)**: Technical Authority Engineer (`technical_authority_engineer`,
+  historical alias `troubleshooting_manager`) is implemented as the first
+  working advisory specialist in `backend/agents/technical_authority_engineer/`,
+  invoked via in-process `TechnicalAuthorityAgentTool(AgentTool)`, gated by
+  `SLOPANOC_TECHNICAL_AUTHORITY_ENABLED` (default `False`). Skills framework
+  and Experience Memory remain planned within Phase 6A.
 - Phase 4H (Security Hardening, P12), 5.2–5.7 (Operational
   Integrations, P13), Phase 6B (Context Engineering Expansion, P14), and
   Phase 7 (JOC / Advanced Troubleshooting, P15) are all still FUTURE, in

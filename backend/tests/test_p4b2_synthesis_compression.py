@@ -113,10 +113,12 @@ def test_generic_incident_manager_instruction_is_byte_for_byte_unchanged() -> No
     All-Image Retrieval milestone extended it once more to describe the
     two-tool split (`teams_get_hosted_content` for one specific image vs.
     `teams_get_all_hosted_content` for a deterministic, exhaustive batch)
-    and `failed_ordinals`/count-based reporting -- this is that
+    and `failed_ordinals`/count-based reporting, and the Governed Knowledge
+    Same-Turn Selection milestone mandated calling `knowledge_select_evidence`
+    in that exact same turn whenever retrieved knowledge is used -- this is that
     legitimate, intentional length, not P4B.2-era drift.
     """
-    assert len(INCIDENT_MANAGER_INSTRUCTION) == 54429
+    assert len(INCIDENT_MANAGER_INSTRUCTION) == 54462
 
 
 def test_synthesis_only_agent_no_longer_uses_the_generic_instruction() -> None:

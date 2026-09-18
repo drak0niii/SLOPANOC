@@ -49,7 +49,7 @@ not that the code is wrong.
 | POST-B7 UI/UX Refinement Milestone | ✅ COMPLETE |
 | A5 — Knowledge Island Ingestion Foundation + Real TELCO/RAN Compound Knowledge Validation | ✅ COMPLETE |
 | 5.X — Teams Rich Content / Media Retrieval | ✅ COMPLETE / FROZEN |
-| Phase 6A — Intelligence Architecture Foundation | **← NEXT** — not started |
+| Phase 6A — Technical Authority Engineer Foundation | ✅ COMPLETE (Foundation) / IN PROGRESS |
 | Phase 4H — Security Hardening | FUTURE — after 6A |
 | 5.2–5.7 — Operational Integrations | FUTURE — after 4H |
 | Phase 6B — Context Engineering Expansion | FUTURE — after 5.2–5.7 |
@@ -287,24 +287,26 @@ Incident Manager, never a new agent.
 built and validated against the context sources that already exist,
 before every future Operational Context source exists?
 
-**Capability introduced (target, not built):** a Context Engineering
-foundation that assembles bounded context for a specialist from whatever
-CURRENTLY exists by the time 6A starts — Knowledge Context/RAG, Case
-Context, Teams text, Teams rich media (5.X), and conversation/session
-context; a second specialist (Troubleshooting Manager) alongside Incident
-Manager, attached via `AgentTool` the same way Incident Manager is (never
-native `sub_agents` transfer); a reusable **Skills** behavioral
-framework/registry/controlled-selection concept ("how should this kind of
-work be performed?" — see `docs/AGENT_CONTRACT.md` §3a and
-`docs/TROUBLESHOOTING_STRATEGY.md` §12a) the Troubleshooting Manager
-selects and executes instead of one new agent per fault type; and an
-**Experience Memory** foundation/boundary (prior operational experience/
-pattern information — see `docs/KNOWLEDGE_CONTRACT.md` §22.3–22.4),
-distinct from Approved Knowledge and never silently promoted to it
-without the same human-gated `CANDIDATE → APPROVED` governance §22.4
-already defines. An optional supervisory Head of Automated Operations
-layer remains documented future architecture only — not automatically
-pulled into 6A's scope.
+**Capability introduced:**
+- **Technical Authority Engineer Foundation (COMPLETE)**: First working advisory
+  specialist (`technical_authority_engineer`, historical alias
+  `troubleshooting_manager`), attached via in-process `AgentTool` alongside
+  Incident Manager. Interprets technical problems, separates facts from
+  hypotheses, recommends at most ONE evidence-supported diagnostic check per
+  turn, explains diagnostic rationale and expected evidence, enforces strict
+  command grounding in approved knowledge, and enforces advisory boundaries
+  (`tools = []`, no execution, no approvals, no Teams writes). Gated by
+  `SLOPANOC_TECHNICAL_AUTHORITY_ENABLED` (default `False`).
+- **Context Engineering foundation (FUTURE / PLANNED)**: assembles bounded
+  context for specialists from existing sources (Knowledge Context/RAG, Case
+  Context, Teams text + media, session state).
+- **Skills behavioral framework (FUTURE / PLANNED)**: reusable behavioral
+  framework ("how should this kind of work be performed?").
+- **Experience Memory foundation (FUTURE / PLANNED)**: operational memory
+  boundary ("what have we seen before?").
+- An optional supervisory Head of Automated Operations layer remains
+  documented future architecture only — not automatically pulled into 6A's
+  scope.
 
 **Depends on:** A5 (real Knowledge Island ingestion) and 5.X (Teams rich
 media) having produced enough real context diversity — Teams text,

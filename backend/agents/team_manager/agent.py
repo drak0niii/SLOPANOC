@@ -79,6 +79,8 @@ for the full ADK-source-verified mechanism.
 """
 from __future__ import annotations
 
+from typing import Any, Optional
+
 from google.adk.agents import Agent
 
 from backend.agents.team_manager.case_context import team_manager_instruction_provider
@@ -106,6 +108,43 @@ _settings = get_settings()
 # module's own docstring for the full ADK-source-verified rationale.
 incident_manager_tool = MultimodalAgentTool(agent=_fast_path_incident_manager)
 
+
+def _build_team_manager_tools(enable_technical_authority: Optional[bool] = None) -> list[Any]:
+    """Builds the tool roster for Team Manager.
+
+    Gated by `SLOPANOC_TECHNICAL_AUTHORITY_ENABLED` (default False) to preserve
+    100% baseline behavior and API security contract assertions when disabled.
+    """
+    if enable_technical_authority is None:
+        enable_technical_authority = _settings.technical_authority_enabled
+    tools: list[Any] = [
+        incident_manager_tool,
+        record_case_analysis,
+        record_conversation_target,
+        record_source_requirements,
+    ]
+    if enable_technical_authority:
+        from backend.agents.technical_authority_engineer.agent import technical_authority_engineer_tool
+        from backend.agents.problem_manager.agent_tool import problem_manager_tool
+        from backend.agents.automated_operations_engineer.agent_tool import automated_operations_engineer_tool
+
+        tools.extend([
+            technical_authority_engineer_tool,
+            problem_manager_tool,
+            automated_operations_engineer_tool,
+        ])
+    return tools
+
+
+def get_team_manager(enable_technical_authority: Optional[bool] = None) -> Agent:
+    """Returns a Team Manager Agent configured with the appropriate tool set."""
+    if enable_technical_authority is None:
+        enable_technical_authority = _settings.technical_authority_enabled
+    if not enable_technical_authority:
+        return team_manager
+    return team_manager.model_copy(update={"tools": _build_team_manager_tools(True)})
+
+
 team_manager = Agent(
     name="team_manager",
     # Latency pass: a process-lifetime-shared `BaseLlm` instance rather
@@ -120,7 +159,7 @@ team_manager = Agent(
         "incident_manager specialist."
     ),
     instruction=team_manager_instruction_provider,
-    tools=[incident_manager_tool, record_case_analysis, record_conversation_target, record_source_requirements],
+    tools=_build_team_manager_tools(),
     # R3 FIX (correctness-regression pass): a LIST of callbacks -- ADK's
     # own documented multi-callback mechanism (verified against the
     # installed 1.33.0 source, `flows/llm_flows/functions.py`'s `_run_

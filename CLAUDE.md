@@ -36,12 +36,19 @@ CURRENT STATE (verified against the implementation — do not assume more)
 - Real React + TypeScript frontend (Vite, Tailwind) and real FastAPI backend.
 - Gemini, via Google ADK, performs reasoning/orchestration.
 - Team Manager is the only user-facing agent.
-- Incident Manager is currently the principal specialist agent, invoked by
+- Incident Manager is the principal operational/Teams specialist agent, invoked by
   Team Manager through an ADK AgentTool call (in-process, not a hand-off).
+- Technical Authority Engineer (`technical_authority_engineer`, historical
+  alias `troubleshooting_manager`) is implemented as the first working advisory
+  specialist (Phase 6A Foundation), invoked by Team Manager via in-process
+  `TechnicalAuthorityAgentTool(AgentTool)`, gated by the feature flag
+  `SLOPANOC_TECHNICAL_AUTHORITY_ENABLED` (default `False`). Baseline behavior,
+  tool rosters, and character budgets remain 100% preserved when disabled.
 - Power Automate is the Microsoft Teams / M365 gateway. Microsoft Graph is
   not integrated directly anywhere in this stack.
 - Persistent chat sessions are implemented (ADK DatabaseSessionService,
-  SQLite locally).
+  Cloud SQL PostgreSQL at runtime; isolated SQLite permitted only in
+  automated tests).
 - Persistent Case/fault context is implemented (backend/cases/), distinct
   from ordinary session/chat state.
 - True SSE streaming is implemented, with real mid-run cancellation.
@@ -135,8 +142,9 @@ and nothing in it changes the frozen architecture above.
                 |
        +--------+--------+
        v                 v
-    Incident Manager   Troubleshooting Manager
-     [CURRENT]            [FUTURE / Phase 6A]
+    Incident Manager   Technical Authority Engineer
+     [CURRENT]         (Troubleshooting Manager)
+       |               [CURRENT FOUNDATION / Phase 6A]
        |                   |
        |             Skills [FUTURE / Phase 6A]
        |                   |
@@ -187,8 +195,10 @@ includes" or "the system does" — those phrasings are reserved for what
   Context surface is Phase 6B scope (after 5.2–5.7). Do not build either
   during Phase 6A, and do not conflate 6A's bounded foundation with 6B's
   fuller expansion.
-- Troubleshooting Manager, Skills, and Experience Memory belong to Phase
-  6A (docs/BUILD_SEQUENCE.md §2a). Head of Automated Operations remains
+- Troubleshooting Manager / Technical Authority Engineer, Skills, and Experience Memory belong to Phase
+  6A (docs/BUILD_SEQUENCE.md §2a). Technical Authority Engineer Foundation is
+  now IMPLEMENTED and verified under `SLOPANOC_TECHNICAL_AUTHORITY_ENABLED`.
+  Head of Automated Operations remains
   FUTURE and OPTIONAL — it is not automatically part of 6A merely because
   6A exists, and must never be a mandatory hop in the current or 6A-era
   runtime. The current user-facing path remains Team Manager, unchanged.
@@ -265,10 +275,12 @@ Read the invariants below as constraints on ALL future work, not just A5:
   not restart for VSWR Over Threshold" remains authoritative even if
   Experience Memory shows three prior VSWR cases were restarted.
 
-None of Skills, Experience Memory, Context Engineering, Troubleshooting
-Manager, or MCP is implemented by this section — it is a documentation/
+None of Skills, Experience Memory, Context Engineering, or MCP
+is implemented by this section — it is a documentation/
 mental-model alignment pass only, performed after A5's completion, and
-does not reorder the locked roadmap below or reopen A5.
+does not reorder the locked roadmap below or reopen A5. Technical Authority
+Engineer Foundation (Phase 6A) is implemented as a bounded advisory specialist
+under feature flag `SLOPANOC_TECHNICAL_AUTHORITY_ENABLED`.
 
 ===================================================================
 NON-NEGOTIABLE TROUBLESHOOTING PRODUCT STRATEGY
@@ -374,10 +386,10 @@ See docs/TEAMS_TOOL_CONTRACT.md for the full contract.
 CURRENT PERSISTENCE / RUNTIME
 ===================================================================
 
-- Session persistence uses ADK's DatabaseSessionService; local development
-  defaults to SQLite unless `SLOPANOC_DATABASE_URL`/
-  `SLOPANOC_KNOWLEDGE_DATABASE_URL` explicitly select PostgreSQL — SQLite
-  remains the zero-setup default, never silently overridden.
+- Session persistence uses ADK's DatabaseSessionService; normal backend
+  runtime REQUIRES Cloud SQL PostgreSQL (`postgresql` SQLAlchemy dialect)
+  for both `SLOPANOC_DATABASE_URL` and `SLOPANOC_KNOWLEDGE_DATABASE_URL` —
+  SQLite is strictly permitted only in isolated automated tests.
 - POST-5.1 A — Cloud SQL PostgreSQL (A1–A4) is COMPLETE. A Cloud SQL
   PostgreSQL 18 instance (`sloc-anoc-sandbox01`, project
   `pr-msn-dev-gl-slopai-01`, region `europe-west4`) and its `slopanoc`
@@ -570,7 +582,8 @@ all-image reasoning — all live-validated; see the dedicated "5.X —
 TEAMS RICH CONTENT / MEDIA RETRIEVAL" entries further below and
 docs/MASTER_ROADMAP.md/docs/DEFECT_REGISTER.md for the canonical,
 always-current status and full defect history). **Phase 6A is now
-NEXT.**
+IN PROGRESS (Technical Authority Engineer Foundation COMPLETE / VERIFIED
+under feature flag `SLOPANOC_TECHNICAL_AUTHORITY_ENABLED`).**
 
 **ROADMAP REALIGNMENT (locked, replaces the previous A5 → Phase 4H →
 5.2–5.7 → Phase 6 order — see docs/BUILD_SEQUENCE.md §2a for the full
@@ -578,8 +591,8 @@ rationale):** the execution order after A5 is **5.X (Teams Rich
 Content / Media Retrieval) → Phase 6A (Intelligence Architecture
 Foundation) → Phase 4H (Security Hardening) → 5.2–5.7 → Phase 6B
 (Context Engineering Expansion) → Phase 7**. **5.X is COMPLETE / FROZEN.
-Phase 6A is NEXT — NOT STARTED.** Phase 4H no longer immediately follows
-A5; it now follows Phase 6A.
+Phase 6A Technical Authority Engineer Foundation is COMPLETE / VERIFIED.**
+Phase 4H follows Phase 6A.
 
 POST-5.1 B execution sequence (locked, do not reorder):
   B0 [DONE] Durable chat attachment architecture + ADK persistence audit
@@ -3564,6 +3577,53 @@ without a real, observed defect or a new, explicitly approved milestone.
 **NEXT: Phase 6A — Intelligence Architecture Foundation.**
 
 ===================================================================
+PHASE 6A — TECHNICAL AUTHORITY ENGINEER FOUNDATION (COMPLETE / VERIFIED)
+===================================================================
+
+Phase 6A Foundation implements the first working advisory specialist:
+Technical Authority Engineer (`technical_authority_engineer`, preserving
+historical alias `troubleshooting_manager` for contract traceability).
+
+CORE MISSION & ADVISORY DISCIPLINE:
+- Interprets verified technical problems.
+- Distinguishes observed facts from working hypotheses.
+- Identifies missing diagnostic information.
+- Evaluates applicable approved knowledge/procedures.
+- Recommends at most ONE useful next diagnostic check per turn.
+- Explains why the check matters and what specific evidence is expected.
+- Strict command trust: operational commands must be grounded in an
+  approved, verified source catalog (`ApprovedCommand`) or verified
+  evidence snippet; ungrounded commands are stripped (`command=None`,
+  `command_source=None`) and safety restrictions appended.
+- Advisory only: `tools = []`, no execution, no configuration changes,
+  no proposal approvals, no Teams write capabilities.
+- Team Manager remains the sole user-facing orchestrator; Incident Manager
+  retains sole Teams operation ownership.
+
+ADK EXECUTION & INTEGRATION CONTRACT:
+- Invoked via in-process `TechnicalAuthorityAgentTool(AgentTool)`
+  (`backend/agents/technical_authority_engineer/agent_tool.py`), running a
+  nested `Runner` with an ephemeral `InMemorySessionService`. Does not
+  transfer end-user conversation ownership (never native `sub_agents`).
+- Reuses process-shared Gemini client (`get_shared_llm`).
+- Governed by feature flag `SLOPANOC_TECHNICAL_AUTHORITY_ENABLED`
+  (default `False`). Baseline behavior, tool rosters, and character budgets
+  are 100% preserved when disabled.
+- Server-validated context envelope: caller claims are validated against
+  server state (`snapshot_selected_knowledge_evidence`,
+  `read_known_message_ids`, Case context) before execution.
+- Current-turn image evidence (`file_data` parts) forwarded from calling
+  `user_content`.
+- Dynamic instruction injection: `TECHNICAL_AUTHORITY_DELEGATION_ADDENDUM`
+  injected into `team_manager_instruction_provider` only when
+  `technical_authority_enabled` is True, preserving `TEAM_MANAGER_INSTRUCTION`
+  length below the 33,500-char threshold when disabled.
+- Function calling schema safety: request schema uses flat types
+  (`Optional[list[dict[str, Any]]]`) and `default=None` to avoid Pydantic v2
+  `$defs`/`$ref` and `_HAS_DEFAULT_FACTORY_CLASS` serialization crashes in
+  GenAI function declarations and ADK telemetry traces (DEF-0008).
+
+===================================================================
 
 COMPLETE (this section is preserved as it was originally written, when
 Phase 5.1 was still the next phase in this locked list — do not read the
@@ -3668,27 +3728,26 @@ implementation/defect/validation history.
   distinct governed-ingestion concern, reuse of the existing B5/B6
   architecture rather than a second vision pipeline).
 
-Then: PHASE 6A — INTELLIGENCE ARCHITECTURE FOUNDATION — ← NEXT, NOT
-STARTED, after 5.X
+Then: PHASE 6A — INTELLIGENCE ARCHITECTURE FOUNDATION — IN PROGRESS
+(Technical Authority Engineer Foundation COMPLETE / VERIFIED under
+feature flag `SLOPANOC_TECHNICAL_AUTHORITY_ENABLED`)
 
   Builds a BOUNDED intelligence/orchestration foundation against the
   context sources that already exist after A5 and 5.X (Knowledge
   Context/RAG, Case Context, Teams text + media, session state) — not
   the full future Operational Context surface (5.2–5.7 do not exist
-  yet). Contains: a Context Engineering foundation; a second specialist,
-  Troubleshooting Manager, attached via AgentTool alongside Incident
-  Manager (Team Manager remains the sole user-facing agent); a Skills
-  behavioral framework/registry ("how should this kind of work be
-  performed?" — never an agent, never a MOP/SOP, never a tool, never
-  memory — see docs/AGENT_CONTRACT.md §3a); an Experience Memory
-  foundation/boundary ("what have we seen before?" — never Approved
-  Knowledge, never silently promoted to it — see
-  docs/KNOWLEDGE_CONTRACT.md §22.3–22.4). Does NOT implement Phase 7's
-  mature troubleshooting loop (persistent Troubleshooting State,
-  hypothesis lifecycle, next-best-diagnostic-action loop, end states) —
-  6A is a foundation, not the finished troubleshooting experience. Does
-  not create one agent per fault type (Skills provide behavioral
-  specialization instead). Does not create a Knowledge Agent.
+  yet). Phase 6A Foundation implements the first working advisory
+  specialist: Technical Authority Engineer (`technical_authority_engineer`,
+  historical alias `troubleshooting_manager`), attached via AgentTool
+  alongside Incident Manager (Team Manager remains the sole user-facing
+  agent); single-step diagnostic discipline, server-validated context
+  envelope, and strict command grounding. Reusable Skills behavioral
+  framework/registry and Experience Memory foundation remain future 6A
+  work. Does NOT implement Phase 7's mature troubleshooting loop
+  (persistent Troubleshooting State, hypothesis lifecycle,
+  next-best-diagnostic-action loop, end states) — 6A is a foundation, not
+  the finished troubleshooting experience. Does not create one agent per
+  fault type. Does not create a Knowledge Agent.
 
 Then: PHASE 4H SECURITY HARDENING — FUTURE, after Phase 6A
 

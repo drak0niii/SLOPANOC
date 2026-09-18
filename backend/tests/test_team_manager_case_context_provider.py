@@ -142,6 +142,31 @@ async def test_context_never_persisted_into_session_state(patched_case_service: 
     assert dict(refreshed.state) == state_before
 
 
+@pytest.mark.asyncio
+async def test_instruction_includes_troubleshooting_state_when_present(patched_case_service: CaseService) -> None:
+    case = await patched_case_service.create_case(ALICE, "Cell Outage", "Loss on cell 42.")
+    ts_state = {
+        "fault_id": "FAULT-CELL-42",
+        "status": "investigating",
+        "symptom_summary": "Loss on cell 42",
+        "working_hypothesis": "Loose RF jumper",
+        "competing_hypotheses": ["Transceiver fault"],
+    }
+    ctx = await _readonly_context(
+        ALICE,
+        state={
+            ACTIVE_CASE_ID_STATE_KEY: case.case_id,
+            "troubleshooting_state": ts_state,
+        },
+    )
+    rendered = await team_manager.canonical_instruction(ctx)
+
+    assert "ACTIVE CASE CONTEXT:" in rendered[0]
+    assert "Active Fault: FAULT-CELL-42 (Status: investigating)" in rendered[0]
+    assert "Working Hypothesis: Loose RF jumper" in rendered[0]
+    assert "Competing Hypotheses: Transceiver fault" in rendered[0]
+
+
 def test_case_context_module_never_calls_append_event() -> None:
     """Structural guarantee alongside the functional one above -- this
     module has no code path that could persist anything. Checks for an

@@ -50,7 +50,11 @@ const CodeBlockContext = createContext(false);
 
 const components: Components = {
   p: ({ children }) => <p className="mb-2.5 whitespace-pre-wrap break-words">{children}</p>,
-  strong: ({ children }) => <strong className="font-semibold text-primary">{children}</strong>,
+  strong: ({ children }) => (
+    <strong className="font-semibold text-primary [&>code]:bg-amber-500/15 [&>code]:text-amber-300 [&>code]:border [&>code]:border-amber-500/30">
+      {children}
+    </strong>
+  ),
   em: ({ children }) => <em className="italic">{children}</em>,
   h1: ({ children }) => (
     <h1 className="mb-2 mt-4 text-lg font-semibold leading-snug text-primary">{children}</h1>
@@ -137,6 +141,20 @@ const components: Components = {
 
 const remarkPlugins = [remarkGfm];
 
+/**
+ * Strips raw internal pseudo-XML tags emitted by LLM hallucinations
+ * (e.g. `<interaction>`, `<target_selection_request>`, `<option>...`)
+ * to prevent leaking raw system tags into visible markdown text.
+ */
+function sanitizeMessageContent(raw: string): string {
+  if (!raw) return "";
+  return raw
+    .replace(/<interaction\b[^>]*>[\s\S]*?<\/interaction>/gi, "")
+    .replace(/<target_selection_request\b[^>]*>[\s\S]*?<\/target_selection_request>/gi, "")
+    .replace(/<\/?(?:interaction|target_selection_request|option)\b[^>]*>/gi, "")
+    .trimStart();
+}
+
 export const MessageMarkdown = memo(function MessageMarkdown({
   content,
   className,
@@ -144,10 +162,11 @@ export const MessageMarkdown = memo(function MessageMarkdown({
   content: string;
   className?: string;
 }) {
+  const sanitized = sanitizeMessageContent(content);
   return (
     <div className={cn("text-base leading-relaxed text-primary [&>*:first-child]:mt-0 [&>*:last-child]:mb-0", className)}>
       <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
-        {content}
+        {sanitized}
       </ReactMarkdown>
     </div>
   );

@@ -26,14 +26,15 @@ architecture those passes produced.
 |---|---|---|---|---|
 | `team_manager` | Orchestrator, sole user-facing author | Yes | No — never calls a Teams tool directly | No — presents proposals and outcomes; a deterministic policy gate owns actual authorization |
 | `incident_manager` | Teams specialist | No — never produces text the user sees directly | Yes — sole caller of the Teams tools (`docs/TEAMS_TOOL_CONTRACT.md`) | No — prepares/executes writes only when told to, and execution is independently re-authorized by the tool implementation itself |
+| `technical_authority_engineer` | Technical authority advisory specialist (historical alias `troubleshooting_manager`) | No — never communicates directly with user | No — `tools = []`, pure advisory analysis | No — no approval authority, no execution capabilities |
 
-No other agent exists today. The future second specialist is
-**Troubleshooting Manager** (Phase 6A — see `docs/BUILD_SEQUENCE.md`
-§2a and §2's "Future agent topology" below), which would attach to
-`team_manager` the same way `incident_manager` does. There is no
-Knowledge Agent, planned or built — Generic Governed Knowledge is a
-Knowledge Context provider/tool surface (§3a, §12), never a specialist
-of its own.
+`technical_authority_engineer` is implemented as the first working advisory
+specialist (Phase 6A Foundation), attached via in-process
+`TechnicalAuthorityAgentTool(AgentTool)` to `team_manager.tools`, gated by the
+feature flag `SLOPANOC_TECHNICAL_AUTHORITY_ENABLED` (default `False`). Baseline
+behavior, tool rosters, and character budgets remain 100% preserved when disabled.
+There is no Knowledge Agent, planned or built — Generic Governed Knowledge is a
+Knowledge Context provider/tool surface (§3a, §12), never a specialist of its own.
 
 ---
 
@@ -294,8 +295,8 @@ MCP        = FUTURE, OPTIONAL capability-discovery/invocation mechanism
 
 ### Responsible for
 
-- Teams-domain reasoning: turning a `team_manager` delegation into
-  `teams_list_chats`/`teams_get_messages`/`teams_get_members` calls, and
+- Operational collaboration and Teams-domain reasoning: turning a `team_manager` delegation into
+  `teams_list_chats`/`teams_get_messages`/`teams_get_members`/`teams_get_hosted_content` calls, and
   turning results back into a structured response (§6).
 - Discovering/resolving which chat a request refers to when given a name
   rather than an id (`chat_resolution.py`), including presenting an
@@ -303,11 +304,17 @@ MCP        = FUTURE, OPTIONAL capability-discovery/invocation mechanism
 - Retrieving messages and extracting decisions, actions, proposals, open
   questions, and risks — grounded only in messages actually retrieved this
   turn, never recalled from an earlier, unrelated call.
+- Extracting operational timeline, verified participant statements, and inline
+  visual evidence (Teams hosted images) in true document order.
+- Searching and selecting governed operational knowledge (`knowledge_search`,
+  `knowledge_select_evidence`) for operational context.
 - Preparing a Teams write action as a pending proposal, and — once
   `team_manager` signals the user approved it — invoking the write tool.
   `incident_manager` never decides approval itself; it only relays the
   intent, and the tool implementation independently re-authorizes before
   anything reaches Power Automate (§7).
+- Legacy diagnostic troubleshooting guidance (`troubleshooting_guidance`) ONLY
+  when Technical Authority Engineer is disabled (`SLOPANOC_TECHNICAL_AUTHORITY_ENABLED=False`).
 
 ### Must NOT do
 
@@ -316,6 +323,11 @@ MCP        = FUTURE, OPTIONAL capability-discovery/invocation mechanism
   user sees.
 - Must not invent Teams content. An empty retrieval is reported as a valid
   "no relevant messages" result, never filled in from general knowledge.
+- Must not perform technical root cause diagnosis, fault interpretation, or
+  procedural next-step selection when Technical Authority Engineer is enabled
+  (`SLOPANOC_TECHNICAL_AUTHORITY_ENABLED=True`). In that mode, technical advisory
+  authority belongs exclusively to `technical_authority_engineer`.
+- Must not execute commands, modify configurations, or bypass proposal approval.
 - Must not call Microsoft Graph or any Microsoft 365 API directly — every
   Teams operation goes through the tool contract
   (`docs/TEAMS_TOOL_CONTRACT.md`), which goes through Power Automate.
@@ -541,12 +553,95 @@ generic, safe response — it never falls back to a normal, tool-enabled
   remain independent of `incident_manager` and of any future specialist
   (e.g. the future Troubleshooting Manager) — it must not become one-off
   MOP/SOP reading logic owned by a single agent.
-- The currently planned next specialist is **Troubleshooting Manager**,
-  introduced as part of **Phase 6A — Intelligence Architecture
-  Foundation** (`docs/BUILD_SEQUENCE.md` §2a), the current next
-  implementation milestone — its prerequisite, **5.X (Teams Rich Content
-  / Media Retrieval, canonical P10)**, is now COMPLETE and FROZEN.
-  Troubleshooting Manager and Head of Automated Operations (§2's future
-  topology) were correctly never introduced during 5.X — 5.X was scoped
-  to Teams media retrieval only — and must not be introduced except as
-  part of Phase 6A actually building them.
+- The first working advisory specialist is **Technical Authority Engineer**
+  (historical alias **Troubleshooting Manager**), introduced as part of
+  **Phase 6A — Technical Authority Engineer Foundation** (`docs/BUILD_SEQUENCE.md`
+  §2a), implemented and verified under feature flag
+  `SLOPANOC_TECHNICAL_AUTHORITY_ENABLED`. Detailed contract lives in §13 below.
+  Head of Automated Operations (§2's future topology) remains future/optional.
+
+---
+
+## 13. technical_authority_engineer (Phase 6A Foundation)
+
+Historical alias: `troubleshooting_manager`.
+
+### Responsible for
+
+- Interpreting verified technical problems and incident symptoms.
+- Distinguishing observed facts from hypotheses.
+- Identifying missing diagnostic information needed to isolate root cause.
+- Evaluating applicable approved knowledge and diagnostic procedures.
+- Recommending at most ONE useful next diagnostic check per turn.
+- Explaining why the check matters and what specific evidence is needed.
+- Enforcing strict command trust: operational commands must be drawn
+  verbatim from an approved, verified source catalog or verified evidence
+  snippet.
+- Operating strictly in an advisory role: `tools = []`.
+
+### Must NOT do
+
+- Must not communicate with the user directly, in any form.
+- Must not execute commands, modify configurations, or trigger state changes.
+- Must not approve action proposals or grant operational permissions.
+- Must not perform Teams write actions or access Power Automate directly.
+- Must not recommend more than one diagnostic check in a single turn.
+- Must not fabricate ungrounded operational commands.
+
+### Schemas
+
+- Input: `TechnicalAuthorityRequest` (`problem_statement`, `verified_symptoms`,
+  `missing_information`, `verified_evidence`, `approved_commands_catalog`,
+  `known_applicability_facts`, `prior_steps_taken`).
+- Output: `TechnicalAuthorityResponse` (`outcome`: `recommended`,
+  `insufficient_evidence`, `escalation_required`, `error`;
+  `technical_interpretation`, `verified_evidence_citations`,
+  `missing_information`, `diagnostic_step`, `escalation_reason`, `detail`).
+- Step: `DiagnosticStep` (`action`, `reason`, `command`, `command_source`,
+  `expected_evidence`, `restrictions`).
+- Evidence Reference: `EvidenceReference` (`source_id`, `source_type`, `title`,
+  `content_snippet`, `metadata`).
+- Approved Command: `ApprovedCommand` (`command`, `source_id`,
+  `procedure_section`, `restrictions`).
+
+### Single-Step Discipline & Command Grounding Invariants
+
+- At most ONE diagnostic step per response.
+- `diagnostic_step` must be `None` when `outcome != recommended`.
+- If `outcome == recommended` but `diagnostic_step` is missing, the response
+  fails closed to `outcome = insufficient_evidence`.
+- Operational commands must match an entry in `approved_commands_catalog` or
+  appear within a verified evidence `content_snippet`. Ungrounded commands are
+  deterministically stripped (`command = None`, `command_source = None`) and
+  safety precautions appended.
+- Validated deterministically by `after_agent_callback`
+  (`enforce_technical_authority_response_integrity`).
+
+### Tool & Execution Model
+
+- Invoked via in-process `TechnicalAuthorityAgentTool(AgentTool)`, running a
+  nested Runner with an ephemeral `InMemorySessionService`.
+- Context envelope validation: caller-supplied claims in `verified_evidence`
+  and `approved_commands_catalog` are re-validated against trusted server state
+  before the nested agent runs.
+- Current-turn image parts from calling `user_content` forwarded into the
+  nested invocation.
+- Gated by `SLOPANOC_TECHNICAL_AUTHORITY_ENABLED` (default `False`). When
+  disabled, Team Manager tool roster and instruction are 100% untouched.
+
+### Overlap & Precedence Resolution with Incident Manager
+
+- **When TAE is disabled (`SLOPANOC_TECHNICAL_AUTHORITY_ENABLED=False`)**:
+  `incident_manager` maintains 100% legacy ownership of procedural troubleshooting
+  via `IncidentManagerResponse.troubleshooting_guidance`. The completion-boundary
+  override in `chat_service.py` renders deterministic one-command guidance if
+  populated.
+- **When TAE is enabled (`SLOPANOC_TECHNICAL_AUTHORITY_ENABLED=True`)**:
+  Team Manager delegates technical diagnosis exclusively to TAE via
+  `TECHNICAL_AUTHORITY_DELEGATION_ADDENDUM`.
+  If `incident_manager` was invoked earlier in the same turn for operational
+  retrieval and registered legacy troubleshooting guidance, `TechnicalAuthorityAgentTool.run_async`
+  explicitly discards it via `discard_troubleshooting_guidance(run_id)`.
+  This ensures that TAE's advisory recommendation is not overridden at the
+  `chat_service.py` completion boundary, preserving complete separation of concerns.
+

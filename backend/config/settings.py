@@ -71,6 +71,7 @@ _KNOWLEDGE_INGESTION_MAX_TOTAL_EXPANDED_BYTES_ENV_VAR = "SLOPANOC_KNOWLEDGE_INGE
 # one-time legacy-session backfill scan (B4A correction pass) to the same
 # candidate set, so that scan can never grow unbounded either.
 _SAVED_CHAT_LIST_LIMIT_ENV_VAR = "SLOPANOC_SAVED_CHAT_LIST_LIMIT"
+_TECHNICAL_AUTHORITY_ENABLED_ENV_VAR = "SLOPANOC_TECHNICAL_AUTHORITY_ENABLED"
 
 # Matches google.adk.agents.llm_agent.LlmAgent.DEFAULT_MODEL in the
 # installed ADK (1.33.0) -- not an independently invented default.
@@ -97,6 +98,8 @@ _DEFAULT_MODEL_WARMUP_ENABLED = True
 # defeating the whole point of this pass -- this default is comfortably
 # above the worst observed cold duration while still bounding startup.
 _DEFAULT_MODEL_WARMUP_TIMEOUT_SECONDS = 30.0
+# Phase 6A: Technical Authority Engineer feature flag (default False).
+_DEFAULT_TECHNICAL_AUTHORITY_ENABLED = False
 
 # "database" (persistent, ADK DatabaseSessionService) is the default --
 # instruction: "the default local-development path should preferably use
@@ -219,6 +222,17 @@ class Settings:
         raw = self._env.get(_MODEL_WARMUP_ENABLED_ENV_VAR)
         if raw is None:
             return _DEFAULT_MODEL_WARMUP_ENABLED
+        return raw.strip().lower() in ("1", "true", "yes", "on")
+
+    @property
+    def technical_authority_enabled(self) -> bool:
+        """Phase 6A feature flag -- `SLOPANOC_TECHNICAL_AUTHORITY_ENABLED`
+        (default False). Enables Technical Authority Engineer specialist
+        delegation and tools while leaving baseline behavior undisturbed when False.
+        """
+        raw = self._env.get(_TECHNICAL_AUTHORITY_ENABLED_ENV_VAR)
+        if raw is None:
+            return _DEFAULT_TECHNICAL_AUTHORITY_ENABLED
         return raw.strip().lower() in ("1", "true", "yes", "on")
 
     @property

@@ -39,8 +39,9 @@ checkpoint.
   (`gemini-2.5-flash` by default, overridable — see [Configuration](#configuration)).
 - A process-lifetime-shared model client per configured model name, and an
   optional startup model warm-up.
-- Persistent chat sessions (ADK `DatabaseSessionService`, SQLite by default
-  locally) — conversations survive a backend restart.
+- Persistent chat sessions (ADK `DatabaseSessionService`, Cloud SQL
+  PostgreSQL at runtime; isolated SQLite permitted only in automated tests) —
+  conversations survive a backend restart.
 - Streaming responses over Server-Sent Events, with real mid-run
   cancellation.
 - Editing an earlier message rewinds the session so later, now-stale turns
@@ -54,6 +55,13 @@ checkpoint.
   not a hand-off). It has both Teams tools and generic `knowledge_search`/
   `knowledge_select_evidence` KM tools directly — there is no separate
   Knowledge agent.
+- Technical Authority Engineer (`technical_authority_engineer`, historical
+  alias `troubleshooting_manager`): advisory specialist for interpreting
+  technical problems, single-step diagnostic recommendations, and strict
+  command grounding (Phase 6A Foundation), invoked via in-process
+  `TechnicalAuthorityAgentTool(AgentTool)`, gated by the feature flag
+  `SLOPANOC_TECHNICAL_AUTHORITY_ENABLED` (default `False`). Advisory only:
+  no execution, no config changes, no proposal approvals, no Teams writes.
 - Deterministic resolution of what "this chat" refers to — the current
   SLOPANOC conversation, a previously-selected Teams chat, or a Teams chat
   named explicitly in the current message.
@@ -93,8 +101,9 @@ checkpoint.
   that branch of the conversation is discarded (edit/rewind).
 
 **Persistence / case context**
-- Local development persistence uses SQLite through ADK's
-  `DatabaseSessionService`.
+- Backend persistence uses Cloud SQL PostgreSQL through ADK's
+  `DatabaseSessionService` (mandatory at runtime; hermetic SQLite is
+  restricted to isolated automated tests).
 - A separate, optional Case/fault context store (`backend/cases/`) can be
   linked to a session to give the assistant durable, cross-session context —
   distinct from ordinary chat/session state.
@@ -584,6 +593,7 @@ Backend configuration is read from process environment variables
 | `SLOPANOC_SAVED_CHAT_LIST_LIMIT` | Recent-N cap for `GET /api/sessions` and its legacy-marker backfill scan (POST-5.1 B4B) — not real pagination, ADK's `list_sessions` has none | `50` |
 | `SLOPANOC_CASE_CONTEXT_MAX_ITEMS` | Max Case context items shown to the model | `12` |
 | `SLOPANOC_CASE_CONTEXT_MAX_CHARACTERS` | Max Case context characters shown to the model | `4000` |
+| `SLOPANOC_TECHNICAL_AUTHORITY_ENABLED` | Feature flag to enable Technical Authority Engineer advisory specialist (Phase 6A Foundation) | `false` |
 | `SLOPANOC_MODEL_WARMUP_ENABLED` | Warm up the model client on startup | `true` |
 | `SLOPANOC_MODEL_WARMUP_TIMEOUT_SECONDS` | Warm-up timeout | `30` |
 | `VITE_SLOPANOC_API_BASE_URL` | Frontend override for the backend base URL (see `.env.example`) | same-origin, proxied by Vite |
@@ -739,7 +749,7 @@ rationale):**
 ```text
 A5 (COMPLETE)
   → 5.X Teams Rich Content / Media Retrieval   COMPLETE / FROZEN
-  → Phase 6A Intelligence Architecture Foundation   ← NEXT, NOT STARTED
+  → Phase 6A Intelligence Architecture Foundation   IN PROGRESS (Technical Authority Engineer Foundation COMPLETE / VERIFIED)
   → Phase 4H Security Hardening                     FUTURE
   → 5.2–5.7 Operational Integrations                FUTURE
   → Phase 6B Context Engineering Expansion          FUTURE

@@ -60,16 +60,40 @@ from backend.api.case_service import ACTIVE_CASE_ID_STATE_KEY
 from backend.cases.schemas import CaseContextSnapshot
 from backend.cases.service import get_case_service
 from backend.cases.snapshot import build_case_context_snapshot
+from backend.cases.troubleshooting_state import TroubleshootingState
+from backend.config.settings import get_settings
+from backend.context.assembly import ContextDomain, ContextEngineeringBroker, ContextItem
 from backend.gateway.safe_error import SafeErrorException
 
+TECHNICAL_AUTHORITY_DELEGATION_ADDENDUM = """
+TECHNICAL AUTHORITY ENGINEER DELEGATION (Phase 6A):
+When the user asks for technical troubleshooting, diagnosis of a fault or issue, or next steps to resolve a problem:
+- Delegate technical fault interpretation and diagnostic step recommendations EXCLUSIVELY to the `technical_authority_engineer` specialist tool.
+- Use `incident_manager` strictly for operational retrieval (Teams messages, incident chat history, visual evidence) and Teams communications (proposing/sending messages or creating chats). Do NOT delegate technical diagnostic recommendations or procedural next steps to `incident_manager`.
+- If incident context or symptoms must be retrieved from Teams, first delegate to `incident_manager` to gather operational facts, then pass the verified symptoms, problem statement, and known applicability facts to `technical_authority_engineer`.
+- Provide the problem statement, verified symptoms, and any known applicability facts to `technical_authority_engineer`.
+- The specialist evaluates technical evidence and recommends at most ONE evidence-grounded next check, or identifies missing diagnostic information.
+- Relay the specialist's technical interpretation, the single next check, and its justification clearly to the user.
+- The specialist operates in an advisory role only: no direct execution, no configuration changes, no approval authority, no Teams write capabilities.
+"""
 
-def _render_case_context_block(snapshot: CaseContextSnapshot) -> str:
+
+def _render_case_context_block(
+    snapshot: CaseContextSnapshot,
+    troubleshooting_state: Optional[TroubleshootingState] = None,
+) -> str:
     lines = [
         "ACTIVE CASE CONTEXT:",
         f"Title: {snapshot.title}",
         f"Status: {snapshot.status.value}",
         f"Problem statement: {snapshot.problem_statement}",
     ]
+    if troubleshooting_state:
+        lines.append(f"Active Fault: {troubleshooting_state.fault_id} (Status: {troubleshooting_state.status.value})")
+        if troubleshooting_state.working_hypothesis:
+            lines.append(f"Working Hypothesis: {troubleshooting_state.working_hypothesis}")
+        if troubleshooting_state.competing_hypotheses:
+            lines.append(f"Competing Hypotheses: {', '.join(troubleshooting_state.competing_hypotheses)}")
     if snapshot.external_reference:
         lines.append(f"External reference: {snapshot.external_reference}")
     if snapshot.items:
@@ -108,6 +132,9 @@ async def team_manager_instruction_provider(ctx: ReadonlyContext) -> str:
     base = TEAM_MANAGER_TRUSTED_RESULT_INSTRUCTION if pending_specialist_result else TEAM_MANAGER_INSTRUCTION
     base_instruction = await inject_session_state(base, ctx)
 
+    if get_settings().technical_authority_enabled and not pending_specialist_result:
+        base_instruction = f"{base_instruction}\n\n{TECHNICAL_AUTHORITY_DELEGATION_ADDENDUM}"
+
     if not case_id:
         return base_instruction
 
@@ -118,5 +145,37 @@ async def team_manager_instruction_provider(ctx: ReadonlyContext) -> str:
     except SafeErrorException:
         return base_instruction
 
+    ts_raw = ctx.state.get("troubleshooting_state")
+    troubleshooting_state: Optional[TroubleshootingState] = None
+    if ts_raw and isinstance(ts_raw, dict):
+        try:
+            troubleshooting_state = TroubleshootingState.model_validate(ts_raw)
+        except Exception:
+            pass
+
     snapshot = build_case_context_snapshot(case, items)
-    return f"{base_instruction}\n\n{CASE_CONTEXT_TEAM_MANAGER_ADDENDUM}\n\n{_render_case_context_block(snapshot)}"
+
+    # Context Engineering Layer: assemble multi-source bounded context
+    broker = ContextEngineeringBroker()
+    case_context_items = [
+        ContextItem(
+            domain=ContextDomain.CASE,
+            source_id=f"case-item-{idx}",
+            title=f"Case {item.kind.value} ({item.source_type.value})",
+            content=item.content,
+        )
+        for idx, item in enumerate(snapshot.items)
+    ]
+    _ = broker.assemble(
+        query=snapshot.problem_statement,
+        operational_items=case_context_items,
+        case_details={
+            "case_id": snapshot.case_id,
+            "title": snapshot.title,
+            "status": snapshot.status.value,
+            "problem_statement": snapshot.problem_statement,
+        },
+        troubleshooting_state=troubleshooting_state,
+    )
+
+    return f"{base_instruction}\n\n{CASE_CONTEXT_TEAM_MANAGER_ADDENDUM}\n\n{_render_case_context_block(snapshot, troubleshooting_state)}"

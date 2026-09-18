@@ -91,3 +91,61 @@ class TokenOverlapRelevanceScorer:
 
         overlap = query_tokens & candidate_tokens
         return len(overlap) / len(query_tokens)
+
+
+class DenseVectorRelevanceScorer:
+    """Computes dense semantic relevance using 768-dimensional embeddings."""
+
+    def __init__(self, embedding_service: Optional[Any] = None) -> None:
+        if embedding_service is None:
+            from backend.knowledge.embeddings.service import get_vector_embedding_service
+            self._embedding_service = get_vector_embedding_service()
+        else:
+            self._embedding_service = embedding_service
+
+    def score(self, query_text: str, knowledge_object: KnowledgeObject, section: KnowledgeSection) -> float:
+        if not query_text.strip() or not section.content.strip():
+            return 0.0
+
+        from backend.knowledge.embeddings.service import compute_cosine_similarity
+
+        candidate_parts = [
+            knowledge_object.title,
+            " ".join(knowledge_object.metadata.tags),
+            section.heading or "",
+            section.content,
+        ]
+        candidate_text = " ".join(p for p in candidate_parts if p)
+
+        query_vec = self._embedding_service.embed_text_sync(query_text)
+        candidate_vec = self._embedding_service.embed_text_sync(candidate_text)
+
+        sim = compute_cosine_similarity(query_vec, candidate_vec)
+        # Normalize [-1.0, 1.0] to [0.0, 1.0]
+        return max(0.0, min(1.0, (sim + 1.0) / 2.0))
+
+
+class HybridRelevanceScorer:
+    """Fuses sparse lexical overlap and dense semantic similarity scores."""
+
+    def __init__(
+        self,
+        sparse_scorer: Optional[KnowledgeRelevanceScorer] = None,
+        dense_scorer: Optional[KnowledgeRelevanceScorer] = None,
+        sparse_weight: float = 0.5,
+        dense_weight: float = 0.5,
+    ) -> None:
+        self._sparse_scorer = sparse_scorer if sparse_scorer is not None else TokenOverlapRelevanceScorer()
+        self._dense_scorer = dense_scorer if dense_scorer is not None else DenseVectorRelevanceScorer()
+        self._sparse_weight = sparse_weight
+        self._dense_weight = dense_weight
+
+    def score(self, query_text: str, knowledge_object: KnowledgeObject, section: KnowledgeSection) -> float:
+        sparse_score = self._sparse_scorer.score(query_text, knowledge_object, section)
+        dense_score = self._dense_scorer.score(query_text, knowledge_object, section)
+        total_weight = self._sparse_weight + self._dense_weight
+        if total_weight <= 0.0:
+            return 0.0
+        combined = (self._sparse_weight * sparse_score + self._dense_weight * dense_score) / total_weight
+        return max(0.0, min(1.0, combined))
+
