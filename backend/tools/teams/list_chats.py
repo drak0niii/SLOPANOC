@@ -258,9 +258,9 @@ def teams_list_chats(
         intent, never the user's original raw wording (which would still
         name the old, unresolved destination). `pending_operation` is
         your own closed classification of the base kind of read --
-        `"summarize"` or `"get_messages"` (see `ReadOperation`) -- kept
-        SEPARATE from `pending_question` specifically so the base intent
-        survives even in the rare case `pending_question` has to be
+        `"summarize"`, `"get_messages"`, or `"get_latest_hosted_image"`
+        (see `ReadOperation`) -- kept SEPARATE from `pending_question` so
+        the base intent survives even in the rare case `pending_question` has to be
         discarded for still naming the ambiguous chat (see
         `_safe_pending_question`). Leave all three unset for a write
         request.

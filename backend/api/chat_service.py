@@ -1290,6 +1290,80 @@ class ChatService:
         # final-response event can ever be appended for this attempt,
         # closing the fail-open history gap structurally rather than
         # relying on a second best-effort write after the fact.
+        if session.state.get(CANONICAL_RESULT_ENFORCEMENT_STATE_KEY) is not True:
+            try:
+                await self._session_service.persist_state_delta(
+                    session, {CANONICAL_RESULT_ENFORCEMENT_STATE_KEY: True}
+                )
+            except Exception:
+                _logger.error(
+                    "chat_service: canonical-result enforcement marker could not be established -- "
+                    "failing the turn closed before any specialist/model execution run_id=%s",
+                    sequencer.run_id,
+                )
+                yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
+                await self._record_turn_status(
+                    session_id, user_id, sequencer.run_id, TurnStatus.FAILED, "enforcement_marker_unavailable"
+                )
+                yield sequencer.build(
+                    StreamEventType.ERROR,
+                    {
+                        "code": "run_failure",
+                        "message": "The assistant could not start this request. Please try again.",
+                    },
+                )
+                failed_trace = trace_recorder.record(**response_failed_trace_step())
+                if failed_trace is not None:
+                    yield failed_trace
+                yield sequencer.build(StreamEventType.RUN_COMPLETED, {"outcome": "error"})
+                perf.log_duration("total_run", perf.elapsed_seconds())
+                return
+
+        # DEF-0048 HARDENING -- claim the pending read continuation, if any,
+        # IMMEDIATELY after session load/canonical enforcement and BEFORE
+        # any other state mutation of this turn (including the POST-6A
+        # turn-lifecycle bookkeeping just below). This restores the
+        # pre-POST-6A ordering deliberately: an audit of a live "selection
+        # not honored on resume" report found no data-loss mechanism in the
+        # current ADK `append_event` merge semantics (a later
+        # `persist_state_delta` call merges its own delta into the SAME
+        # in-memory `session.state` dict rather than replacing it, verified
+        # directly against the installed ADK 1.33.0
+        # `DatabaseSessionService`/`BaseSessionService` source, and against
+        # a real sqlite-backed `DatabaseSessionService` in
+        # test_read_continuation_database_backend_regression.py) -- but the
+        # continuation is this turn's single most safety-critical piece of
+        # state (it is what makes the selected Teams chat authoritative and
+        # keeps the model from re-opening a resolved ambiguity), so it must
+        # never depend on an incidental ordering property of unrelated
+        # bookkeeping that could legitimately change later (a different ADK
+        # version, a different session-service backend, a future
+        # refactor). Claiming it first makes "the continuation is bound
+        # before anything else about this turn is decided" true by
+        # construction, not by accident.
+        #
+        # Production-hardening pass (unchanged from before this reordering):
+        # consume (single-use) whatever `ResolvedReadContinuation` a prior
+        # turn's `selection_service.choose()` may have stored for a resumed
+        # SelectionCard read. Popped and its removal persisted
+        # UNCONDITIONALLY, before the Runner ever starts -- regardless of
+        # whether this turn's model actually ends up calling
+        # `incident_manager` -- so a cancelled/superseded/duplicated turn
+        # can never leave it around to be (mis)applied to a later,
+        # unrelated turn (see `read_continuation_enforcement.py`'s own
+        # module docstring for how it is applied, and
+        # `selection/service.py`'s `pop_read_continuation` for why this is
+        # the single consumption point). Stashing it in-process (never in
+        # persisted state) is what lets `enforce_read_continuation` --
+        # team_manager's `before_tool_callback` -- find it for this SAME
+        # turn's `incident_manager` call, if team_manager's model makes one.
+        pending_read_continuation = pop_read_continuation(session.state)
+        if pending_read_continuation is not None:
+            await self._session_service.persist_state_delta(
+                session, {PENDING_READ_CONTINUATION_STATE_KEY: None}
+            )
+            stash_active_read_continuation(session_id, pending_read_continuation)
+
         # ============================================================
         # POST-6A -- ONE FAILURE BOUNDARY FOR THE WHOLE TURN
         # ============================================================
@@ -1308,6 +1382,11 @@ class ChatService:
         # Keyed by `run_id`, which exists at acceptance -- the ADK
         # `invocation_id` does not exist until the Runner's first event,
         # far too late to be the acceptance marker.
+        #
+        # DEF-0048: deliberately AFTER the read-continuation claim above --
+        # this is unrelated turn bookkeeping and must never sit between
+        # session load and the continuation claim (see that block's own
+        # comment).
         try:
             coordinator = self._session_service.coordinator
             distributed = coordinator.distributed_available
@@ -1358,61 +1437,10 @@ class ChatService:
             await self._session_service.persist_state_delta(session, lifecycle_delta)
         except Exception:
             # Bookkeeping must never block a turn; the canonical-result
-            # enforcement marker below is the hard gate, not this.
+            # enforcement marker above is the hard gate, not this.
             _logger.warning(
                 "chat_service: could not record turn acceptance run_id=%s", sequencer.run_id, exc_info=True
             )
-
-        if session.state.get(CANONICAL_RESULT_ENFORCEMENT_STATE_KEY) is not True:
-            try:
-                await self._session_service.persist_state_delta(
-                    session, {CANONICAL_RESULT_ENFORCEMENT_STATE_KEY: True}
-                )
-            except Exception:
-                _logger.error(
-                    "chat_service: canonical-result enforcement marker could not be established -- "
-                    "failing the turn closed before any specialist/model execution run_id=%s",
-                    sequencer.run_id,
-                )
-                yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
-                await self._record_turn_status(
-                    session_id, user_id, sequencer.run_id, TurnStatus.FAILED, "enforcement_marker_unavailable"
-                )
-                yield sequencer.build(
-                    StreamEventType.ERROR,
-                    {
-                        "code": "run_failure",
-                        "message": "The assistant could not start this request. Please try again.",
-                    },
-                )
-                failed_trace = trace_recorder.record(**response_failed_trace_step())
-                if failed_trace is not None:
-                    yield failed_trace
-                yield sequencer.build(StreamEventType.RUN_COMPLETED, {"outcome": "error"})
-                perf.log_duration("total_run", perf.elapsed_seconds())
-                return
-
-        # Production-hardening pass: consume (single-use) whatever
-        # `ResolvedReadContinuation` a prior turn's `selection_service
-        # .choose()` may have stored for a resumed SelectionCard read.
-        # Popped and its removal persisted UNCONDITIONALLY, before the
-        # Runner ever starts -- regardless of whether this turn's model
-        # actually ends up calling `incident_manager` -- so a cancelled/
-        # superseded/duplicated turn can never leave it around to be
-        # (mis)applied to a later, unrelated turn (see
-        # `read_continuation_enforcement.py`'s own module docstring for
-        # how it is applied, and `selection/service.py`'s
-        # `pop_read_continuation` for why this is the single consumption
-        # point). Stashing it in-process (never in persisted state) is
-        # what lets `enforce_read_continuation` -- team_manager's
-        # `before_tool_callback` -- find it for this SAME turn's
-        # `incident_manager` call, if team_manager's model makes one.
-        pending_read_continuation = pop_read_continuation(session.state)
-        if pending_read_continuation is not None:
-            await self._session_service.persist_state_delta(
-                session, {PENDING_READ_CONTINUATION_STATE_KEY: None}
-            )
-            stash_active_read_continuation(session_id, pending_read_continuation)
 
         # Production hardening pass #4 -- hard-crash stale-trusted-result
         # protection: at the START of every turn, before this turn has

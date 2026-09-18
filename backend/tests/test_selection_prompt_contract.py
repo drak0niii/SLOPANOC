@@ -40,7 +40,7 @@ def test_incident_manager_prompt_threads_pending_question_and_time_range_through
         "also pass your own `question` and `requested_time_range` (exactly as given to you, including leaving "
         "either unset if it is unset) as `pending_question`/`pending_time_range`, PLUS `pending_operation`" in _IM
     )
-    assert "this lets a real chat-name ambiguity preserve what was actually being asked" in _IM
+    assert "Setting `pending_operation` lets a real chat-name ambiguity preserve what was actually being asked" in _IM
     assert "without replaying or re-deriving anything from raw conversation text" in _IM
     assert (
         "Leave `pending_question`/`pending_time_range`/`pending_operation` all unset for a sendMessage write "
@@ -50,16 +50,47 @@ def test_incident_manager_prompt_threads_pending_question_and_time_range_through
 
 def test_incident_manager_prompt_separates_operation_from_focus_question() -> None:
     """Pre-4H hardening pass (item 1): `pending_operation` (a closed
-    "summarize"/"get_messages" classification) is a SEPARATE signal from
-    `pending_question` (free-text focus/detail) -- set every time,
-    independent of whether `pending_question` is also set, so the base
-    read intent survives even when `pending_question` itself must later
-    be discarded for still naming the ambiguous chat.
+    "summarize"/"get_messages"/"get_latest_hosted_image" classification)
+    is a SEPARATE signal from `pending_question` (free-text focus/detail)
+    -- set every time, independent of whether `pending_question` is also
+    set, so the base read intent survives even when `pending_question`
+    itself must later be discarded for still naming the ambiguous chat.
     """
-    assert 'set to whichever of "summarize" or "get_messages"' in _IM
+    assert 'set to whichever of "summarize",' in _IM
+    assert '"get_messages", or "get_latest_hosted_image" best describes the base' in _IM
     assert "`pending_operation` is a SEPARATE signal from `pending_question`" in _IM
     assert "set it every time, even when `pending_question` is also set" in _IM
     assert "`pending_question` must NEVER repeat or restate `chat_topic`'s own name" in _IM
+
+
+def test_incident_manager_prompt_classifies_latest_image_requests_as_their_own_operation() -> None:
+    """DEF-0048: a request for "the last picture posted here" must be
+    classified as `pending_operation="get_latest_hosted_image"` -- a
+    closed, structural signal `_safe_pending_question` never touches --
+    rather than collapsing to "get_messages"/"summarize" and silently
+    losing the image-describe intent whenever the ambiguous chat's own
+    name happens to appear inside the user's free-text question.
+    """
+    assert 'Use "get_latest_hosted_image" whenever the request is about' in _IM
+    assert "the most recently posted image/picture/photo/screenshot/attachment in" in _IM
+    assert (
+        '"find the latest image and describe it" intent survives even when '
+        "`pending_question` cannot" in _IM
+    )
+
+
+def test_incident_manager_prompt_has_a_latest_image_retrieval_procedure() -> None:
+    """DEF-0048: once messages are retrieved, incident_manager must scan
+    them latest-first for the most recent image-bearing one and retrieve
+    it via the existing hosted-content tools -- never fabricate a
+    description, and never silently answer with text-only content when
+    the request was specifically about the latest image.
+    """
+    assert "LATEST IMAGE REQUESTS" in _IM
+    assert "scan them in the SAME latest-first order as MESSAGE CHRONOLOGY" in _IM
+    assert "that message is \"the latest posted image\"" in _IM
+    assert "If NO retrieved message has a non-empty `hosted_content_ids`" in _IM
+    assert 'set `outcome` to "no_result"' in _IM.split("LATEST IMAGE REQUESTS", 1)[1][:1200]
 
 
 # --- incident_manager: step 3 (selection_needed branch) --------------------

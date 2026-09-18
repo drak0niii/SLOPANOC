@@ -126,7 +126,7 @@ from backend.attachments.service import AttachmentService
 from backend.attachments.storage import ChatAttachmentStorage
 from backend.gateway.safe_error import SafeErrorException, validation_error
 from backend.selection.read_resume import build_read_resume_message
-from backend.selection.schemas import PendingReadIntent, ResolvedReadContinuation
+from backend.selection.schemas import PendingReadIntent, ReadOperation, ResolvedReadContinuation
 from backend.tools.teams.get_messages import KNOWN_MESSAGE_IDS_STATE_KEY, DEFAULT_MAX_MESSAGES, teams_get_messages
 from backend.tools.teams.list_chats import teams_list_chats
 
@@ -1040,10 +1040,33 @@ async def execute_read_continuation(
     case for a plain resumed "summarize this chat" -- there is no such
     requirement at all, so retrieval moves entirely into the application
     layer and the model gets exactly one, synthesis-only call.
+
+    DEF-0048 -- WHY `GET_LATEST_HOSTED_IMAGE` ALSO STAYS MODEL-DRIVEN,
+    EVEN WITH NO TIME RANGE: the deterministic-retrieval path's own
+    synthesis-only agent (`_SYNTHESIS_ONLY_INCIDENT_MANAGER`) has
+    `tools=[]` BY DESIGN (see that agent's own docstring -- "the model
+    reasons about retrieval, or calls anything at all... structurally
+    impossible"), and its `_PrefetchedEvidenceMessage` projection
+    deliberately carries only `message_id`/`author`/`sent_at`/`text`/
+    `message_references` -- no `hosted_content_ids` -- because nothing on
+    that path has ever needed image retrieval before. Both of those are
+    correct for a text-only summary/get-messages continuation, but
+    together they make "find and describe the latest image" structurally
+    UNREACHABLE on this path: there is no id for the model to see and no
+    tool it could call for one even if there were. `GET_LATEST_HOSTED_
+    IMAGE` therefore always routes to the model-driven path below, which
+    keeps `teams_get_hosted_content`/`teams_get_all_hosted_content` in
+    `_CONTINUATION_INCIDENT_MANAGER`'s own toolset (see that agent's own
+    docstring) and lets incident_manager's own "LATEST IMAGE REQUESTS"
+    instruction (prompts.py) call them for real, exactly as it already
+    does for a normal, non-continuation image request.
     """
     internal_session_id = _internal_session_id(parent_session_id, run_id)
     try:
-        if continuation.requested_time_range is None:
+        if (
+            continuation.requested_time_range is None
+            and continuation.operation is not ReadOperation.GET_LATEST_HOSTED_IMAGE
+        ):
             result = await _execute_via_deterministic_retrieval(
                 session_service=session_service,
                 user_id=user_id,

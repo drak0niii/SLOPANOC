@@ -52,10 +52,30 @@ class ReadOperation(str, Enum):
     of closed-enum judgment call it already makes for `outcome`
     (IncidentManagerOutcome) -- never a Python keyword/regex classifier
     over the user's own words.
+
+    DEF-0048: `GET_LATEST_HOSTED_IMAGE` is the structural fix for a
+    request like "get me the last picture posted in this chat, describe
+    it" -- before this value existed, the base intent had nowhere safe to
+    live except `question` (free text), which `list_chats.py`'s
+    `_safe_pending_question` must discard whenever the ambiguous chat's
+    own name happens to appear inside it (a near-certainty for exactly
+    this phrasing: "the last picture in chat room <topic>" names <topic>
+    directly) -- collapsing the request to a generic `SUMMARIZE`/
+    `GET_MESSAGES` continuation with the image intent silently gone. This
+    value carries "find the most recent image-bearing message in this
+    conversation and describe it" entirely in the closed `operation`
+    field, which `_safe_pending_question` never touches -- so the intent
+    survives disambiguation exactly like `SUMMARIZE`/`GET_MESSAGES`
+    already do, by construction, not by a text-surgery patch over
+    `_safe_pending_question` (explicitly out of scope -- see that
+    function's own docstring and `PendingReadIntent`'s "KNOWN LIMITATION"
+    paragraph for why arbitrary regex/text-replacement surgery on
+    user-authored text is never the fix this codebase reaches for).
     """
 
     SUMMARIZE = "summarize"
     GET_MESSAGES = "get_messages"
+    GET_LATEST_HOSTED_IMAGE = "get_latest_hosted_image"
 
 
 class PendingReadIntent(BaseModel):

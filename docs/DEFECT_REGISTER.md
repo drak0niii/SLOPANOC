@@ -40,7 +40,7 @@ bar — recording the negative finding is itself deliberate, per this
 register's own governing instruction, so nobody re-opens them later on
 the same mistaken suspicion.
 
-**Next available ID: DEF-0048.**
+**Next available ID: DEF-0049.**
 
 (Corrected POST-6A: this line read `DEF-0037` while DEF-0037 through
 DEF-0047 were all already recorded below. A stale next-ID is exactly
@@ -4759,6 +4759,108 @@ by an unrelated worker
   test_an_interrupted_turn_is_reconciled_not_lost`,
   `backend/tests/test_post6a_prompt6.py::
   test_a_long_running_active_turn_is_not_reconciled_as_interrupted`.
+
+===================================================================
+DEF-0048 — Resolved Teams selection is not authoritative across a resumed
+read turn for an image-describe request
+===================================================================
+
+- **Status:** FIXED.
+- **Severity:** HIGH — a user who had already resolved a Teams chat
+  ambiguity was asked to pick again instead of getting the answer.
+- **Component:** `backend/selection/schemas.py` (`ReadOperation`),
+  `backend/selection/read_resume.py`,
+  `backend/agents/team_manager/read_continuation_execution.py`
+  (`execute_read_continuation`'s dispatch),
+  `backend/agents/incident_manager/prompts.py`, `backend/api/chat_service.py`.
+- **Symptom (real live UI failure):** "give me the last picture posted in
+  chat room: SLOPANOC Gateway. Describe it for me" correctly produced an
+  ambiguous-chat SelectionCard; picking "SLOPANOC Gateway Group Test" was
+  confirmed by the UI, but the resumed turn replied "I still need you to
+  pick from the chat options I presented..." instead of describing the
+  image.
+- **Investigated and NOT confirmed as the mechanism (recorded so it is
+  never re-suspected without new evidence):** the initially-suspected
+  cause was POST-6A turn-lifecycle bookkeeping
+  (`reconcile_interrupted_turns`/`build_turn_lifecycle_delta`, added in
+  `Third`) now running, and its own `persist_state_delta` call executing,
+  BEFORE `pop_read_continuation(session.state)`, on the theory that this
+  could silently drop or hide `PENDING_READ_CONTINUATION_STATE_KEY`.
+  Verified directly against the installed ADK 1.33.0
+  `DatabaseSessionService`/`BaseSessionService` source: `append_event`
+  MERGES a delta into the SAME in-memory `session.state` dict (`session
+  .state.update({key: value})`) rather than replacing it, and the
+  session object `chat_service.py` uses across this sequence is loaded
+  once and never re-fetched — so an unrelated write cannot remove an
+  unrelated key. Reproduced directly against a real, file-backed
+  `DatabaseSessionService` (not just `InMemorySessionService`): the
+  continuation survived two full lifecycle-bookkeeping writes in a row
+  every time. No data-loss mechanism was found.
+- **Root cause actually confirmed:** `ReadOperation` (the closed
+  vocabulary a `PendingReadIntent`/`ResolvedReadContinuation` uses to
+  survive disambiguation) had only `SUMMARIZE`/`GET_MESSAGES` — no slot
+  for "find the latest posted image and describe it". That intent had
+  nowhere to live except free-text `pending_question`, which
+  `list_chats.py`'s `_safe_pending_question` must discard whenever the
+  ambiguous chat's own name appears inside it — a near-certainty for
+  exactly this phrasing ("...chat room: SLOPANOC Gateway...") — reducing
+  the resumed request to a bare, unfocused `GET_MESSAGES`/`SUMMARIZE`
+  continuation with the image intent silently gone. A second, independent
+  gap compounded this: even with a correctly-classified operation,
+  `execute_read_continuation`'s dispatch routed any continuation with no
+  `requested_time_range` (the common case for an image request) to the
+  P4B deterministic "prefetch + tools=[] synthesis" fast path — whose
+  synthesis-only agent has NO tools at all and whose
+  `_PrefetchedEvidenceMessage` projection does not even carry
+  `hosted_content_ids` — making "describe the latest image" structurally
+  unreachable on that path regardless of what the model wanted to do.
+- **Fix:**
+  - `ReadOperation.GET_LATEST_HOSTED_IMAGE` added as a first-class,
+    closed operation value (`schemas.py`), with its own generic resume
+    phrase (`read_resume.py`'s
+    `GENERIC_GET_LATEST_HOSTED_IMAGE_RESUME_TEXT`) — the base intent now
+    survives disambiguation structurally, never depending on
+    `pending_question` surviving sanitization.
+  - `incident_manager`'s prompt (`prompts.py`) gained classification
+    guidance for this operation (step 2) and a new "LATEST IMAGE
+    REQUESTS" procedure: scan retrieved messages latest-first for the
+    first one with a non-empty `hosted_content_ids` and retrieve it via
+    the existing hosted-content tools.
+  - `execute_read_continuation` now routes `GET_LATEST_HOSTED_IMAGE`
+    unconditionally to the model-driven (tools-enabled) path — the
+    tools=[] synthesis fast path is never used for it, regardless of
+    `requested_time_range` — so `teams_get_hosted_content`/`teams_get_
+    all_hosted_content` remain reachable.
+  - `chat_service.py` now claims (`pop_read_continuation`) the pending
+    continuation immediately after session load/canonical enforcement,
+    BEFORE the POST-6A turn-lifecycle bookkeeping block — restoring the
+    pre-`Third` relative ordering as defense-in-depth (not proven
+    necessary for correctness under current ADK merge semantics, but
+    removes the dependency on that being true forever).
+- **Regression protection:**
+  `backend/tests/test_def_0048_teams_selection_continuation_authority.py`
+  — the exact live journey end to end (no `teams.listChats` re-query, no
+  second `SELECTION_PENDING`, `teams.getMessages`/`teams.
+  getHostedContent` called with the authoritative chat id, a real
+  description reaches the user), the SAME journey against a real
+  file-backed `DatabaseSessionService`, a direct proof that the
+  continuation survives simulated POST-6A lifecycle writes, a structural
+  ordering-contract test, single-use/duplicate-resume/unrelated-next-turn
+  non-reuse, a failed selected-chat lookup failing closed without
+  re-disambiguating, the `execute_read_continuation` dispatch fix
+  (`GET_LATEST_HOSTED_IMAGE` always model-driven; `SUMMARIZE` unaffected),
+  and the structural intent-survives-sanitization proof at the
+  `teams_list_chats` layer. `backend/tests/test_selection_prompt_contract
+  .py` extended for the new prompt wording. Full existing
+  `test_read_continuation_*`/`test_ambiguous_selection_*`/
+  `test_selection_*` suites re-run green (SUMMARIZE/GET_MESSAGES
+  continuation behavior unaffected).
+- **Live validation:** not run against the real stack in this pass (no
+  live Gemini/Teams credentials in the implementing session) — the fix
+  is proven against real deterministic code paths (`teams_get_messages`,
+  `teams_get_hosted_content`, ADK's own session-state merge semantics)
+  with the specialist's own model reasoning faked, per this suite's
+  established, documented offline-testing limitation.
 
 ===================================================================
 MAINTENANCE

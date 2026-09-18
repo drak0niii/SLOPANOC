@@ -61,10 +61,21 @@ GENERIC_SUMMARY_RESUME_TEXT = "Please provide a summary of the currently selecte
 GENERIC_GET_MESSAGES_RESUME_TEXT = (
     "Please retrieve the latest messages from the currently selected Teams conversation."
 )
+GENERIC_GET_LATEST_HOSTED_IMAGE_RESUME_TEXT = (
+    "Please find the most recently posted image in the currently selected Teams conversation and describe it."
+)
+"""DEF-0048: the generic fallback for `ReadOperation.GET_LATEST_HOSTED_
+IMAGE` -- used only when `question` itself had to be discarded (see
+`PendingReadIntent.operation`'s docstring). Unlike the summarize/
+get_messages fallbacks, this phrase alone is normally sufficient: "find
+the latest image and describe it" IS the complete base intent for this
+operation, so losing `question` here loses far less than it would for a
+`question` that named a specific detail/focus."""
 
 _GENERIC_RESUME_TEXT_BY_OPERATION: dict[ReadOperation, str] = {
     ReadOperation.SUMMARIZE: GENERIC_SUMMARY_RESUME_TEXT,
     ReadOperation.GET_MESSAGES: GENERIC_GET_MESSAGES_RESUME_TEXT,
+    ReadOperation.GET_LATEST_HOSTED_IMAGE: GENERIC_GET_LATEST_HOSTED_IMAGE_RESUME_TEXT,
 }
 
 

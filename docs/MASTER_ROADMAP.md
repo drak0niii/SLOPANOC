@@ -628,6 +628,7 @@ sequence depends on.
 | Identity | OIDC/JWT bearer verification (issuer, audience, algorithm allowlist, tenant, JWKS rotation); browser login wired end to end on `oidc-client-ts`; 401 restarts sign-in |
 | Governance | Draft / approve / revoke all permission-gated; the admin CLI's configured-actor bypass closed (DEF-0046) |
 | Concurrency | PostgreSQL advisory locks for liveness PLUS a durable ownership generation (`slopanoc_operation_claims`) for fencing; ownership-based turn reconciliation (DEF-0047); cancellation-safe connection release |
+| Teams selection continuity | A resumed read continuation is claimed immediately after session load, before POST-6A turn-lifecycle bookkeeping (defense-in-depth ordering); `ReadOperation.GET_LATEST_HOSTED_IMAGE` is a first-class continuation operation so a "find the latest image, describe it" request survives disambiguation instead of collapsing to a generic message read (DEF-0048) |
 
 **NOT PROVEN — explicitly open:**
 
