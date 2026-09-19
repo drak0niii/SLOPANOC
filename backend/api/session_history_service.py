@@ -99,13 +99,40 @@ def _user_text(event: Any) -> Optional[str]:
     return text or None
 
 
+def _assistant_event_text(event: Any) -> Optional[str]:
+    """Extract non-thought text from an assistant event without requiring
+    `is_final_response() == True`. Used as a fallback when multi-part candidate
+    generation produces text in an intermediate step (e.g. alongside a tool call)
+    and the final step contains no new text parts.
+    """
+    if getattr(event, "author", None) == "user":
+        return None
+    if not getattr(event, "content", None) or not getattr(event.content, "parts", None):
+        return None
+    if getattr(event.content, "role", None) == "user":
+        return None
+    if getattr(event, "partial", False):
+        return None
+    texts = [t for t in (_non_thought_text(p) for p in event.content.parts) if t]
+    text = "\n".join(texts)
+    return text or None
+
+
 class _Turn:
     """In-memory-only accumulator while walking one session's active
     events -- never serialized itself; `SessionHistoryMessageDTO`s are
     built from it once the walk is done.
     """
 
-    __slots__ = ("turn_id", "user_text", "user_timestamp", "final_text", "final_timestamp")
+    __slots__ = (
+        "turn_id",
+        "user_text",
+        "user_timestamp",
+        "final_text",
+        "final_timestamp",
+        "candidate_text",
+        "candidate_timestamp",
+    )
 
     def __init__(self, turn_id: str) -> None:
         self.turn_id = turn_id
@@ -113,6 +140,8 @@ class _Turn:
         self.user_timestamp: Optional[float] = None
         self.final_text: Optional[str] = None
         self.final_timestamp: Optional[float] = None
+        self.candidate_text: Optional[str] = None
+        self.candidate_timestamp: Optional[float] = None
 
 
 def _project_turns(events: list[Any]) -> list[_Turn]:
@@ -166,6 +195,21 @@ def _project_turns(events: list[Any]) -> list[_Turn]:
             turn = _get(event.invocation_id)
             turn.final_text = final_text
             turn.final_timestamp = event.timestamp
+        else:
+            cand_text = _assistant_event_text(event)
+            if cand_text:
+                turn = _get(event.invocation_id)
+                if turn.candidate_text is None:
+                    turn.candidate_text = cand_text
+                else:
+                    turn.candidate_text = f"{turn.candidate_text}\n{cand_text}"
+                turn.candidate_timestamp = event.timestamp
+
+    for turn_id in order:
+        t = turns[turn_id]
+        if t.final_text is None and t.candidate_text:
+            t.final_text = t.candidate_text
+            t.final_timestamp = t.candidate_timestamp
 
     return [turns[turn_id] for turn_id in order if turns[turn_id].user_timestamp is not None]
 

@@ -44,6 +44,11 @@ async def record_case_analysis(
     """Record durable Case analysis -- a hypothesis, a recommendation, or
     an open question -- for the Case this session is currently linked to.
 
+    CRITICAL USAGE RESTRICTION: Call this tool ONLY when an active Case is
+    linked to the session and an "ACTIVE CASE CONTEXT" section is present in
+    your instructions. Never call this tool in ordinary, unlinked chat
+    sessions.
+
     Args:
       kind: One of "hypothesis", "recommendation", "open_question" --
         anything else is rejected. Never "evidence", "observation",

@@ -253,7 +253,7 @@ Do NOT simply re-confirm your prior answer's own earlier judgment. RE-EXAMINE `a
 
 If, on this fresh reading, one or more items in `available_evidence` materially help answer `question`: call `knowledge_select_evidence` with the exact `selection_key` of each -- copy verbatim, never invent one -- and then give a corrected, complete structured response that actually uses that evidence to answer `question`. This corrected response may differ from `prior_answer_text` in wording and substance; it must not differ in never inventing a command/fact/procedure step the selected evidence does not itself state.
 
-If, after this fresh reading, no item in `available_evidence` actually helps answer `question`: call `knowledge_select_evidence` with an empty list, then give an honest response stating that no applicable governed knowledge was found -- do not fabricate one to fill the gap.
+If, after this fresh reading, no item in `available_evidence` actually helps answer `question`: you MUST call `knowledge_select_evidence` with an empty list `[]` (`keys=[]`) to complete compliance safely, then give an honest response stating that no applicable governed knowledge was found -- do not fabricate one to fill the gap, and do NOT omit calling `knowledge_select_evidence([])`.
 
 Call `knowledge_select_evidence` exactly once, then respond with your structured answer. Do not call any other tool."""
 
