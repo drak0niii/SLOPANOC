@@ -126,6 +126,27 @@ def render_agent_roster_section(tools: list[Any]) -> str:
     return "\n".join(lines)
 
 
+def _render_troubleshooting_state_block(ts: TroubleshootingState) -> str:
+    lines = [
+        "ACTIVE TROUBLESHOOTING STATE:",
+        f"Fault ID: {ts.fault_id} (Status: {ts.status.value})",
+        f"Symptom summary: {ts.symptom_summary}",
+    ]
+    if ts.node_id:
+        lines.append(f"Node: {ts.node_id}")
+    if ts.working_hypothesis:
+        lines.append(f"Working Hypothesis: {ts.working_hypothesis}")
+    if ts.competing_hypotheses:
+        lines.append(f"Competing Hypotheses: {', '.join(ts.competing_hypotheses)}")
+    if ts.diagnostic_history:
+        lines.append("Diagnostic history:")
+        for rec in ts.diagnostic_history:
+            cmd_info = f" [cmd: `{rec.grounded_command}`]" if rec.grounded_command else ""
+            obs_info = f" -> observed: {rec.observed_result}" if rec.observed_result else ""
+            lines.append(f"- [{rec.status.value}] {rec.action}{cmd_info}{obs_info}")
+    return "\n".join(lines)
+
+
 def _render_case_context_block(
     snapshot: CaseContextSnapshot,
     troubleshooting_state: Optional[TroubleshootingState] = None,
@@ -142,6 +163,12 @@ def _render_case_context_block(
             lines.append(f"Working Hypothesis: {troubleshooting_state.working_hypothesis}")
         if troubleshooting_state.competing_hypotheses:
             lines.append(f"Competing Hypotheses: {', '.join(troubleshooting_state.competing_hypotheses)}")
+        if troubleshooting_state.diagnostic_history:
+            lines.append("Diagnostic history:")
+            for rec in troubleshooting_state.diagnostic_history:
+                cmd_info = f" [cmd: `{rec.grounded_command}`]" if rec.grounded_command else ""
+                obs_info = f" -> observed: {rec.observed_result}" if rec.observed_result else ""
+                lines.append(f"- [{rec.status.value}] {rec.action}{cmd_info}{obs_info}")
     if snapshot.external_reference:
         lines.append(f"External reference: {snapshot.external_reference}")
     if snapshot.items:
@@ -190,16 +217,6 @@ def make_team_manager_instruction_provider(
             if "automated_operations_engineer" in tool_names:
                 base_instruction = f"{base_instruction}\n\n{AUTOMATED_OPERATIONS_DELEGATION_ADDENDUM}"
 
-        if not case_id:
-            return base_instruction
-
-        try:
-            case_service = get_case_service()
-            case = await case_service.get_case(ctx.user_id, case_id)
-            items = await case_service.get_context_items(ctx.user_id, case_id)
-        except SafeErrorException:
-            return base_instruction
-
         ts_raw = ctx.state.get("troubleshooting_state")
         troubleshooting_state: Optional[TroubleshootingState] = None
         if ts_raw and isinstance(ts_raw, dict):
@@ -207,6 +224,20 @@ def make_team_manager_instruction_provider(
                 troubleshooting_state = TroubleshootingState.model_validate(ts_raw)
             except Exception:
                 pass
+
+        if not case_id:
+            if troubleshooting_state:
+                return f"{base_instruction}\n\n{_render_troubleshooting_state_block(troubleshooting_state)}"
+            return base_instruction
+
+        try:
+            case_service = get_case_service()
+            case = await case_service.get_case(ctx.user_id, case_id)
+            items = await case_service.get_context_items(ctx.user_id, case_id)
+        except SafeErrorException:
+            if troubleshooting_state:
+                return f"{base_instruction}\n\n{_render_troubleshooting_state_block(troubleshooting_state)}"
+            return base_instruction
 
         snapshot = build_case_context_snapshot(case, items)
 

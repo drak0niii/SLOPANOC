@@ -168,6 +168,11 @@ from backend.api.multimodal_turn_context import (
     trusted_image_parts_from_content,
 )
 from backend.agents.incident_manager.schemas import TroubleshootingGuidance
+from backend.agents.technical_authority_engineer.execution_context import (
+    discard_technical_authority_execution,
+    get_technical_authority_execution,
+    has_technical_authority_executed,
+)
 from backend.api.applicability_context_capture import discard_known_applicability_context
 from backend.api.streaming_events import EventSequencer, Stage, StreamEvent, StreamEventType, status_data
 from backend.api.troubleshooting_guidance_context import (
@@ -1682,6 +1687,10 @@ class ChatService:
             # snapshot-then-use-later shape. Never the model's own
             # agent_payload/text -- always the trusted backend accessor.
             selected_knowledge_evidence = snapshot_selected_knowledge_evidence(sequencer.run_id)
+            # Specialist-aware completion boundary: snapshot whether technical_authority_engineer
+            # evaluated a fault in this turn before discarding run-scoped execution tracking.
+            technical_authority_execution = get_technical_authority_execution(sequencer.run_id)
+            discard_technical_authority_execution(sequencer.run_id)
             # Same discipline for the Generic KM tool adapter's own
             # run-id-keyed trusted evidence state
             # (backend/tools/knowledge/runtime.py) -- guarantees no
@@ -1856,54 +1865,61 @@ class ChatService:
                 # this remediation.
 
         if error is None and source_requirements_capture.requires_governed_knowledge and not selected_knowledge_evidence:
-            # FOURTH pre-4H correction pass: PAST ASSISTANT OUTPUT != GOVERNED
-            # KNOWLEDGE. team_manager's own turn declared (via `record_
-            # source_requirements`, directly or via the remediation just
-            # above) that THIS request requires current governed
-            # knowledge, but this run's own trusted, run-scoped SELECTED
-            # evidence (snapshotted above, in the `finally` block) is
-            # empty -- whether because team_manager never delegated to
-            # incident_manager at all, or because its own free-form
-            # presentation did not carry a validated result forward
-            # faithfully. `final_text` is therefore UNTRUSTED for this
-            # governed-knowledge portion and must not reach the user as-is.
-            # See governed_knowledge_completion.py's own module docstring
-            # for the full live-failure rationale -- this deterministically
-            # forces the REAL, unmodified `incident_manager` to run, so ITS
-            # OWN existing compliance retry (provenance_compliance.py,
-            # third correction pass) is what actually enforces selection;
-            # this is not a second, competing selection mechanism.
-            _logger.warning(
-                "chat_service: requires_governed_knowledge declared but no current selected evidence -- "
-                "forcing deterministic governed-knowledge remediation run_id=%s",
-                sequencer.run_id,
-            )
-            try:
-                chat_topic = (
-                    refreshed_session.state.get(SELECTED_TEAMS_CHAT_TOPIC_STATE_KEY)
-                    if source_requirements_capture.requires_teams
-                    else None
-                )
-                final_text, selected_knowledge_evidence = await enforce_governed_knowledge_at_completion(
-                    question=_remediation_question(message_text),
-                    chat_topic=chat_topic,
-                    run_id=f"{sequencer.run_id}::governed-completion",
-                    # B7 live-regression corrective pass -- this turn's own
-                    # trusted image evidence (already validated once, into
-                    # `content`, above) must remain available across this
-                    # bounded remediation, exactly as it was for the
-                    # original delegation -- see governed_knowledge_
-                    # completion.py's own module docstring for the full
-                    # live-failure narrative this closes.
-                    image_parts=trusted_image_parts_from_content(content),
-                )
-            except Exception:
-                _logger.warning(
-                    "chat_service: governed-knowledge completion remediation raised -- failing closed run_id=%s",
+            if technical_authority_execution:
+                _logger.info(
+                    "chat_service: technical_authority_engineer evaluated the fault in this turn -- "
+                    "skipping incident_manager governed-knowledge completion override run_id=%s",
                     sequencer.run_id,
                 )
-                final_text = SAFE_COMPLETION_FAILURE_TEXT
-                selected_knowledge_evidence = []
+            else:
+                # FOURTH pre-4H correction pass: PAST ASSISTANT OUTPUT != GOVERNED
+                # KNOWLEDGE. team_manager's own turn declared (via `record_
+                # source_requirements`, directly or via the remediation just
+                # above) that THIS request requires current governed
+                # knowledge, but this run's own trusted, run-scoped SELECTED
+                # evidence (snapshotted above, in the `finally` block) is
+                # empty -- whether because team_manager never delegated to
+                # incident_manager at all, or because its own free-form
+                # presentation did not carry a validated result forward
+                # faithfully. `final_text` is therefore UNTRUSTED for this
+                # governed-knowledge portion and must not reach the user as-is.
+                # See governed_knowledge_completion.py's own module docstring
+                # for the full live-failure rationale -- this deterministically
+                # forces the REAL, unmodified `incident_manager` to run, so ITS
+                # OWN existing compliance retry (provenance_compliance.py,
+                # third correction pass) is what actually enforces selection;
+                # this is not a second, competing selection mechanism.
+                _logger.warning(
+                    "chat_service: requires_governed_knowledge declared but no current selected evidence -- "
+                    "forcing deterministic governed-knowledge remediation run_id=%s",
+                    sequencer.run_id,
+                )
+                try:
+                    chat_topic = (
+                        refreshed_session.state.get(SELECTED_TEAMS_CHAT_TOPIC_STATE_KEY)
+                        if source_requirements_capture.requires_teams
+                        else None
+                    )
+                    final_text, selected_knowledge_evidence = await enforce_governed_knowledge_at_completion(
+                        question=_remediation_question(message_text),
+                        chat_topic=chat_topic,
+                        run_id=f"{sequencer.run_id}::governed-completion",
+                        # B7 live-regression corrective pass -- this turn's own
+                        # trusted image evidence (already validated once, into
+                        # `content`, above) must remain available across this
+                        # bounded remediation, exactly as it was for the
+                        # original delegation -- see governed_knowledge_
+                        # completion.py's own module docstring for the full
+                        # live-failure narrative this closes.
+                        image_parts=trusted_image_parts_from_content(content),
+                    )
+                except Exception:
+                    _logger.warning(
+                        "chat_service: governed-knowledge completion remediation raised -- failing closed run_id=%s",
+                        sequencer.run_id,
+                    )
+                    final_text = SAFE_COMPLETION_FAILURE_TEXT
+                    selected_knowledge_evidence = []
 
         if error is None and final_text is not None:
             # A5 final corrective pass -- the HARD, deterministic one-

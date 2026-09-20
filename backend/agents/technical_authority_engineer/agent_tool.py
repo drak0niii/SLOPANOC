@@ -14,6 +14,7 @@ Enforces a server-validated context envelope:
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Optional
 
 from google.adk.memory import InMemoryMemoryService
@@ -26,6 +27,9 @@ from google.adk.utils.context_utils import Aclosing
 from google.genai import types
 from typing_extensions import override
 
+from backend.agents.technical_authority_engineer.execution_context import (
+    record_technical_authority_execution,
+)
 from backend.agents.technical_authority_engineer.schemas import (
     ApprovedCommand,
     EvidenceReference,
@@ -33,7 +37,19 @@ from backend.agents.technical_authority_engineer.schemas import (
     TechnicalAuthorityRequest,
     TechnicalAuthorityResponse,
 )
+from backend.agents.technical_authority_engineer.validation import (
+    _is_command_matching_snippet,
+    _template_to_regex,
+    validate_technical_authority_payload,
+)
+from backend.api.applicability_context_capture import register_known_applicability_context
 from backend.api.turn_context import current_run_id
+from backend.cases.troubleshooting_state import (
+    CheckLifecycleStatus,
+    TroubleshootingState,
+    TroubleshootingStatus,
+)
+from backend.knowledge.domain.applicability import ApplicabilityContext
 from backend.tools.knowledge.runtime import (
     get_available_knowledge_evidence,
     snapshot_selected_knowledge_evidence,
@@ -140,14 +156,27 @@ def build_server_validated_commands(
     evidence_references: list[EvidenceReference],
     caller_commands: list[dict[str, Any]],
 ) -> list[ApprovedCommand]:
-    """Assembles and verifies approved commands against verified evidence and procedures."""
+    """Assembles and verifies approved commands against verified evidence and procedures.
+
+    Mandatory Safeguard 1:
+    Command presence in an evidence snippet is not sufficient authorization.
+    Requires an approved, applicable procedure or governed command registry.
+    Validates exact commands/templates, parameters, restrictions, and source provenance.
+    Eliminates the vulnerability where raw_src presence authorized arbitrary commands.
+    """
     approved_list: list[ApprovedCommand] = []
     seen_commands: set[tuple[str, str]] = set()
 
-    # Evidence content snippets provide Ground Truth text
-    snippet_by_source: dict[str, str] = {
-        ev.source_id: (ev.content_snippet or "") for ev in evidence_references
-    }
+    _AUTHORIZED_SOURCE_TYPES = {"governed_knowledge", "approved_procedure", "governed_command_registry"}
+    authorized_sources: dict[str, str] = {}
+    for ev in evidence_references:
+        src_type = ev.source_type or ""
+        src_id = (ev.source_id or "").strip()
+        # Non-governed sources (Teams chats, raw case notes, user observations) CANNOT authorize operational commands
+        if src_type in ("teams_conversation", "case_context", "user_evidence", "observed_metric") or src_id.startswith("teams:"):
+            continue
+        if src_type in _AUTHORIZED_SOURCE_TYPES or (not src_type and not src_id.startswith("teams:")):
+            authorized_sources[src_id] = ev.content_snippet or ""
 
     for cmd_item in caller_commands:
         if not isinstance(cmd_item, dict):
@@ -157,9 +186,20 @@ def build_server_validated_commands(
         if not raw_cmd or not raw_src:
             continue
 
-        # Grounding check: command must exist in snippet for raw_src, or raw_src must be valid governed knowledge
-        snippet = snippet_by_source.get(raw_src, "")
-        if raw_cmd in snippet or raw_src in snippet_by_source:
+        if raw_src not in authorized_sources:
+            logger.warning(
+                "Rejecting caller command %r from unauthorized or non-governed source: %r",
+                raw_cmd,
+                raw_src,
+            )
+            continue
+
+        snippet = authorized_sources[raw_src]
+        cmd_stripped = re.sub(r"\*\*|`", "", raw_cmd).strip()
+
+        is_grounded = _is_command_matching_snippet(raw_cmd, cmd_stripped, snippet)
+
+        if is_grounded:
             key = (raw_cmd, raw_src)
             if key not in seen_commands:
                 seen_commands.add(key)
@@ -172,7 +212,11 @@ def build_server_validated_commands(
                     )
                 )
         else:
-            logger.warning("Rejecting ungrounded caller command: %r (source: %r)", raw_cmd, raw_src)
+            logger.warning(
+                "Rejecting ungrounded caller command: %r (not found in snippet for %r)",
+                raw_cmd,
+                raw_src,
+            )
 
     return approved_list
 
@@ -199,6 +243,70 @@ class TechnicalAuthorityAgentTool(AgentTool):
 
         run_id = current_run_id()
 
+        # 1. Register trusted applicability context for knowledge retrieval lifecycle
+        caller_facts = args.get("known_applicability_facts")
+        if caller_facts and isinstance(caller_facts, dict):
+            try:
+                app_ctx = ApplicabilityContext(dimensions=caller_facts)
+                register_known_applicability_context(run_id, app_ctx)
+            except Exception:
+                pass
+
+        # 2. Retrieve or initialize persistent TroubleshootingState
+        ts_raw = tool_context.state.get("troubleshooting_state")
+        troubleshooting_state: Optional[TroubleshootingState] = None
+        if ts_raw and isinstance(ts_raw, dict):
+            try:
+                troubleshooting_state = TroubleshootingState.model_validate(ts_raw)
+            except Exception:
+                pass
+
+        session_id = getattr(getattr(tool_context, "_invocation_context", None), "session_id", None)
+        case_id = tool_context.state.get("active_case_id")
+
+        if troubleshooting_state is None:
+            problem = args.get("problem_statement") or "investigation"
+            import uuid
+            troubleshooting_state = TroubleshootingState(
+                fault_id=f"FAULT-{uuid.uuid4().hex[:6].upper()}",
+                symptom_summary=problem[:200],
+                session_id=session_id,
+                case_id=case_id,
+            )
+        else:
+            if session_id and not troubleshooting_state.session_id:
+                troubleshooting_state.session_id = session_id
+            if case_id and not troubleshooting_state.case_id:
+                troubleshooting_state.case_id = case_id
+
+        # 3. Detect user execution of previously recommended checks
+        symptoms_str = " ".join(args.get("verified_symptoms") or [])
+        problem_str = args.get("problem_statement", "")
+        combined_text = f"{problem_str} {symptoms_str}".strip()
+
+        for rec in reversed(troubleshooting_state.diagnostic_history):
+            if rec.status == CheckLifecycleStatus.RECOMMENDED:
+                cmd = (rec.grounded_command or "").strip().lower()
+                obs = None
+                if cmd and cmd in combined_text.lower():
+                    obs = f"Output observed for `{rec.grounded_command}`: {combined_text[:200]}"
+                elif combined_text:
+                    obs = combined_text[:200]
+                troubleshooting_state.record_user_execution(
+                    check_id=rec.check_id,
+                    command=rec.grounded_command,
+                    observed_result=obs,
+                )
+                break
+
+        # 4. Populate prior_steps_taken into sanitized_args to prevent diagnostic repetition loops
+        prior_steps = troubleshooting_state.get_prior_steps_summary()
+        caller_prior = list(args.get("prior_steps_taken") or [])
+        merged_prior = list(prior_steps)
+        for cp in caller_prior:
+            if cp not in merged_prior:
+                merged_prior.append(cp)
+
         # Build server-validated envelope
         caller_evidence = list(args.get("verified_evidence") or [])
         caller_commands = list(args.get("approved_commands_catalog") or [])
@@ -209,6 +317,7 @@ class TechnicalAuthorityAgentTool(AgentTool):
         sanitized_args = dict(args)
         sanitized_args["verified_evidence"] = [e.model_dump(mode="json") for e in server_evidence]
         sanitized_args["approved_commands_catalog"] = [c.model_dump(mode="json") for c in server_commands]
+        sanitized_args["prior_steps_taken"] = merged_prior
 
         input_schema = _get_input_schema(self.agent)
         if input_schema:
@@ -297,7 +406,14 @@ class TechnicalAuthorityAgentTool(AgentTool):
         output_schema = _get_output_schema(self.agent)
         if output_schema:
             try:
-                tool_result = validate_schema(output_schema, merged_text)
+                raw_result = validate_schema(output_schema, merged_text)
+                if isinstance(raw_result, dict):
+                    tool_result, _ = validate_technical_authority_payload(
+                        response_payload=raw_result,
+                        request_payload=sanitized_args,
+                    )
+                else:
+                    tool_result = raw_result
             except Exception as e:
                 logger.error("Technical Authority Engineer output schema validation failed: %s", e)
                 if run_id:
@@ -312,6 +428,28 @@ class TechnicalAuthorityAgentTool(AgentTool):
                 return safe_error_resp.model_dump(mode="json")
         else:
             tool_result = merged_text
+
+        # 5. Persist recommended checks and record specialist execution
+        if isinstance(tool_result, dict):
+            if run_id:
+                record_technical_authority_execution(run_id, tool_result)
+
+            if tool_result.get("outcome") == TechnicalAuthorityOutcome.RECOMMENDED.value:
+                step_data = tool_result.get("diagnostic_step")
+                if isinstance(step_data, dict) and step_data.get("action"):
+                    troubleshooting_state.record_recommended_check(
+                        action=step_data.get("action", ""),
+                        rationale=step_data.get("reason", ""),
+                        expected_observation=step_data.get("expected_evidence", ""),
+                        grounded_command=step_data.get("command"),
+                        command_source_id=step_data.get("command_source"),
+                        session_id=session_id,
+                        case_id=case_id,
+                        node_id=troubleshooting_state.node_id,
+                        fault_id=troubleshooting_state.fault_id,
+                    )
+
+            tool_context.state["troubleshooting_state"] = troubleshooting_state.model_dump(mode="json")
 
         # Deterministic result arbitration:
         # When TAE executes and produces a result, TAE is the authoritative technical specialist.

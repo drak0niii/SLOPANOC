@@ -98,6 +98,10 @@ def get_or_init_run_state(run_id: str, clock: Clock = _default_clock) -> Knowled
                 ),
             )
             _run_states[run_id] = state
+        elif not state.execution_context.applicability_context.dimensions:
+            known_context = pop_known_applicability_context(run_id)
+            if known_context is not None and known_context.dimensions:
+                state.execution_context.applicability_context = known_context
         return state
 
 

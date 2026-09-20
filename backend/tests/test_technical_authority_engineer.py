@@ -445,6 +445,11 @@ def test_build_server_validated_evidence_and_commands() -> None:
     caller_evidence = [
         {"source_id": "fabricated:doc", "source_type": "governed_knowledge"},
         {"source_id": "case:context:1", "source_type": "case_context", "content_snippet": "Case info"},
+        {
+            "source_id": "mop:approved:sec1",
+            "source_type": "governed_knowledge",
+            "content_snippet": "Inspect connections using `check fiber`.",
+        },
     ]
 
     evidence = build_server_validated_evidence(
@@ -459,15 +464,27 @@ def test_build_server_validated_evidence_and_commands() -> None:
     assert "case:context:1" in source_ids
     assert "fabricated:doc" not in source_ids  # Fabricated governed knowledge rejected
 
-    # Commands check
+    # Commands check:
+    # case_context cannot authorize operational commands (Safeguard 1)
+    # governed_knowledge with valid snippet authorizes matching command
+    evidence.append(
+        EvidenceReference(
+            source_id="mop:approved:sec1",
+            source_type="governed_knowledge",
+            title="Approved MOP",
+            content_snippet="Inspect connections using `check fiber`.",
+        )
+    )
     caller_commands = [
-        {"command": "check fiber", "source_id": "case:context:1"},
+        {"command": "check fiber", "source_id": "mop:approved:sec1"},
         {"command": "unapproved reboot", "source_id": "unknown_doc"},
+        {"command": "case command", "source_id": "case:context:1"},
     ]
     commands = build_server_validated_commands(evidence, caller_commands)
     cmd_names = [c.command for c in commands]
     assert "check fiber" in cmd_names
     assert "unapproved reboot" not in cmd_names
+    assert "case command" not in cmd_names
 
 
 # ==============================================================================
