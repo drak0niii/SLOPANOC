@@ -1,20 +1,11 @@
-/** Text pasted or typed past this length is carried as a "Pasted text.txt"
- * attachment instead of raw inline text — shared by the composer (which
- * intercepts long pastes as they happen) and the send flow (a fallback for
- * anything that reaches that length without going through paste, e.g. text
- * typed directly). Both paths produce the same kind of attachment, so a
- * message ends up represented identically either way. */
-export const LONG_PASTE_THRESHOLD = 250;
-
 /** POST-5.1 B3 — frontend UX guards only, not security/authority. The
  * backend (backend/config/settings.py's `SLOPANOC_CHAT_ATTACHMENT_MAX_BYTES`
  * / `_MAX_IMAGES_PER_TURN`) remains the one authoritative enforcement
  * point; these exist purely so the composer can reject an obviously-too-
  * large or over-limit selection locally, before ever starting a network
  * request, without duplicating the backend's own separately-configured
- * values. Centralized here (rather than scattered literals) per the same
- * "one place, not many magic numbers" discipline `LONG_PASTE_THRESHOLD`
- * above already established. */
+ * values. Centralized here (rather than scattered literals) per the
+ * "one place, not many magic numbers" discipline. */
 export const MAX_DRAFT_IMAGES = 4;
 /** Mirrors the backend's default `SLOPANOC_CHAT_ATTACHMENT_MAX_BYTES` (8
  * MiB) — a preflight UX check only; the backend re-validates independently

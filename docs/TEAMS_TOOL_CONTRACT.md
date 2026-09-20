@@ -134,6 +134,16 @@ approved, unexpired, unconsumed proposal exists.
   — see `system_events.is_excludable_from_reasoning`'s `has_hosted_content`
   parameter — but a genuine Teams system/event entry is still always
   excluded regardless.
+- **Deterministic Latest Hosted Content Discovery:** `TeamsGetMessagesResult`
+  deterministically populates `latest_hosted_content_message_id` and
+  `latest_hosted_content_ids` using reverse-chronological traversal across
+  retrieved messages. Even when the most recent message in chat history is text-only,
+  earlier messages carrying hosted content are deterministically identified without
+  relying on model prompting. Additionally, `teams_get_messages` supports
+  `find_hosted_content=True` to stop pagination as soon as a page containing
+  hosted content is encountered. When `"latest"`, `"last"`, or `"newest"` is passed
+  as `message_id` to `teams_get_hosted_content` or `teams_get_all_hosted_content`,
+  it is automatically resolved to the latest discovered message ID carrying hosted content.
 
 ---
 

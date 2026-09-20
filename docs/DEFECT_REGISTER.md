@@ -40,8 +40,8 @@ bar — recording the negative finding is itself deliberate, per this
 register's own governing instruction, so nobody re-opens them later on
 the same mistaken suspicion.
 
-**Next available ID: DEF-0017.**
-**First ID in this register: DEF-0001. Last ID currently used: DEF-0016.**
+**Next available ID: DEF-0021.**
+**First ID in this register: DEF-0001. Last ID currently used: DEF-0020.**
 
 Parent-milestone references below use this register's canonical `Pxx`/
 `Pxx-Myy`/`OOB-xxxx` IDs as revised in `docs/MASTER_ROADMAP.md` §2
@@ -998,6 +998,207 @@ retrieved only a subset of requested images
   defect — the rich-content fast-path routing bug) for this specific
   nondeterminism issue. That citation was corrected in the same pass
   that added this entry — see this milestone's own closure report.
+
+===================================================================
+DEF-0017 — Static assistant greeting advertised unconfigured specialist capabilities
+===================================================================
+
+- **Status:** FIXED
+- **Severity:** HIGH (user-visible truthfulness violation: assistant advertised capabilities it had no tools or agents to execute)
+- **Detected during:** LIVE-CORR September 19 real UI test (Finding 1)
+- **Parent milestone:** LIVE-CORR (September 19 Live UI Test Diagnostic & Repair)
+- **Legacy name:** "Finding 1 (Agent Roster Truthfulness)"
+- **Affected capability:** Team Manager agent roster advertising and capability greeting
+- **Symptom:** The assistant greeting advertised unconfigured specialist capabilities (Technical Authority Engineer, Problem Manager, Automated Operations Engineer) even when those specialists were not enabled or registered.
+- **Expected:** The agent roster and advertised capabilities must be dynamically derived solely from actual registered tools on `agent.tools`, with zero fallback to environment flags and without accessing private ADK attributes.
+- **Root cause:** `TEAM_MANAGER_INSTRUCTION` contained static prompt text enumerating all theoretical specialists, rather than inspecting the actively registered tools of the running agent.
+- **Corrective action:** Implemented `make_team_manager_instruction_provider(tools)` closure in `backend/agents/team_manager/agent.py` and `render_agent_roster_section(tools)` to dynamically construct the roster section based strictly on inspection of registered `tool.name` entries on the agent instance or its copies.
+- **Regression protection:** `backend/tests/test_technical_authority_engineer.py` and `backend/tests/test_extended_agent_topology_and_rag.py`.
+- **Live validation:** Verified through unit and integration suites (`test_technical_authority_engineer.py`).
+- **Fix commit SHA(s):** working tree
+- **Related tests:** `backend/tests/test_technical_authority_engineer.py`
+- **Related docs:** `docs/AGENT_CONTRACT.md` §1
+- **Notes:** Operates without accessing private ADK attributes.
+
+===================================================================
+DEF-0018 — Specialist execution and stages lacked visibility in runtime activity feed
+===================================================================
+
+- **Status:** FIXED
+- **Severity:** MEDIUM (operator visibility gap during incident troubleshooting)
+- **Detected during:** LIVE-CORR September 19 real UI test (Finding 2 & Finding 4)
+- **Parent milestone:** LIVE-CORR (September 19 Live UI Test Diagnostic & Repair)
+- **Legacy name:** "Finding 2 (Specialist Participation Visibility)"
+- **Affected capability:** Runtime activity feed and stage attribution
+- **Symptom:** Working/Worked activity dropdown did not clearly identify Team Manager and specialist (e.g. Technical Authority Engineer) execution stages, leaving specialist participation unproven to the operator.
+- **Expected:** Execution stages and specialist delegations must be clearly attributed in runtime activity events and tool execution pills.
+- **Root cause:** Activity translations lacked explicit specialist stage events and distinct agent-stage labels.
+- **Corrective action:** Added specialist execution tracking, stage attribution events, and updated `backend/api/activity_translator.py`, `src/components/conversation/RunTrace.tsx`, and `ToolActivity` components.
+- **Regression protection:** `backend/tests/test_activity_translator.py`, `src/components/conversation/RunTrace.test.tsx`.
+- **Live validation:** Verified through backend activity translator tests and frontend Vitest suite.
+- **Fix commit SHA(s):** working tree
+- **Related tests:** `backend/tests/test_activity_translator.py`, `src/components/conversation/RunTrace.test.tsx`
+- **Related docs:** `docs/AGENT_CONTRACT.md` §2
+
+===================================================================
+DEF-0019 — Teams latest image discovery failed when newest message was text-only
+===================================================================
+
+- **Status:** FIXED
+- **Severity:** HIGH (media retrieval failure: valid screenshots in chat history reported as not found)
+- **Detected during:** LIVE-CORR September 19 real UI test (Finding 3)
+- **Parent milestone:** LIVE-CORR (September 19 Live UI Test Diagnostic & Repair)
+- **Legacy name:** "Finding 3 (Teams Media Discovery)"
+- **Affected capability:** `teams_get_messages`, `teams_get_hosted_content`, `teams_get_all_hosted_content`
+- **Symptom:** When the most recent message in chat history was text-only, the assistant reported "no images found in SLOPANOC Gateway Group Test" despite earlier messages containing screenshots.
+- **Expected:** Deterministic discovery of the latest message carrying hosted content across retrieved chat history, without relying on model prompting alone.
+- **Root cause:** Pagination and discovery only inspected the newest message, or relied on the model to manually paginate backward in history to find image-bearing messages.
+- **Corrective action:** Added deterministic reverse-chronological traversal across retrieved messages in `backend/tools/teams/get_messages.py` to populate `latest_hosted_content_message_id` and `latest_hosted_content_ids`. Added `find_hosted_content=True` early-exit pagination parameter. Added `get_latest_message_id_with_hosted_content()` in `hosted_content_vision_context.py` and resolved `"latest"` / `"last"` / `"newest"` keywords automatically in `teams_get_hosted_content` and `teams_get_all_hosted_content`.
+- **Regression protection:** `backend/tests/test_teams_hosted_content_latest_discovery.py` (5 tests).
+- **Live validation:** Unit and integration verified with mock Power Automate payloads.
+- **Fix commit SHA(s):** working tree
+- **Related tests:** `backend/tests/test_teams_hosted_content_latest_discovery.py`
+- **Related docs:** `docs/TEAMS_TOOL_CONTRACT.md` §4, §4a, §4b
+
+===================================================================
+DEF-0020 — Follow-up turns repeated fuzzy chat lookup instead of reusing trusted chat ID
+===================================================================
+
+- **Status:** FIXED
+- **Severity:** MEDIUM (latency and reliability overhead from redundant name lookups)
+- **Detected during:** LIVE-CORR September 19 real UI test (Finding 4)
+- **Parent milestone:** LIVE-CORR (September 19 Live UI Test Diagnostic & Repair)
+- **Legacy name:** "Finding 4 (Chat Continuity & Chat ID Reuse)"
+- **Affected capability:** `IncidentManagerRequest` and read continuation execution
+- **Symptom:** Follow-up conversational turns repeated fuzzy chat name resolution via `teams_list_chats` instead of reusing the authoritative `selected_teams_chat_id`.
+- **Expected:** When an authoritative chat ID is already known and selected in session state, it must be propagated directly to the specialist, bypassing redundant fuzzy chat lookups.
+- **Root cause:** `IncidentManagerRequest` lacked an explicit `chat_id` field, forcing `incident_manager` to always invoke `teams_list_chats` with `chat_topic`.
+- **Corrective action:** Added `chat_id: Optional[str] = None` to `IncidentManagerRequest` in `backend/agents/incident_manager/schemas.py`. Bound `args["chat_id"] = continuation.selected_chat_id` in `read_continuation_enforcement.py`. Updated `INCIDENT_MANAGER_INSTRUCTION` in `backend/agents/incident_manager/prompts.py` to instruct `incident_manager` to skip `teams_list_chats` and call `teams_get_messages(chat_id=chat_id)` directly when `chat_id` is supplied.
+- **Regression protection:** `backend/tests/test_p4b2_synthesis_compression.py` and incident manager schema tests.
+- **Live validation:** Verified through contract and continuation enforcement tests.
+- **Fix commit SHA(s):** working tree
+- **Related tests:** `backend/tests/test_p4b2_synthesis_compression.py`
+- **Related docs:** `docs/AGENT_CONTRACT.md` §4, `docs/TEAMS_TOOL_CONTRACT.md` §3, §4
+
+===================================================================
+DEF-0021 — Teams media write requests lacked explicit negative boundary rejection
+===================================================================
+
+- **Status:** FIXED
+- **Severity:** HIGH (operational boundary violation: attempted unsupported media write actions to Teams)
+- **Detected during:** LIVE-CORR September 19 live UI operational test (Issue 1)
+- **Parent milestone:** LIVE-CORR (September 19 Live UI Test Diagnostic & Repair)
+- **Legacy name:** "Issue 1 (Teams Media Write Prohibition)"
+- **Affected capability:** `TEAM_MANAGER_INSTRUCTION` and `INCIDENT_MANAGER_INSTRUCTION` write boundaries
+- **Symptom:** When a user asked to send a picture, image, or media to a Microsoft Teams chat room, the system failed to decline the request and instead searched for chats or attempted to format a message.
+- **Expected:** The system must strictly reject and decline any request to send images, pictures, or media to Teams chat rooms, clearly stating that sending media to Teams is not supported.
+- **Root cause:** Neither `TEAM_MANAGER_INSTRUCTION` nor `INCIDENT_MANAGER_INSTRUCTION` contained an explicit negative boundary instruction prohibiting Teams media writes.
+- **Corrective action:** Added strict negative boundary directives in both `TEAM_MANAGER_INSTRUCTION` and `INCIDENT_MANAGER_INSTRUCTION` mandating immediate, polite refusal of any request to send images/media to Teams.
+- **Regression protection:** `backend/tests/test_p4a_orchestration_overhead_reduction.py`, `backend/tests/test_p4b2_synthesis_compression.py`.
+- **Live validation:** Verified through contract test suites.
+- **Fix commit SHA(s):** working tree
+- **Related tests:** `backend/tests/test_p4a_orchestration_overhead_reduction.py`
+- **Related docs:** `docs/AGENT_CONTRACT.md` §4, `docs/TEAMS_TOOL_CONTRACT.md` §5, §6
+
+===================================================================
+DEF-0022 — Compound summarize-and-send flow failed to formulate summary and proposal
+===================================================================
+
+- **Status:** FIXED
+- **Severity:** HIGH (compound task execution failure across multi-step specialist workflow)
+- **Detected during:** LIVE-CORR September 19 live UI operational test (Issue 2)
+- **Parent milestone:** LIVE-CORR (September 19 Live UI Test Diagnostic & Repair)
+- **Legacy name:** "Issue 2 (Compound Summarize-and-Send Execution Flow)"
+- **Affected capability:** `TEAM_MANAGER_INSTRUCTION` compound flow orchestration
+- **Symptom:** When asked to summarize a Teams chat and post it to another chat room, the system failed to produce a summary and failed to propose a write action via `ActionProposal` / `ApprovalCard`.
+- **Expected:** Sequential execution: first delegate to `incident_manager` to retrieve and summarize the source chat, then propose sending the summarized text to the destination chat via `teams_propose_send_message` so an `ApprovalCard` is presented.
+- **Root cause:** `TEAM_MANAGER_INSTRUCTION` lacked explicit guidance on orchestrating compound multi-step read-then-write tasks across separate Teams conversations.
+- **Corrective action:** Added explicit sequential execution instructions in `TEAM_MANAGER_INSTRUCTION` for compound tasks requiring retrieval/summarization from a source conversation followed by a proposed send to a destination conversation.
+- **Regression protection:** `backend/tests/test_p4a_orchestration_overhead_reduction.py`, `backend/tests/test_followup_routing_contract.py`.
+- **Live validation:** Verified through orchestration and contract test suites.
+- **Fix commit SHA(s):** working tree
+- **Related tests:** `backend/tests/test_p4a_orchestration_overhead_reduction.py`
+- **Related docs:** `docs/AGENT_CONTRACT.md` §2, §4
+
+===================================================================
+DEF-0023 — Team Manager coordination steps omitted from activity feed dropdown
+===================================================================
+
+- **Status:** FIXED
+- **Severity:** MEDIUM (operator visibility gap: orchestrator role absent from activity pill feed)
+- **Detected during:** LIVE-CORR September 19 live UI operational test (Issue 3)
+- **Parent milestone:** LIVE-CORR (September 19 Live UI Test Diagnostic & Repair)
+- **Legacy name:** "Issue 3 (Team Manager in Activity Feed)"
+- **Affected capability:** `backend/api/activity_translator.py` and `ToolExecutionPill.tsx`
+- **Symptom:** In the "Work done" activity feed dropdown, Team Manager was not visible; only specialist tool calls were rendered, or steps lacked Team Manager role attribution.
+- **Expected:** Team Manager coordination and delegation steps must be visible in the activity feed with the "Team Manager" role badge.
+- **Root cause:** `parseToolExecutionFromLabel` in `ToolExecutionPill.tsx` only assigned `team_manager` for case-category steps, and `_translate_function_calls` did not label coordination steps consistently.
+- **Corrective action:** Updated `_translate_function_calls` in `activity_translator.py` to label specialist delegation as `"Coordinating with Technical Authority Engineer"`, and updated `parseToolExecutionFromLabel` in `ToolExecutionPill.tsx` to match `"team manager"`, `"coordinating"`, and `"orchestrating"`, rendering the `[Team Manager]` role badge.
+- **Regression protection:** `backend/tests/test_activity_translator.py`, `src/components/conversation/ToolExecutionPill.test.tsx`.
+- **Live validation:** Verified via Vitest and Pytest suites.
+- **Fix commit SHA(s):** working tree
+- **Related tests:** `backend/tests/test_activity_translator.py`, `src/components/conversation/ToolExecutionPill.test.tsx`
+- **Related docs:** `docs/AGENT_CONTRACT.md` §2
+
+===================================================================
+DEF-0024 — SelectionCard continuation amnesia prompted re-selection of already-chosen chat
+===================================================================
+
+- **Status:** FIXED
+- **Severity:** HIGH (broken interaction state: selection card selection loop)
+- **Detected during:** LIVE-CORR September 19 live UI operational test (Issue 4)
+- **Parent milestone:** LIVE-CORR (September 19 Live UI Test Diagnostic & Repair)
+- **Legacy name:** "Issue 4 (SelectionCard Continuation Context Preservation)"
+- **Affected capability:** `read_continuation_enforcement.py`, `selection_service.py`
+- **Symptom:** After choosing a chat candidate from a SelectionCard, the resumed turn prompted "Please select which chat you mean first..." rather than executing the read or write with the chosen chat.
+- **Expected:** Resumed continuation execution must firmly bind the chosen `chat_id` and execute retrieval or write proposal directly without prompting for re-selection.
+- **Root cause:** Continuation invocation did not firmly bind `chat_id` in the delegation payload, leading the model to treat the destination as unresolved.
+- **Corrective action:** Injected `chat_id: Optional[str]` firmly into `IncidentManagerRequest`, bound `args["chat_id"] = continuation.selected_chat_id` in `read_continuation_enforcement.py`, and instructed `incident_manager` to bypass discovery when `chat_id` is supplied.
+- **Regression protection:** `backend/tests/test_followup_routing_contract.py`, `backend/tests/test_p4b2_synthesis_compression.py`.
+- **Live validation:** Verified via continuation enforcement unit tests.
+- **Fix commit SHA(s):** working tree
+- **Related tests:** `backend/tests/test_followup_routing_contract.py`
+- **Related docs:** `docs/AGENT_CONTRACT.md` §4, `docs/TEAMS_TOOL_CONTRACT.md` §3
+
+===================================================================
+DEF-0025 — Unapproved command stripping stripped legitimate read-only diagnostic checks
+===================================================================
+
+- **Status:** FIXED
+- **Severity:** HIGH (diagnostic blockage: safe commands stripped and model entered repetitive loops)
+- **Detected during:** LIVE-CORR September 19 live UI operational test (Issue 5)
+- **Parent milestone:** LIVE-CORR (September 19 Live UI Test Diagnostic & Repair)
+- **Legacy name:** "Issue 5 (TAE Command Grounding & Diagnostic Loops)"
+- **Affected capability:** `backend/agents/technical_authority_engineer/validation.py` and `prompts.py`
+- **Symptom:** TAE stripped standard read-only commands (e.g. `altk`, `st ru`, `st cell`) with `[Command stripped: unapproved operational command]`, and entered repetitive loops asking for commands already executed earlier in the conversation.
+- **Expected:** Read-only inspection commands should be recognized as safe diagnostic checks without stripping, and prior conversation history must be inspected to avoid re-asking for executed commands.
+- **Root cause:** Command grounding validation treated all uncataloged commands as unapproved operational mutations, and prompts lacked explicit history-inspection directives to prevent loop re-querying.
+- **Corrective action:** Added `is_read_only_diagnostic_command` in `validation.py` to permit safe read-only queries (e.g. `alt`, `altk`, `st ru`, `inv`, `cvls`), and added history-inspection directives in `TECHNICAL_AUTHORITY_ENGINEER_INSTRUCTION` instructing the model to inspect earlier turns before recommending diagnostic checks.
+- **Regression protection:** `backend/tests/test_technical_authority_engineer.py` (43 tests).
+- **Live validation:** Verified via TAE suite.
+- **Fix commit SHA(s):** working tree
+- **Related tests:** `backend/tests/test_technical_authority_engineer.py`
+- **Related docs:** `docs/AGENT_CONTRACT.md` §5, `docs/TROUBLESHOOTING_STRATEGY.md`
+
+===================================================================
+DEF-0026 — TAE failed to proactively search governed knowledge on troubleshooting queries
+===================================================================
+
+- **Status:** FIXED
+- **Severity:** HIGH (diagnostic quality: model yielded insufficient_evidence and generic clarifying questions instead of retrieving existing MOPs)
+- **Detected during:** LIVE-CORR live UI operational test (Session `83679818-a096-420e-a2ce-46f34a5bc30a`)
+- **Parent milestone:** LIVE-CORR (September 20 Live UI Operational Test Diagnostic & Repair)
+- **Legacy name:** "Operational Troubleshooting Knowledge Retrieval Defect"
+- **Affected capability:** `backend/agents/technical_authority_engineer/prompts.py`
+- **Symptom:** When user asked a technical troubleshooting question (e.g. "how can i troubleshoot ESS Service Unavailable ?"), TAE immediately returned `outcome="insufficient_evidence"` with generic clarifying questions without executing `knowledge_search`.
+- **Expected:** When presented with technical troubleshooting queries, alarm names, or fault symptoms, TAE must proactively execute `knowledge_search` before concluding that evidence is missing.
+- **Root cause:** `TECHNICAL_AUTHORITY_ENGINEER_INSTRUCTION` lacked an explicit instruction mandating proactive invocation of `knowledge_search` and `knowledge_select_evidence` on incoming problem statements, defaulting immediately to missing-information fallback.
+- **Corrective action:** Added section 6 "GOVERNED KNOWLEDGE SEARCH & PROCEDURAL EVALUATION" to `TECHNICAL_AUTHORITY_ENGINEER_INSTRUCTION` in `backend/agents/technical_authority_engineer/prompts.py`, directing TAE to proactively search governed knowledge using key terms before concluding that evidence is missing.
+- **Regression protection:** `backend/tests/test_team_manager_case_context_provider.py`, `backend/tests/test_api_security_contract.py`, `backend/tests/test_p4a_orchestration_overhead_reduction.py`.
+- **Live validation:** Confirmed via session `83679818-a096-420e-a2ce-46f34a5bc30a` analysis and unit regression suite.
+- **Fix commit SHA(s):** working tree
+- **Related tests:** `backend/tests/test_team_manager_case_context_provider.py`
+- **Related docs:** `docs/AGENT_CONTRACT.md` §3, `docs/TROUBLESHOOTING_STRATEGY.md`
 
 ===================================================================
 CONSIDERED AND EXPLICITLY NOT REGISTERED

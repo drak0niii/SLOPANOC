@@ -2,6 +2,7 @@ import { useId, type ReactNode } from "react";
 import type { RunTraceStep } from "../../types";
 import { ChevronDown, Clock, TriangleAlert, X } from "../ui/icons";
 import { CurrentActivity } from "./CurrentActivity";
+import { ToolExecutionPill, parseToolExecutionFromLabel } from "./ToolExecutionPill";
 import { deriveRunTraceStepIcon, formatCompletedTraceHeader, type RunTraceStepIcon } from "../../lib/runTrace";
 import { cn } from "../../lib/cn";
 
@@ -139,20 +140,32 @@ export function RunTrace(props: RunTraceProps) {
 
 function RunTraceStepRow({ step, isLast }: { step: RunTraceStep; isLast: boolean }) {
   const icon = deriveRunTraceStepIcon(step);
+  const parsed = parseToolExecutionFromLabel(step.label, step.category);
+  const hasToolOrAgent = Boolean(parsed.agentRole || parsed.toolName);
+
   return (
     <li className="relative flex gap-2 pb-2.5">
       {!isLast && <span aria-hidden="true" className="absolute left-[6.5px] top-4 bottom-0 w-px bg-subtle/60" />}
       <span className="z-10 mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center">
         <StepIcon icon={icon} />
       </span>
-      <span
-        className={cn(
-          "text-sm leading-relaxed",
-          icon === "failed" ? "text-danger" : icon === "warning" ? "text-warning" : "text-secondary",
+      <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
+        <span
+          className={cn(
+            "text-sm leading-relaxed",
+            icon === "failed" ? "text-danger" : icon === "warning" ? "text-warning" : "text-secondary",
+          )}
+        >
+          {step.label}
+        </span>
+        {hasToolOrAgent && (
+          <ToolExecutionPill
+            agentRole={parsed.agentRole}
+            toolName={parsed.toolName}
+            stage={step.status}
+          />
         )}
-      >
-        {step.label}
-      </span>
+      </div>
     </li>
   );
 }

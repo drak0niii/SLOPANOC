@@ -113,10 +113,22 @@ def test_generic_incident_manager_instruction_is_byte_for_byte_unchanged() -> No
     All-Image Retrieval milestone extended it once more to describe the
     two-tool split (`teams_get_hosted_content` for one specific image vs.
     `teams_get_all_hosted_content` for a deterministic, exhaustive batch)
-    and `failed_ordinals`/count-based reporting -- this is that
+    and `failed_ordinals`/count-based reporting, the Governed Knowledge
+    Same-Turn Selection milestone mandated calling `knowledge_select_evidence`
+    in that exact same turn whenever retrieved knowledge is used, the Dynamic
+    Unit Grounding update mandated prerequisite read-only diagnostic checks
+    (`hget near Rfportref`, `alt`, `st ru`) before state-changing commands and
+    prohibited using documentation example hardware identifiers (e.g. `RRU-9`),
+    and the Active Troubleshooting Visual Telemetry Analysis update directed the
+    model to assess visible operational telemetry against active troubleshooting
+    hypotheses without defensive expert-referral disclaimers, and the Remediation Plan
+    update prohibited raw template placeholders (`xxx`, `xxxx`, `<board_name>`), enforced
+    prerequisite hardware diagnostic commands before state-changing restart procedures,
+    mandated multi-message evidence citations when summarizing conversations, and propagated
+    authoritative chat_id directly to skip redundant teams_list_chats name resolution -- this is that
     legitimate, intentional length, not P4B.2-era drift.
     """
-    assert len(INCIDENT_MANAGER_INSTRUCTION) == 54429
+    assert len(INCIDENT_MANAGER_INSTRUCTION) == 57258
 
 
 def test_synthesis_only_agent_no_longer_uses_the_generic_instruction() -> None:

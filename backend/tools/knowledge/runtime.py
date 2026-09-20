@@ -58,6 +58,7 @@ class KnowledgeRunEvidenceState:
     execution_context: KnowledgeToolExecutionContext
     available_evidence: KnowledgeEvidenceSet = field(default_factory=KnowledgeEvidenceSet)
     selected_evidence: list[KnowledgeEvidenceItem] = field(default_factory=list)
+    explicit_empty_selection: bool = False
 
 
 _lock = threading.Lock()
@@ -151,13 +152,16 @@ def select_evidence(run_id: str, selections: list[KnowledgeEvidenceSelectionKey]
         available = state.available_evidence if state is not None else KnowledgeEvidenceSet()
         validated = validate_evidence_selection(available, selections)
 
-        if validated and state is not None:
-            existing_ids = {_identity(item) for item in state.selected_evidence}
-            for item in validated:
-                identity = _identity(item)
-                if identity not in existing_ids:
-                    state.selected_evidence.append(item)
-                    existing_ids.add(identity)
+        if state is not None:
+            if not selections:
+                state.explicit_empty_selection = True
+            elif validated:
+                existing_ids = {_identity(item) for item in state.selected_evidence}
+                for item in validated:
+                    identity = _identity(item)
+                    if identity not in existing_ids:
+                        state.selected_evidence.append(item)
+                        existing_ids.add(identity)
 
         return validated
 
@@ -181,6 +185,16 @@ def snapshot_selected_knowledge_evidence(run_id: str) -> list[KnowledgeEvidenceI
     with _lock:
         state = _run_states.get(run_id)
         return list(state.selected_evidence) if state is not None else []
+
+
+def has_explicit_empty_knowledge_selection(run_id: str) -> bool:
+    """Trusted, backend-only accessor -- returns True if `knowledge_select_evidence`
+    was explicitly called with an empty list (`selections=[]`), indicating negative
+    selection (the model reviewed available evidence and determined none applied).
+    """
+    with _lock:
+        state = _run_states.get(run_id)
+        return state.explicit_empty_selection if state is not None else False
 
 
 def discard_knowledge_run_evidence_state(run_id: str) -> None:

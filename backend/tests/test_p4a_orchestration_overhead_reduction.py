@@ -78,13 +78,17 @@ def test_team_manager_tool_list_is_orchestration_level_only() -> None:
     `teams_get_members`/`teams_create_chat`/etc, all of which live only on
     `incident_manager`'s own tool list, agents/incident_manager/agent.py).
     """
+    from backend.config.settings import get_settings
     names = {getattr(tool, "name", None) or getattr(tool, "__name__", None) for tool in team_manager.tools}
-    assert names == {
+    expected = {
         "incident_manager",
         "record_case_analysis",
         "record_conversation_target",
         "record_source_requirements",
     }
+    if get_settings().technical_authority_enabled:
+        expected.add("technical_authority_engineer")
+    assert names == expected
 
     forbidden_raw_teams_tools = {
         "teams_list_chats",

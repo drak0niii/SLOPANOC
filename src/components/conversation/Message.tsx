@@ -5,7 +5,6 @@ import {
   Copy,
   File,
   FolderClosed,
-  Maximize2,
   MessagesSquare,
   Pencil,
   RefreshCw,
@@ -328,34 +327,6 @@ const MESSAGE_ACTIONS_ROW_CLASS = cn(
   "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100",
 );
 
-/** A message's stored text is the typed text and any pasted-attachment
- * content joined together (see AppState's sendMessage). Recover just the
- * typed portion for display, so text typed alongside a long paste (e.g.
- * "See attached:" before pasting a big block) still shows in the bubble
- * instead of disappearing behind the attachment chip. */
-function getVisibleUserText(message: MessageType): string {
-  const pastedAttachments = message.attachments?.filter((a) => a.isPastedText) ?? [];
-  if (pastedAttachments.length === 0) return message.text;
-
-  const pastedContent = pastedAttachments.map((a) => a.content ?? "").join("\n\n");
-  if (!pastedContent) return message.text;
-  if (message.text === pastedContent) return "";
-  const suffix = `\n\n${pastedContent}`;
-  return message.text.endsWith(suffix) ? message.text.slice(0, -suffix.length) : message.text;
-}
-
-/** Loads a message's full text back into the composer — the shared mechanic
- * behind both "Edit" (plain text messages) and "Expand message" (messages
- * whose text is hidden behind a pasted-text attachment). */
-function loadTextIntoComposer(setDraftText: (text: string) => void, text: string) {
-  setDraftText(text);
-  requestAnimationFrame(() => {
-    const composer = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]');
-    composer?.focus();
-    composer?.setSelectionRange(composer.value.length, composer.value.length);
-  });
-}
-
 function UserMessageActions({
   message,
   onEdit,
@@ -363,9 +334,7 @@ function UserMessageActions({
   message: MessageType;
   onEdit: () => void;
 }) {
-  const { state, setDraftText } = useAppState();
   const hasAttachments = Boolean(message.attachments && message.attachments.length > 0);
-  const pastedTextAttachment = message.attachments?.find((a) => a.isPastedText);
 
   // POST-5.1 B4D correction pass — LOCKED PRODUCT RULE: no Edit affordance
   // at all for a user turn that owns a durable, server-linked image
@@ -375,29 +344,7 @@ function UserMessageActions({
   if (hasPersistedImageAttachment(message)) return null;
 
   if (hasAttachments) {
-    if (!pastedTextAttachment) return null;
-    return (
-      <div className="mt-1.5 flex justify-end">
-        <button
-          type="button"
-          onClick={() => {
-            // Loading a message's text into the composer replaces whatever's
-            // already being typed there — confirm first so an in-progress
-            // draft is never silently discarded.
-            const hasUnsavedDraft =
-              state.draft.text.trim().length > 0 || state.draft.attachments.length > 0;
-            if (hasUnsavedDraft && !window.confirm("Replace what you're currently typing with this message?")) {
-              return;
-            }
-            loadTextIntoComposer(setDraftText, message.text);
-          }}
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-tertiary transition-colors duration-150 hover:bg-surface-hover hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-        >
-          <Maximize2 className="h-3.5 w-3.5" />
-          Expand message
-        </button>
-      </div>
-    );
+    return null;
   }
 
   return (
@@ -620,8 +567,7 @@ export function Message({ message }: { message: MessageType }) {
 
   if (isUser) {
     const hasAttachments = Boolean(message.attachments && message.attachments.length > 0);
-    const visibleText = getVisibleUserText(message);
-    const hasText = visibleText.trim().length > 0;
+    const hasText = message.text.trim().length > 0;
 
     if (isEditing) {
       return (
@@ -671,7 +617,7 @@ export function Message({ message }: { message: MessageType }) {
         {hasText && (
           <div className="max-w-[75%] space-y-2.5 break-words rounded-2xl border border-subtle/60 bg-surface-raised px-4 py-2.5 text-base leading-relaxed text-primary">
             <MessageBody
-              text={visibleText}
+              text={message.text}
               proseClassName="whitespace-pre-wrap break-words"
               messageId={message.id}
             />

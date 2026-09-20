@@ -1063,6 +1063,14 @@ class ChatService:
         # governed. Goes out of scope (and is never inspected again) the
         # moment this generator returns, on every exit path.
         buffered_delta_texts: list[str] = []
+        # Multi-part candidate recovery: track all delta chunks that are
+        # genuinely emitted to the client via MESSAGE_DELTA. In Gemini 2.5 Flash,
+        # the model may emit text concurrently with a function call (e.g.
+        # record_source_requirements). That event is marked non-final because of
+        # pending tool execution. If the post-tool final event contains no new
+        # text, `final_text` would remain None unless recovered from the text
+        # already verified and streamed to the user.
+        emitted_delta_texts: list[str] = []
         # POST-5.1 B4B DEFECT FIX -- captured (in-memory only, no session
         # I/O) the moment the first event of a real turn is observed; the
         # ACTUAL saved-chat bookkeeping write is deferred until this
@@ -1491,6 +1499,7 @@ class ChatService:
                                         status_cleared = True
                                         perf.mark("first_message_delta")
                                     yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": pending_text})
+                                    emitted_delta_texts.append(pending_text)
 
                         # Contributor-accuracy fix + performance pass: start
                         # (or restart, for a superseded chat_id) the
@@ -1546,6 +1555,7 @@ class ChatService:
                                     status_cleared = True
                                     perf.mark("first_message_delta")
                                 yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": delta_text})
+                                emitted_delta_texts.append(delta_text)
 
                         text = _extract_final_text(event)
                         if text is not None:
@@ -1581,6 +1591,7 @@ class ChatService:
                     )
                     if retry_text:
                         yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": retry_text})
+                        emitted_delta_texts.append(retry_text)
                         final_text = retry_text
                     else:
                         _logger.warning(
@@ -1912,6 +1923,11 @@ class ChatService:
             # it.
             if captured_troubleshooting_guidance is not None:
                 final_text = render_troubleshooting_guidance(captured_troubleshooting_guidance)
+
+        if error is None and final_text is None and emitted_delta_texts:
+            recovered_text = "".join(emitted_delta_texts)
+            if recovered_text.strip():
+                final_text = recovered_text
 
         if error is None and final_text is None:
             # A turn that produced no final text at all is itself an

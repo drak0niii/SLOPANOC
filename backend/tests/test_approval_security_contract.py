@@ -24,18 +24,22 @@ def _tool_names(agent) -> list[str]:
 
 
 def test_team_manager_has_no_approval_tools() -> None:
+    from backend.config.settings import get_settings
     # Phase 4D added `record_case_analysis` (a restricted Case-analysis
     # write, see backend/agents/team_manager/case_tools.py); the semantic-
     # scope bug fix added `record_conversation_target` (a deterministic
     # declaration tool, see conversation_target.py) -- still no
     # approval-mutation tool of any kind.
     names = _tool_names(team_manager)
-    assert names == [
+    expected = [
         "incident_manager",
         "record_case_analysis",
         "record_conversation_target",
         "record_source_requirements",
     ]
+    if get_settings().technical_authority_enabled:
+        expected.append("technical_authority_engineer")
+    assert names == expected
     for forbidden in ("approve_proposal", "reject_proposal", "consume_proposal", "create_action_proposal"):
         assert forbidden not in names
 

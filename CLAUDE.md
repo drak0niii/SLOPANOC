@@ -3561,6 +3561,85 @@ hosted_content.py`, `backend/api/hosted_content_vision_context.py`,
 `backend/api/source_images.py`, `backend/api/turn_source_references.py`'s
 visual-evidence extension, or the frontend Visual Evidence Gallery
 without a real, observed defect or a new, explicitly approved milestone.
+
+===================================================================
+LIVE-CORR — SEPTEMBER 19 REAL UI TEST: REPAIR OBSERVED FAILURES
+(DEF-0017 through DEF-0025 — COMPLETE)
+===================================================================
+
+An out-of-band architectural and operational corrective pass resolving
+nine defects observed during live UI testing on September 19:
+
+1. AGENT ROSTER TRUTHFULNESS (Finding 1, DEF-0017). The assistant greeting
+   previously advertised unconfigured specialist roles (Technical Authority
+   Engineer, Problem Manager, Automated Operations Engineer) because greeting
+   text was statically written into prompts. Resolved by deriving the agent
+   roster dynamically from `agent.tools` at agent construction time using a
+   closure factory (`make_team_manager_instruction_provider`), inspecting
+   `tool.name` to advertise only genuinely registered specialist capabilities
+   with zero fallback to environment flags and without accessing private ADK
+   attributes.
+
+2. SPECIALIST PARTICIPATION VISIBILITY (Finding 2, DEF-0018). Specialist
+   execution stages and Technical Authority Engineer involvement were not
+   accurately reflected in the activity feed. Resolved by mapping specialist
+   delegation, sub-agent execution, and tool execution stages truthfully
+   in `activity_translator.py` and the runtime activity event channel.
+
+3. DETERMINISTIC LATEST TEAMS IMAGE DISCOVERY (Finding 3, DEF-0019). When
+   the newest message in Teams chat history was text-only, retrieval
+   reported "no images found" even though earlier messages carried hosted
+   images. Resolved deterministically in `backend/tools/teams/get_messages.py`
+   via reverse-chronological traversal across retrieved messages, populating
+   `latest_hosted_content_message_id` and `latest_hosted_content_ids`,
+   adding `find_hosted_content=True` pagination early-exit, and resolving
+   `message_id="latest"` / `"last"` / `"newest"` in `teams_get_hosted_content`
+   and `teams_get_all_hosted_content` to the newest message ID with hosted
+   content across the run.
+
+4. CHAT CONTINUITY & TRUSTED CHAT ID REUSE (Finding 4, DEF-0020). Follow-up
+   conversational turns performed redundant fuzzy chat lookups via
+   `teams_list_chats` instead of reusing the authoritative chat destination.
+   Resolved by propagating `chat_id: Optional[str]` through
+   `IncidentManagerRequest`, binding it in continuation execution, and
+   skipping fuzzy chat discovery in `incident_manager` when `chat_id` is
+   already known.
+
+5. TEAMS MEDIA WRITE PROHIBITION (Issue 1, DEF-0021). The assistant failed
+   to reject requests to send media/images to Teams chat rooms. Resolved by
+   adding explicit negative boundaries in `TEAM_MANAGER_INSTRUCTION` and
+   `INCIDENT_MANAGER_INSTRUCTION` mandating immediate, polite rejection of
+   requests to send images or media to Teams chat rooms.
+
+6. COMPOUND SUMMARIZE-AND-SEND FLOW (Issue 2, DEF-0022). Requests to summarize
+   one Teams conversation and post the summary to another conversation failed
+   to formulate the summary or trigger write proposals. Resolved by instructing
+   sequential execution in `TEAM_MANAGER_INSTRUCTION`: first delegate to
+   `incident_manager` to retrieve and summarize the source conversation, then
+   propose sending the summarized text to the destination conversation via
+   `teams_propose_send_message` so an `ApprovalCard` is presented.
+
+7. TEAM MANAGER IN ACTIVITY FEED (Issue 3, DEF-0023). Team Manager orchestration
+   and coordination steps were missing from the "Work done" activity feed
+   dropdown. Resolved by updating `activity_translator.py` to emit coordination
+   trace steps and updating `ToolExecutionPill.tsx` to match "team manager",
+   "coordinating", and "orchestrating" labels with the `[Team Manager]` badge.
+
+8. SELECTIONCARD CONTINUATION CONTEXT PRESERVATION (Issue 4, DEF-0024). Selecting
+   a chat candidate from a SelectionCard resulted in the assistant prompting
+   to re-select the chat. Resolved by firmly injecting `chat_id` into
+   `IncidentManagerRequest`, binding `args["chat_id"] = continuation.selected_chat_id`
+   in continuation enforcement, and instructing `incident_manager` to skip
+   redundant discovery when `chat_id` is present.
+
+9. TAE COMMAND GROUNDING & LOOP PREVENTION (Issue 5, DEF-0025). Technical
+   Authority Engineer stripped legitimate read-only diagnostic checks (e.g. `altk`,
+   `st ru`, `st cell`) and entered repetitive diagnostic loops. Resolved by
+   introducing `is_read_only_diagnostic_command` in `validation.py` to permit
+   safe inspection commands without stripping, and adding conversation history
+   inspection instructions in `TECHNICAL_AUTHORITY_ENGINEER_INSTRUCTION` to prevent
+   re-requesting commands already run.
+
 **NEXT: Phase 6A — Intelligence Architecture Foundation.**
 
 ===================================================================

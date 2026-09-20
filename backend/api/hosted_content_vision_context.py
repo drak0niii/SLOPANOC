@@ -243,6 +243,22 @@ def get_message_hosted_content_order(message_id: str) -> list[str]:
         return list(_message_order.get(run_id, {}).get(message_id, []))
 
 
+def get_latest_message_id_with_hosted_content() -> Optional[str]:
+    """Return the message_id of the newest message (by sent_at) that has
+    recorded hosted content in the current run."""
+    run_id = current_run_id()
+    if run_id is None:
+        return None
+    with _lock:
+        orders = _message_order.get(run_id, {})
+        metadata = _message_metadata.get(run_id, {})
+        candidates = [mid for mid, ids in orders.items() if ids]
+        if not candidates:
+            return None
+        candidates.sort(key=lambda mid: metadata.get(mid, ("", ""))[1], reverse=True)
+        return candidates[0]
+
+
 def already_retrieved_this_run(chat_id: str, message_id: str, hosted_content_id: str) -> bool:
     """Deterministic All-Image Retrieval milestone -- `True` if this exact
     `(chat_id, message_id, hosted_content_id)` triple was already

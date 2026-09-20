@@ -43,6 +43,9 @@ from backend.api.streaming_events import Stage, TraceCategory, TraceStepStatus
 
 _INCIDENT_MANAGER_TOOL_NAME = "incident_manager"
 _RECORD_CASE_ANALYSIS_TOOL_NAME = "record_case_analysis"
+_TECHNICAL_AUTHORITY_TOOL_NAMES = {"technical_authority_engineer", "troubleshooting_manager"}
+_PROBLEM_MANAGER_TOOL_NAME = "problem_manager"
+_AUTOMATED_OPS_TOOL_NAME = "automated_operations_engineer"
 
 # Phase 2 (Runtime Activity Truthfulness) correction: `incident_manager`
 # is DELIBERATELY ABSENT from this mapping. Agent delegation alone proves
@@ -447,6 +450,12 @@ class RunTraceTranslator:
                 # supplied -- no trace step for this call-observation point
                 # is more accurate than a fabricated one.
                 return None
+            if name in _TECHNICAL_AUTHORITY_TOOL_NAMES:
+                return _trace_step(TraceCategory.CONTEXT, "Coordinating with Technical Authority Engineer")
+            if name == _PROBLEM_MANAGER_TOOL_NAME:
+                return _trace_step(TraceCategory.CASE, "Consulting ITIL Problem Manager for root cause analysis")
+            if name == _AUTOMATED_OPS_TOOL_NAME:
+                return _trace_step(TraceCategory.SYSTEM, "Consulting Automated Operations Engineer for operational summary")
         return None
 
     def _translate_function_responses(self, function_responses: list[Any]) -> Optional[TraceStepInput]:
@@ -461,6 +470,18 @@ class RunTraceTranslator:
                     return step
             elif name == _RECORD_CASE_ANALYSIS_TOOL_NAME:
                 step = self._case_analysis_response_trace(result)
+                if step is not None:
+                    return step
+            elif name in _TECHNICAL_AUTHORITY_TOOL_NAMES:
+                step = self._technical_authority_response_trace(result)
+                if step is not None:
+                    return step
+            elif name == _PROBLEM_MANAGER_TOOL_NAME:
+                step = self._problem_manager_response_trace(result)
+                if step is not None:
+                    return step
+            elif name == _AUTOMATED_OPS_TOOL_NAME:
+                step = self._automated_ops_response_trace(result)
                 if step is not None:
                     return step
         return None
@@ -559,6 +580,38 @@ class RunTraceTranslator:
         kind = result.get("kind")
         if isinstance(kind, str) and kind in _CASE_ANALYSIS_KIND_TRACE_LABELS:
             return _trace_step(TraceCategory.CASE, _CASE_ANALYSIS_KIND_TRACE_LABELS[kind])
+        return None
+
+    def _technical_authority_response_trace(self, result: dict[str, Any]) -> Optional[TraceStepInput]:
+        outcome = result.get("outcome")
+        if outcome == "recommended":
+            step = result.get("diagnostic_step")
+            if isinstance(step, dict) and step.get("command"):
+                return _trace_step(TraceCategory.CONTEXT, "Formulated recommended diagnostic check with grounded command")
+            return _trace_step(TraceCategory.CONTEXT, "Formulated recommended diagnostic check")
+        if outcome == "insufficient_evidence":
+            return _trace_step(TraceCategory.CONTEXT, "Identified missing diagnostic evidence", TraceStepStatus.WARNING)
+        if outcome == "escalation_required":
+            return _trace_step(TraceCategory.CONTEXT, "Determined escalation required", TraceStepStatus.WARNING)
+        if outcome == "error":
+            return _trace_step(TraceCategory.CONTEXT, "Technical Authority evaluation failed", TraceStepStatus.FAILED)
+        return None
+
+    def _problem_manager_response_trace(self, result: dict[str, Any]) -> Optional[TraceStepInput]:
+        if "error" in result:
+            return _trace_step(TraceCategory.CASE, "Problem Manager investigation failed", TraceStepStatus.FAILED)
+        if result.get("root_cause_analysis"):
+            return _trace_step(TraceCategory.CASE, "Completed post-incident root cause analysis")
+        return None
+
+    def _automated_ops_response_trace(self, result: dict[str, Any]) -> Optional[TraceStepInput]:
+        if "error" in result:
+            return _trace_step(TraceCategory.SYSTEM, "Operational briefing generation failed", TraceStepStatus.FAILED)
+        title = result.get("briefing_title")
+        if isinstance(title, str) and title.strip():
+            return _trace_step(TraceCategory.SYSTEM, f'Generated operational summary: "{title.strip()}"')
+        if "briefing_markdown" in result:
+            return _trace_step(TraceCategory.SYSTEM, "Generated operational summary")
         return None
 
 

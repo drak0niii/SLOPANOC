@@ -92,22 +92,22 @@ describe("AttachmentChipRow — POST-5.1 B3 real image chips", () => {
     );
   });
 
-  it("still renders a non-image (long-paste) attachment through the existing Chip path, unchanged", () => {
+  it("still renders a non-image attachment through the existing Chip path, unchanged", () => {
     mockAppState.state.draft.attachments = [
-      { id: "att-1", kind: "file", name: "Pasted text.txt", meta: "500 characters", isPastedText: true, content: "x" },
+      { id: "att-1", kind: "file", name: "Doc.pdf", meta: "1 page" },
     ];
     render(<AttachmentChipRow />);
-    expect(screen.getByText("Pasted text.txt")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Remove Pasted text.txt" })).toBeInTheDocument();
+    expect(screen.getByText("Doc.pdf")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Doc.pdf" })).toBeInTheDocument();
   });
 
-  it("renders multiple mixed attachments (image + pasted text) together", () => {
+  it("renders multiple mixed attachments (image + file) together", () => {
     mockAppState.state.draft.attachments = [
       makeImage({ id: "img-1" }),
-      { id: "att-1", kind: "file", name: "Pasted text.txt", meta: "500 characters", isPastedText: true, content: "x" },
+      { id: "att-1", kind: "file", name: "Doc.pdf", meta: "1 page" },
     ];
     const { container } = render(<AttachmentChipRow />);
-    expect(screen.getByText("Pasted text.txt")).toBeInTheDocument();
+    expect(screen.getByText("Doc.pdf")).toBeInTheDocument();
     expect(container.querySelector("img")).toBeInTheDocument();
   });
 });

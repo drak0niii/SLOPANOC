@@ -71,7 +71,6 @@ import { hasPersistedImageAttachment } from "../lib/persistedAttachments";
 import {
   ACCEPTED_IMAGE_MIME_TYPES,
   ATTACHMENT_LIMIT_NOTICE_DURATION_MS,
-  LONG_PASTE_THRESHOLD,
   MAX_DRAFT_IMAGES,
   MAX_IMAGE_BYTES,
   type AcceptedImageMimeType,
@@ -3587,38 +3586,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       (a): a is Attachment => a.kind !== "image",
     );
 
-    // The composer already intercepts long *pastes* and turns them into a
-    // "Pasted text.txt" attachment before they ever reach draft.text (see
-    // PromptComposer's onPaste handler) — its content is folded back in here
-    // so the message's full text always reflects what was actually said,
-    // regardless of how much of it lives in an attachment.
-    const existingPastedAttachments = nonImageAttachments.filter((a) => a.isPastedText);
-    const pastedContent = existingPastedAttachments.map((a) => a.content ?? "").join("\n\n");
-    const rawText = [typedText, pastedContent].filter(Boolean).join("\n\n");
+    const rawText = typedText;
+    const attachments = nonImageAttachments;
     // POST-5.1 B5 — an image-only send (rawText empty, no non-image
     // attachments, but real images present) is now valid; only a
     // genuinely empty draft (no text, no attachments of any kind) is
     // rejected here.
     if (!rawText && nonImageAttachments.length === 0 && imageAttachments.length === 0) return;
-
-    // Anything not already caught at paste time — typed directly, or pasted
-    // through a path the composer didn't intercept — still gets converted
-    // here as a fallback, so a message is represented the same way no
-    // matter how the long text arrived.
-    const typedIsLongPaste = typedText.length > LONG_PASTE_THRESHOLD;
-    const attachments = typedIsLongPaste
-      ? [
-          ...nonImageAttachments,
-          {
-            id: createId("attachment"),
-            kind: "file" as const,
-            name: "Pasted text.txt",
-            meta: `${typedText.length.toLocaleString()} characters`,
-            isPastedText: true,
-            content: typedText,
-          },
-        ]
-      : nonImageAttachments;
 
     const chatId = state.activeChatId ?? createId("chat");
     const isNewChat = state.activeChatId === null;

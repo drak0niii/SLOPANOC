@@ -292,6 +292,8 @@ class TeamsGetMessagesResult(BaseModel):
     oldest_retrieved_at: Optional[str] = None
     newest_retrieved_at: Optional[str] = None
     coverage: TeamsCoverage
+    latest_hosted_content_message_id: Optional[str] = None
+    latest_hosted_content_ids: list[str] = Field(default_factory=list)
 
 
 class TeamsHostedContentResult(BaseModel):

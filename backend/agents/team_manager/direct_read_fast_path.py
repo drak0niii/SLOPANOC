@@ -1016,17 +1016,47 @@ def get_fast_path_team_manager() -> Any:
     runner` calls this in place of importing the base `team_manager`
     directly.
     """
-    if not _fast_path_team_manager_cache:
-        from backend.agents.team_manager.agent import team_manager
+    from backend.agents.team_manager.agent import _build_team_manager_tools, team_manager
+    from backend.agents.team_manager.case_context import make_team_manager_instruction_provider
+    from backend.config.settings import get_settings
 
+    settings = get_settings()
+    current_tools = _build_team_manager_tools(
+        enable_technical_authority=settings.technical_authority_enabled,
+        enable_problem_manager=settings.problem_manager_enabled,
+        enable_automated_operations=settings.automated_operations_enabled,
+    )
+    current_names = [getattr(t, "name", getattr(t, "__name__", str(t))) for t in current_tools]
+    canonical_names = [getattr(t, "name", getattr(t, "__name__", str(t))) for t in team_manager.tools]
+    instruction_to_use = (
+        team_manager.instruction
+        if current_names == canonical_names
+        else make_team_manager_instruction_provider(current_tools)
+    )
+    if not _fast_path_team_manager_cache:
+        update_dict: dict[str, Any] = {
+            "tools": current_tools,
+            "instruction": instruction_to_use,
+            "before_model_callback": [
+                _present_fast_path_result_via_trusted_pipeline,
+                before_model_call("team_manager"),
+            ],
+        }
         _fast_path_team_manager_cache.append(
-            team_manager.model_copy(
-                update={
-                    "before_model_callback": [
-                        _present_fast_path_result_via_trusted_pipeline,
-                        before_model_call("team_manager"),
-                    ]
-                }
-            )
+            team_manager.model_copy(update=update_dict)
         )
+    else:
+        current_agent = _fast_path_team_manager_cache[0]
+        cached_names = [getattr(t, "name", getattr(t, "__name__", str(t))) for t in current_agent.tools]
+        if cached_names != current_names:
+            update_dict = {
+                "tools": current_tools,
+                "instruction": instruction_to_use,
+                "before_model_callback": [
+                    _present_fast_path_result_via_trusted_pipeline,
+                    before_model_call("team_manager"),
+                ],
+            }
+            _fast_path_team_manager_cache[0] = team_manager.model_copy(update=update_dict)
+
     return _fast_path_team_manager_cache[0]

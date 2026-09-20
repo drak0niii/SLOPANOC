@@ -27,13 +27,8 @@ architecture those passes produced.
 | `team_manager` | Orchestrator, sole user-facing author | Yes | No — never calls a Teams tool directly | No — presents proposals and outcomes; a deterministic policy gate owns actual authorization |
 | `incident_manager` | Teams specialist | No — never produces text the user sees directly | Yes — sole caller of the Teams tools (`docs/TEAMS_TOOL_CONTRACT.md`) | No — prepares/executes writes only when told to, and execution is independently re-authorized by the tool implementation itself |
 
-No other agent exists today. The future second specialist is
-**Troubleshooting Manager** (Phase 6A — see `docs/BUILD_SEQUENCE.md`
-§2a and §2's "Future agent topology" below), which would attach to
-`team_manager` the same way `incident_manager` does. There is no
-Knowledge Agent, planned or built — Generic Governed Knowledge is a
-Knowledge Context provider/tool surface (§3a, §12), never a specialist
-of its own.
+**Dynamic Tool-Derived Roster Truthfulness:**
+The agent roster advertised by `team_manager` in greetings and capability descriptions is dynamically derived solely from actual registered tools on `agent.tools` using a closure factory (`make_team_manager_instruction_provider`), with zero fallback to environment flags and without accessing private ADK attributes. Unconfigured specialist capabilities are never advertised.
 
 ---
 
@@ -335,6 +330,9 @@ MCP        = FUTURE, OPTIONAL capability-discovery/invocation mechanism
 
 ```text
 chat_topic: str                     # the chat name/title as the user stated it
+chat_id: Optional[str]              # authoritative chat id when already resolved or
+                                       # selected; allows incident_manager to skip redundant
+                                       # teams_list_chats fuzzy lookup
 question: Optional[str]              # a complete, self-contained question;
                                        # team_manager resolves pronouns/ellipsis
                                        # itself before setting this — incident_manager

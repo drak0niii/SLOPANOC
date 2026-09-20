@@ -180,6 +180,20 @@ describe("RunTrace — completed mode", () => {
     expect(screen.getByText("Request could not be completed")).toBeInTheDocument();
   });
 
+  it("renders specialist tool execution pills for recognized tool execution steps", () => {
+    const specialistSteps: RunTraceStep[] = [
+      { stepId: "s1", category: "teams", label: "Retrieving Teams messages", status: "completed" },
+      { stepId: "s2", category: "context", label: "Searching governed knowledge", status: "completed" },
+      { stepId: "s3", category: "response", label: "Generated the response", status: "completed" },
+    ];
+    render(<RunTrace mode="completed" outcome="ok" durationSeconds={20} steps={specialistSteps} expanded={true} onToggle={() => {}} />);
+
+    expect(screen.getByText("Incident Manager")).toBeInTheDocument();
+    expect(screen.getByText("teams_get_messages")).toBeInTheDocument();
+    expect(screen.getByText("Technical Authority")).toBeInTheDocument();
+    expect(screen.getByText("knowledge_search")).toBeInTheDocument();
+  });
+
   it("never renders safe_metadata raw — only the pre-rendered label", () => {
     render(<RunTrace mode="completed" outcome="ok" durationSeconds={34} steps={steps()} expanded={true} onToggle={() => {}} />);
     expect(screen.queryByText(/message_count/)).not.toBeInTheDocument();

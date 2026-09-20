@@ -43,6 +43,15 @@ class IncidentManagerRequest(BaseModel):
     correction pass).
     """
 
+    chat_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "The authoritative Teams chat ID, if already known and bound by "
+            "team_manager (e.g. from selected_teams_chat_id in session state). "
+            "When set, incident_manager directly reads messages for this chat_id "
+            "without invoking teams_list_chats for redundant name resolution."
+        ),
+    )
     chat_topic: Optional[str] = Field(
         default=None,
         description=(

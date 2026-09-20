@@ -142,6 +142,31 @@ async def test_context_never_persisted_into_session_state(patched_case_service: 
     assert dict(refreshed.state) == state_before
 
 
+@pytest.mark.asyncio
+async def test_instruction_includes_troubleshooting_state_when_present(patched_case_service: CaseService) -> None:
+    case = await patched_case_service.create_case(ALICE, "Cell Outage", "Loss on cell 42.")
+    ts_state = {
+        "fault_id": "FAULT-CELL-42",
+        "status": "investigating",
+        "symptom_summary": "Loss on cell 42",
+        "working_hypothesis": "Loose RF jumper",
+        "competing_hypotheses": ["Transceiver fault"],
+    }
+    ctx = await _readonly_context(
+        ALICE,
+        state={
+            ACTIVE_CASE_ID_STATE_KEY: case.case_id,
+            "troubleshooting_state": ts_state,
+        },
+    )
+    rendered = await team_manager.canonical_instruction(ctx)
+
+    assert "ACTIVE CASE CONTEXT:" in rendered[0]
+    assert "Active Fault: FAULT-CELL-42 (Status: investigating)" in rendered[0]
+    assert "Working Hypothesis: Loose RF jumper" in rendered[0]
+    assert "Competing Hypotheses: Transceiver fault" in rendered[0]
+
+
 def test_case_context_module_never_calls_append_event() -> None:
     """Structural guarantee alongside the functional one above -- this
     module has no code path that could persist anything. Checks for an
@@ -154,3 +179,55 @@ def test_case_context_module_never_calls_append_event() -> None:
     source = inspect.getsource(case_context_module)
     assert "append_event(" not in source
     assert "persist_state_delta(" not in source
+
+
+@pytest.mark.asyncio
+async def test_roster_reflects_registered_tools_strictly(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unittest.mock import MagicMock
+    from backend.agents.team_manager.case_context import make_team_manager_instruction_provider
+
+    # Even if feature flag is enabled in env, if tool is not registered, it must not appear!
+    monkeypatch.setenv("SLOPANOC_TECHNICAL_AUTHORITY_ENABLED", "true")
+    monkeypatch.setenv("SLOPANOC_PROBLEM_MANAGER_ENABLED", "true")
+    monkeypatch.setenv("SLOPANOC_AUTOMATED_OPERATIONS_ENABLED", "true")
+
+    im_tool = MagicMock()
+    im_tool.name = "incident_manager"
+    baseline_tools = [im_tool]
+
+    provider = make_team_manager_instruction_provider(baseline_tools)
+    ctx = await _readonly_context(ALICE, state={})
+    instruction = await provider(ctx)
+
+    assert "ACTIVE AGENT ROSTER & SPECIALISTS:" in instruction
+    assert "`incident_manager`" in instruction
+    assert "`technical_authority_engineer`" not in instruction
+    assert "`problem_manager`" not in instruction
+    assert "`automated_operations_engineer`" not in instruction
+    assert "TECHNICAL AUTHORITY ENGINEER DELEGATION" not in instruction
+    assert "PROBLEM MANAGER DELEGATION" not in instruction
+    assert "AUTOMATED OPERATIONS ENGINEER DELEGATION" not in instruction
+
+    # Now add TAE tool only
+    tae_tool = MagicMock()
+    tae_tool.name = "technical_authority_engineer"
+    tae_provider = make_team_manager_instruction_provider([im_tool, tae_tool])
+    tae_instruction = await tae_provider(ctx)
+
+    assert "`technical_authority_engineer`" in tae_instruction
+    assert "TECHNICAL AUTHORITY ENGINEER DELEGATION" in tae_instruction
+    assert "`problem_manager`" not in tae_instruction
+    assert "`automated_operations_engineer`" not in tae_instruction
+    assert "PROBLEM MANAGER DELEGATION" not in tae_instruction
+    assert "AUTOMATED OPERATIONS ENGINEER DELEGATION" not in tae_instruction
+
+    # Now add PM tool only
+    pm_tool = MagicMock()
+    pm_tool.name = "problem_manager"
+    pm_provider = make_team_manager_instruction_provider([im_tool, pm_tool])
+    pm_instruction = await pm_provider(ctx)
+
+    assert "`problem_manager`" in pm_instruction
+    assert "PROBLEM MANAGER DELEGATION" in pm_instruction
+    assert "`technical_authority_engineer`" not in pm_instruction
+    assert "`automated_operations_engineer`" not in pm_instruction

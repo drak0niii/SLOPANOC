@@ -731,3 +731,54 @@ async def test_a_later_real_turn_never_overwrites_a_manual_rename() -> None:
 
     summaries = await history.list_saved_sessions(service, "u1", limit=50)
     assert summaries[0].title == "Manually renamed"
+
+
+@pytest.mark.asyncio
+async def test_assistant_text_emitted_alongside_tool_call_is_retained_when_post_tool_event_has_no_text() -> None:
+    """Multi-part candidate recovery in session history: when model emits text
+    in an intermediate event alongside a function_call (where is_final_response() is
+    False due to pending tool execution), and the subsequent post-tool event
+    has no new text, history projection must retain the candidate text rather
+    than dropping the assistant reply.
+    """
+    service = ApiSessionService()
+    session_id = await service.create_session("u1")
+    session = await service.get_session(session_id, "u1")
+    session = await _append(service, session, _user_event("inv-1", "hello"))
+
+    # Step 1: Model emits text AND a function call in the same candidate.
+    # Non-final because of the pending tool call.
+    ev1 = Event(
+        invocation_id="inv-1",
+        author="team_manager",
+        content=types.Content(
+            role="model",
+            parts=[
+                types.Part.from_text(text="Hello! I am ANOC."),
+                types.Part(function_call=types.FunctionCall(name="record_source_requirements", args={"requires_teams": False})),
+            ],
+        ),
+    )
+    session = await _append(service, session, ev1)
+
+    # Step 2: Tool execution response.
+    ev2 = _function_response_event("inv-1", "record_source_requirements", {"ok": True})
+    session = await _append(service, session, ev2)
+
+    # Step 3: Final event from runner post-tool, has is_final_response() == True
+    # but contains no new text parts (empty content or None).
+    ev3 = Event(
+        invocation_id="inv-1",
+        author="team_manager",
+        content=types.Content(role="model", parts=[]),
+    )
+    await _append(service, session, ev3)
+
+    response = await history.get_session_history(service, _fresh_attachment_service(), session_id, "u1")
+
+    assert len(response.messages) == 2
+    user_msg, assistant_msg = response.messages
+    assert user_msg.role == "user"
+    assert user_msg.text == "hello"
+    assert assistant_msg.role == "assistant"
+    assert assistant_msg.text == "Hello! I am ANOC."

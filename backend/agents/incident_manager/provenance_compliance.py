@@ -92,7 +92,11 @@ from pydantic import BaseModel
 from backend.agents.incident_manager.schemas import IncidentManagerOutcome, IncidentManagerResponse
 from backend.api.turn_context import current_run_id
 from backend.knowledge.provenance.contracts import KnowledgeEvidenceItem, KnowledgeEvidenceSelectionKey
-from backend.tools.knowledge.runtime import get_available_knowledge_evidence, snapshot_selected_knowledge_evidence
+from backend.tools.knowledge.runtime import (
+    get_available_knowledge_evidence,
+    has_explicit_empty_knowledge_selection,
+    snapshot_selected_knowledge_evidence,
+)
 from backend.tools.knowledge.tools import knowledge_select_evidence
 
 _logger = logging.getLogger(__name__)
@@ -253,7 +257,7 @@ Do NOT simply re-confirm your prior answer's own earlier judgment. RE-EXAMINE `a
 
 If, on this fresh reading, one or more items in `available_evidence` materially help answer `question`: call `knowledge_select_evidence` with the exact `selection_key` of each -- copy verbatim, never invent one -- and then give a corrected, complete structured response that actually uses that evidence to answer `question`. This corrected response may differ from `prior_answer_text` in wording and substance; it must not differ in never inventing a command/fact/procedure step the selected evidence does not itself state.
 
-If, after this fresh reading, no item in `available_evidence` actually helps answer `question`: call `knowledge_select_evidence` with an empty list, then give an honest response stating that no applicable governed knowledge was found -- do not fabricate one to fill the gap.
+If, after this fresh reading, no item in `available_evidence` actually helps answer `question`: you MUST call `knowledge_select_evidence` with an empty list `[]` (`selections=[]`) to complete compliance safely, then give an honest response stating that no applicable governed knowledge was found -- do not fabricate one to fill the gap, and do NOT omit calling `knowledge_select_evidence(selections=[])`.
 
 Call `knowledge_select_evidence` exactly once, then respond with your structured answer. Do not call any other tool."""
 
@@ -387,8 +391,8 @@ async def enforce_governed_knowledge_selection(callback_context: Any, original_t
     if not available.items:
         return None  # zero-evidence case -- selection may legitimately stay empty
 
-    if snapshot_selected_knowledge_evidence(run_id):
-        return None  # already compliant -- nothing to enforce
+    if snapshot_selected_knowledge_evidence(run_id) or has_explicit_empty_knowledge_selection(run_id):
+        return None  # already compliant (selected or explicitly rejected) -- nothing to enforce
 
     _logger.warning(
         "provenance_compliance: available governed evidence exists but none selected -- retrying once run_id=%s",

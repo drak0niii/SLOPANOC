@@ -55,6 +55,7 @@ from google.adk.tools import ToolContext
 
 from backend.api.hosted_content_vision_context import (
     already_retrieved_this_run,
+    get_latest_message_id_with_hosted_content,
     get_message_hosted_content_order,
     stash_pending_hosted_content_image,
 )
@@ -285,6 +286,11 @@ def teams_get_hosted_content(
     if not hosted_content_id or not hosted_content_id.strip():
         return _validation_error_result("A Teams hosted content id is required to retrieve hosted content.")
 
+    if message_id.strip().lower() in ("latest", "last", "newest"):
+        resolved_mid = get_latest_message_id_with_hosted_content()
+        if resolved_mid:
+            message_id = resolved_mid
+
     if tool_context is not None:
         known = read_known_hosted_content_ids(tool_context.state)
         if hosted_content_id not in known.get(chat_id, {}).get(message_id, set()):
@@ -398,6 +404,11 @@ def teams_get_all_hosted_content(
         return _validation_error_result("A Teams chat id is required to retrieve hosted content.")
     if not message_id or not message_id.strip():
         return _validation_error_result("A Teams message id is required to retrieve hosted content.")
+
+    if message_id.strip().lower() in ("latest", "last", "newest"):
+        resolved_mid = get_latest_message_id_with_hosted_content()
+        if resolved_mid:
+            message_id = resolved_mid
 
     known_ids_for_message: set[str] = set()
     if tool_context is not None:

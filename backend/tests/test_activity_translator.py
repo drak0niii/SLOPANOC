@@ -780,3 +780,95 @@ def test_E_actual_teams_discovery_produces_a_factual_structured_teams_status() -
     assert status["stage"] == "teams_context"
     assert status["label"] == "Finding the Teams conversation"
     assert status["label"] != _OBSOLETE_UNCONDITIONAL_TEAMS_STATUS_LABEL
+
+
+def test_technical_authority_call_and_response_traces() -> None:
+    translator = RunTraceTranslator()
+    call_step = translator.translate_event(
+        FakeEvent(final=False, function_calls=[FakeFunctionCall("technical_authority_engineer", {})])
+    )
+    assert call_step is not None
+    assert call_step["category"] == TraceCategory.CONTEXT
+    assert "Technical Authority Engineer" in call_step["label"]
+
+    rec_step = translator.translate_event(
+        FakeEvent(
+            final=False,
+            function_responses=[
+                FakeFunctionResponse(
+                    "technical_authority_engineer",
+                    {
+                        "outcome": "recommended",
+                        "diagnostic_step": {"action": "Check board status", "command": "show board"},
+                    },
+                )
+            ],
+        )
+    )
+    assert rec_step is not None
+    assert rec_step["category"] == TraceCategory.CONTEXT
+    assert "grounded command" in rec_step["label"]
+
+    insufficient_step = translator.translate_event(
+        FakeEvent(
+            final=False,
+            function_responses=[
+                FakeFunctionResponse(
+                    "technical_authority_engineer",
+                    {"outcome": "insufficient_evidence"},
+                )
+            ],
+        )
+    )
+    assert insufficient_step is not None
+    assert insufficient_step["status"] == TraceStepStatus.WARNING
+
+
+def test_problem_manager_call_and_response_traces() -> None:
+    translator = RunTraceTranslator()
+    call_step = translator.translate_event(
+        FakeEvent(final=False, function_calls=[FakeFunctionCall("problem_manager", {})])
+    )
+    assert call_step is not None
+    assert call_step["category"] == TraceCategory.CASE
+    assert "Problem Manager" in call_step["label"]
+
+    resp_step = translator.translate_event(
+        FakeEvent(
+            final=False,
+            function_responses=[
+                FakeFunctionResponse(
+                    "problem_manager",
+                    {"root_cause_analysis": "Optical transceiver degraded"},
+                )
+            ],
+        )
+    )
+    assert resp_step is not None
+    assert resp_step["category"] == TraceCategory.CASE
+    assert "root cause analysis" in resp_step["label"]
+
+
+def test_automated_operations_call_and_response_traces() -> None:
+    translator = RunTraceTranslator()
+    call_step = translator.translate_event(
+        FakeEvent(final=False, function_calls=[FakeFunctionCall("automated_operations_engineer", {})])
+    )
+    assert call_step is not None
+    assert call_step["category"] == TraceCategory.SYSTEM
+    assert "Automated Operations Engineer" in call_step["label"]
+
+    resp_step = translator.translate_event(
+        FakeEvent(
+            final=False,
+            function_responses=[
+                FakeFunctionResponse(
+                    "automated_operations_engineer",
+                    {"briefing_title": "Morning Shift Briefing 2026-09-18"},
+                )
+            ],
+        )
+    )
+    assert resp_step is not None
+    assert resp_step["category"] == TraceCategory.SYSTEM
+    assert "Morning Shift Briefing" in resp_step["label"]

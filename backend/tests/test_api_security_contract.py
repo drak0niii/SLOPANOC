@@ -358,16 +358,26 @@ def test_agent_topology_is_unaffected_by_the_api_layer() -> None:
     """
     from backend.agents.incident_manager.agent import incident_manager
     from backend.agents.team_manager.agent import team_manager
+    from backend.config.settings import get_settings
 
     def tname(t):
         return getattr(t, "name", None) or getattr(t, "__name__", str(t))
 
-    assert [tname(t) for t in team_manager.tools] == [
+    settings = get_settings()
+    expected_team_manager_tools = [
         "incident_manager",
         "record_case_analysis",
         "record_conversation_target",
         "record_source_requirements",
     ]
+    if settings.technical_authority_enabled:
+        expected_team_manager_tools.append("technical_authority_engineer")
+    if settings.problem_manager_enabled:
+        expected_team_manager_tools.append("problem_manager")
+    if settings.automated_operations_enabled:
+        expected_team_manager_tools.append("automated_operations_engineer")
+
+    assert [tname(t) for t in team_manager.tools] == expected_team_manager_tools
     assert [tname(t) for t in incident_manager.tools] == [
         "teams_list_chats",
         "teams_get_messages",

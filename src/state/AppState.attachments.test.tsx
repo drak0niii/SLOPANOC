@@ -279,10 +279,8 @@ describe("AppState — queueImageFiles eligibility and preflight", () => {
         {
           id: "att-1",
           kind: "file",
-          name: "Pasted text.txt",
-          meta: "500 characters",
-          isPastedText: true,
-          content: "x",
+          name: "Doc.pdf",
+          meta: "1 page",
         },
       ]);
     });

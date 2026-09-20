@@ -145,6 +145,7 @@ def enforce_read_continuation(tool: Any, args: dict[str, Any], tool_context: Any
     if continuation is None:
         return None
 
+    args["chat_id"] = continuation.selected_chat_id
     args["chat_topic"] = continuation.selected_chat_topic
     args["question"] = build_read_resume_message(
         PendingReadIntent(operation=continuation.operation, question=continuation.question)

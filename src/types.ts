@@ -44,14 +44,6 @@ export interface Attachment {
   kind: AttachmentKind;
   name: string;
   meta?: string;
-  /** Marks the mock "Pasted text.txt" attachment created when a message's
-   * typed/pasted text exceeds the long-paste threshold — lets the message
-   * renderer hide the raw inline text and offer "Expand message" instead. */
-  isPastedText?: boolean;
-  /** The full pasted text, present only on `isPastedText` attachments —
-   * carries the content from the moment of paste (before it's ever in
-   * `draft.text`) through to the sent message. */
-  content?: string;
 }
 
 /** POST-5.1 B3 — the browser-only lifecycle of one durable-backed image
@@ -94,14 +86,10 @@ export interface DraftImageAttachment {
 }
 
 /** POST-5.1 B3 — everything `Draft.attachments` may hold: the existing
- * metadata-only `Attachment` (still the ONLY shape long-paste "Pasted
- * text.txt" entries ever use — that subsystem is deliberately untouched,
- * see PromptComposer.tsx's `handlePaste`) union'd with the new real-image
- * draft shape. Discriminated on `kind` — `Attachment.kind` is `"file" |
- * "folder"`, `DraftImageAttachment.kind` is `"image"`, so the two never
- * collide and TypeScript narrows correctly on a plain `kind` check. This
- * is the smallest safe union (instruction: do not rewrite the long-paste
- * subsystem to unify it with the new image type). */
+ * metadata-only `Attachment` union'd with the real-image draft shape.
+ * Discriminated on `kind` — `Attachment.kind` is `"file" | "folder"`,
+ * `DraftImageAttachment.kind` is `"image"`, so the two never collide
+ * and TypeScript narrows correctly on a plain `kind` check. */
 export type DraftAttachment = Attachment | DraftImageAttachment;
 
 /** POST-5.1 B3 — prepared for B4/B5, NOT produced by anything yet: the

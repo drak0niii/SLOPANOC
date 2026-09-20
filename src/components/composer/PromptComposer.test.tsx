@@ -417,9 +417,9 @@ describe("PromptComposer — POST-5.1 B5 Send eligibility for real image attachm
     expect(screen.getByRole("button", { name: "Send message" })).not.toBeDisabled();
   });
 
-  it("a non-image (pasted-text) attachment alone never blocks Send", () => {
+  it("a non-image attachment alone never blocks Send", () => {
     mockAppState.state.draft.attachments = [
-      { id: "att-1", kind: "file", name: "Pasted text.txt", meta: "500 characters", isPastedText: true, content: "x" },
+      { id: "att-1", kind: "file", name: "Doc.pdf", meta: "1 page" },
     ];
     render(<PromptComposer />);
 
@@ -447,7 +447,7 @@ describe("PromptComposer — POST-5.1 B3 clipboard image paste", () => {
     expect(mockAppState.addAttachments).not.toHaveBeenCalled();
   });
 
-  it("an image paste is never also treated as a long-text paste, even if clipboard text is also present", () => {
+  it("an image paste is never treated as text, even if clipboard text is also present", () => {
     render(<PromptComposer />);
     const file = new File(["binary"], "clip.png", { type: "image/png" });
     const textarea = screen.getByLabelText("Message");
@@ -463,33 +463,22 @@ describe("PromptComposer — POST-5.1 B3 clipboard image paste", () => {
     expect(mockAppState.addAttachments).not.toHaveBeenCalled();
   });
 
-  it("a plain long-text paste (no image) still goes through the existing addAttachments path, unchanged", () => {
+  it("a plain text paste (short or long) is never intercepted and never calls addAttachments", () => {
     render(<PromptComposer />);
     const textarea = screen.getByLabelText("Message");
 
-    fireEvent.paste(textarea, {
-      clipboardData: {
+    const pasteEvent = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, "clipboardData", {
+      value: {
         items: [],
-        getData: () => "y".repeat(500),
+        getData: () => "y".repeat(1500),
       },
     });
 
-    expect(mockAppState.addAttachments).toHaveBeenCalledOnce();
-    expect(mockAppState.queueImageFiles).not.toHaveBeenCalled();
-  });
-
-  it("a short plain-text paste triggers neither path", () => {
-    render(<PromptComposer />);
-    const textarea = screen.getByLabelText("Message");
-
-    fireEvent.paste(textarea, {
-      clipboardData: {
-        items: [],
-        getData: () => "short",
-      },
-    });
+    textarea.dispatchEvent(pasteEvent);
 
     expect(mockAppState.addAttachments).not.toHaveBeenCalled();
     expect(mockAppState.queueImageFiles).not.toHaveBeenCalled();
+    expect(pasteEvent.defaultPrevented).toBe(false);
   });
 });

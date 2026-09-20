@@ -91,7 +91,11 @@ from backend.agents.incident_manager.schemas import IncidentManagerOutcome, Inci
 from backend.api.session_service import APP_NAME
 from backend.api.turn_context import bind_run_id, reset_run_id
 from backend.knowledge.provenance.contracts import KnowledgeEvidenceItem
-from backend.tools.knowledge.runtime import discard_knowledge_run_evidence_state, snapshot_selected_knowledge_evidence
+from backend.tools.knowledge.runtime import (
+    discard_knowledge_run_evidence_state,
+    has_explicit_empty_knowledge_selection,
+    snapshot_selected_knowledge_evidence,
+)
 
 _logger = logging.getLogger(__name__)
 _perf_logger = logging.getLogger("backend.perf")
@@ -194,10 +198,11 @@ async def enforce_governed_knowledge_at_completion(
                 validated = None
 
         selected_evidence = snapshot_selected_knowledge_evidence(run_id)
+        has_empty_selection = has_explicit_empty_knowledge_selection(run_id)
 
         if validated is not None and validated.get("outcome") in (IncidentManagerOutcome.OK.value, IncidentManagerOutcome.NO_RESULT.value):
             summary = validated.get("summary") or validated.get("detail")
-            if summary:
+            if summary and (selected_evidence or has_empty_selection or validated.get("outcome") == IncidentManagerOutcome.NO_RESULT.value):
                 _perf_logger.info("perf stage=governed_knowledge_completion_remediation_ok run_id=%s", run_id)
                 return summary, selected_evidence
 

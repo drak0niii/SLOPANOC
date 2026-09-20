@@ -79,9 +79,14 @@ for the full ADK-source-verified mechanism.
 """
 from __future__ import annotations
 
+from typing import Any, Optional
+
 from google.adk.agents import Agent
 
-from backend.agents.team_manager.case_context import team_manager_instruction_provider
+from backend.agents.team_manager.case_context import (
+    make_team_manager_instruction_provider,
+    team_manager_instruction_provider,
+)
 from backend.agents.team_manager.direct_read_fast_path import _fast_path_incident_manager
 from backend.agents.team_manager.case_tools import record_case_analysis
 from backend.agents.team_manager.conversation_target import record_conversation_target
@@ -106,6 +111,65 @@ _settings = get_settings()
 # module's own docstring for the full ADK-source-verified rationale.
 incident_manager_tool = MultimodalAgentTool(agent=_fast_path_incident_manager)
 
+
+def _build_team_manager_tools(
+    enable_technical_authority: Optional[bool] = None,
+    enable_problem_manager: Optional[bool] = None,
+    enable_automated_operations: Optional[bool] = None,
+) -> list[Any]:
+    """Builds the tool roster for Team Manager.
+
+    Specialist tools are independently gated by their respective feature flags to preserve
+    100% baseline behavior and API security contract assertions when disabled.
+    Enabling TAE must not implicitly activate unrelated agents.
+    """
+    settings = get_settings()
+    if enable_technical_authority is None:
+        enable_technical_authority = settings.technical_authority_enabled
+    if enable_problem_manager is None:
+        enable_problem_manager = settings.problem_manager_enabled
+    if enable_automated_operations is None:
+        enable_automated_operations = settings.automated_operations_enabled
+
+    tools: list[Any] = [
+        incident_manager_tool,
+        record_case_analysis,
+        record_conversation_target,
+        record_source_requirements,
+    ]
+    if enable_technical_authority:
+        from backend.agents.technical_authority_engineer.agent import technical_authority_engineer_tool
+        tools.append(technical_authority_engineer_tool)
+    if enable_problem_manager:
+        from backend.agents.problem_manager.agent_tool import problem_manager_tool
+        tools.append(problem_manager_tool)
+    if enable_automated_operations:
+        from backend.agents.automated_operations_engineer.agent_tool import automated_operations_engineer_tool
+        tools.append(automated_operations_engineer_tool)
+    return tools
+
+
+def get_team_manager(
+    enable_technical_authority: Optional[bool] = None,
+    enable_problem_manager: Optional[bool] = None,
+    enable_automated_operations: Optional[bool] = None,
+) -> Agent:
+    """Returns a Team Manager Agent configured with the appropriate tool set."""
+    tools = _build_team_manager_tools(
+        enable_technical_authority=enable_technical_authority,
+        enable_problem_manager=enable_problem_manager,
+        enable_automated_operations=enable_automated_operations,
+    )
+    return team_manager.model_copy(
+        update={
+            "tools": tools,
+            "instruction": make_team_manager_instruction_provider(tools),
+        }
+    )
+
+
+_initial_team_manager_tools = _build_team_manager_tools()
+
 team_manager = Agent(
     name="team_manager",
     # Latency pass: a process-lifetime-shared `BaseLlm` instance rather
@@ -116,11 +180,11 @@ team_manager = Agent(
     model=get_shared_llm(_settings.gemini_model),
     description=(
         "SLOPANOC's orchestrator. Owns the user conversation, asks only "
-        "for missing information, and delegates Teams-domain work to the "
-        "incident_manager specialist."
+        "for missing information, and delegates technical troubleshooting to "
+        "technical_authority_engineer and Teams-domain work to incident_manager."
     ),
-    instruction=team_manager_instruction_provider,
-    tools=[incident_manager_tool, record_case_analysis, record_conversation_target, record_source_requirements],
+    instruction=make_team_manager_instruction_provider(_initial_team_manager_tools),
+    tools=_initial_team_manager_tools,
     # R3 FIX (correctness-regression pass): a LIST of callbacks -- ADK's
     # own documented multi-callback mechanism (verified against the
     # installed 1.33.0 source, `flows/llm_flows/functions.py`'s `_run_

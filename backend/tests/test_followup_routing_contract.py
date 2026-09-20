@@ -112,13 +112,17 @@ def test_team_manager_has_no_tools_besides_incident_manager_and_case_analysis() 
     test_conversation_target_prompt_contract.py for that structural
     proof specifically.
     """
+    from backend.config.settings import get_settings
     names = [getattr(t, "name", None) or getattr(t, "__name__", str(t)) for t in team_manager.tools]
-    assert names == [
+    expected = [
         "incident_manager",
         "record_case_analysis",
         "record_conversation_target",
         "record_source_requirements",
     ]
+    if get_settings().technical_authority_enabled:
+        expected.append("technical_authority_engineer")
+    assert names == expected
 
 
 # --- Prompt contract: incident_manager (semantic consistency) -----------

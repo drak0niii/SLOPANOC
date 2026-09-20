@@ -38,17 +38,21 @@ def test_incident_manager_tools_include_the_new_write_tools_but_not_approval() -
 
 
 def test_team_manager_tools_are_unchanged_by_this_milestone() -> None:
+    from backend.config.settings import get_settings
     # Phase 4D added `record_case_analysis` (see
     # backend/agents/team_manager/case_tools.py); the semantic-scope bug
     # fix added `record_conversation_target` (see
     # backend/agents/team_manager/conversation_target.py) -- the Teams
     # write-tooling itself is unchanged.
-    assert _tool_names(team_manager) == [
+    expected = [
         "incident_manager",
         "record_case_analysis",
         "record_conversation_target",
         "record_source_requirements",
     ]
+    if get_settings().technical_authority_enabled:
+        expected.append("technical_authority_engineer")
+    assert _tool_names(team_manager) == expected
 
 
 def _mentions_as_code(source: str, name: str) -> bool:

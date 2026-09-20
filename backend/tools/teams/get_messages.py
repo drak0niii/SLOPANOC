@@ -455,6 +455,7 @@ def teams_get_messages(
     from_datetime: Optional[str] = None,
     to_datetime: Optional[str] = None,
     tool_context: Optional[ToolContext] = None,
+    find_hosted_content: bool = False,
 ) -> dict[str, Any]:
     """Retrieve the messages in one already-resolved Teams chat, paging
     automatically through as many 50-message Power Automate pages as
@@ -605,6 +606,13 @@ def teams_get_messages(
 
         # A full (_PAGE_SIZE) page came back: older messages may exist.
 
+        # When looking for hosted content, if we already have at least one message with
+        # hosted content, we have captured the latest one and do not need to page further back.
+        if find_hosted_content and any(m.hosted_content_ids for m in messages_by_id.values()):
+            next_before = oldest_in_page
+            range_fully_covered = False
+            break
+
         # Rule 2: stop once we've reached/passed the requested lower
         # boundary -- no need to page back any further than that.
         if from_dt is not None and oldest_in_page is not None:
@@ -685,6 +693,10 @@ def teams_get_messages(
         newest_retrieved_at=newest_retrieved_at,
     )
 
+    latest_hc_msg = next((m for m in reversed(ordered) if m.hosted_content_ids), None)
+    latest_hosted_content_message_id = latest_hc_msg.id if latest_hc_msg else None
+    latest_hosted_content_ids = list(latest_hc_msg.hosted_content_ids) if latest_hc_msg else []
+
     result = TeamsGetMessagesResult(
         chat_id=chat_id,
         messages=ordered,
@@ -700,6 +712,8 @@ def teams_get_messages(
         oldest_retrieved_at=oldest_retrieved_at,
         newest_retrieved_at=newest_retrieved_at,
         coverage=coverage,
+        latest_hosted_content_message_id=latest_hosted_content_message_id,
+        latest_hosted_content_ids=latest_hosted_content_ids,
     )
     # `message_count` -- the SAME allowlisted metadata key `run_trace.py`
     # already reserves for this concept. Reported even when 0 (a valid,

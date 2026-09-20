@@ -8,8 +8,6 @@ import { MicrophoneButton } from "./MicrophoneButton";
 import { AttachmentChipRow } from "./AttachmentChipRow";
 import { SourceChipRow } from "./SourceChipRow";
 import { cn } from "../../lib/cn";
-import { createId } from "../../lib/id";
-import { LONG_PASTE_THRESHOLD } from "../../lib/constants";
 import type { DraftImageAttachment } from "../../types";
 
 const MAX_TEXTAREA_HEIGHT = 240;
@@ -20,7 +18,6 @@ export function PromptComposer() {
     activeChat,
     activeMessages,
     setDraftText,
-    addAttachments,
     queueImageFiles,
     sendMessage,
     stopActiveRun,
@@ -132,10 +129,8 @@ export function PromptComposer() {
 
   /** POST-5.1 B3 — an image on the clipboard (e.g. a screenshot) goes
    * through the exact same central ingestion path as the picker
-   * (`queueImageFiles`), never a separate base64/data-URL pipeline. This
-   * takes precedence over the long-text-paste handling below: a paste
-   * that contains an image is never also treated as (or mixed with) a
-   * text paste, even if the clipboard happens to carry both. */
+   * (`queueImageFiles`), never a separate base64/data-URL pipeline. Text
+   * pastes proceed natively to the textarea to preserve raw formatting. */
   function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
     const imageFiles = Array.from(event.clipboardData.items)
       .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
@@ -146,23 +141,6 @@ export function PromptComposer() {
       queueImageFiles(imageFiles);
       return;
     }
-
-    // A paste over the threshold becomes a "Pasted text.txt" attachment
-    // immediately, rather than dumping a wall of text into the composer —
-    // whatever's already typed is left alone.
-    const pasted = event.clipboardData.getData("text");
-    if (pasted.length <= LONG_PASTE_THRESHOLD) return;
-    event.preventDefault();
-    addAttachments([
-      {
-        id: createId("attachment"),
-        kind: "file",
-        name: "Pasted text.txt",
-        meta: `${pasted.length.toLocaleString()} characters`,
-        isPastedText: true,
-        content: pasted,
-      },
-    ]);
   }
 
   return (
