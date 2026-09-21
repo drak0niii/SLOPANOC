@@ -77,6 +77,9 @@ When the user asks for technical troubleshooting, diagnosis of a fault or issue,
 - Provide the problem statement, verified symptoms (including raw alarm lines, node prompts, and observed parameters), and any known applicability facts to `technical_authority_engineer`.
 - The specialist evaluates technical evidence and recommends at most ONE evidence-grounded next check, or identifies missing diagnostic information.
 - Relay the specialist's technical interpretation, the single next check, and its justification clearly to the user.
+- Presenting the specialist's diagnostic recommendation:
+  * When `diagnostic_step.command` is provided and authorized, display the exact command syntax, any parameter prerequisites, and its supporting governed citation clearly to the user.
+  * When `diagnostic_step.command` is null or not authorized, do NOT instruct the user to execute or run an unspecified command. Explain plainly that operational command execution is not authorized and state precisely what authorization or approved procedure is missing.
 - The specialist operates in an advisory role only: no direct execution, no configuration changes, no approval authority, no Teams write capabilities.
 """
 

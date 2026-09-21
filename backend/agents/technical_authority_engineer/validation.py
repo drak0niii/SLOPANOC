@@ -68,21 +68,104 @@ def _template_to_regex(template: str) -> Optional[re.Pattern]:
     return re.compile(regex_str, re.IGNORECASE)
 
 
+_PROHIBITION_PATTERNS = [
+    re.compile(r"(?:do\s+not|never|prohibited|must\s+not|avoid)\s+(?:execute|run|issue)?\s*(?:`|\*\*)?{cmd}(?:`|\*\*)?", re.IGNORECASE),
+    re.compile(r"warning:\s*(?:do\s+not\s+(?:execute|run|issue)?\s*)?(?:`|\*\*)?{cmd}(?:`|\*\*)?", re.IGNORECASE),
+]
+
+
+def is_command_prohibited_in_snippet(cmd: str, snippet: str) -> bool:
+    """Checks if a command is mentioned exclusively in a warning or prohibition context."""
+    cmd_clean = re.sub(r"\*\*|`", "", cmd).strip()
+    if not cmd_clean:
+        return False
+    escaped = re.escape(cmd_clean)
+    for p_temp in _PROHIBITION_PATTERNS:
+        pattern = re.compile(p_temp.pattern.format(cmd=escaped), re.IGNORECASE)
+        if pattern.search(snippet):
+            return True
+    return False
+
+
 def _is_command_matching_snippet(cmd_clean: str, cmd_stripped: str, snippet: str) -> bool:
-    """Checks if cmd matches snippet verbatim or matches any template extracted from snippet."""
-    if cmd_clean in snippet or cmd_stripped in snippet:
-        return True
-    # Check backtick-enclosed candidate templates first, e.g. `restart board <board_slot>`
-    for match in re.finditer(r"`([^`]+)`", snippet):
-        candidate_template = match.group(1).strip()
-        template_regex = _template_to_regex(candidate_template)
+    """Checks if cmd matches snippet via backtick template, word boundary, or template regex.
+
+    Arbitrary substring matches (e.g. 'alt' inside 'fault') and prohibited commands are rejected.
+    """
+    if is_command_prohibited_in_snippet(cmd_clean, snippet):
+        return False
+
+    # 1. Check backtick-enclosed candidate commands and templates, e.g. `alt`, `restart board <board_slot>`
+    for match in re.finditer(r"`([^`\n]+)`", snippet):
+        candidate = match.group(1).strip()
+        if cmd_clean == candidate or cmd_stripped == candidate:
+            return True
+        template_regex = _template_to_regex(candidate)
         if template_regex and (template_regex.match(cmd_clean) or template_regex.match(cmd_stripped)):
             return True
-    # Also test whole snippet if it is a template itself
+
+    # 2. Word-boundary exact match (prevents substring hijacking e.g. 'alt' in 'fault')
+    for target in (cmd_clean, cmd_stripped):
+        if not target:
+            continue
+        escaped = re.escape(target)
+        if re.search(rf"(?<![A-Za-z0-9_\-]){escaped}(?![A-Za-z0-9_\-])", snippet, re.IGNORECASE):
+            return True
+
+    # 3. Whole snippet template regex
     template_regex = _template_to_regex(snippet)
     if template_regex and (template_regex.search(cmd_clean) or template_regex.search(cmd_stripped)):
         return True
+
     return False
+
+
+def resolve_canonical_source_id(
+    raw_source: Optional[str],
+    evidence_references: list[dict[str, Any] | Any],
+) -> Optional[str]:
+    """Resolves a model- or caller-supplied source identifier to a canonical server-owned source_id.
+
+    Recognizes canonical (knowledge_id:version_label:section_id), human-readable titles,
+    document filenames, and metadata IDs. Fails closed (returns None) if ungrounded.
+    """
+    if not raw_source or not isinstance(raw_source, str):
+        return None
+    src_clean = raw_source.strip()
+    if not src_clean:
+        return None
+
+    # Strip parenthetical annotations e.g. "(section: HC Commands)", "(line 81)"
+    base_src = re.sub(r"\s*\([^)]*\)", "", src_clean).strip()
+
+    for ev in evidence_references:
+        canonical_id = getattr(ev, "source_id", None) or (ev.get("source_id") if isinstance(ev, dict) else None)
+        if not canonical_id or not isinstance(canonical_id, str):
+            continue
+        canonical_id = canonical_id.strip()
+
+        # Exact match with canonical source_id
+        if src_clean == canonical_id or base_src == canonical_id:
+            return canonical_id
+
+        # Match against human-readable title
+        ev_title = getattr(ev, "title", None) or (ev.get("title") if isinstance(ev, dict) else None)
+        if ev_title and isinstance(ev_title, str):
+            ev_title = ev_title.strip()
+            if src_clean == ev_title or base_src == ev_title or ev_title in src_clean or base_src in ev_title:
+                return canonical_id
+
+        # Match against metadata fields (e.g. document filename / source_id, knowledge_id)
+        meta = getattr(ev, "metadata", None) or (ev.get("metadata") if isinstance(ev, dict) else {}) or {}
+        if isinstance(meta, dict):
+            doc_source_id = str(meta.get("source_id") or "").strip()
+            if doc_source_id and (src_clean == doc_source_id or base_src == doc_source_id or doc_source_id in src_clean or base_src in doc_source_id):
+                return canonical_id
+            doc_k_id = str(meta.get("knowledge_id") or "").strip()
+            if doc_k_id and (src_clean == doc_k_id or base_src == doc_k_id):
+                return canonical_id
+
+    return None
 
 
 def is_command_grounded(
@@ -100,13 +183,15 @@ def is_command_grounded(
     cmd_stripped = re.sub(r"\*\*|`", "", cmd_clean).strip()
     src_clean = (command_source or "").strip()
 
+    canonical_src = resolve_canonical_source_id(src_clean, verified_evidence) or src_clean
+
     # 1. Check approved commands catalog (server-validated)
     for approved in approved_commands_catalog:
         if not isinstance(approved, dict):
             continue
         app_cmd = approved.get("command", "").strip()
         app_src = approved.get("source_id", "").strip()
-        if not src_clean or src_clean == app_src:
+        if not src_clean or canonical_src == app_src or src_clean == app_src:
             if cmd_clean == app_cmd or cmd_stripped == app_cmd:
                 return True
             template_regex = _template_to_regex(app_cmd)
@@ -126,7 +211,7 @@ def is_command_grounded(
         if ev_type and ev_type not in _AUTHORIZED_SOURCE_TYPES:
             continue
         ev_snippet = ev.get("content_snippet", "")
-        if src_clean and src_clean == ev_src and ev_snippet:
+        if (canonical_src == ev_src or src_clean == ev_src) and ev_snippet:
             if _is_command_matching_snippet(cmd_clean, cmd_stripped, ev_snippet):
                 return True
 
@@ -166,7 +251,7 @@ def sanitize_prose_operational_instructions(
                 continue
             regex = re.compile(rf"(?:`|\*\*)?{pattern_str}(?:`|\*\*)?", re.IGNORECASE)
             if regex.search(result):
-                result = regex.sub("[unapproved command removed]", result)
+                result = regex.sub("", result)
                 modified = True
 
     # 2. Check backticked tokens for ungrounded operational commands
@@ -178,7 +263,7 @@ def sanitize_prose_operational_instructions(
         if is_op_cmd:
             if not is_command_grounded(token_clean, None, approved_catalog, verified_evidence):
                 modified = True
-                return "[unapproved command removed]"
+                return ""
         return match.group(0)
 
     result = re.sub(r"`([^`]+)`", _replace_backticked, result)
@@ -188,19 +273,12 @@ def sanitize_prose_operational_instructions(
         for match in pattern.finditer(result):
             matched_cmd = match.group(1).strip()
             if not is_command_grounded(matched_cmd, None, approved_catalog, verified_evidence):
-                if "[unapproved command" not in matched_cmd:
-                    result = result.replace(matched_cmd, "[unapproved command removed]")
-                    modified = True
+                result = result.replace(matched_cmd, "")
+                modified = True
 
-    # 4. If imperative verbs were paired with stripped commands, neutralize to observational phrases
-    imperative_sub_patterns = [
-        (re.compile(r"\b(execute|run|issue|perform)\s+\[unapproved command removed\]", re.IGNORECASE), "check [unapproved operational command stripped - observational check only]"),
-        (re.compile(r"\b(execute|run|issue|perform)\s+(the\s+command\s+)?\[unapproved command removed\]", re.IGNORECASE), "perform observational check [unapproved operational command stripped]"),
-    ]
-    for pattern, replacement in imperative_sub_patterns:
-        if pattern.search(result):
-            result = pattern.sub(replacement, result)
-            modified = True
+    # 4. Clean up any resulting double spaces or empty backticks/quotes
+    result = re.sub(r"`\s*`", "", result)
+    result = re.sub(r"\s{2,}", " ", result).strip()
 
     return result, modified
 
@@ -281,9 +359,30 @@ def validate_technical_authority_payload(
                     step_copy["command_source"] = None
                     restrictions = list(step_copy.get("restrictions") or [])
                     restrictions.append("[Command stripped: unapproved operational command]")
+                    restrictions.append("[Operational command is not authorized: missing approved governed procedure]")
                     restrictions.append("[Observational check only: unapproved command stripped]")
                     step_copy["restrictions"] = restrictions
+
+                    # Neutralize execution instruction so user is never told to execute an unspecified command
+                    raw_action = step_copy.get("action", "")
+                    action_text = raw_action
+                    for sc in stripped_commands:
+                        action_text = re.sub(rf"(?:`|\*\*)?{re.escape(sc)}(?:`|\*\*)?", "", action_text, flags=re.IGNORECASE)
+                    action_text = re.sub(
+                        r"\b(run|execute|issue|perform)\s+(the\s+command\s+)?(in|on|at|against)\b",
+                        r"Perform observational check \3",
+                        action_text,
+                        flags=re.IGNORECASE,
+                    )
+                    action_text = re.sub(r"^\s*(run|execute|issue)\s+", "Inspect ", action_text, flags=re.IGNORECASE)
+                    step_copy["action"] = re.sub(r"\s{2,}", " ", action_text).strip()
                     modified = True
+                else:
+                    # Grounded: bind canonical server-owned source ID to command_source
+                    canonical_src = resolve_canonical_source_id(cmd_source, verified_evidence)
+                    if canonical_src and canonical_src != cmd_source:
+                        step_copy["command_source"] = canonical_src
+                        modified = True
 
             # Validate operational instructions across all prose fields of the step
             for field in ("action", "reason", "expected_evidence"):
@@ -371,6 +470,34 @@ async def enforce_technical_authority_response_integrity(
                 req_payload = parsed_req
         except Exception:
             pass
+
+    # Dynamic evidence refresh: specialist may have selected governed knowledge during execution.
+    # Preserve approved procedure, applicability, parameter and source checks via build_server_validated_evidence.
+    try:
+        from backend.agents.technical_authority_engineer.agent_tool import (
+            build_server_validated_commands,
+            build_server_validated_evidence,
+        )
+        from backend.api.turn_context import current_run_id
+
+        run_id = current_run_id()
+        if run_id:
+            caller_ev = req_payload.get("verified_evidence", [])
+            caller_cmd = list(req_payload.get("approved_commands_catalog", []))
+            resp_step = resp_payload.get("diagnostic_step")
+            if isinstance(resp_step, dict) and resp_step.get("command"):
+                caller_cmd.append({
+                    "command": resp_step["command"],
+                    "source_id": resp_step.get("command_source") or "",
+                    "procedure_section": resp_step.get("action"),
+                    "restrictions": resp_step.get("restrictions") or [],
+                })
+            refreshed_ev = build_server_validated_evidence(run_id, None, caller_ev)
+            refreshed_cmd = build_server_validated_commands(refreshed_ev, caller_cmd)
+            req_payload["verified_evidence"] = [e.model_dump(mode="json") for e in refreshed_ev]
+            req_payload["approved_commands_catalog"] = [c.model_dump(mode="json") for c in refreshed_cmd]
+    except Exception as e:
+        logger.warning("Dynamic evidence refresh in callback encountered error: %s", e)
 
     sanitized, modified = validate_technical_authority_payload(resp_payload, req_payload)
 

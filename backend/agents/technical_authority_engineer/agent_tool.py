@@ -102,25 +102,28 @@ def build_server_validated_evidence(
                             "section_id": item.reference.section_id,
                             "heading": item.section.heading,
                             "section_type": item.section.section_type,
+                            "source_id": item.source.source_id,
+                            "title": item.title,
                         },
                     )
                 )
 
     # 2. Known Teams messages from session state
-    known_msg_ids = read_known_message_ids(tool_context.state)
-    for msg_id in known_msg_ids:
-        source_id = f"teams:{msg_id}"
-        if source_id not in seen_source_ids:
-            seen_source_ids.add(source_id)
-            evidence_items.append(
-                EvidenceReference(
-                    source_id=source_id,
-                    source_type="teams_conversation",
-                    title=f"Teams Message {msg_id}",
-                    content_snippet=None,
-                    metadata={"message_id": msg_id},
+    if tool_context and hasattr(tool_context, "state") and tool_context.state:
+        known_msg_ids = read_known_message_ids(tool_context.state)
+        for msg_id in known_msg_ids:
+            source_id = f"teams:{msg_id}"
+            if source_id not in seen_source_ids:
+                seen_source_ids.add(source_id)
+                evidence_items.append(
+                    EvidenceReference(
+                        source_id=source_id,
+                        source_type="teams_conversation",
+                        title=f"Teams Message {msg_id}",
+                        content_snippet=None,
+                        metadata={"message_id": msg_id},
+                    )
                 )
-            )
 
     # 3. Caller-supplied evidence validation (caller cannot fabricate arbitrary IDs)
     for caller_item in caller_evidence:
@@ -164,11 +167,17 @@ def build_server_validated_commands(
     Validates exact commands/templates, parameters, restrictions, and source provenance.
     Eliminates the vulnerability where raw_src presence authorized arbitrary commands.
     """
+    from backend.agents.technical_authority_engineer.validation import (
+        _is_command_matching_snippet,
+        is_command_prohibited_in_snippet,
+        resolve_canonical_source_id,
+    )
+
     approved_list: list[ApprovedCommand] = []
     seen_commands: set[tuple[str, str]] = set()
 
     _AUTHORIZED_SOURCE_TYPES = {"governed_knowledge", "approved_procedure", "governed_command_registry"}
-    authorized_sources: dict[str, str] = {}
+    authorized_sources: dict[str, EvidenceReference] = {}
     for ev in evidence_references:
         src_type = ev.source_type or ""
         src_id = (ev.source_id or "").strip()
@@ -176,17 +185,19 @@ def build_server_validated_commands(
         if src_type in ("teams_conversation", "case_context", "user_evidence", "observed_metric") or src_id.startswith("teams:"):
             continue
         if src_type in _AUTHORIZED_SOURCE_TYPES or (not src_type and not src_id.startswith("teams:")):
-            authorized_sources[src_id] = ev.content_snippet or ""
+            authorized_sources[src_id] = ev
 
+    # Validate caller or candidate commands against governed evidence
     for cmd_item in caller_commands:
         if not isinstance(cmd_item, dict):
             continue
         raw_cmd = cmd_item.get("command", "").strip()
         raw_src = cmd_item.get("source_id", "").strip()
-        if not raw_cmd or not raw_src:
+        if not raw_cmd:
             continue
 
-        if raw_src not in authorized_sources:
+        canonical_src = resolve_canonical_source_id(raw_src, evidence_references) or raw_src
+        if not canonical_src or canonical_src not in authorized_sources:
             logger.warning(
                 "Rejecting caller command %r from unauthorized or non-governed source: %r",
                 raw_cmd,
@@ -194,20 +205,25 @@ def build_server_validated_commands(
             )
             continue
 
-        snippet = authorized_sources[raw_src]
+        ev = authorized_sources[canonical_src]
+        snippet = ev.content_snippet or ""
         cmd_stripped = re.sub(r"\*\*|`", "", raw_cmd).strip()
+
+        if is_command_prohibited_in_snippet(raw_cmd, snippet):
+            logger.warning("Rejecting caller command %r: prohibited in snippet for %r", raw_cmd, canonical_src)
+            continue
 
         is_grounded = _is_command_matching_snippet(raw_cmd, cmd_stripped, snippet)
 
         if is_grounded:
-            key = (raw_cmd, raw_src)
+            key = (raw_cmd, canonical_src)
             if key not in seen_commands:
                 seen_commands.add(key)
                 approved_list.append(
                     ApprovedCommand(
                         command=raw_cmd,
-                        source_id=raw_src,
-                        procedure_section=cmd_item.get("procedure_section"),
+                        source_id=canonical_src,
+                        procedure_section=cmd_item.get("procedure_section") or ev.title,
                         restrictions=list(cmd_item.get("restrictions") or []),
                     )
                 )
@@ -408,6 +424,24 @@ class TechnicalAuthorityAgentTool(AgentTool):
             try:
                 raw_result = validate_schema(output_schema, merged_text)
                 if isinstance(raw_result, dict):
+                    # Dynamic evidence refresh: specialist may have called knowledge_search
+                    # and knowledge_select_evidence during execution. Refresh server-validated
+                    # evidence and approved commands catalog so legitimately selected evidence
+                    # is available to post-runner validation.
+                    refreshed_evidence = build_server_validated_evidence(run_id, tool_context, caller_evidence)
+                    candidate_commands = list(caller_commands)
+                    step = raw_result.get("diagnostic_step")
+                    if isinstance(step, dict) and step.get("command"):
+                        candidate_commands.append({
+                            "command": step["command"],
+                            "source_id": step.get("command_source") or "",
+                            "procedure_section": step.get("action"),
+                            "restrictions": step.get("restrictions") or [],
+                        })
+                    refreshed_commands = build_server_validated_commands(refreshed_evidence, candidate_commands)
+                    sanitized_args["verified_evidence"] = [e.model_dump(mode="json") for e in refreshed_evidence]
+                    sanitized_args["approved_commands_catalog"] = [c.model_dump(mode="json") for c in refreshed_commands]
+
                     tool_result, _ = validate_technical_authority_payload(
                         response_payload=raw_result,
                         request_payload=sanitized_args,
