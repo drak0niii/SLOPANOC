@@ -121,7 +121,13 @@ never derived from team_manager's own discarded, unproven answer text.
 
 
 async def enforce_governed_knowledge_at_completion(
-    *, question: str, chat_topic: Optional[str], run_id: str, image_parts: Sequence[types.Part] = ()
+    *,
+    question: str,
+    chat_topic: Optional[str],
+    run_id: str,
+    image_parts: Sequence[types.Part] = (),
+    chat_id: Optional[str] = None,
+    requires_rich_content: bool = False,
 ) -> tuple[str, list[KnowledgeEvidenceItem]]:
     """Runs the real `incident_manager` (full toolset, unmodified) exactly
     once, deterministically, with `requires_governed_knowledge=True` --
@@ -159,7 +165,13 @@ async def enforce_governed_knowledge_at_completion(
     from backend.agents.incident_manager.agent import incident_manager
     from backend.agents.incident_manager.schemas import IncidentManagerRequest
 
-    request = IncidentManagerRequest(chat_topic=chat_topic, question=question, requires_governed_knowledge=True)
+    request = IncidentManagerRequest(
+        chat_id=chat_id,
+        chat_topic=chat_topic,
+        question=question,
+        requires_governed_knowledge=True,
+        requires_rich_content=requires_rich_content,
+    )
     content = types.Content(
         role="user",
         parts=[
