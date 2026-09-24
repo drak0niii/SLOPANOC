@@ -24,3 +24,7 @@ __pycache__/
 *.db-wal
 *.db-shm
 request.json
+
+.venv/
+.vscode/
+logs/
