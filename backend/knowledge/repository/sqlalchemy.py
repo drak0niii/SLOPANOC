@@ -48,12 +48,13 @@ needs to change. See that module's own docstring for the alias.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Optional
 
 from pydantic import ValidationError
 from sqlalchemy import Text, select
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError, InterfaceError
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.pool import StaticPool
@@ -87,25 +88,21 @@ class KnowledgeObjectRecord(Base):
     payload: Mapped[str] = mapped_column(Text)
 
 
-def _engine_kwargs(database_url: str) -> dict[str, Any]:
-    """Mirrors `backend/cases/db.py`'s own `_engine_kwargs` exactly
-    (deliberately duplicated, not imported -- this package stays
-    independent of `backend.cases`, the same domain-isolation discipline
-    `backend/cases/db.py` itself already applies to ADK's session
-    engine). Without this, an in-memory SQLite URL would get a fresh,
-    empty database on every new pooled connection, since `:memory:` only
-    exists for the lifetime of a single connection.
+_logger = logging.getLogger(__name__)
 
-    This is a SQLite-ONLY special case -- `url.get_backend_name() ==
-    "sqlite"` gates it -- and must never fire for any other dialect. A
-    `postgresql+asyncpg://...` URL always falls through to `{}`, i.e.
-    plain SQLAlchemy engine defaults (POST-5.1 A2 instruction section 7:
-    "Use SQLAlchemy defaults for this milestone unless a concrete
-    existing test requires otherwise").
+
+def _engine_kwargs(database_url: str) -> dict[str, Any]:
+    """Configures dialect-specific async SQLAlchemy engine parameters.
+    - SQLite in-memory: StaticPool with check_same_thread=False.
+    - PostgreSQL: pool_pre_ping=True and pool_recycle=300 to survive stateful
+      proxy/firewall connection drops and stale connection errors (Defect 1).
     """
     url = make_url(database_url)
-    if url.get_backend_name() == "sqlite" and url.database in (None, ":memory:"):
+    backend_name = url.get_backend_name()
+    if backend_name == "sqlite" and url.database in (None, ":memory:"):
         return {"poolclass": StaticPool, "connect_args": {"check_same_thread": False}}
+    if backend_name == "postgresql":
+        return {"pool_pre_ping": True, "pool_recycle": 300}
     return {}
 
 
@@ -170,8 +167,13 @@ class SqlAlchemyKnowledgeRepository:
 
     async def get(self, knowledge_id: str, version_label: str) -> Optional[KnowledgeObject]:
         await self.ensure_schema()
-        async with self._session_factory() as session:
-            record = await session.get(KnowledgeObjectRecord, (knowledge_id, version_label))
+        try:
+            async with self._session_factory() as session:
+                record = await session.get(KnowledgeObjectRecord, (knowledge_id, version_label))
+        except (InterfaceError, DBAPIError) as exc:
+            _logger.warning("Transient DB connection error in get, retrying once on fresh session: %s", exc)
+            async with self._session_factory() as session:
+                record = await session.get(KnowledgeObjectRecord, (knowledge_id, version_label))
         if record is None:
             return None
         return self._reconstruct(record)
@@ -196,21 +198,31 @@ class SqlAlchemyKnowledgeRepository:
 
     async def list_versions(self, knowledge_id: str) -> list[KnowledgeObject]:
         await self.ensure_schema()
-        async with self._session_factory() as session:
-            # Ordered by version_label purely for deterministic,
-            # reproducible test/inspection output -- PRESENTATION/STORAGE
-            # DETERMINISM ONLY. Version labels are opaque identifiers
-            # (docs/KNOWLEDGE_CONTRACT.md §14.4); this ordering carries
-            # ZERO governance/precedence meaning, and no caller may infer
-            # currentness from list position. Every persisted lifecycle
-            # state (CANDIDATE/APPROVED/ARCHIVE) is returned -- no
-            # filtering of any kind.
-            result = await session.execute(
-                select(KnowledgeObjectRecord)
-                .where(KnowledgeObjectRecord.knowledge_id == knowledge_id)
-                .order_by(KnowledgeObjectRecord.version_label)
-            )
-            records = result.scalars().all()
+        try:
+            async with self._session_factory() as session:
+                # Ordered by version_label purely for deterministic,
+                # reproducible test/inspection output -- PRESENTATION/STORAGE
+                # DETERMINISM ONLY. Version labels are opaque identifiers
+                # (docs/KNOWLEDGE_CONTRACT.md §14.4); this ordering carries
+                # ZERO governance/precedence meaning, and no caller may infer
+                # currentness from list position. Every persisted lifecycle
+                # state (CANDIDATE/APPROVED/ARCHIVE) is returned -- no
+                # filtering of any kind.
+                result = await session.execute(
+                    select(KnowledgeObjectRecord)
+                    .where(KnowledgeObjectRecord.knowledge_id == knowledge_id)
+                    .order_by(KnowledgeObjectRecord.version_label)
+                )
+                records = result.scalars().all()
+        except (InterfaceError, DBAPIError) as exc:
+            _logger.warning("Transient DB connection error in list_versions, retrying once on fresh session: %s", exc)
+            async with self._session_factory() as session:
+                result = await session.execute(
+                    select(KnowledgeObjectRecord)
+                    .where(KnowledgeObjectRecord.knowledge_id == knowledge_id)
+                    .order_by(KnowledgeObjectRecord.version_label)
+                )
+                records = result.scalars().all()
         return [self._reconstruct(record) for record in records]
 
     async def list_all(self) -> list[KnowledgeObject]:
@@ -227,18 +239,28 @@ class SqlAlchemyKnowledgeRepository:
         with `KnowledgeRepositoryCorruptionError` here too.
         """
         await self.ensure_schema()
-        async with self._session_factory() as session:
-            # Ordered by (knowledge_id, version_label) purely for
-            # deterministic, reproducible output -- PRESENTATION/STORAGE
-            # DETERMINISM ONLY, exactly like list_versions's own ordering.
-            # This carries ZERO governance or relevance meaning; it is
-            # not a ranking and must never be read as one.
-            result = await session.execute(
-                select(KnowledgeObjectRecord).order_by(
-                    KnowledgeObjectRecord.knowledge_id, KnowledgeObjectRecord.version_label
+        try:
+            async with self._session_factory() as session:
+                # Ordered by (knowledge_id, version_label) purely for
+                # deterministic, reproducible output -- PRESENTATION/STORAGE
+                # DETERMINISM ONLY, exactly like list_versions's own ordering.
+                # This carries ZERO governance or relevance meaning; it is
+                # not a ranking and must never be read as one.
+                result = await session.execute(
+                    select(KnowledgeObjectRecord).order_by(
+                        KnowledgeObjectRecord.knowledge_id, KnowledgeObjectRecord.version_label
+                    )
                 )
-            )
-            records = result.scalars().all()
+                records = result.scalars().all()
+        except (InterfaceError, DBAPIError) as exc:
+            _logger.warning("Transient DB connection error in list_all, retrying once on fresh session: %s", exc)
+            async with self._session_factory() as session:
+                result = await session.execute(
+                    select(KnowledgeObjectRecord).order_by(
+                        KnowledgeObjectRecord.knowledge_id, KnowledgeObjectRecord.version_label
+                    )
+                )
+                records = result.scalars().all()
         return [self._reconstruct(record) for record in records]
 
     @staticmethod

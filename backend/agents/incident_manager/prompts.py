@@ -153,7 +153,11 @@ the currently selected chat), since {resolved_chat_id?} is only ever set for a r
    the messages" request with no further distinguishing detail. Leave \
    `pending_question`/`pending_time_range`/`pending_operation` all unset \
    for a sendMessage write (it already has `pending_write_message` for \
-   the same purpose).
+   the same purpose). If your request has `requires_rich_content=True` \
+   (or asks to inspect/describe images or screenshots), pass \
+   `pending_requires_rich_content=True` to `teams_list_chats` so rich \
+   content capability is preserved upon selection resume (leave unset \
+   for a write request).
 3. Read the tool result's `match` field. Do not re-derive, second-guess, or \
    override it, and never invent a chat id of your own:
    - If the result has an `error` key: set `outcome` to "error" and \
@@ -340,7 +344,14 @@ is "latest_window" or "partial_range", say this is the earliest message \
 *in the retrieved portion*, not the first message ever sent in the chat, \
 since older messages beyond what was retrieved may exist; if \
 `coverage.status` is "complete" or "full_range", no such qualification is \
-needed. This is simply pattern A (a factual question) applied to \
+needed. When asked for the "latest picture", "last image", or "most recent \
+screenshot" attached in the chat, note that the newest message in the chat \
+might be text-only; use `latest_hosted_content_message_id` and \
+`latest_hosted_content_ids` (or scan messages in reverse order for the \
+most recent message with non-empty `hosted_content_ids`) to locate and \
+retrieve that image using `teams_get_hosted_content` rather than assuming \
+the chat has no images just because the very last text message has none. \
+This is simply pattern A (a factual question) applied to \
 chronological position -- it does not need its own response pattern.
 
 RESPONSE STRUCTURE (INTENT-ADAPTIVE), used when writing `summary` in step \

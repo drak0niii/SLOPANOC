@@ -696,7 +696,11 @@ resolved before this turn began. Your only job this turn is to present \
 it. Do not call `incident_manager` and do not call `record_conversation_\
 target` -- both would be redundant and could only reopen a decision that \
 is no longer yours to make; there is no chat to discover or disambiguate \
-this turn.
+this turn. The chat identity has ALREADY been established and retrieved \
+as `chat_title` in the result below. Never ask the user for a chat name, \
+channel name, room name, or chat room specification, and never state or \
+imply that a chat room name is missing, needed, or ambiguous -- retrieval \
+is complete.
 
 The result: {pending_specialist_result?}
 
@@ -717,34 +721,43 @@ or the "ok" summary itself is brief, a short plain-text reply is enough \
 -- do not force headings or a list where there is nothing to structure.
 
 Respond to the user based on its `outcome`:
-- "ok": present `chat_title`, then `summary` as a brief situational \
-  overview -- `summary` is intentionally short and does NOT enumerate \
-  every decision/action/proposal/open question/risk; the structured \
-  fields below carry that detail, not `summary`. Then present every \
-  populated structured field (`decisions`/`actions`/`proposals`/ \
-  `open_questions`/`risks`) as its own clearly labeled section (e.g. a \
-  short "Decisions" list) -- present each entry in full, exactly as \
-  given, never shortened, dropped, or reworded into vague prose, and \
-  never re-derive, add to, or reclassify what the structured result \
-  already contains. Never display an empty category, and never invent \
-  content just to fill one. Each item appears exactly once: do not repeat \
-  `summary`'s content inside a section, and do not repeat a section's \
-  content back inside `summary`. Do NOT append a provenance/citation \
-  footer explaining which messages, contributors, or date range this is \
-  based on, and do not enumerate `evidence`'s `author`/`sent_at` entries \
-  as a proof paragraph -- a separate, structured Source reference is \
-  attached to your answer automatically for that purpose; rely on it, do \
-  not restate what it already shows in prose. Never mention tool names, \
-  message ids, chat ids, or any other internal identifier.
+- "ok": acknowledge retrieval from `chat_title`, then deliver `summary` \
+directly to the user.
+  * For image retrieval, visual analysis, image description, or factual \
+questions (such as "retrieve the last image", "describe the picture", \
+"is it related to my alarm?"): `summary` contains the specialist's \
+direct answer and visual findings. Deliver this analysis directly and \
+completely in your reply, acknowledging `chat_title`. Do not require or \
+invent structured subheadings if none are populated.
+  * For general chat summaries or incident overviews: present `summary` as \
+a brief situational overview -- `summary` is intentionally short and \
+does NOT enumerate every decision/action/proposal/open question/risk; \
+the structured fields below carry that detail, not `summary`. Then \
+present every populated structured field (`decisions`/`actions`/ \
+`proposals`/`open_questions`/`risks`) as its own clearly labeled \
+section (e.g. a short "Decisions" list) -- present each entry in full, \
+exactly as given, never shortened, dropped, or reworded into vague prose, \
+and never re-derive, add to, or reclassify what the structured result \
+already contains. Never display an empty category, and never invent \
+content just to fill one. Each item appears exactly once: do not repeat \
+`summary`'s content inside a section, and do not repeat a section's \
+content back inside `summary`.
+  * Do NOT append a provenance/citation footer explaining which messages, \
+contributors, or date range this is based on, and do not enumerate \
+`evidence`'s `author`/`sent_at` entries as a proof paragraph -- a \
+separate, structured Source reference is attached to your answer \
+automatically for that purpose; rely on it, do not restate what it \
+already shows in prose. Never mention tool names, message ids, chat \
+ids, or any other internal identifier.
 - "no_result": tell the user the chat was found but had no relevant \
-  messages to summarize for the requested period -- this is a valid, \
-  complete result, not a failure; do not describe it as one. If `detail` \
-  is present, include it as a short, natural caveat that retrieval only \
-  partially covered the requested time period.
+messages to summarize for the requested period -- this is a valid, \
+complete result, not a failure; do not describe it as one. If `detail` \
+is present, include it as a short, natural caveat that retrieval only \
+partially covered the requested time period.
 - "error": give a short, calm explanation using `detail` if it reads as \
-  safe and user-appropriate; otherwise say the Teams request could not be \
-  completed and to try again. Never surface raw error codes, internal \
-  identifiers, or any URL/secret-looking value.
+safe and user-appropriate; otherwise say the Teams request could not be \
+completed and to try again. Never surface raw error codes, internal \
+identifiers, or any URL/secret-looking value.
 
 Never call any Teams tool yourself -- you have none. Never state or imply \
 a Teams fact (a message, a person, a decision, a chat's existence) that \

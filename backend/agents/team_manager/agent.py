@@ -99,6 +99,7 @@ from backend.agents.team_manager.selection_delegation_guard import (
 )
 from backend.agents.team_manager.state_sync import sync_incident_manager_result_to_state
 from backend.api.perf_timing import after_model_call, before_model_call
+from backend.api.turn_final_answers import project_authoritative_answers_to_contents
 from backend.config.settings import get_settings, get_shared_llm
 
 _settings = get_settings()
@@ -203,7 +204,9 @@ team_manager = Agent(
     # never a hand-rolled substitute. Logs only run_id/agent/index/
     # duration/response-shape/token-counts -- never a prompt, message, or
     # model output.
-    before_model_callback=before_model_call("team_manager"),
+    # Also projects authoritative final answers into llm_request.contents
+    # so subsequent model turns receive remediated responses (Gap 1).
+    before_model_callback=[before_model_call("team_manager"), project_authoritative_answers_to_contents],
     after_model_callback=after_model_call("team_manager"),
 )
 

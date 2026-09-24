@@ -6,7 +6,7 @@ populated (deterministic Python, not model output).
 """
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -589,6 +589,28 @@ class AttachmentHistoryDTO(BaseModel):
     size_bytes: int
 
 
+class RunTraceStepDTO(BaseModel):
+    step_id: str
+    category: str
+    label: str
+    status: str
+    safe_metadata: Optional[dict[str, Any]] = None
+
+
+class RunTraceHistoryDTO(BaseModel):
+    server_run_id: Optional[str] = None
+    steps: list[RunTraceStepDTO] = Field(default_factory=list)
+    final_duration_seconds: Optional[float] = None
+    outcome: Optional[str] = None
+
+
+class SelectionHistoryDTO(BaseModel):
+    selection_id: str
+    pending_selection: dict[str, Any]
+    phase: str
+    selected_label: Optional[str] = None
+
+
 class SessionHistoryMessageDTO(BaseModel):
     """One projected, safe transcript entry. `message_id` and `turn_id`
     are deliberately DIFFERENT identities (B4A correction pass) --
@@ -614,6 +636,8 @@ class SessionHistoryMessageDTO(BaseModel):
     # never a separate "historical" shape -- see this file's own imports.
     source: Optional[SourceReferenceDTO] = None
     knowledge_sources: list[KnowledgeSourceReferenceDTO] = Field(default_factory=list)
+    run_trace: Optional[RunTraceHistoryDTO] = None
+    selection: Optional[SelectionHistoryDTO] = None
 
 
 class SessionHistoryResponse(BaseModel):

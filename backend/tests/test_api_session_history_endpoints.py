@@ -179,6 +179,9 @@ async def test_history_response_never_leaks_raw_state_or_internal_fields(
         # neither, so `source` serializes as `null` and `knowledge_sources`
         # as `[]`, proving the allow-list-widening itself introduces no
         # fabricated evidence for a turn that never had any.
+        # Defect 3 addition -- `run_trace`/`selection` are durable turn
+        # presentation fields; for a seeded turn without presentation state,
+        # both serialize as `null`.
         assert set(message.keys()) == {
             "message_id",
             "turn_id",
@@ -188,9 +191,13 @@ async def test_history_response_never_leaks_raw_state_or_internal_fields(
             "attachments",
             "source",
             "knowledge_sources",
+            "run_trace",
+            "selection",
         }
         assert message["source"] is None
         assert message["knowledge_sources"] == []
+        assert message["run_trace"] is None
+        assert message["selection"] is None
 
 
 # --- PATCH /api/sessions/{id} -------------------------------------------

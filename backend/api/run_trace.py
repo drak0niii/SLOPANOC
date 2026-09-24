@@ -73,6 +73,11 @@ class RunTraceRecorder:
     def __init__(self, sequencer: EventSequencer) -> None:
         self._sequencer = sequencer
         self._last_signature: Optional[tuple[Any, ...]] = None
+        self._recorded_steps: list[dict[str, Any]] = []
+
+    @property
+    def recorded_steps(self) -> list[dict[str, Any]]:
+        return list(self._recorded_steps)
 
     def record(
         self,
@@ -94,4 +99,5 @@ class RunTraceRecorder:
 
         step_id = str(uuid.uuid4())
         data = trace_step_data(step_id, category, label, status, sanitized_metadata)
+        self._recorded_steps.append(data)
         return self._sequencer.build(StreamEventType.TRACE_STEP, data)

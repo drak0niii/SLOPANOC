@@ -131,6 +131,7 @@ def _match(
     pending_question: Optional[str],
     pending_time_range: Optional[str],
     pending_operation: Optional[str] = None,
+    pending_requires_rich_content: bool = False,
 ) -> TeamsListChatsResult:
     """Deterministic resolution, delegated to chat_resolution.py's
     centralized `resolve_chat` (shared by every Teams capability that
@@ -207,6 +208,7 @@ def _match(
                         # for a text-only request, or outside a chat_
                         # service.py-driven turn -- both safe defaults.
                         attachment_ids=list(current_run_image_attachment_ids()),
+                        requires_rich_content=pending_requires_rich_content,
                     )
                 ),
             )
@@ -225,6 +227,7 @@ def teams_list_chats(
     pending_question: Optional[str] = None,
     pending_time_range: Optional[str] = None,
     pending_operation: Optional[str] = None,
+    pending_requires_rich_content: bool = False,
     tool_context: Optional[ToolContext] = None,
 ) -> dict[str, Any]:
     """Look up the Teams chat the user is referring to, by its exact title.
@@ -264,6 +267,8 @@ def teams_list_chats(
         discarded for still naming the ambiguous chat (see
         `_safe_pending_question`). Leave all three unset for a write
         request.
+      pending_requires_rich_content: Pass True when the read request
+        requires visual analysis/retrieval of images/hosted content.
       tool_context: ADK-injected; needed only to persist a
         `PendingSelection` when disambiguation is needed (see module
         docstring for how this reaches team_manager's real session).
@@ -300,6 +305,13 @@ def teams_list_chats(
     report_activity(ActivityKind.TEAMS_CHAT_DISCOVERY_SUCCEEDED, {"candidate_count": len(chats)})
 
     result = _match(
-        chats, topic, tool_context, pending_write_message, pending_question, pending_time_range, pending_operation
+        chats,
+        topic,
+        tool_context,
+        pending_write_message,
+        pending_question,
+        pending_time_range,
+        pending_operation,
+        pending_requires_rich_content,
     )
     return result.model_dump(mode="json")

@@ -127,8 +127,10 @@ from backend.attachments.storage import ChatAttachmentStorage
 from backend.gateway.safe_error import SafeErrorException, validation_error
 from backend.selection.read_resume import build_read_resume_message
 from backend.selection.schemas import PendingReadIntent, ResolvedReadContinuation
+from backend.tools.teams.execute_write import teams_create_chat, teams_send_message
 from backend.tools.teams.get_messages import KNOWN_MESSAGE_IDS_STATE_KEY, DEFAULT_MAX_MESSAGES, teams_get_messages
 from backend.tools.teams.list_chats import teams_list_chats
+from backend.tools.teams.propose_write import teams_propose_create_chat, teams_propose_send_message
 
 _logger = logging.getLogger(__name__)
 _perf_logger = logging.getLogger("backend.perf")
@@ -257,12 +259,21 @@ def get_resolved_chat_messages(
     return result
 
 
+_WRITE_TOOLS = frozenset(
+    {
+        teams_propose_create_chat,
+        teams_propose_send_message,
+        teams_create_chat,
+        teams_send_message,
+    }
+)
+
 _CONTINUATION_INCIDENT_MANAGER = incident_manager.model_copy(
     update={
         "tools": [
             get_resolved_chat_messages if tool is teams_get_messages else tool
             for tool in incident_manager.tools
-            if tool is not teams_list_chats
+            if tool is not teams_list_chats and tool not in _WRITE_TOOLS
         ]
     }
 )
@@ -402,6 +413,7 @@ class _PrefetchedEvidenceMessage(BaseModel):
     sent_at: str
     text: str
     message_references: list[dict[str, Any]] = Field(default_factory=list)
+    hosted_content_ids: list[str] = Field(default_factory=list)
 
 
 class _ResolvedContinuationSynthesisRequest(BaseModel):
@@ -470,6 +482,7 @@ def _build_prefetched_evidence(retrieved_messages: list[Any]) -> list[_Prefetche
                 sent_at=retrieved.sent_at,
                 text=retrieved.text,
                 message_references=references,
+                hosted_content_ids=getattr(retrieved, "hosted_content_ids", []) or [],
             )
         )
     return projected
@@ -859,11 +872,13 @@ async def _execute_via_model_driven_retrieval(
     )
 
     request = IncidentManagerRequest(
+        chat_id=continuation.selected_chat_id,
         chat_topic=continuation.selected_chat_topic,
         question=build_read_resume_message(
             PendingReadIntent(operation=continuation.operation, question=continuation.question)
         ),
         requested_time_range=continuation.requested_time_range,
+        requires_rich_content=continuation.requires_rich_content,
     )
     content = types.Content(
         role="user",
@@ -1043,7 +1058,7 @@ async def execute_read_continuation(
     """
     internal_session_id = _internal_session_id(parent_session_id, run_id)
     try:
-        if continuation.requested_time_range is None:
+        if continuation.requested_time_range is None and not continuation.requires_rich_content:
             result = await _execute_via_deterministic_retrieval(
                 session_service=session_service,
                 user_id=user_id,

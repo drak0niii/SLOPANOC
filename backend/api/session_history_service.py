@@ -54,6 +54,9 @@ from typing import Any, Optional
 from backend.api.chat_service import _active_events, _extract_final_text, _non_thought_text
 from backend.api.schemas import (
     AttachmentHistoryDTO,
+    RunTraceHistoryDTO,
+    RunTraceStepDTO,
+    SelectionHistoryDTO,
     SessionHistoryMessageDTO,
     SessionHistoryResponse,
     SessionSummaryDTO,
@@ -67,6 +70,8 @@ from backend.api.session_state_keys import (
     derive_chat_title,
     is_genuine_user_content_event,
 )
+from backend.api.turn_final_answers import resolve_turn_final_answer
+from backend.api.turn_presentation import resolve_turn_presentation
 from backend.api.turn_source_references import resolve_turn_source_references
 from backend.attachments.models import ChatAttachmentStatus
 from backend.attachments.service import AttachmentService
@@ -280,7 +285,9 @@ async def get_session_history(
                 attachments=turn_attachments,
             )
         )
-        if turn.final_text is not None:
+        authoritative_answer = resolve_turn_final_answer(session.state, turn.turn_id)
+        effective_final_text = authoritative_answer if authoritative_answer is not None else turn.final_text
+        if effective_final_text is not None:
             # B7 corrective pass -- re-projects this turn's own durably
             # persisted Teams/governed-KM provenance (backend/api/turn_
             # source_references.py), keyed by the SAME `turn.turn_id`
@@ -292,16 +299,51 @@ async def get_session_history(
             # needed here beyond what `_active_events`/`projected_turns`
             # already do for the message list itself.
             source, knowledge_sources = resolve_turn_source_references(session.state, turn.turn_id)
+            pres = resolve_turn_presentation(session.state, turn.turn_id)
+            run_trace_dto: Optional[RunTraceHistoryDTO] = None
+            selection_dto: Optional[SelectionHistoryDTO] = None
+            if pres:
+                rt_raw = pres.get("run_trace")
+                if isinstance(rt_raw, dict):
+                    raw_steps = rt_raw.get("steps") or []
+                    steps = [
+                        RunTraceStepDTO(
+                            step_id=s.get("step_id", ""),
+                            category=s.get("category", ""),
+                            label=s.get("label", ""),
+                            status=s.get("status", "completed"),
+                            safe_metadata=s.get("safe_metadata"),
+                        )
+                        for s in raw_steps
+                        if isinstance(s, dict)
+                    ]
+                    run_trace_dto = RunTraceHistoryDTO(
+                        server_run_id=rt_raw.get("server_run_id"),
+                        steps=steps,
+                        final_duration_seconds=rt_raw.get("final_duration_seconds"),
+                        outcome=rt_raw.get("outcome"),
+                    )
+                sel_raw = pres.get("selection")
+                if isinstance(sel_raw, dict):
+                    selection_dto = SelectionHistoryDTO(
+                        selection_id=sel_raw.get("selection_id", ""),
+                        pending_selection=sel_raw.get("pending_selection", {}),
+                        phase=sel_raw.get("phase", "resolved"),
+                        selected_label=sel_raw.get("selected_label"),
+                    )
+
             messages.append(
                 SessionHistoryMessageDTO(
                     message_id=f"{turn.turn_id}:assistant",
                     turn_id=turn.turn_id,
                     role="assistant",
-                    text=turn.final_text,
+                    text=effective_final_text,
                     created_at=_iso(turn.final_timestamp or 0.0),
                     attachments=[],
                     source=source,
                     knowledge_sources=knowledge_sources,
+                    run_trace=run_trace_dto,
+                    selection=selection_dto,
                 )
             )
 

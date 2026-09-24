@@ -403,6 +403,20 @@ export interface SessionHistoryAttachmentDTO {
  * shape. Populated only for `role === "assistant"` (a user message never
  * carries a Source), and only when that turn actually produced evidence —
  * `source` is absent and `knowledge_sources` is `[]` otherwise. */
+export interface RunTraceHistoryDTO {
+  server_run_id?: string;
+  steps: TraceStepDTO[];
+  final_duration_seconds?: number;
+  outcome?: "ok" | "error" | "stopped";
+}
+
+export interface SelectionHistoryDTO {
+  selection_id: string;
+  pending_selection: PendingSelectionDTO;
+  phase: string;
+  selected_label?: string;
+}
+
 export interface SessionHistoryMessageDTO {
   message_id: string;
   turn_id: string;
@@ -412,6 +426,8 @@ export interface SessionHistoryMessageDTO {
   attachments: SessionHistoryAttachmentDTO[];
   source?: SourceReferenceDTO;
   knowledge_sources: KnowledgeSourceReferenceDTO[];
+  run_trace?: RunTraceHistoryDTO;
+  selection?: SelectionHistoryDTO;
 }
 
 export interface SessionHistoryResponseDTO {

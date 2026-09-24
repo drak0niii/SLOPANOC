@@ -1067,6 +1067,8 @@ export function reducer(state: AppState, action: Action): AppState {
       if (!chat || !chat.run || chat.run.runToken !== runToken) return state;
       const existing = state.messages[messageId];
       if (!existing) return state;
+      // FINALIZED MESSAGE GUARD: Never mutate or revert a message that has already reached "complete"
+      if (existing.status === "complete") return state;
       return {
         ...state,
         // Defensive: the activity line disappears the instant the first
@@ -1085,6 +1087,8 @@ export function reducer(state: AppState, action: Action): AppState {
       if (!chat || !chat.run || chat.run.runToken !== runToken) return state;
       const existing = state.messages[messageId];
       if (!existing) return state;
+      // FINALIZED MESSAGE GUARD: If already complete, ignore duplicate completed event
+      if (existing.status === "complete") return state;
       // Phase 5.1J correction pass (Part C): `source` (Teams) and
       // `knowledgeSources` (KM) are independent — either, both, or
       // neither may be present on one completed message (a combined-
@@ -2118,11 +2122,40 @@ export function reducer(state: AppState, action: Action): AppState {
       // rendering on the exact same SourceChip path.
       const sources: Record<string, SourceReferenceDTO> = {};
       const knowledgeSources: Record<string, KnowledgeSourceReferenceDTO[]> = {};
+      const runTraces: Record<string, RunTraceRecord> = {};
+      const selectionCards: Record<string, SelectionCardRecord> = {};
       for (const dto of response.messages) {
         messageIds.push(dto.message_id);
         if (dto.source) sources[dto.message_id] = dto.source;
         if (dto.knowledge_sources && dto.knowledge_sources.length > 0)
           knowledgeSources[dto.message_id] = dto.knowledge_sources;
+        if (dto.run_trace) {
+          runTraces[dto.message_id] = {
+            serverRunId: dto.run_trace.server_run_id,
+            steps: (dto.run_trace.steps || []).map((s) => ({
+              stepId: s.step_id,
+              category: s.category,
+              label: s.label,
+              status: s.status as "completed" | "warning" | "failed",
+              safeMetadata: s.safe_metadata,
+            })),
+            finalDurationSeconds: dto.run_trace.final_duration_seconds,
+            outcome: dto.run_trace.outcome,
+            expanded: false,
+          };
+        }
+        if (dto.selection) {
+          selectionCards[dto.message_id] = {
+            selectionId: dto.selection.selection_id,
+            pendingSelection: dto.selection.pending_selection,
+            selectionCard: {
+              selectionId: dto.selection.selection_id,
+              phase: dto.selection.phase as any,
+              selectedLabel: dto.selection.selected_label,
+            },
+            collapsed: false,
+          };
+        }
         messages[dto.message_id] = {
           id: dto.message_id,
           chatId,
@@ -2168,6 +2201,10 @@ export function reducer(state: AppState, action: Action): AppState {
             ...(Object.keys(sources).length > 0 ? { sources: { ...chat.sources, ...sources } } : null),
             ...(Object.keys(knowledgeSources).length > 0
               ? { knowledgeSources: { ...chat.knowledgeSources, ...knowledgeSources } }
+              : null),
+            ...(Object.keys(runTraces).length > 0 ? { runTraces: { ...chat.runTraces, ...runTraces } } : null),
+            ...(Object.keys(selectionCards).length > 0
+              ? { selectionCards: { ...chat.selectionCards, ...selectionCards } }
               : null),
           },
         },

@@ -211,6 +211,79 @@ describe("AppState — B4C lazy history hydration", () => {
     expect(latest.state.chats.s1.messageIds).toEqual(["e-2:user"]);
   });
 
+  it("rehydrates rich turn presentation (run traces and selection cards) on history load", async () => {
+    seedOneSavedSession();
+    getSessionHistory.mockResolvedValue({
+      session_id: "s1",
+      messages: [
+        {
+          message_id: "e-1:user",
+          turn_id: "e-1",
+          role: "user",
+          text: "Which chat room should I check?",
+          created_at: "2026-09-07T21:40:00.000000+00:00",
+          attachments: [],
+        },
+        {
+          message_id: "e-1:assistant",
+          turn_id: "e-1",
+          role: "assistant",
+          text: "I found multiple matching chat rooms.",
+          created_at: "2026-09-07T21:40:05.000000+00:00",
+          attachments: [],
+          run_trace: {
+            server_run_id: "run-123",
+            steps: [
+              {
+                step_id: "step-1",
+                category: "teams",
+                label: "Searched Teams chat rooms",
+                status: "completed",
+                safe_metadata: { candidate_count: 2 },
+              },
+            ],
+            final_duration_seconds: 3.45,
+            outcome: "ok",
+          },
+          selection: {
+            selection_id: "sel-456",
+            pending_selection: {
+              selection_id: "sel-456",
+              kind: "teams_chat",
+              status: "pending",
+              requested_value: "SLOPANOC",
+              options: [
+                { option_id: "opt-1", label: "SLOPANOC Gateway" },
+                { option_id: "opt-2", label: "SLOPANOC Incidents" },
+              ],
+            },
+            phase: "resolved",
+            selected_label: "SLOPANOC Gateway",
+          },
+        },
+      ],
+    });
+    renderHarness();
+    await waitFor(() => expect(latest.state.chats.s1).toBeDefined());
+
+    await act(async () => {
+      latest.selectChat("s1");
+    });
+    await waitFor(() => expect(latest.state.chats.s1.historyHydrationStatus).toBe("loaded"));
+
+    const chat = latest.state.chats.s1;
+    expect(chat.runTraces?.["e-1:assistant"]).toBeDefined();
+    expect(chat.runTraces?.["e-1:assistant"].finalDurationSeconds).toBe(3.45);
+    expect(chat.runTraces?.["e-1:assistant"].outcome).toBe("ok");
+    expect(chat.runTraces?.["e-1:assistant"].steps).toHaveLength(1);
+    expect(chat.runTraces?.["e-1:assistant"].steps[0].label).toBe("Searched Teams chat rooms");
+
+    expect(chat.selectionCards?.["e-1:assistant"]).toBeDefined();
+    expect(chat.selectionCards?.["e-1:assistant"].selectionId).toBe("sel-456");
+    expect(chat.selectionCards?.["e-1:assistant"].selectionCard?.phase).toBe("resolved");
+    expect(chat.selectionCards?.["e-1:assistant"].selectionCard?.selectedLabel).toBe("SLOPANOC Gateway");
+  });
+
   it("a history load failure remains retryable and does not fabricate 'No messages'", async () => {
     seedOneSavedSession();
     getSessionHistory.mockRejectedValueOnce(new ApiError("This conversation could not be found.", 404));

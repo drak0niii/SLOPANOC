@@ -64,6 +64,10 @@ from typing import Optional
 from backend.api.pending_action import map_pending_action
 from backend.api.schemas import ChooseSelectionResponse, PendingActionDTO, SkipSelectionResponse
 from backend.api.session_service import DEFAULT_USER_ID, ApiSessionService
+from backend.api.turn_presentation import (
+    TURN_PRESENTATION_STATE_KEY,
+    update_turn_presentation_selection,
+)
 from backend.approval.schemas import WriteOperation
 from backend.approval.service import PENDING_ACTION_PROPOSAL_STATE_KEY, create_action_proposal
 from backend.gateway.safe_error import SafeError, SafeErrorException
@@ -167,8 +171,19 @@ async def choose(
                 # re-derived: see ResolvedReadContinuation.attachment_ids'
                 # own docstring.
                 attachment_ids=read_intent.attachment_ids,
+                requires_rich_content=read_intent.requires_rich_content,
             )
             store_read_continuation(delta, continuation)
+
+        label = _label_for(selection, option_id)
+        if TURN_PRESENTATION_STATE_KEY in session.state:
+            updated_pres = update_turn_presentation_selection(
+                session.state[TURN_PRESENTATION_STATE_KEY],
+                selection_id,
+                phase="resolved",
+                selected_label=label,
+            )
+            delta[TURN_PRESENTATION_STATE_KEY] = updated_pres
 
         await session_service.persist_state_delta(session, delta)
 
@@ -188,7 +203,7 @@ async def choose(
         session_id=session_id,
         selection_id=selection_id,
         status=selection.status.value,
-        selected_label=_label_for(selection, option_id),
+        selected_label=label,
         pending_action=pending_action,
         resume_message=resume_message,
     )
@@ -210,8 +225,16 @@ async def skip(
         selection = result.selection
         assert selection is not None
 
-        await session_service.persist_state_delta(
-            session, {PENDING_SELECTION_STATE_KEY: session.state[PENDING_SELECTION_STATE_KEY]}
-        )
+        skip_delta: dict = {
+            PENDING_SELECTION_STATE_KEY: session.state[PENDING_SELECTION_STATE_KEY]
+        }
+        if TURN_PRESENTATION_STATE_KEY in session.state:
+            skip_delta[TURN_PRESENTATION_STATE_KEY] = update_turn_presentation_selection(
+                session.state[TURN_PRESENTATION_STATE_KEY],
+                selection_id,
+                phase="dismissed",
+            )
+
+        await session_service.persist_state_delta(session, skip_delta)
 
     return SkipSelectionResponse(session_id=session_id, selection_id=selection_id, status=selection.status.value)

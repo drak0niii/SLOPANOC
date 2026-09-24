@@ -92,6 +92,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from functools import lru_cache
 from typing import Any, AsyncIterator, Awaitable, Callable, NamedTuple, Optional, Protocol, Sequence
 
@@ -174,13 +175,16 @@ from backend.agents.technical_authority_engineer.execution_context import (
     has_technical_authority_executed,
 )
 from backend.api.applicability_context_capture import discard_known_applicability_context
-from backend.api.streaming_events import EventSequencer, Stage, StreamEvent, StreamEventType, status_data
+from backend.api.streaming_events import EventSequencer, Stage, StreamEvent, StreamEventType, status_data, trace_step_data
 from backend.api.troubleshooting_guidance_context import (
     discard_troubleshooting_guidance,
+    has_troubleshooting_guidance,
     pop_troubleshooting_guidance,
     render_troubleshooting_guidance,
 )
 from backend.api.turn_context import bind_run_id, pop_message_texts, reset_run_id
+from backend.api.turn_final_answers import TURN_FINAL_ANSWERS_STATE_KEY, build_turn_final_answers_delta
+from backend.api.turn_presentation import TURN_PRESENTATION_STATE_KEY, build_turn_presentation_delta
 from backend.api.turn_source_references import TURN_SOURCE_REFERENCES_STATE_KEY, build_turn_source_references_delta
 from backend.attachments.repository import AttachmentRepository
 from backend.attachments.service import AttachmentService, get_attachment_service
@@ -1473,38 +1477,34 @@ class ChatService:
                         # buffered text released nowhere, corrupting
                         # `message.delta`'s own promise to carry the full
                         # answer for a turn with no other exposure path.
-                        if buffered_delta_texts and source_requirements_capture.declared:
-                            if source_requirements_capture.requires_governed_knowledge:
-                                # EXPLICIT GOVERNED -- permanently discard
-                                # everything buffered while still UNKNOWN.
-                                # `final_text` for this turn is decided later
-                                # in this method (troubleshooting_guidance
-                                # override / governed-knowledge completion
-                                # remediation) from TRUSTED state, never from
-                                # team_manager's own live prose -- live-
-                                # reproduced proof (VSWR follow-up turn):
-                                # team_manager streamed "...within the
-                                # acceptable range..." while the trusted,
-                                # remediated `message.completed` carried a
-                                # materially different, correctly-grounded
-                                # answer. Never emitted, never held onto past
-                                # this point.
+                        if (
+                            source_requirements_capture.requires_governed_knowledge
+                            or has_troubleshooting_guidance(sequencer.run_id)
+                        ):
+                            # EXPLICIT GOVERNED OR TROUBLESHOOTING GUIDANCE -- permanently discard
+                            # everything buffered while still UNKNOWN.
+                            # `final_text` for this turn is decided later
+                            # in this method (troubleshooting_guidance
+                            # override / governed-knowledge completion
+                            # remediation) from TRUSTED state, never from
+                            # team_manager's own live prose.
+                            if buffered_delta_texts:
                                 buffered_delta_texts = []
-                            else:
-                                # EXPLICIT NON-GOVERNED -- release everything
-                                # buffered while UNKNOWN, in original order,
-                                # immediately -- a single coherent reveal,
-                                # regardless of whether THIS event itself
-                                # carries any further text.
-                                pending_texts = buffered_delta_texts
-                                buffered_delta_texts = []
-                                for pending_text in pending_texts:
-                                    if not status_cleared:
-                                        yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
-                                        status_cleared = True
-                                        perf.mark("first_message_delta")
-                                    yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": pending_text})
-                                    emitted_delta_texts.append(pending_text)
+                        elif buffered_delta_texts and source_requirements_capture.declared:
+                            # EXPLICIT NON-GOVERNED (and no troubleshooting guidance) -- release everything
+                            # buffered while UNKNOWN, in original order,
+                            # immediately -- a single coherent reveal,
+                            # regardless of whether THIS event itself
+                            # carries any further text.
+                            pending_texts = buffered_delta_texts
+                            buffered_delta_texts = []
+                            for pending_text in pending_texts:
+                                if not status_cleared:
+                                    yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
+                                    status_cleared = True
+                                    perf.mark("first_message_delta")
+                                yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": pending_text})
+                                emitted_delta_texts.append(pending_text)
 
                         # Contributor-accuracy fix + performance pass: start
                         # (or restart, for a superseded chat_id) the
@@ -1534,17 +1534,15 @@ class ChatService:
                             # carried, so only three cases remain for this
                             # event's OWN delta text specifically:
                             if not source_requirements_capture.declared:
-                                # Still UNKNOWN -- buffer verbatim, turn-
-                                # local only (never session state/Case
-                                # context/a source reference -- goes out of
-                                # scope with this generator on every exit
-                                # path). See the buffer-reconciliation
-                                # check above for the full three-state
-                                # rationale and what happens once
-                                # classification resolves.
-                                buffered_delta_texts.append(delta_text)
-                            elif source_requirements_capture.requires_governed_knowledge:
-                                # EXPLICIT GOVERNED -- discard; never
+                                # Still UNKNOWN -- buffer verbatim unless
+                                # troubleshooting guidance was already registered.
+                                if not has_troubleshooting_guidance(sequencer.run_id):
+                                    buffered_delta_texts.append(delta_text)
+                            elif (
+                                source_requirements_capture.requires_governed_knowledge
+                                or has_troubleshooting_guidance(sequencer.run_id)
+                            ):
+                                # EXPLICIT GOVERNED OR TROUBLESHOOTING GUIDANCE -- discard; never
                                 # emitted, never held onto past this point.
                                 pass
                             else:
@@ -1795,11 +1793,15 @@ class ChatService:
         # again further down for `pending_action`/`pending_selection`, so
         # this is still exactly one extra session read per turn, not two.
         refreshed_session = await self._session_service.get_session(session_id, user_id)
+        pending_selection_active = map_pending_selection(refreshed_session.state) is not None
+        pending_action_active = map_pending_action(refreshed_session.state) is not None
+        has_pending_interaction = pending_selection_active or pending_action_active
 
         if (
             error is None
             and final_text is not None
             and not specialist_result_state_written
+            and not has_pending_interaction
             and not source_requirements_capture.declared
         ):
             # FIFTH pre-4H correction pass: the remaining structural gap --
@@ -1869,6 +1871,14 @@ class ChatService:
                 _logger.info(
                     "chat_service: technical_authority_engineer evaluated the fault in this turn -- "
                     "skipping incident_manager governed-knowledge completion override run_id=%s",
+                    sequencer.run_id,
+                )
+            elif has_pending_interaction:
+                _logger.info(
+                    "chat_service: pending interaction active (selection=%s action=%s) -- "
+                    "skipping incident_manager governed-knowledge completion override run_id=%s",
+                    pending_selection_active,
+                    pending_action_active,
                     sequencer.run_id,
                 )
             else:
@@ -2129,6 +2139,28 @@ class ChatService:
         # nor a governed-KM source has nothing to persist -- `build_turn_
         # source_references_delta` returns `None` for that case, and no
         # write happens at all.
+        # B7 corrective pass + Final Answer Persistence: durable provenance
+        # and authoritative final response persistence, keyed by this turn's
+        # own real ADK `invocation_id` (`turn_invocation_id`).
+        # Persisted BEFORE MESSAGE_COMPLETED is emitted, failing closed with
+        # StreamEventType.ERROR if persistence fails.
+        if turn_invocation_id is None:
+            active = _active_events(refreshed_session.events)
+            for ev in reversed(active):
+                inv = getattr(ev, "invocation_id", None)
+                if inv:
+                    turn_invocation_id = inv
+                    break
+
+        state_delta_to_persist: dict[str, Any] = {}
+        if turn_invocation_id is not None and final_text is not None:
+            turn_final_answers_delta = build_turn_final_answers_delta(
+                refreshed_session.state.get(TURN_FINAL_ANSWERS_STATE_KEY),
+                turn_invocation_id,
+                final_text,
+            )
+            state_delta_to_persist[TURN_FINAL_ANSWERS_STATE_KEY] = turn_final_answers_delta
+
         if turn_invocation_id is not None:
             turn_source_references_delta = build_turn_source_references_delta(
                 refreshed_session.state.get(TURN_SOURCE_REFERENCES_STATE_KEY),
@@ -2138,13 +2170,70 @@ class ChatService:
                 visual_evidence_internal,
             )
             if turn_source_references_delta is not None:
-                await self._session_service.persist_state_delta(
-                    refreshed_session, {TURN_SOURCE_REFERENCES_STATE_KEY: turn_source_references_delta}
+                state_delta_to_persist[TURN_SOURCE_REFERENCES_STATE_KEY] = turn_source_references_delta
+
+        pending_action = map_pending_action(refreshed_session.state)
+        pending_selection = map_pending_selection(refreshed_session.state)
+
+        # Durable per-turn presentation persistence (Defect 3)
+        # Captures run trace steps, execution duration, and selection state.
+        if turn_invocation_id is not None:
+            final_steps = list(trace_recorder.recorded_steps)
+            if pending_selection is not None:
+                final_steps.append(
+                    trace_step_data(
+                        str(uuid.uuid4()),
+                        **selection_prepared_trace_step(),
+                    )
                 )
+            final_steps.append(
+                trace_step_data(
+                    str(uuid.uuid4()),
+                    **response_generated_trace_step(),
+                )
+            )
+            presentation_data: dict[str, Any] = {
+                "run_trace": {
+                    "server_run_id": sequencer.run_id,
+                    "steps": final_steps,
+                    "final_duration_seconds": round(perf.elapsed_seconds(), 2),
+                    "outcome": "ok",
+                },
+            }
+            if pending_selection is not None:
+                presentation_data["selection"] = {
+                    "selection_id": pending_selection.selection_id,
+                    "pending_selection": pending_selection.model_dump(mode="json"),
+                    "phase": "choosing",
+                    "selected_label": None,
+                }
+            turn_presentation_delta = build_turn_presentation_delta(
+                refreshed_session.state.get(TURN_PRESENTATION_STATE_KEY),
+                turn_invocation_id,
+                presentation_data,
+            )
+            state_delta_to_persist[TURN_PRESENTATION_STATE_KEY] = turn_presentation_delta
+
+        if state_delta_to_persist:
+            try:
+                await self._session_service.persist_state_delta(refreshed_session, state_delta_to_persist)
+            except Exception as exc:
+                _logger.error(
+                    "chat_service: failed to persist final response state delta run_id=%s turn_id=%s: %s",
+                    sequencer.run_id,
+                    turn_invocation_id,
+                    exc,
+                )
+                yield sequencer.build(
+                    StreamEventType.ERROR,
+                    {"code": "persistence_failure", "message": "Failed to persist final response. Please try again."},
+                )
+                yield sequencer.build(StreamEventType.RUN_COMPLETED, {"outcome": "error"})
+                perf.log_duration("total_run", perf.elapsed_seconds())
+                return
 
         yield sequencer.build(StreamEventType.MESSAGE_COMPLETED, message_completed_data)
 
-        pending_action = map_pending_action(refreshed_session.state)
         if pending_action is not None:
             yield sequencer.build(StreamEventType.ACTION_PENDING, pending_action.model_dump(mode="json"))
 
@@ -2152,7 +2241,6 @@ class ChatService:
         # exactly: independently re-derived from session state (never
         # from anything the model said this turn), so the frontend
         # renders only candidates a deterministic tool actually returned.
-        pending_selection = map_pending_selection(refreshed_session.state)
         if pending_selection is not None:
             yield sequencer.build(StreamEventType.SELECTION_PENDING, pending_selection.model_dump(mode="json"))
             selection_trace = trace_recorder.record(**selection_prepared_trace_step())

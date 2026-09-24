@@ -1039,7 +1039,7 @@ def get_fast_path_team_manager() -> Any:
             "instruction": instruction_to_use,
             "before_model_callback": [
                 _present_fast_path_result_via_trusted_pipeline,
-                before_model_call("team_manager"),
+                *(team_manager.before_model_callback or [before_model_call("team_manager")]),
             ],
         }
         _fast_path_team_manager_cache.append(
@@ -1054,7 +1054,7 @@ def get_fast_path_team_manager() -> Any:
                 "instruction": instruction_to_use,
                 "before_model_callback": [
                     _present_fast_path_result_via_trusted_pipeline,
-                    before_model_call("team_manager"),
+                    *(team_manager.before_model_callback or [before_model_call("team_manager")]),
                 ],
             }
             _fast_path_team_manager_cache[0] = team_manager.model_copy(update=update_dict)

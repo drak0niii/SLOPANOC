@@ -111,6 +111,7 @@ class PendingReadIntent(BaseModel):
     question: Optional[str] = None
     requested_time_range: Optional[str] = None
     attachment_ids: list[str] = Field(default_factory=list)
+    requires_rich_content: bool = False
     """POST-5.1 B6 -- server-CAPTURED (never model/frontend-supplied) ids
     of this request's own trusted current-turn image attachments, if any,
     in the same order the user attached them. Populated ONLY from
@@ -163,6 +164,7 @@ class ResolvedReadContinuation(BaseModel):
     question: Optional[str] = None
     requested_time_range: Optional[str] = None
     attachment_ids: list[str] = Field(default_factory=list)
+    requires_rich_content: bool = False
     """POST-5.1 B6 -- copied verbatim from the resolved `PendingSelection`
     's own `pending_read_intent.attachment_ids` (`api/selection_service.py`
     's `choose()`) -- the SAME server-captured ids `PendingReadIntent.

@@ -125,10 +125,12 @@ def test_generic_incident_manager_instruction_is_byte_for_byte_unchanged() -> No
     update prohibited raw template placeholders (`xxx`, `xxxx`, `<board_name>`), enforced
     prerequisite hardware diagnostic commands before state-changing restart procedures,
     mandated multi-message evidence citations when summarizing conversations, and propagated
-    authoritative chat_id directly to skip redundant teams_list_chats name resolution -- this is that
+    authoritative chat_id directly to skip redundant teams_list_chats name resolution, and the
+    Teams image retrieval repair propagated `pending_requires_rich_content=True` on disambiguation
+    and guided reverse message scanning for latest hosted content images -- this is that
     legitimate, intentional length, not P4B.2-era drift.
     """
-    assert len(INCIDENT_MANAGER_INSTRUCTION) == 57258
+    assert len(INCIDENT_MANAGER_INSTRUCTION) == 58027
 
 
 def test_synthesis_only_agent_no_longer_uses_the_generic_instruction() -> None:

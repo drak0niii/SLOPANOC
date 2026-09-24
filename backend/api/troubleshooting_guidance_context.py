@@ -79,6 +79,22 @@ def pop_troubleshooting_guidance(run_id: Optional[str]) -> Optional[Troubleshoot
         return _store.pop(run_id, None)
 
 
+def peek_troubleshooting_guidance(run_id: Optional[str]) -> Optional[TroubleshootingGuidance]:
+    """Inspects whether guidance has been registered for `run_id` without removing it.
+    Used by `chat_service.py` to suppress speculative streaming deltas when guidance
+    will replace final_text at completion.
+    """
+    if not run_id:
+        return None
+    with _lock:
+        return _store.get(run_id)
+
+
+def has_troubleshooting_guidance(run_id: Optional[str]) -> bool:
+    """Returns True if guidance has been registered for `run_id`."""
+    return peek_troubleshooting_guidance(run_id) is not None
+
+
 def discard_troubleshooting_guidance(run_id: str) -> None:
     """Backstop/normal cleanup, called from chat_service.py's own
     `finally` block alongside its sibling context stores. Safe to call
