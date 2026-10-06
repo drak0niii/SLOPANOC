@@ -1143,6 +1143,28 @@ def applicability_blocked_action(
     )
 
 
+def names_governed_action(
+    command: Optional[str],
+    cited_source: Optional[str],
+    selected_evidence: Iterable[EvidenceReference | dict[str, Any]],
+) -> bool:
+    """Whether a model-written command names a governed action of THIS run (structural identity only,
+    never authority): an applicability-blocked governed diagnostic read of the section it cites, or
+    the rendering of a ProcedureAction the catalog derives from this run's SELECTED, approved, MATCH,
+    procedural evidence (whatever Command Authority then decides about it). A command that names none
+    -- text no selected procedure instructs, e.g. one seen only in sample output or an image
+    transcription, or one the model composed itself -- has no governed source: it is never an
+    acquisition method."""
+    normalized = " ".join(str(command or "").split())
+    if not normalized:
+        return False
+    evidence = list(selected_evidence or [])
+    if applicability_blocked_action(normalized, cited_source, evidence) is not None:
+        return True
+    actions, _ = build_procedure_action_catalog(evidence)
+    return any(command_matches_template(normalized, " ".join(a.command_template.split())) for a in actions)
+
+
 def authorized_command_action(
     command: Optional[str],
     command_source: Optional[str],

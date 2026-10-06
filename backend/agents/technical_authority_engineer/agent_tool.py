@@ -79,6 +79,7 @@ from backend.agents.technical_authority_engineer.procedure_actions import (
     instruction_view,
     issued_action_ids,
     issued_actions,
+    names_governed_action,
     read_confirmed_parameters,
     record_issued_actions,
     resolution_summary,
@@ -134,9 +135,13 @@ from backend.agents.technical_authority_engineer.evidence_acquisition import (
 )
 from backend.agents.technical_authority_engineer.evidence_sources import governed_document_type, is_action_source, live_sources_for
 from backend.agents.technical_authority_engineer.gap_recovery import (
+    GAP_CONTINUATION_KEY,
     GAP_RECOVERY_KEY,
     NON_TERMINAL_GAP_NOTE,
+    GovernedCommand,
     action_choice_instruction,
+    attempted_ungrounded_command,
+    gap_continuation_instruction,
     proposed_branch_requirement,
     proposes_method,
     recovery_instruction,
@@ -168,6 +173,7 @@ from backend.agents.technical_authority_engineer.progression_controller import (
     ProgressionController,
     ProposalDecision,
     TurnKind,
+    is_multi_action_command,
 )
 from backend.agents.technical_authority_engineer.troubleshooting_threads import (
     ThreadDecision,
@@ -1487,35 +1493,102 @@ def _fault_closed(progression: ProgressionController) -> bool:
     return fault is not None and fault.resolution.value in ("resolved", "escalated")
 
 
+def _ungrounded_command(command: Optional[str], source: Optional[str], selected_evidence: list[Any]) -> bool:
+    """A model-written single diagnostic command that names no governed action of THIS run's SELECTED
+    evidence (`names_governed_action`): no selected procedure instructs it, so it is no acquisition
+    method. Not judged here: a composed command (the single-invocation boundary and the Progression
+    Controller reject several actions in one step) and a state-changing command (a remediation is
+    governed by the remediation gate and Command Authority, not by evidence acquisition)."""
+    text = str(command or "").strip()
+    return (
+        bool(text) and not is_multi_action_command(text) and state_change_class(text) is None
+        and not names_governed_action(text, source, selected_evidence)
+    )
+
+
+def _governed_command_check(run_id: Optional[str]) -> GovernedCommand:
+    """(command, cited source) -> whether a model-written command may count as an acquisition method:
+    anything but an ungrounded command (`_ungrounded_command`) over THIS run's SELECTED evidence,
+    re-read at each call (a remediation message may change the selection)."""
+    def _check(command: str, source: Optional[str]) -> bool:
+        return not _ungrounded_command(command, source, build_server_validated_evidence(run_id, None, []) if run_id else [])
+
+    return _check
+
+
+async def _forecast_gap(
+    payloads: list[dict[str, Any]],
+    progression: ProgressionController,
+    fault_id: str,
+    run_id: Optional[str],
+    governed_command: Optional[GovernedCommand] = None,
+    *,
+    actions_declined: bool = False,
+) -> Optional[tuple[Optional[dict[str, Any]], Any, AcquisitionDecision]]:
+    """(payload, requirement, decision) when the specialist's latest proposal names acquirable evidence
+    WITHOUT a governed method and the server's own acquisition decision for it -- forecast on a SHADOW
+    copy of the progression, nothing recorded -- is a governed acquisition GAP; None otherwise. A
+    method is judged on the RAW payloads too (an integrity callback may already have stripped a refused
+    command -- a refused governed method is not a gap); with `governed_command`, a command that names
+    no governed action of this run is no method at all."""
+    if not run_id or proposes_method(payloads, governed_command):
+        return None
+    payload = payloads[-1] if payloads else None
+    candidate, from_mechanism = proposed_branch_requirement(
+        payload, fault_id, governed_command, attempted_command=attempted_ungrounded_command(payloads, governed_command)
+    )
+    if candidate is None or live_sources_for(candidate.capability):
+        return None
+    shadow = progression.progression.model_copy(deep=True)
+    requirement, _ = _continue_requirement(shadow, candidate, run_id, followup=from_mechanism)
+    discovery = _discovery_state(run_id, progression.progression, fault_id)
+    discovery.actions_declined = actions_declined
+    decision = await decide_acquisition(requirement, progression=shadow, action=GovernedActionState(), discovery=discovery, run_id=run_id)
+    if decision.outcome is not AcquisitionOutcome.GAP:
+        return None
+    return payload, requirement, decision
+
+
+async def _plan_gap_continuation(
+    payloads: list[dict[str, Any]],
+    progression: ProgressionController,
+    fault_id: str,
+    run_id: Optional[str],
+    governed_command: GovernedCommand,
+    *,
+    actions_declined: bool,
+) -> Optional[dict[str, Any]]:
+    """The specialist's proposal still ends in a governed acquisition GAP after the bounded governed
+    recovery path (current catalog choice, governed alternatives, one server search): the exhausted
+    branch to record and to continue past -- ONE continuation request, never a loop. Nothing is chosen,
+    selected or authorized here."""
+    forecast = await _forecast_gap(payloads, progression, fault_id, run_id, governed_command, actions_declined=actions_declined)
+    if forecast is None:
+        return None
+    payload, requirement, decision = forecast
+    return {
+        "payload": payload, "requirement": requirement, "requirement_id": requirement.requirement_id,
+        "repeated": decision.repeated, "gap_reason": requirement.blocking_reason.value if requirement.blocking_reason else None,
+    }
+
+
 async def _plan_gap_recovery(
     payloads: list[dict[str, Any]],
     progression: ProgressionController,
     fault_id: str,
     run_id: Optional[str],
     confirmed_facts: dict[str, list[str]],
+    governed_command: Optional[GovernedCommand] = None,
 ) -> Optional[dict[str, Any]]:
-    """Forecast whether the specialist's proposal ends in a governed acquisition GAP and, if so, the
-    valid governed alternatives of this fault. The forecast runs the server's own acquisition decision
-    on a SHADOW copy of the progression (nothing is recorded here). Alternatives come only from THIS
-    run's governed evidence (gap_recovery.viable_governed_alternatives); when there are none, the
-    server runs ONE fresh governed search (AVAILABLE only, server-owned query) and re-evaluates.
-    None when the proposal names a method (judged on the RAW payloads too: an integrity callback may
-    already have stripped a refused command -- a refused method is not a gap), is not acquirable
-    evidence, or would not be a gap."""
-    if proposes_method(payloads):
+    """Forecast whether the specialist's proposal ends in a governed acquisition GAP (`_forecast_gap`)
+    and, if so, the valid governed alternatives of this fault. Alternatives come only from THIS run's
+    governed evidence (gap_recovery.viable_governed_alternatives); when there are none, the server
+    runs ONE fresh governed search (AVAILABLE only, server-owned query) and re-evaluates. None when
+    the proposal names a method, is not acquirable evidence, or would not be a gap."""
+    forecast = await _forecast_gap(payloads, progression, fault_id, run_id, governed_command)
+    if forecast is None:
         return None
-    payload = payloads[-1] if payloads else None
-    candidate, from_mechanism = proposed_branch_requirement(payload, fault_id)
-    if candidate is None or not run_id or live_sources_for(candidate.capability):
-        return None
-    shadow = progression.progression.model_copy(deep=True)
-    requirement, _ = _continue_requirement(shadow, candidate, run_id, followup=from_mechanism)
-    decision = await decide_acquisition(
-        requirement, progression=shadow, action=GovernedActionState(),
-        discovery=_discovery_state(run_id, progression.progression, fault_id), run_id=run_id,
-    )
-    if decision.outcome is not AcquisitionOutcome.GAP:
-        return None
+    payload, requirement, decision = forecast
     alternatives, excluded = viable_governed_alternatives(run_governed_evidence(run_id), progression.progression, fault_id)
     discovery: Optional[str] = None
     if not alternatives:
@@ -1602,14 +1675,22 @@ def _operational_step_disposition(
 
 
 def _plan_action_choice(
-    payloads: list[dict[str, Any]], progression: ProgressionController, fault_id: str, run_id: Optional[str]
+    payloads: list[dict[str, Any]],
+    progression: ProgressionController,
+    fault_id: str,
+    run_id: Optional[str],
+    governed_command: Optional[GovernedCommand] = None,
 ) -> Optional[dict[str, Any]]:
     """The specialist named an acquirable evidence need WITHOUT any method (judged on raw payloads
-    too) while THIS run's SELECTED, approved, MATCH evidence offers valid diagnostic-read actions the
-    fault has not performed: the candidate set for one explicit choice. None otherwise."""
-    if not run_id or proposes_method(payloads):
+    too; with `governed_command`, a command naming no governed action of this run is no method) while
+    THIS run's SELECTED, approved, MATCH evidence offers valid diagnostic-read actions the fault has
+    not performed: the candidate set for one explicit choice. None otherwise."""
+    if not run_id or proposes_method(payloads, governed_command):
         return None
-    requirement, _ = proposed_branch_requirement(payloads[-1] if payloads else None, fault_id)
+    requirement, _ = proposed_branch_requirement(
+        payloads[-1] if payloads else None, fault_id, governed_command,
+        attempted_command=attempted_ungrounded_command(payloads, governed_command),
+    )
     if requirement is None:
         return None
     actions = _selected_action_alternatives(run_id, progression.progression, fault_id)
@@ -1685,6 +1766,48 @@ def _gap_recovery_view(gap_recovery: dict[str, Any]) -> dict[str, Any]:
         "chosen_issued": gap_recovery.get("chosen_issued"),
         "terminal": gap_recovery.get("terminal"),
     }
+
+
+def _gap_continuation_view(
+    branch_gaps: list[AcquisitionDecision], acquisition: Optional[AcquisitionDecision], gap_continuation: Optional[dict[str, Any]]
+) -> dict[str, Any]:
+    """Server-owned record of the governed acquisition gaps recorded in this run that the final answer
+    continues past: every recorded branch gap whose requirement the final acquisition decision does not
+    itself address (a final gap, or a method found, for the SAME requirement is rendered by its own
+    path). Requirement descriptions are server-derived evidence descriptions, never commands."""
+    final_requirement_id = acquisition.requirement.requirement_id if acquisition is not None else None
+    gaps: list[dict[str, Any]] = []
+    for decision in branch_gaps:
+        requirement_id = decision.requirement.requirement_id
+        if requirement_id == final_requirement_id or any(g["requirement_id"] == requirement_id for g in gaps):
+            continue
+        gaps.append({
+            "requirement_id": requirement_id,
+            "gap_id": decision.gap.gap_id if decision.gap is not None else None,
+            "reason": decision.gap.gap_reason.value if decision.gap is not None else None,
+            "description": decision.requirement.description,
+        })
+    return {"gaps": gaps, "continued": gap_continuation is not None}
+
+
+def _record_gap_continuation(view: dict[str, Any], tool_result: dict[str, Any], acquisition: Optional[AcquisitionDecision]) -> None:
+    """Diagnostics (identifiers only): the gaps continued past, and what the final answer did next."""
+    step = tool_result.get("diagnostic_step") if isinstance(tool_result.get("diagnostic_step"), dict) else {}
+    try:
+        from backend.tools.knowledge.diagnostic_trace import record_operational_event
+
+        record_operational_event({
+            "stage": "gap_continuation",
+            "continued": view.get("continued"),
+            "gaps": [{k: g.get(k) for k in ("requirement_id", "gap_id", "reason")} for g in view.get("gaps") or []],
+            "final_outcome": getattr(tool_result.get("outcome"), "value", tool_result.get("outcome")),
+            "final_requirement_id": acquisition.requirement.requirement_id if acquisition is not None else None,
+            "final_acquisition": acquisition.outcome if acquisition is not None else None,
+            "governed_command_presented": bool(str(step.get("command") or "").strip()),
+            "procedure_action_id": step.get("procedure_action_id"),
+        })
+    except Exception:
+        pass
 
 
 def _reconcile_known_acquisition(
@@ -1871,7 +1994,8 @@ def _response_completeness(
     if tool_result.get("applicability_clarification") or tool_result.get("parameter_clarification"):
         elements.append("clarification")
     acquisition_view = tool_result.get(EVIDENCE_ACQUISITION_KEY)
-    if isinstance(acquisition_view, dict) and acquisition_view.get("response_text"):
+    continued_gaps = (tool_result.get(GAP_CONTINUATION_KEY) or {}).get("gaps") if isinstance(tool_result.get(GAP_CONTINUATION_KEY), dict) else None
+    if (isinstance(acquisition_view, dict) and acquisition_view.get("response_text")) or continued_gaps:
         elements.append("governed_gap")
     if outcome == TechnicalAuthorityOutcome.ESCALATION_REQUIRED.value:
         elements.append("escalation")
@@ -2098,9 +2222,14 @@ def _governed_action_state(
     refused_command: Optional[str],
     evidence: list[EvidenceReference],
     legacy_action: Any = None,
+    refused_ungrounded: bool = False,
 ) -> GovernedActionState:
     """What THIS run established about the step's governed action (its CURRENT authority).
-    `legacy_action`: the continuity identity of an authorized legacy command (`_legacy_action_for`)."""
+    `legacy_action`: the continuity identity of an authorized legacy command (`_legacy_action_for`).
+    `refused_ungrounded`: the refused command names no governed action of this run
+    (`names_governed_action`) -- it is no acquisition method, so it blocks nothing: the step's
+    evidence need goes through the normal decision (governed alternatives / gap), never presented
+    as an operator task."""
     applicability = {e.source_id: (e.metadata or {}).get("applicability_outcome") for e in evidence if e.source_type == "governed_knowledge"}
     command = str((step or {}).get("command") or "").strip() or None
     state = GovernedActionState()
@@ -2127,7 +2256,7 @@ def _governed_action_state(
         state.blocking_reason = GapReason.APPLICABILITY_UNRESOLVED
     elif tool_result.get("parameter_clarification"):
         state.blocking_reason = GapReason.REQUIRED_PARAMETER_MISSING
-    elif action is not None or refused_command:
+    elif action is not None or (refused_command and not refused_ungrounded):
         state.blocking_reason = GapReason.ACTION_NOT_AUTHORIZED
     return state
 
@@ -2147,12 +2276,14 @@ async def _decide_evidence_acquisition(
     continuity_trace: Optional[dict[str, Any]] = None,
     legacy_action: Optional[tuple[str, str, Any]] = None,
     actions_declined: bool = False,
+    refused_ungrounded: bool = False,
 ) -> tuple[Optional[AcquisitionDecision], Optional[dict[str, Any]], dict[str, Any]]:
     """Returns (decision, the proposed step it applies to, updated result). Only an ACCEPTED step
     proposal or a non-operational outcome is evaluated (a rejected proposal changes nothing).
     `pending_step`: the step a PENDING_STEP_RESOLVED decision resolves -- its own open requirement is
     the structural continuity (wording never splits it into a new requirement). `legacy_action`: the
-    continuity identity of an authorized legacy command (`_authorized_legacy_action`)."""
+    continuity identity of an authorized legacy command (`_authorized_legacy_action`).
+    `refused_ungrounded`: the refused command names no governed action of this run (no method)."""
     step = tool_result.get("diagnostic_step") if isinstance(tool_result.get("diagnostic_step"), dict) else None
     outcome = tool_result.get("outcome")
     out = dict(tool_result)
@@ -2179,7 +2310,8 @@ async def _decide_evidence_acquisition(
         else:
             requirement, continuity = _continue_requirement(progression, requirement, run_id, followup=False)
         state = _governed_action_state(
-            step, out, action_resolution, blocked_action, refused_command, refreshed_evidence, _legacy_action_for(step, legacy_action)
+            step, out, action_resolution, blocked_action, refused_command, refreshed_evidence, _legacy_action_for(step, legacy_action),
+            refused_ungrounded=refused_ungrounded,
         )
         result = await decide_acquisition(requirement, progression=progression, action=state, discovery=discovery, run_id=run_id)
         result.continuity = continuity
@@ -3176,7 +3308,11 @@ class TechnicalAuthorityAgentTool(AgentTool):
         # the copy the specialist's own integrity callback sanitized.
         final_payloads: list[dict[str, Any]] = []
         gap_recovery: Optional[dict[str, Any]] = None
+        gap_continuation: Optional[dict[str, Any]] = None
         action_choice: Optional[dict[str, Any]] = None
+        # A model-written command that names no governed action of this run's SELECTED evidence is no
+        # acquisition method: its evidence need takes the governed recovery path (never an operator task).
+        governed_command = _governed_command_check(run_id)
         resume_completeness: Optional[dict[str, Any]] = None
         output_schema = _get_output_schema(self.agent)
         # Structured-output recovery (structured_output.py): an unusable FINAL answer (empty, invalid /
@@ -3282,7 +3418,7 @@ class TechnicalAuthorityAgentTool(AgentTool):
             # applies). The offered ids are issued from SELECTED evidence (the catalog tool's own rule);
             # the resolver and Command Authority still decide. Never auto-chosen, never auto-authorized.
             if not selection_fail_closed and known_acquisition is None:
-                action_choice = _plan_action_choice(final_payloads, progression, troubleshooting_state.fault_id, run_id)
+                action_choice = _plan_action_choice(final_payloads, progression, troubleshooting_state.fault_id, run_id, governed_command)
                 if action_choice is not None:
                     record_issued_actions(run_id, [a.action for a in action_choice["actions"]])
                     logger.warning("Technical Authority Engineer named evidence without a method; offering %d selected governed action(s) once",
@@ -3296,13 +3432,40 @@ class TechnicalAuthorityAgentTool(AgentTool):
                         last_content, last_grounding_metadata = r_content, r_grounding
                         final_payloads = list(r_payloads)
             if not selection_fail_closed and pending_now is None and not _fault_closed(progression) and action_choice is None:
-                gap_recovery = await _plan_gap_recovery(final_payloads, progression, troubleshooting_state.fault_id, run_id, confirmed_facts)
+                gap_recovery = await _plan_gap_recovery(
+                    final_payloads, progression, troubleshooting_state.fault_id, run_id, confirmed_facts, governed_command
+                )
                 if gap_recovery is not None and gap_recovery["alternatives"]:
                     gap_recovery["offered"] = True
                     logger.warning("Technical Authority Engineer proposal ends in a governed acquisition gap; offering %d governed alternative(s) once",
                                    len(gap_recovery["alternatives"]))
                     remediation = types.Content(role="user", parts=[types.Part.from_text(text=recovery_instruction(
                         gap_recovery["requirement"], gap_recovery["alternatives"], repeated=gap_recovery["repeated"],
+                    ))])
+                    r_content, r_grounding, r_payloads = await _run_specialist_message(runner, session, remediation, tool_context)
+                    all_payloads.extend(r_payloads)
+                    if r_content is not None and r_payloads:
+                        last_content, last_grounding_metadata = r_content, r_grounding
+                        final_payloads = list(r_payloads)
+            # Acquisition-gap continuation (gap_recovery.py): the bounded governed recovery path above
+            # (current catalog choice, governed alternatives, one server search) established no grounded
+            # method for the evidence the specialist still needs. The gap ends that BRANCH, not the
+            # investigation: the server records it and asks the specialist ONCE to continue reasoning from
+            # the evidence already collected (next hypothesis / evidence need). Tools stay enabled, so its
+            # next need is resolved through the normal governed path; nothing is chosen, selected or
+            # authorized on its behalf, and no command of its own ever becomes a method.
+            if not selection_fail_closed and pending_now is None and not _fault_closed(progression):
+                gap_continuation = await _plan_gap_continuation(
+                    final_payloads, progression, troubleshooting_state.fault_id, run_id, governed_command,
+                    actions_declined=action_choice is not None,
+                )
+                if gap_continuation is not None:
+                    logger.warning(
+                        "Technical Authority Engineer evidence need has no governed acquisition method after governed recovery; "
+                        "recording the gap and requesting continued reasoning once"
+                    )
+                    remediation = types.Content(role="user", parts=[types.Part.from_text(text=gap_continuation_instruction(
+                        gap_continuation["requirement"], gap_continuation["gap_reason"], repeated=gap_continuation["repeated"],
                     ))])
                     r_content, r_grounding, r_payloads = await _run_specialist_message(runner, session, remediation, tool_context)
                     all_payloads.extend(r_payloads)
@@ -3320,6 +3483,7 @@ class TechnicalAuthorityAgentTool(AgentTool):
                 and not selection_fail_closed
                 and action_choice is None
                 and not (gap_recovery is not None and gap_recovery.get("offered"))
+                and gap_continuation is None
                 and not _fault_closed(progression)
                 and not _actionable_proposal(final_payloads)
             ):
@@ -3514,6 +3678,15 @@ class TechnicalAuthorityAgentTool(AgentTool):
                     refused_command, refused_source = _latest_proposed_command(final_payloads, legacy_model_command, legacy_model_source)
                     if action_resolution is None and refused_command and isinstance(validated_step, dict) and not validated_step.get("command"):
                         blocked_action = applicability_blocked_action(refused_command, refused_source, refreshed_evidence)
+                    # A refused model-written command that names no governed action of THIS run's SELECTED
+                    # evidence (no selected procedure instructs it) is no acquisition method: its evidence
+                    # need is decided like any method-less need (governed alternative / gap), never kept as
+                    # a "blocked" method behind a command-less operator task.
+                    refused_ungrounded = bool(
+                        action_resolution is None and isinstance(validated_step, dict)
+                        and not validated_step.get("command") and blocked_action is None
+                        and _ungrounded_command(refused_command, refused_source, refreshed_evidence)
+                    )
                     # Authorized legacy command (identity only, ZERO authority): the ProcedureAction it
                     # exactly corresponds to in THIS run's selected evidence, kept on the step and its
                     # acquisition candidate so the next turn knows the governed acquisition method.
@@ -3543,19 +3716,31 @@ class TechnicalAuthorityAgentTool(AgentTool):
                     if isinstance(tool_result, dict):
                         tool_result = {
                             k: v for k, v in tool_result.items()
-                            if k not in (EVIDENCE_ACQUISITION_KEY, SUPPORTING_EVIDENCE_KEY, SUPPORTING_EVIDENCE_IDENTITIES_KEY, GAP_RECOVERY_KEY, ACTION_CHOICE_KEY)
+                            if k not in (
+                                EVIDENCE_ACQUISITION_KEY, SUPPORTING_EVIDENCE_KEY, SUPPORTING_EVIDENCE_IDENTITIES_KEY, GAP_RECOVERY_KEY,
+                                ACTION_CHOICE_KEY, GAP_CONTINUATION_KEY,
+                            )
                         }
+                        branch_gaps: list[AcquisitionDecision] = []
                         if gap_recovery is not None and gap_recovery.get("offered"):
                             # The exhausted branch stays recorded whatever the specialist chose instead.
-                            await _record_branch_gap(gap_recovery, progression, troubleshooting_state.fault_id, run_id, refreshed_evidence)
+                            recorded_gap = await _record_branch_gap(gap_recovery, progression, troubleshooting_state.fault_id, run_id, refreshed_evidence)
+                            branch_gaps += [recorded_gap] if recorded_gap is not None else []
+                        if gap_continuation is not None:
+                            # The branch the specialist was asked to continue past stays recorded too.
+                            recorded_gap = await _record_branch_gap(gap_continuation, progression, troubleshooting_state.fault_id, run_id, refreshed_evidence)
+                            branch_gaps += [recorded_gap] if recorded_gap is not None else []
                         if action_choice is not None:
                             # The specialist was offered this run's valid SELECTED actions: it chose one, or
                             # explicitly kept a method-less need (declined) -- only then may a gap be recorded.
                             final_step = raw_result.get("diagnostic_step") if isinstance(raw_result.get("diagnostic_step"), dict) else {}
                             chosen = str(final_step.get("procedure_action_id") or "").strip()
                             action_choice["chosen"] = chosen if chosen in {a.action.action_id for a in action_choice["actions"]} else None
-                            action_choice["declined"] = not proposes_method(final_payloads) and (
-                                proposed_branch_requirement(final_payloads[-1] if final_payloads else None, troubleshooting_state.fault_id)[0] is not None
+                            action_choice["declined"] = not proposes_method(final_payloads, governed_command) and (
+                                proposed_branch_requirement(
+                                    final_payloads[-1] if final_payloads else None, troubleshooting_state.fault_id, governed_command,
+                                    attempted_command=attempted_ungrounded_command(final_payloads, governed_command),
+                                )[0] is not None
                             )
                         acquisition, acquisition_step, tool_result = await _decide_evidence_acquisition(
                             tool_result,
@@ -3571,6 +3756,7 @@ class TechnicalAuthorityAgentTool(AgentTool):
                             fault_id=troubleshooting_state.fault_id,
                             run_id=run_id,
                             actions_declined=bool(action_choice and action_choice.get("declined")),
+                            refused_ungrounded=refused_ungrounded,
                         )
                         if action_choice is not None:
                             final_gap = acquisition is not None and acquisition.outcome is AcquisitionOutcome.GAP
@@ -3613,6 +3799,11 @@ class TechnicalAuthorityAgentTool(AgentTool):
                                 record_operational_event({"stage": "gap_recovery", **tool_result[GAP_RECOVERY_KEY]})
                             except Exception:
                                 pass
+                        if branch_gaps or gap_continuation is not None:
+                            continuation_view = _gap_continuation_view(branch_gaps, acquisition, gap_continuation)
+                            if continuation_view["gaps"]:
+                                tool_result[GAP_CONTINUATION_KEY] = continuation_view
+                            _record_gap_continuation(continuation_view, tool_result, acquisition)
                     step_after = tool_result.get("diagnostic_step") if isinstance(tool_result, dict) else None
                     step_disposition = _operational_step_disposition(
                         proposed=selection_fail_closed or any(proposes_operational_step(p) for p in all_payloads),
@@ -3882,4 +4073,8 @@ class TechnicalAuthorityAgentTool(AgentTool):
         if self.propagate_grounding_metadata and last_grounding_metadata:
             tool_context.state["temp:_adk_grounding_metadata"] = last_grounding_metadata
 
+        if isinstance(tool_result, dict):
+            # The gap notice is rendered by the server from the execution record (never re-worded by the
+            # Team Manager): the record keeps it, the Team Manager's input does not.
+            tool_result = {k: v for k, v in tool_result.items() if k != GAP_CONTINUATION_KEY}
         return tool_result

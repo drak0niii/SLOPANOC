@@ -1146,8 +1146,13 @@ load unchanged).
   `AcquisitionGap` audit records fault, step, requirement, searches, consulted / selected evidence,
   candidates and reason (for knowledge onboarding, SME escalation, tool / automation backlog), and the
   response is rendered from server state — it never asks the operator for a command. Applicability
-  unresolved, missing parameters, refused commands, retrieval failure, data source / tool
-  unavailability and discovery not performed are distinct reasons and are NOT gaps.
+  unresolved, missing parameters, governed commands refused by authority, retrieval failure, data
+  source / tool unavailability and discovery not performed are distinct reasons and are NOT gaps. A
+  model-written diagnostic command that names no governed action of THIS run (not the rendering of a
+  ProcedureAction of the SELECTED evidence, not an applicability-blocked governed read — e.g. text seen
+  only in sample output or an image transcription) is no acquisition method at all: its need takes the
+  normal path below (governed alternatives, gap), never a command-less step presented as an operator
+  task. Composed commands and state changes keep their own gates (one action per step, remediation).
 - **Results.** A conversational request for how to obtain evidence ("what command do I run", "how do
   I check that") is never bound as a diagnostic result unless the pending command is echoed with its
   output.
@@ -1238,6 +1243,17 @@ load unchanged).
   requirement re-proposed with nothing materially new (no new trusted result, operator hint, consulted
   source or applicability outcome) reuses the gap without another discovery attempt (at most one
   attempt per run).
+- **Acquisition-gap continuation.** When the specialist's final proposal still ends in a gap after that
+  bounded path (current catalog choice, governed alternatives, one server search), the server records
+  the gap and asks the specialist ONCE, tools enabled, to continue reasoning from the evidence already
+  collected: the next hypothesis or evidence requirement, without inventing a command or repeating the
+  unavailable need (`gap_recovery.gap_continuation_instruction`). Its next proposal passes the normal
+  chain. The final answer is prefixed with a server-rendered notice (`render_acquisition_gap_notice`,
+  from the execution record only — never shown to the Team Manager as input): the need for which no
+  governed method could be found or cross-checked, that no command is provided for it, the model's
+  hypothesis labelled as model-generated, and a knowledge status that calls only an authorized command
+  of the next step governed. A gap the final decision itself addresses (same requirement) is rendered
+  by its own path, never twice; the trace records `GAP CONTINUATION`.
 - **Contentless continuation.** A message that introduces no technical subject ("what do you
   suggest?", "and now?", "go ahead") continues the active fault: neither word overlap with the active
   objective nor a caller's switch claim turns it into a new objective.

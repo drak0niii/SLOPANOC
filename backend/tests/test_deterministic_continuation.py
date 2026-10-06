@@ -198,15 +198,17 @@ async def test_fresh_search_returning_nothing_yields_a_governed_acquisition_gap(
 async def test_what_next_without_known_acquisition_invents_no_method(conversation) -> None:  # noqa: F811
     repo, conv = conversation
     await repo.add(_ru_mop())
-    # A fabricated command is refused: the pending step has no governed identity (nothing known).
+    # A fabricated command is refused and is no acquisition method (no selected procedure instructs it):
+    # its need is a governed acquisition gap, never a command-less step left pending as an operator task.
     t1 = await conv.turn("how do I troubleshoot the radio unit fault?", [RU_SEARCH, RU_SELECT, _legacy_st_ru(command="show everything-now")], "Checking.")
     (step,) = t1["progression"].steps
-    assert step.status is StepStatus.PRESENTED and step.procedure_action_id is None and step.command is None
+    assert step.status is StepStatus.BLOCKED_GOVERNED_ACQUISITION_GAP and step.procedure_action_id is None and step.command is None
+    assert t1["progression"].open_gap(step.evidence_requirement_id) is not None and "show everything-now" not in t1["final"]
     t2 = await conv.turn("what next?", [_need_ru_state()], "Okay.")
     continuation = _continuation(t2)
-    assert (continuation["kind"], continuation["rule"], continuation["known_procedure_action_id"]) == ("generic_continuation", None, None)
+    # Nothing is pending and no governed acquisition is known: no continuation rule, no forced discovery.
+    assert (continuation["rule"], continuation["known_procedure_action_id"]) == (None, None)
     assert _events(t2, "acquisition_discovery") == []
-    assert [e["outcome"] for e in _events(t2, "acquisition_continuity")] == ["no_known_governed_acquisition"]
     assert t2["tae_calls"] == 1
     assert not [c for c in _trace(t2).get("command_authority", []) if c["decision"] == "authorized"]
     assert not (t2["records"][-1].get("diagnostic_step") or {}).get("command")

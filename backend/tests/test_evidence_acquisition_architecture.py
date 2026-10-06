@@ -409,15 +409,20 @@ async def test_11_retrieval_failure_end_to_end_is_not_a_gap(conversation, monkey
 
 
 @pytest.mark.asyncio
-async def test_9_command_rejection_is_not_a_gap(conversation) -> None:
+async def test_9_ungrounded_command_is_no_method_and_its_need_is_a_gap(conversation) -> None:
+    # A command no selected procedure instructs is no acquisition method (unlike a governed action that
+    # authority refuses): after the bounded governed path, its need is a recorded gap -- never kept as a
+    # "blocked" method behind a command-less operator task.
     repo, conv = conversation
     await repo.add(DOC.knowledge())
     t1 = await conv.turn("how can i troubleshoot ESS Service Unavailable on Ericsson 4G?",
                          [SEARCH, DOC.select(), _legacy_alt(command="show everything-now")], "Checking.",
                          tae_args={"problem_statement": "ESS", "known_applicability_facts": {"vendor": ["Ericsson"], "technology": ["4G"]}})
     requirement = t1["progression"].evidence_requirements[-1]
-    assert requirement.blocking_reason is GapReason.ACTION_NOT_AUTHORIZED and t1["progression"].acquisition_gaps == []
-    assert requirement.last_authority_decision.status is AuthorityStatus.NOT_AUTHORIZED
+    assert requirement.blocking_reason is GapReason.NO_APPROVED_ACQUISITION_ACTION
+    assert [g.requirement_id for g in t1["progression"].acquisition_gaps] == [requirement.requirement_id]
+    assert all(s.status is not StepStatus.PRESENTED for s in t1["progression"].steps)
+    assert "show everything-now" not in t1["final"] and not (t1["records"][-1].get("diagnostic_step") or {}).get("command")
 
 
 @pytest.mark.asyncio

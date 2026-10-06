@@ -595,6 +595,16 @@ def format_diagnostic_trace(snapshot: dict[str, Any]) -> str:
                 f" alternatives={[a.get('procedure_action_id') for a in e.get('alternatives') or []]} excluded={e.get('excluded')}"
             )
             lines.append(f"  NEXT chosen={e.get('chosen')} issued={e.get('chosen_issued')} terminal={e.get('terminal')}")
+        elif e.get("stage") == "gap_continuation":
+            lines.append(
+                f"GAP CONTINUATION continued={e.get('continued')}"
+                f" gaps={[(g.get('requirement_id'), g.get('gap_id'), g.get('reason')) for g in e.get('gaps') or []]}"
+            )
+            lines.append(
+                f"  NEXT outcome={e.get('final_outcome')} requirement={e.get('final_requirement_id')}"
+                f" acquisition={e.get('final_acquisition')} action={e.get('procedure_action_id')}"
+                f" governed_command={e.get('governed_command_presented')}"
+            )
         elif e.get("stage") == "acquisition_discovery":
             lines.append(
                 f"ACQUISITION DISCOVERY reason={e.get('reason')} status={e.get('status')} query={e.get('query_text')!r}"

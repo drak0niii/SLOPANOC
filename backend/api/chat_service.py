@@ -186,6 +186,7 @@ from backend.agents.technical_authority_engineer.clarification_continuity import
     pending_clarification_follow_up_text,
     render_clarification_meta_response,
 )
+from backend.agents.technical_authority_engineer.gap_recovery import with_acquisition_gap_notice
 from backend.agents.technical_authority_engineer.procedure_actions import discard_issued_actions
 from backend.agents.technical_authority_engineer.validation import discard_integrity_decisions
 from backend.agents.technical_authority_engineer.synthesis_boundary import (
@@ -2232,6 +2233,10 @@ class ChatService:
                 # Completeness: an actionable continued investigation never ends with nothing, and a
                 # validated step's authorized command is never dropped by synthesis.
                 final_text = enforce_response_completeness(final_text, technical_authority_execution, completeness_decision)
+                if final_producer not in ("server_safe_failure", "governed_completion") and final_text != SAFE_COMPLETION_FAILURE_TEXT:
+                    # A governed acquisition gap the investigation continued past is stated by the server
+                    # (never re-worded by synthesis), with the knowledge status of what follows.
+                    final_text = with_acquisition_gap_notice(final_text, technical_authority_execution)
                 if final_producer == "team_manager":
                     final_producer = "technical_authority_engineer"
                 completeness_decision["final_producer"] = final_producer

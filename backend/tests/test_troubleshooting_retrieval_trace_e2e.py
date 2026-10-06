@@ -61,7 +61,8 @@ async def test_rejected_model_command_is_fully_reconstructable_from_persisted_tr
 
     tae = turn["technical_authority"]
     assert tae["outcome"] is not None and tae["command"] is None
-    assert turn["final_response_kind"] in ("answer", "no_governed_procedure_selected", "governed_fail_closed")
+    # The rejected command named no governed action: its need is answered from server state (gap).
+    assert turn["final_response_kind"] in ("answer", "no_governed_procedure_selected", "governed_fail_closed", "evidence_acquisition")
     # Identities and decisions only -- never procedure body text.
     assert "Restart the affected radio" not in json.dumps(turn)
     assert _S4_CONTENT.splitlines()[0] not in json.dumps(turn)
