@@ -8,6 +8,9 @@ import {
   formatSourceFooter,
   formatSourcePeriod,
   groupKnowledgeSourceReferences,
+  isPendingApplicability,
+  knowledgeSourcePrefix,
+  supportingKnowledgeSources,
 } from "./sourceReference";
 
 function makeSource(overrides: Partial<SourceReferenceDTO> = {}): SourceReferenceDTO {
@@ -350,5 +353,38 @@ describe("formatSourceFooter — Teams Visual Evidence milestone", () => {
     expect(formatSourceFooter(source)).toBe(
       "This response was derived from retrieved Teams messages in the conversation above.",
     );
+  });
+});
+
+describe("applicability presentation (clarification continuity pass)", () => {
+  it("treats only a recorded non-match outcome as pending applicability", () => {
+    expect(isPendingApplicability(makeKnowledgeSource({ applicability_outcome: "unknown" }))).toBe(true);
+    expect(isPendingApplicability(makeKnowledgeSource({ applicability_outcome: "partial_match" }))).toBe(true);
+    expect(isPendingApplicability(makeKnowledgeSource({ applicability_outcome: "match" }))).toBe(false);
+    expect(isPendingApplicability(makeKnowledgeSource({ applicability_outcome: null }))).toBe(false);
+    expect(isPendingApplicability(makeKnowledgeSource())).toBe(false);
+  });
+
+  it("labels a pending source as a candidate, never as an authoritative source", () => {
+    expect(knowledgeSourcePrefix(true)).toBe("Candidate source");
+    expect(knowledgeSourcePrefix(false)).toBe("Source");
+  });
+
+  it("marks a group pending when any of its sections is not MATCH", () => {
+    const matched = makeKnowledgeSource({ section_id: "aurora:v1:s0", applicability_outcome: "match" });
+    const unknown = makeKnowledgeSource({ section_id: "aurora:v1:s1", applicability_outcome: "unknown" });
+    expect(groupKnowledgeSourceReferences([matched])[0].pendingApplicability).toBe(false);
+    expect(groupKnowledgeSourceReferences([matched, unknown])[0].pendingApplicability).toBe(true);
+  });
+});
+
+describe("supportingKnowledgeSources (evidence provenance pass)", () => {
+  it("keeps only evidence that materially grounds the answer; consulted evidence is not a Source", () => {
+    const supporting = makeKnowledgeSource({ section_id: "mop:v1:s0", support_role: "supporting" });
+    const consulted = makeKnowledgeSource({ section_id: "doc1:v2:s7", support_role: "consulted" });
+    const legacy = makeKnowledgeSource({ section_id: "old:v1:s0" });
+    expect(supportingKnowledgeSources([supporting, consulted, legacy]).map((s) => s.section_id)).toEqual(["mop:v1:s0", "old:v1:s0"]);
+    expect(supportingKnowledgeSources([consulted])).toEqual([]);
+    expect(supportingKnowledgeSources(undefined)).toEqual([]);
   });
 });

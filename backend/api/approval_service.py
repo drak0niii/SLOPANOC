@@ -54,6 +54,14 @@ from backend.api.session_service import DEFAULT_USER_ID, ApiSessionService
 from backend.approval.schemas import ApprovalDenialReason
 from backend.approval.service import PENDING_ACTION_PROPOSAL_STATE_KEY, approve_proposal, reject_proposal
 from backend.gateway.safe_error import SafeError, SafeErrorException
+from backend.operations.control_plane import (
+    PERSISTED_STATE_KEYS as _OPERATIONAL_STATE_KEYS,
+    OperationalDenial,
+    approve_operational,
+    is_operational_proposal,
+    reject_operational,
+)
+from backend.approval.service import load_active_proposal
 
 # Reuses the existing, generic `action_failure` SafeError code (already
 # mapped to HTTP 409 in errors.py, Phase 4A) for every "this proposal
@@ -89,6 +97,14 @@ def _denial_exception(reason: Optional[ApprovalDenialReason]) -> SafeErrorExcept
     )
 
 
+def _operational_delta(state) -> dict:
+    return {key: state[key] for key in _OPERATIONAL_STATE_KEYS if key in state}
+
+
+def _operational_denial(denial: OperationalDenial) -> SafeErrorException:
+    return SafeErrorException(SafeError(error_code="action_failure", user_message=denial.message, reason=denial.reason))
+
+
 async def approve(
     session_service: ApiSessionService,
     session_id: str,
@@ -99,6 +115,17 @@ async def approve(
 
     async with session_service.lock_for(session_id, user_id):
         session = await session_service.get_session(session_id, user_id)  # the authoritative, latest read
+        if is_operational_proposal(load_active_proposal(session.state)):
+            # Tranche 3: operational target confirmation / approval. `user_id` comes only from the
+            # trusted UserContext; every binding is re-validated by the control plane first.
+            try:
+                await approve_operational(session.state, proposal_id, user_id=user_id)
+            except OperationalDenial as denial:
+                await session_service.persist_state_delta(session, _operational_delta(session.state))
+                raise _operational_denial(denial) from None
+            await session_service.persist_state_delta(session, _operational_delta(session.state))
+            refreshed = await session_service.get_session(session_id, user_id)
+            return ApprovalResponse(session_id=session_id, result="approved", pending_action=map_pending_action(refreshed.state))
         result = approve_proposal(proposal_id, session.state)
         if not result.success:
             raise _denial_exception(result.reason)
@@ -122,6 +149,14 @@ async def reject(
 
     async with session_service.lock_for(session_id, user_id):
         session = await session_service.get_session(session_id, user_id)
+        if is_operational_proposal(load_active_proposal(session.state)):
+            try:
+                reject_operational(session.state, proposal_id, user_id=user_id)
+            except OperationalDenial as denial:
+                raise _operational_denial(denial) from None
+            await session_service.persist_state_delta(session, _operational_delta(session.state))
+            refreshed = await session_service.get_session(session_id, user_id)
+            return ApprovalResponse(session_id=session_id, result="rejected", pending_action=map_pending_action(refreshed.state))
         result = reject_proposal(proposal_id, session.state)
         if not result.success:
             raise _denial_exception(result.reason)

@@ -1271,6 +1271,37 @@ describe("Message — source chip layout alignment (Runtime Activity Truthfulnes
     expect(container).toBeInTheDocument();
   });
 
+  it("never renders consulted (selected but not relied on) evidence as an authoritative Source", () => {
+    mockAppState.activeChat = makeChat({
+      backendSessionId: "s1",
+      knowledgeSources: {
+        "msg-1": [
+          kmSource({ section_id: "doc1:v2:s7", knowledge_id: "doc1", title: "Document1", support_role: "consulted" }),
+        ],
+      },
+    });
+    const completed = makeMessage({ id: "msg-1", status: "complete", text: "No approved governed procedure ..." });
+    render(withProvider(<Message message={completed} />));
+    expect(screen.queryByRole("button", { name: /Source ·/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Document1/)).not.toBeInTheDocument();
+  });
+
+  it("shows supporting evidence and hides consulted evidence on the same answer", () => {
+    mockAppState.activeChat = makeChat({
+      backendSessionId: "s1",
+      knowledgeSources: {
+        "msg-1": [
+          kmSource({ section_id: "mop:v1:s0", knowledge_id: "mop", title: "Alarm MOP", support_role: "supporting" }),
+          kmSource({ section_id: "doc1:v2:s7", knowledge_id: "doc1", title: "Document1", evidence_source_id: "doc-9", support_role: "consulted" }),
+        ],
+      },
+    });
+    const completed = makeMessage({ id: "msg-1", status: "complete", text: "Run `alt`." });
+    render(withProvider(<Message message={completed} />));
+    expect(screen.getAllByRole("button", { name: /^Source ·/ })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /Alarm MOP/ })).toBeInTheDocument();
+  });
+
   it("(B) each source row remains individually clickable, opening its own drawer with its own distinct content", () => {
     mockAppState.activeChat = makeChat({
       backendSessionId: "s1",

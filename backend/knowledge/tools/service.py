@@ -7,6 +7,8 @@ rationale.
 """
 from __future__ import annotations
 
+from typing import Callable, Optional
+
 from backend.knowledge.provenance.contracts import KnowledgeEvidenceItem, KnowledgeEvidenceSelectionKey
 from backend.knowledge.provenance.service import KnowledgeProvenanceService, validate_evidence_selection
 from backend.knowledge.retrieval.contracts import KnowledgeRetrievalItem, KnowledgeRetrievalQuery
@@ -15,6 +17,7 @@ from backend.knowledge.tools.contracts import (
     KnowledgeSearchAgentPayload,
     KnowledgeSearchDiagnostic,
     KnowledgeSearchExecutionResult,
+    KnowledgeSearchRetrievalDiagnostics,
     KnowledgeSearchToolRequest,
     KnowledgeToolConsistencyError,
     KnowledgeToolEvidenceItem,
@@ -56,6 +59,7 @@ def _build_tool_item(retrieval_item: KnowledgeRetrievalItem, evidence_item: Know
         source_display_name=evidence_item.source.display_name,
         source_locator=evidence_item.section.source_locator,
         applicability_outcome=retrieval_item.applicability_outcome,
+        unresolved_applicability_dimensions=list(retrieval_item.unresolved_applicability_dimensions),
         relevance_score=retrieval_item.relevance_score,
         section_sequence=evidence_item.section.sequence,
     )
@@ -112,7 +116,10 @@ class KnowledgeToolService:
         self._provenance_service = provenance_service
 
     async def search(
-        self, request: KnowledgeSearchToolRequest, context: KnowledgeToolExecutionContext
+        self,
+        request: KnowledgeSearchToolRequest,
+        context: KnowledgeToolExecutionContext,
+        diagnostics_sink: Optional[Callable[[KnowledgeSearchRetrievalDiagnostics], None]] = None,
     ) -> KnowledgeSearchExecutionResult:
         """The one generic `knowledge_search` capability: build a 5.1G
         `KnowledgeRetrievalQuery` from the model-controlled `request` and
@@ -136,6 +143,16 @@ class KnowledgeToolService:
         ]
 
         agent_payload = KnowledgeSearchAgentPayload(items=items, diagnostics=diagnostics)
+        if diagnostics_sink is not None:
+            diagnostics_sink(
+                KnowledgeSearchRetrievalDiagnostics(
+                    retrieval_mode=retrieval_result.mode,
+                    dense_status=retrieval_result.dense_status,
+                    eligible_section_count=retrieval_result.eligible_section_count,
+                    candidate_count=retrieval_result.candidate_count,
+                    ranking=tuple(retrieval_result.ranking),
+                )
+            )
         return KnowledgeSearchExecutionResult(agent_payload=agent_payload, evidence_set=evidence_set)
 
     def validate_selection(

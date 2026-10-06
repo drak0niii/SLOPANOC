@@ -19,7 +19,11 @@ from backend.knowledge.domain.applicability import ApplicabilityContext, Applica
 from backend.knowledge.domain.enums import KnowledgeDocumentType
 from backend.knowledge.domain.models import require_non_blank
 from backend.knowledge.provenance.contracts import KnowledgeEvidenceSelectionKey, KnowledgeEvidenceSet
-from backend.knowledge.retrieval.contracts import KnowledgeRetrievalDiagnosticReason
+from backend.knowledge.retrieval.contracts import (
+    KnowledgeRetrievalDiagnosticReason,
+    KnowledgeRetrievalMode,
+    KnowledgeRetrievalRankingDiagnostic,
+)
 
 DEFAULT_SEARCH_LIMIT = 5
 MAXIMUM_SEARCH_LIMIT = 10
@@ -138,6 +142,14 @@ class KnowledgeToolEvidenceItem(BaseModel):
     applicability_outcome: ApplicabilityOutcome = Field(
         description="MATCH, PARTIAL_MATCH, or UNKNOWN, preserved exactly from 5.1G -- never normalized/upgraded to MATCH. NOT_APPLICABLE never appears here (5.1G already excludes it)."
     )
+    unresolved_applicability_dimensions: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Names of this item's constrained applicability dimensions the query context could not evaluate "
+            "(per-dimension UNKNOWN), taken verbatim from the deterministic applicability evaluation. Dimension "
+            "names only -- never values. Empty for MATCH."
+        ),
+    )
     relevance_score: float = Field(
         ge=0.0,
         le=1.0,
@@ -197,3 +209,20 @@ class KnowledgeSearchExecutionResult:
 
     agent_payload: KnowledgeSearchAgentPayload
     evidence_set: KnowledgeEvidenceSet
+
+
+@dataclass(frozen=True)
+class KnowledgeSearchRetrievalDiagnostics:
+    """Observability-only view of one search's retrieval ranking, delivered to an
+    optional `diagnostics_sink` of `KnowledgeToolService.search` -- deliberately NOT a
+    field of `KnowledgeSearchExecutionResult` (which stays exactly
+    agent_payload + evidence_set). Identities/scores only, aligned with
+    `agent_payload.items`; never model input, never evidence, never consulted by
+    selection, provenance, applicability, or command authority.
+    """
+
+    retrieval_mode: KnowledgeRetrievalMode
+    dense_status: str
+    eligible_section_count: int
+    candidate_count: int
+    ranking: tuple[KnowledgeRetrievalRankingDiagnostic, ...]

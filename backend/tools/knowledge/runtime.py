@@ -8,7 +8,7 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from functools import lru_cache
-from typing import Callable
+from typing import Any, Callable, Optional
 
 from backend.config.settings import get_settings
 from backend.knowledge.domain.applicability import ApplicabilityContext
@@ -59,6 +59,13 @@ class KnowledgeRunEvidenceState:
     available_evidence: KnowledgeEvidenceSet = field(default_factory=KnowledgeEvidenceSet)
     selected_evidence: list[KnowledgeEvidenceItem] = field(default_factory=list)
     explicit_empty_selection: bool = False
+    applicability_by_identity: dict[tuple[str, str, "str | None"], str] = field(default_factory=dict)
+    unresolved_dimensions_by_identity: dict[tuple[str, str, "str | None"], list[str]] = field(default_factory=dict)
+    search_log: list[dict[str, Any]] = field(default_factory=list)
+    """Every governed search of this run: query, status (ok | error), result count (discovery audit)."""
+    annotations_by_identity: dict[tuple[str, str, "str | None"], dict[str, Any]] = field(default_factory=dict)
+    """Opaque, server-derived annotations of SELECTED evidence (e.g. a consumer's derived view of the
+    same governed version). Never model input; this module does not interpret them."""
 
 
 _lock = threading.Lock()
@@ -136,6 +143,18 @@ def record_search_result(run_id: str, execution: KnowledgeSearchExecutionResult)
 
         state.available_evidence = KnowledgeEvidenceSet(items=merged_items)
 
+        # Record server-evaluated applicability outcomes by item identity
+        for payload_item in execution.agent_payload.items:
+            key = payload_item.selection_key
+            ident = (key.knowledge_id, key.version_label, key.section_id)
+            outcome = getattr(payload_item, "applicability_outcome", None)
+            if outcome is not None:
+                val = outcome.value.lower() if hasattr(outcome, "value") else str(outcome).lower()
+                state.applicability_by_identity[ident] = val
+                state.unresolved_dimensions_by_identity[ident] = list(
+                    getattr(payload_item, "unresolved_applicability_dimensions", None) or []
+                )
+
 
 def select_evidence(run_id: str, selections: list[KnowledgeEvidenceSelectionKey]) -> list[KnowledgeEvidenceItem]:
     """Validate `selections` against exactly this run's own AVAILABLE
@@ -191,6 +210,96 @@ def snapshot_selected_knowledge_evidence(run_id: str) -> list[KnowledgeEvidenceI
         return list(state.selected_evidence) if state is not None else []
 
 
+def record_evidence_annotation(run_id: str, identity: tuple[str, str, "str | None"], name: str, value: Any) -> None:
+    """Trusted, backend-only: attach a server-derived annotation to one SELECTED evidence identity
+    of this run (no-op for an unknown run or an unselected identity)."""
+    with _lock:
+        state = _run_states.get(run_id)
+        if state is None or identity not in {_identity(item) for item in state.selected_evidence}:
+            return
+        state.annotations_by_identity.setdefault(identity, {})[name] = value
+
+
+def get_evidence_annotation(run_id: str, identity: tuple[str, str, "str | None"], name: str) -> Any:
+    with _lock:
+        state = _run_states.get(run_id)
+        return (state.annotations_by_identity.get(identity) or {}).get(name) if state is not None else None
+
+
+def get_evidence_applicability_outcome(
+    run_id: str, identity: tuple[str, str, "str | None"]
+) -> "str | None":
+    """Trusted, backend-only accessor -- returns server-evaluated applicability outcome
+    ('match', 'partial_match', 'unknown', etc.) recorded during retrieval for this evidence identity.
+    """
+    with _lock:
+        state = _run_states.get(run_id)
+        if state is None:
+            return None
+        return state.applicability_by_identity.get(identity)
+
+
+def refresh_run_applicability_context(run_id: str, context: ApplicabilityContext) -> None:
+    """Trusted, backend-only: install the server-reconciled `ApplicabilityContext` for this run.
+
+    When the run's evidence state already exists with a DIFFERENT context, the context is replaced
+    and every previously recorded applicability outcome is discarded, so a stale UNKNOWN /
+    PARTIAL_MATCH is never reused after enrichment. Outcomes are only re-established by a new
+    `knowledge_search`, i.e. by deterministic `evaluate_applicability` -- never set here.
+    Selected evidence is untouched; without a fresh outcome it stays non-authoritative.
+    """
+    from backend.api.applicability_context_capture import register_known_applicability_context
+
+    with _lock:
+        state = _run_states.get(run_id)
+        if state is None:
+            register_known_applicability_context(run_id, context)
+            return
+        if state.execution_context.applicability_context.dimensions == context.dimensions:
+            return
+        state.execution_context.applicability_context = context
+        state.applicability_by_identity.clear()
+        state.unresolved_dimensions_by_identity.clear()
+
+
+def get_available_unresolved_applicability_dimensions(run_id: str) -> list[str]:
+    """Trusted, backend-only: unresolved applicability dimension names of the highest-ranked
+    AVAILABLE governed document whose outcome is not MATCH. Used only to phrase a clarification;
+    never confers authority."""
+    with _lock:
+        state = _run_states.get(run_id)
+        if state is None:
+            return []
+        target_kid = None
+        dims: list[str] = []
+        for item in state.available_evidence.items:
+            ident = _identity(item)
+            outcome = state.applicability_by_identity.get(ident)
+            if outcome in (None, "match"):
+                continue
+            if target_kid is None:
+                target_kid = ident[0]
+            if ident[0] != target_kid:
+                continue
+            for dim in state.unresolved_dimensions_by_identity.get(ident, []):
+                if dim not in dims:
+                    dims.append(dim)
+        return dims
+
+
+def get_evidence_unresolved_applicability_dimensions(
+    run_id: str, identity: tuple[str, str, "str | None"]
+) -> list[str]:
+    """Trusted, backend-only accessor -- returns the applicability dimension names the
+    server-side evaluation could not resolve (per-dimension UNKNOWN) for this evidence identity.
+    """
+    with _lock:
+        state = _run_states.get(run_id)
+        if state is None:
+            return []
+        return list(state.unresolved_dimensions_by_identity.get(identity, []))
+
+
 def has_explicit_empty_knowledge_selection(run_id: str) -> bool:
     """Trusted, backend-only accessor -- returns True if `knowledge_select_evidence`
     was explicitly called with an empty list (`selections=[]`), indicating negative
@@ -199,6 +308,35 @@ def has_explicit_empty_knowledge_selection(run_id: str) -> bool:
     with _lock:
         state = _run_states.get(run_id)
         return state.explicit_empty_selection if state is not None else False
+
+
+def has_knowledge_run_state(run_id: str) -> bool:
+    """Trusted, backend-only accessor -- True once any `knowledge_search` initialized this
+    run's evidence state (i.e. governed knowledge was actually searched in this run).
+    """
+    with _lock:
+        return run_id in _run_states
+
+
+def note_search_outcome(run_id: str, query_text: str, status: str, result_count: int = 0, error: Optional[str] = None) -> None:
+    """Trusted, backend-only: record one governed search of this run (success or failure) so the
+    server can tell a completed discovery from a failed one. Bounded."""
+    with _lock:
+        state = _run_states.get(run_id)
+        if state is None:
+            return
+        entry = {"query_text": query_text[:300], "status": status, "result_count": result_count}
+        if error:
+            entry["error"] = error
+        state.search_log = [*state.search_log[-19:], entry]
+
+
+def run_search_log(run_id: Optional[str]) -> list[dict[str, Any]]:
+    if not run_id:
+        return []
+    with _lock:
+        state = _run_states.get(run_id)
+        return [dict(e) for e in state.search_log] if state is not None else []
 
 
 def discard_knowledge_run_evidence_state(run_id: str) -> None:
@@ -237,4 +375,16 @@ def get_knowledge_tool_service() -> KnowledgeToolService:
     easier.
     """
     repository = get_knowledge_repository()
-    return KnowledgeToolService(KnowledgeRetrievalService(repository), KnowledgeProvenanceService(repository))
+    settings = get_settings()
+    dense_provider = None
+    if settings.knowledge_retrieval_mode == "hybrid" and settings.vertex_ai_enabled:
+        from backend.tools.knowledge.dense_similarity import VertexEmbeddingSimilarityProvider
+
+        dense_provider = VertexEmbeddingSimilarityProvider(model_name=settings.knowledge_embedding_model)
+    retrieval_service = KnowledgeRetrievalService(
+        repository,
+        dense_provider=dense_provider,
+        dense_min_similarity=settings.knowledge_dense_min_similarity,
+        dense_timeout_seconds=settings.knowledge_dense_timeout_seconds,
+    )
+    return KnowledgeToolService(retrieval_service, KnowledgeProvenanceService(repository))

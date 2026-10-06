@@ -91,6 +91,11 @@ from backend.agents.team_manager.direct_read_fast_path import _fast_path_inciden
 from backend.agents.team_manager.case_tools import record_case_analysis
 from backend.agents.team_manager.conversation_target import record_conversation_target
 from backend.agents.team_manager.multimodal_agent_tool import MultimodalAgentTool
+from backend.agents.team_manager.operational_routing import (
+    enforce_operational_route,
+    guard_forced_specialist_call,
+    restrict_forced_route_response,
+)
 from backend.agents.team_manager.read_continuation_enforcement import enforce_read_continuation
 from backend.agents.team_manager.source_requirements import record_source_requirements
 from backend.agents.team_manager.selection_delegation_guard import (
@@ -196,7 +201,9 @@ team_manager = Agent(
     # needed` structurally forbids a second `incident_manager` delegation
     # in the same turn once an earlier one already returned "selection_
     # needed" (see selection_delegation_guard.py's own module docstring).
-    before_tool_callback=[enforce_read_continuation, block_repeated_delegation_after_selection_needed],
+    # `guard_forced_specialist_call` (operational_routing.py): on a server-forced operational route
+    # exactly one governed specialist evaluation runs per turn (parallel duplicate calls suppressed).
+    before_tool_callback=[guard_forced_specialist_call, enforce_read_continuation, block_repeated_delegation_after_selection_needed],
     after_tool_callback=[sync_incident_manager_result_to_state, record_selection_needed],
     # Latency-diagnosis pass: correlated model-call timing (see perf_
     # timing.py's own module docstring, "MODEL-CALL INSTRUMENTATION") --
@@ -206,8 +213,15 @@ team_manager = Agent(
     # model output.
     # Also projects authoritative final answers into llm_request.contents
     # so subsequent model turns receive remediated responses (Gap 1).
-    before_model_callback=[before_model_call("team_manager"), project_authoritative_answers_to_contents],
-    after_model_callback=after_model_call("team_manager"),
+    # Server-owned operational continuation routing (operational_routing.py): on a turn the server
+    # routed through the governed operational pipeline, function calling is restricted to the
+    # Technical Authority Engineer until it ran, then disabled -- a request-level constraint, not a
+    # prompt instruction. Any other turn is untouched.
+    before_model_callback=[before_model_call("team_manager"), project_authoritative_answers_to_contents, enforce_operational_route],
+    # `restrict_forced_route_response` (operational_routing.py): on a server-forced operational route the
+    # executed model response carries exactly one governed-specialist call (no parallel duplicates, no
+    # non-existent tools) before it ran, and no function call after it ran.
+    after_model_callback=[after_model_call("team_manager"), restrict_forced_route_response],
 )
 
 presentation_team_manager = team_manager.model_copy(

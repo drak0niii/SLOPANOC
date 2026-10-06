@@ -160,6 +160,13 @@ export function parseSSEEvent(rawData: string, onWarn: (message: string) => void
           const valid = (data.knowledge_sources as unknown[]).filter((entry): boolean => {
             if (typeof entry !== "object" || entry === null) return false;
             const ref = entry as Record<string, unknown>;
+            // Optional presentation metadata: a malformed value is dropped, never trusted.
+            if (ref.applicability_outcome !== undefined && ref.applicability_outcome !== null && !isString(ref.applicability_outcome)) {
+              delete ref.applicability_outcome;
+            }
+            if (ref.support_role !== undefined && ref.support_role !== null && !isString(ref.support_role)) {
+              delete ref.support_role;
+            }
             return (
               ref.source_type === "knowledge" &&
               isString(ref.source_id) &&

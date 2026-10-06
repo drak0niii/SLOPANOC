@@ -6,9 +6,11 @@ reference-flow rationale.
 """
 from __future__ import annotations
 
+import asyncio
+import math
 from typing import Optional
 
-from backend.knowledge.domain.applicability import ApplicabilityOutcome, evaluate_applicability
+from backend.knowledge.domain.applicability import ApplicabilityEvaluation, ApplicabilityOutcome, evaluate_applicability
 from backend.knowledge.domain.models import KnowledgeObject, KnowledgeSection
 from backend.knowledge.governance.contracts import CurrentVersionResolutionStatus, InvalidVersionFamilyError
 from backend.knowledge.governance.versioning import resolve_current_version
@@ -17,10 +19,27 @@ from backend.knowledge.retrieval.contracts import (
     KnowledgeRetrievalDiagnostic,
     KnowledgeRetrievalDiagnosticReason,
     KnowledgeRetrievalItem,
+    KnowledgeRetrievalMode,
     KnowledgeRetrievalQuery,
+    KnowledgeRetrievalRankingDiagnostic,
     KnowledgeRetrievalResult,
 )
-from backend.knowledge.retrieval.scoring import KnowledgeRelevanceScorer, TokenOverlapRelevanceScorer
+from backend.knowledge.retrieval.reranking import RRF_K_CONSTANT, compute_reciprocal_rank_fusion
+from backend.knowledge.retrieval.scoring import (
+    DenseSimilarityProvider,
+    KnowledgeRelevanceScorer,
+    TokenOverlapRelevanceScorer,
+)
+
+DEFAULT_DENSE_MIN_SIMILARITY = 0.65
+"""Generic semantic floor (raw cosine): a section with NO lexical overlap enters the
+candidate set only when its dense similarity reaches this value. Not query-, vendor-
+or document-tuned; configurable at composition time."""
+
+DEFAULT_DENSE_TIMEOUT_SECONDS = 10.0
+
+_RRF_MAX_SCORE = 2.0 / (RRF_K_CONSTANT + 1)
+"""Best possible fused score (rank 1 in both signals); used to normalize RRF to [0, 1]."""
 
 _APPLICABILITY_CERTAINTY_RANK: dict[ApplicabilityOutcome, int] = {
     ApplicabilityOutcome.MATCH: 0,
@@ -106,23 +125,78 @@ def _item_sort_key(item: KnowledgeRetrievalItem) -> tuple:
     )
 
 
+def _identity_sort_key(entry: tuple[KnowledgeObject, KnowledgeSection, ApplicabilityEvaluation]) -> tuple:
+    obj, section, _ = entry
+    return (obj.knowledge_id, obj.version.label, section.sequence, section.section_id)
+
+
+def _ranks(scores: list[Optional[float]], order_keys: list[tuple]) -> list[Optional[int]]:
+    """1-based rank per index among entries with a non-None score (higher first,
+    deterministic identity tie-break); None for unranked entries."""
+    ranked = sorted((i for i, sc in enumerate(scores) if sc is not None), key=lambda i: (-scores[i], order_keys[i]))
+    out: list[Optional[int]] = [None] * len(scores)
+    for position, index in enumerate(ranked, start=1):
+        out[index] = position
+    return out
+
+
 class KnowledgeRetrievalService:
     """Depends only on `KnowledgeRepository` (never
     `SQLiteKnowledgeRepository` or any storage detail) and a
     `KnowledgeRelevanceScorer`. Read-only: never calls
     `repository.add`/`replace`, never mutates a `KnowledgeObject`, never
     persists retrieval state.
+
+    HYBRID RELEVANCE (optional `dense_provider`): governance runs FIRST and is
+    unchanged -- only sections of the resolved current version of a family that
+    is not NOT_APPLICABLE are ever scored. Relevance is then computed twice
+    (lexical `scorer`, semantic `dense_provider`), fused by reciprocal rank
+    fusion, and ranked by the same deterministic `_item_sort_key`. Hybrid changes
+    discovery/ranking ONLY: applicability outcomes, lifecycle status and version
+    are copied from governance exactly as in lexical mode. If the dense stage
+    fails or times out, this query falls back to lexical relevance (reported in
+    `dense_status`); a synthetic/substitute similarity is never used.
     """
 
-    def __init__(self, repository: KnowledgeRepository, scorer: Optional[KnowledgeRelevanceScorer] = None) -> None:
+    def __init__(
+        self,
+        repository: KnowledgeRepository,
+        scorer: Optional[KnowledgeRelevanceScorer] = None,
+        dense_provider: Optional[DenseSimilarityProvider] = None,
+        dense_min_similarity: float = DEFAULT_DENSE_MIN_SIMILARITY,
+        dense_timeout_seconds: float = DEFAULT_DENSE_TIMEOUT_SECONDS,
+    ) -> None:
         self._repository = repository
         self._scorer: KnowledgeRelevanceScorer = scorer if scorer is not None else TokenOverlapRelevanceScorer()
+        self._dense_provider = dense_provider
+        self._dense_min_similarity = dense_min_similarity
+        self._dense_timeout_seconds = dense_timeout_seconds
+
+    async def _dense_similarities(
+        self, query_text: str, eligible: list[tuple[KnowledgeObject, KnowledgeSection, ApplicabilityEvaluation]]
+    ) -> tuple[Optional[list[float]], str]:
+        if self._dense_provider is None:
+            return None, "not_configured"
+        if not eligible:
+            return None, "no_eligible_sections"
+        try:
+            values = await asyncio.wait_for(
+                self._dense_provider.similarities(query_text, [(obj, sec) for obj, sec, _ in eligible]),
+                timeout=self._dense_timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            return None, "unavailable:timeout"
+        except Exception as exc:  # never propagate: lexical relevance remains available
+            return None, f"unavailable:{type(exc).__name__}"
+        if len(values) != len(eligible) or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in values):
+            return None, "unavailable:invalid_response"
+        return [max(-1.0, min(1.0, float(v))) for v in values], "ok"
 
     async def retrieve(self, query: KnowledgeRetrievalQuery) -> KnowledgeRetrievalResult:
         corpus = await self._repository.list_all()
         families = _group_by_knowledge_id(corpus)
 
-        items: list[KnowledgeRetrievalItem] = []
+        eligible: list[tuple[KnowledgeObject, KnowledgeSection, ApplicabilityEvaluation]] = []
         diagnostics: list[KnowledgeRetrievalDiagnostic] = []
 
         # Sorted purely for deterministic diagnostic ORDER -- the final
@@ -164,26 +238,86 @@ class KnowledgeRetrievalService:
                 continue
 
             for section in current.sections:
-                relevance = self._scorer.score(query.query_text, current, section)
-                if relevance <= 0.0:
-                    continue
-                items.append(
-                    KnowledgeRetrievalItem(
-                        knowledge_id=current.knowledge_id,
-                        document_type=current.document_type,
-                        title=current.title,
-                        version_label=current.version.label,
-                        lifecycle_status=current.lifecycle_status,
-                        section=section,
-                        source=current.source,
-                        applicability_outcome=applicability_evaluation.outcome,
-                        relevance_score=relevance,
-                        is_derived=_resolve_is_derived(current, section),
-                    )
-                )
+                eligible.append((current, section, applicability_evaluation))
+
+        order_keys = [_identity_sort_key(entry) for entry in eligible]
+        sparse = [self._scorer.score(query.query_text, obj, sec) for obj, sec, _ in eligible]
+        dense, dense_status = await self._dense_similarities(query.query_text, eligible)
+
+        sparse_for_rank: list[Optional[float]] = [sc if sc > 0.0 else None for sc in sparse]
+        if dense is None:
+            mode = KnowledgeRetrievalMode.LEXICAL
+            dense_for_rank: list[Optional[float]] = [None] * len(eligible)
+        else:
+            mode = KnowledgeRetrievalMode.HYBRID
+            dense_for_rank = [sim if sim >= self._dense_min_similarity else None for sim in dense]
+        sparse_ranks = _ranks(sparse_for_rank, order_keys)
+        dense_ranks = _ranks(dense_for_rank, order_keys)
+
+        candidates = [i for i in range(len(eligible)) if sparse_for_rank[i] is not None or dense_for_rank[i] is not None]
+        base_items: dict[tuple[str, str, str], KnowledgeRetrievalItem] = {}
+        index_by_identity: dict[tuple[str, str, str], int] = {}
+        for i in candidates:
+            obj, section, evaluation = eligible[i]
+            item = KnowledgeRetrievalItem(
+                knowledge_id=obj.knowledge_id,
+                document_type=obj.document_type,
+                title=obj.title,
+                version_label=obj.version.label,
+                lifecycle_status=obj.lifecycle_status,
+                section=section,
+                source=obj.source,
+                applicability_outcome=evaluation.outcome,
+                unresolved_applicability_dimensions=[
+                    result.dimension
+                    for result in evaluation.dimension_results
+                    if result.outcome is ApplicabilityOutcome.UNKNOWN
+                ],
+                relevance_score=sparse[i],
+                is_derived=_resolve_is_derived(obj, section),
+            )
+            identity = (item.knowledge_id, item.version_label, section.section_id)
+            base_items[identity] = item
+            index_by_identity[identity] = i
+
+        if mode is KnowledgeRetrievalMode.LEXICAL:
+            items = list(base_items.values())
+        else:
+            def _ranked(ranks: list[Optional[int]]) -> list[KnowledgeRetrievalItem]:
+                keyed = [(ranks[index_by_identity[k]], k) for k in base_items if ranks[index_by_identity[k]] is not None]
+                return [base_items[k] for _, k in sorted(keyed)]
+
+            fused = compute_reciprocal_rank_fusion(_ranked(sparse_ranks), _ranked(dense_ranks))
+            items = [
+                item.model_copy(update={"relevance_score": min(1.0, item.relevance_score / _RRF_MAX_SCORE)})
+                for item in fused
+            ]
 
         # Limit is applied ONLY here, after full eligibility + scoring +
         # ranking (instruction section 31/32) -- never earlier, and
         # never as a substitute for "send everything to the model".
-        ranked = sorted(items, key=_item_sort_key)
-        return KnowledgeRetrievalResult(items=ranked[: query.limit], excluded_families=diagnostics)
+        ranked = sorted(items, key=_item_sort_key)[: query.limit]
+        ranking = []
+        for item in ranked:
+            i = index_by_identity[(item.knowledge_id, item.version_label, item.section.section_id)]
+            ranking.append(
+                KnowledgeRetrievalRankingDiagnostic(
+                    knowledge_id=item.knowledge_id,
+                    version_label=item.version_label,
+                    section_id=item.section.section_id,
+                    sparse_score=round(sparse[i], 6),
+                    sparse_rank=sparse_ranks[i],
+                    dense_similarity=None if dense is None else round(dense[i], 6),
+                    dense_rank=dense_ranks[i],
+                    fused_score=round(item.relevance_score, 6),
+                )
+            )
+        return KnowledgeRetrievalResult(
+            items=ranked,
+            excluded_families=diagnostics,
+            mode=mode,
+            dense_status=dense_status,
+            eligible_section_count=len(eligible),
+            candidate_count=len(candidates),
+            ranking=ranking,
+        )

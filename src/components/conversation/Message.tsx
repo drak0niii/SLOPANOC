@@ -16,7 +16,7 @@ import { ScrollingText } from "../ui/ScrollingText";
 import { SOURCE_KIND_BY_ID } from "../../data/workspaceSources";
 import { SourceCitation } from "./SourceCitation";
 import { SourceChip } from "./SourceChip";
-import { groupKnowledgeSourceReferences } from "../../lib/sourceReference";
+import { groupKnowledgeSourceReferences, supportingKnowledgeSources } from "../../lib/sourceReference";
 import { ActionProposalCard } from "./ActionProposalCard";
 import { ConnectorUnavailableCard } from "./ConnectorUnavailableCard";
 import { ConnectorSuggestionsCard } from "./ConnectorSuggestionsCard";
@@ -688,7 +688,7 @@ export function Message({ message }: { message: MessageType }) {
             message.status === "complete" &&
             isBackendMessage &&
             (activeChat?.sources?.[message.id] ||
-              (activeChat?.knowledgeSources?.[message.id]?.length ?? 0) > 0) && (
+              supportingKnowledgeSources(activeChat?.knowledgeSources?.[message.id]).length > 0) && (
               // SOURCE CHIP ALIGNMENT CORRECTION: a clean, left-aligned
               // vertical stack — never a wrapping horizontal chip row. A
               // long knowledge-group label (e.g. "Source · Rogers
@@ -708,7 +708,7 @@ export function Message({ message }: { message: MessageType }) {
                     sessionId={activeChat?.backendSessionId ?? ""}
                   />
                 )}
-                {groupKnowledgeSourceReferences(activeChat?.knowledgeSources?.[message.id]).map((group) => (
+                {groupKnowledgeSourceReferences(supportingKnowledgeSources(activeChat?.knowledgeSources?.[message.id])).map((group) => (
                   <SourceChip key={group.groupKey} kind="knowledge-group" group={group} />
                 ))}
               </div>

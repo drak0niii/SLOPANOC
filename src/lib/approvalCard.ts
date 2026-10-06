@@ -3,7 +3,17 @@ import type { PendingActionDTO } from "../api/types";
 import type { ApprovalCardState } from "../types";
 
 export interface ApprovalCardView {
-  kind: "pending" | "approving" | "executing" | "completed" | "rejecting" | "rejected" | "expired" | "unconfirmed" | "failed";
+  kind:
+    | "pending"
+    | "approving"
+    | "executing"
+    | "completed"
+    | "rejecting"
+    | "rejected"
+    | "expired"
+    | "unconfirmed"
+    | "failed"
+    | "ready";
   message?: string;
   executedAction?: { chatId: string | null; title: string | null; webUrl: string | null } | null;
 }
@@ -49,6 +59,22 @@ export function deriveApprovalCardView(
         return { kind: "unconfirmed", message: card.message };
       case "failed":
         return { kind: "failed", message: card.message };
+    }
+  }
+
+  // Tranche 3 operational cards: approval ends at "ready for execution" —
+  // nothing is executed, so "approved" is a definite, non-ambiguous state
+  // here (unlike a Teams write whose execution outcome may be unknown).
+  const operational = pendingAction.operational;
+  if (operational) {
+    if (operational.control_stage === "invalidated") {
+      return {
+        kind: "failed",
+        message: `This action is no longer valid${operational.invalidation_reason ? ` (${operational.invalidation_reason})` : ""}.`,
+      };
+    }
+    if (pendingAction.status === "approved" && operational.control_stage === "ready_for_execution") {
+      return { kind: "ready" };
     }
   }
 

@@ -34,6 +34,34 @@ export interface PendingActionDTO {
    * time. Not populated for teams.createChat, which uses `title`
    * instead. */
   target_display_name: string | null;
+  /** Tranche 3 — server-built details for an operational (troubleshooting)
+   * target-confirmation / approval card. Absent for Teams proposals. */
+  operational?: OperationalActionDTO | null;
+}
+
+/** Deterministic operational action card details (backend OperationalActionDTO).
+ * Presentation only: the backend re-validates everything on approve/reject. */
+export interface OperationalActionDTO {
+  kind: "target_confirmation" | "approval";
+  control_id: string;
+  what: string;
+  command: string;
+  operation_type: string;
+  risk: "read_only" | "state_changing";
+  target_type: string;
+  target: string;
+  reason: string | null;
+  source_title: string | null;
+  source_section: string | null;
+  source_id: string;
+  source_version: string;
+  restrictions: string[];
+  control_stage: string;
+  approval_status: string | null;
+  confirmed_by: string | null;
+  approved_by: string | null;
+  invalidation_reason: string | null;
+  execution_note: string;
 }
 
 export interface ActiveCaseDTO {
@@ -146,6 +174,16 @@ export interface KnowledgeSourceReferenceDTO {
   section_heading: string | null;
   source_locator: string | null;
   content: string;
+  /** Server-evaluated applicability for the current operational context
+   * ("match", "partial_match", "unknown", ...). Anything other than
+   * "match" is presented as a CANDIDATE source pending applicability
+   * confirmation, never as authoritative. Absent/null on older answers. */
+  applicability_outcome?: string | null;
+  /** "supporting" = materially grounds what was presented (shown as a
+   * Source); "consulted" = selected but not relied on (audit only, never
+   * shown as an authoritative Source). Absent/null on older answers =
+   * supporting. */
+  support_role?: string | null;
 }
 
 export interface MessageCompletedEvent extends SSEEventBase {

@@ -105,6 +105,32 @@ class AssistantMessage(BaseModel):
     content: str
 
 
+class OperationalActionDTO(BaseModel):
+    """Deterministic, server-built approval-card details for an operational action (Tranche 3).
+    Built only from the control plane's trusted action context -- never from model text."""
+
+    kind: Literal["target_confirmation", "approval"]
+    control_id: str
+    what: str
+    command: str
+    operation_type: str
+    risk: Literal["read_only", "state_changing"]
+    target_type: str
+    target: str
+    reason: Optional[str] = None
+    source_title: Optional[str] = None
+    source_section: Optional[str] = None
+    source_id: str
+    source_version: str
+    restrictions: list[str] = Field(default_factory=list)
+    control_stage: str
+    approval_status: Optional[str] = None
+    confirmed_by: Optional[str] = None
+    approved_by: Optional[str] = None
+    invalidation_reason: Optional[str] = None
+    execution_note: str = "SLOPANOC never executes state-changing actions; approval ends at 'ready for execution'."
+
+
 class PendingActionDTO(BaseModel):
     """Safe, frontend-facing view of the session's active `ActionProposal`
     (if any). Deliberately excludes `payload_hash`, any Power Automate
@@ -138,6 +164,7 @@ class PendingActionDTO(BaseModel):
             "instead; this field is not populated for that operation."
         ),
     )
+    operational: Optional[OperationalActionDTO] = None
 
 
 class ActiveCaseDTO(BaseModel):
@@ -308,6 +335,15 @@ class KnowledgeSourceReferenceDTO(BaseModel):
     section_heading: Optional[str] = None
     source_locator: Optional[str] = None
     content: str
+    applicability_outcome: Optional[str] = None
+    """Server-evaluated applicability of this selected evidence for the current operational
+    context ('match', 'partial_match', 'unknown', ...), recorded during retrieval; None when no
+    evaluation was recorded. Presentation only (the frontend shows anything other than 'match' as
+    a CANDIDATE source pending applicability confirmation) -- never authority."""
+    support_role: Optional[str] = None
+    """'supporting' (materially grounds the conclusion / recommendation / action presented) or
+    'consulted' (selected during the turn but not relied on by what was presented: audit only,
+    never shown as an authoritative Source). None on older answers = supporting."""
 
 
 class ChatResponse(BaseModel):
@@ -361,6 +397,26 @@ class ExecuteActionResponse(BaseModel):
     result: Literal["executed"] = "executed"
     pending_action: Optional[PendingActionDTO] = None
     executed_action: Optional[ExecutedActionDTO] = None
+
+
+class ReadExecutionDTO(BaseModel):
+    execution_id: str
+    status: str
+    adapter_type: Optional[str] = None
+    started_at: str
+    completed_at: str
+    exit_code: Optional[int] = None
+    observed_output: Optional[str] = None
+    detail: Optional[str] = None
+
+
+class ReadExecutionResponse(BaseModel):
+    """Response for POST /api/sessions/{id}/diagnostic-checks/{check_id}/execute (Tranche 3):
+    a controlled, read-only diagnostic execution. Observed output is evidence, not authority."""
+
+    session_id: str
+    check_id: str
+    execution: ReadExecutionDTO
 
 
 class HealthResponse(BaseModel):

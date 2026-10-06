@@ -473,6 +473,7 @@ def test_build_server_validated_evidence_and_commands() -> None:
             source_type="governed_knowledge",
             title="Approved MOP",
             content_snippet="Inspect connections using `check fiber`.",
+            metadata={"lifecycle_status": "approved", "applicability_outcome": "match"},
         )
     )
     caller_commands = [
@@ -494,8 +495,11 @@ def test_build_server_validated_evidence_and_commands() -> None:
 
 def test_technical_authority_engineer_invariants() -> None:
     assert technical_authority_engineer.name == "technical_authority_engineer"
-    # Shared Generic KM context service: read-only governed search & select
-    assert technical_authority_engineer.tools == [knowledge_search, knowledge_select_evidence]
+    # Shared Generic KM context service: read-only governed search & select, plus the read-only
+    # server-issued ProcedureAction catalog for SELECTED evidence (Tranche 2). No write/execute tool.
+    from backend.agents.technical_authority_engineer.procedure_actions import procedure_action_catalog
+
+    assert technical_authority_engineer.tools == [knowledge_search, knowledge_select_evidence, procedure_action_catalog]
     assert technical_authority_engineer.input_schema == TechnicalAuthorityRequest
     assert technical_authority_engineer.output_schema == TechnicalAuthorityResponse
     assert "Technical Authority Engineer" in TECHNICAL_AUTHORITY_ENGINEER_INSTRUCTION

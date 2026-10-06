@@ -96,6 +96,33 @@ export function formatKnowledgeSourceLabel(source: {
   return "Governed knowledge";
 }
 
+/** Applicability presentation: a governed source is authoritative for the
+ * current context only when the server evaluated its applicability as
+ * "match". Any other recorded outcome ("unknown", "partial_match", ...)
+ * is a CANDIDATE source pending applicability confirmation. An absent
+ * outcome (older answers, or no evaluation recorded) keeps the existing
+ * presentation. Presentation only — never authority. */
+export function isPendingApplicability(source: { applicability_outcome?: string | null }): boolean {
+  const outcome = source.applicability_outcome;
+  return typeof outcome === "string" && outcome.trim() !== "" && outcome !== "match";
+}
+
+/** Only evidence that materially grounds what was presented is shown as a
+ * Source. Evidence the backend marks "consulted" (selected during the turn
+ * but not relied on) stays in the persisted audit record and is never
+ * rendered as an authoritative Source chip. Older references (no role)
+ * remain supporting. */
+export function supportingKnowledgeSources(
+  references: KnowledgeSourceReferenceDTO[] | undefined,
+): KnowledgeSourceReferenceDTO[] {
+  return (references ?? []).filter((reference) => reference.support_role !== "consulted");
+}
+
+/** Chip prefix: "Candidate source" while applicability is not confirmed. */
+export function knowledgeSourcePrefix(pendingApplicability: boolean): string {
+  return pendingApplicability ? "Candidate source" : "Source";
+}
+
 /** POST-A5 refinement (Track B, final corrective pass) — one consolidated
  * presentation group per DISTINCT governed source+version, built entirely
  * by aggregating already-trusted `KnowledgeSourceReferenceDTO` entries
@@ -132,6 +159,8 @@ export interface KnowledgeSourceGroup {
   sourceSystem: string;
   evidenceSourceId: string;
   sourceDisplayName: string | null;
+  /** True when ANY section's applicability has not reached MATCH. */
+  pendingApplicability: boolean;
   /** Every distinct selected section belonging to this source+version,
    * deduplicated by `section_id` ONLY (never heading/content), first-seen
    * order preserved — two sections sharing an identical heading still both
@@ -172,6 +201,7 @@ export function groupKnowledgeSourceReferences(
         sourceSystem: reference.source_system,
         evidenceSourceId: reference.evidence_source_id,
         sourceDisplayName: reference.source_display_name,
+        pendingApplicability: false,
         sections: [],
       };
       groupByKey.set(groupKey, group);
@@ -180,6 +210,7 @@ export function groupKnowledgeSourceReferences(
     if (!group.sections.some((existing) => existing.section_id === reference.section_id)) {
       group.sections.push(reference);
     }
+    if (isPendingApplicability(reference)) group.pendingApplicability = true;
   }
 
   return groups;

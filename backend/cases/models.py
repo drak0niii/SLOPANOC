@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Text
+from sqlalchemy import JSON, CheckConstraint, DateTime, Float, ForeignKey, Integer, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -90,3 +90,25 @@ class CaseContextItemRecord(Base):
     # to the current user) before this row is ever written; see
     # service.py's `record_case_analysis` (instruction section 17).
     supporting_item_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+
+
+class CaseTroubleshootingProgressionRecord(Base):
+    """The AUTHORITATIVE troubleshooting progression of one Case: fault threads, steps, observations
+    (validated results and rejected candidates), hypotheses, remediation records, phase, resolution
+    and audit events, as one versioned aggregate document (`TroubleshootingProgression`).
+
+    `version` is the optimistic-concurrency token: every save is a compare-and-swap
+    `UPDATE ... WHERE version = <read version>`; a stale writer fails instead of overwriting. Session
+    state only ever holds read projections of this record.
+    """
+
+    __tablename__ = "slopanoc_case_troubleshooting_progressions"
+    __table_args__ = (CheckConstraint("version >= 1", name="ck_slopanoc_case_troubleshooting_progressions_version_positive"),)
+
+    case_id: Mapped[str] = mapped_column(ForeignKey("slopanoc_cases.case_id"), primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    schema_version: Mapped[str] = mapped_column(Text, nullable=False)
+    progression: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_by_session_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

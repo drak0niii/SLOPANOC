@@ -152,3 +152,19 @@ describe("SourceChip — knowledge-group (POST-A5 refinement, Track B)", () => {
     expect(drawerText.toLowerCase()).not.toContain("source_uri");
   });
 });
+
+describe("SourceChip — knowledge-group applicability presentation", () => {
+  it("shows a group as a candidate source while any section's applicability is not MATCH", () => {
+    const [group] = groupKnowledgeSourceReferences([makeKnowledgeSource({ applicability_outcome: "unknown" })]);
+    render(<SourceChip kind="knowledge-group" group={group} />);
+    fireEvent.click(screen.getByRole("button", { name: /Candidate source · Aurora Relay Verification Procedure · v1/ }));
+    expect(screen.getByRole("note")).toHaveTextContent(/pending applicability confirmation/);
+  });
+
+  it("keeps the Source presentation for a matched group", () => {
+    const [group] = groupKnowledgeSourceReferences([makeKnowledgeSource({ applicability_outcome: "match" })]);
+    render(<SourceChip kind="knowledge-group" group={group} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Source · Aurora Relay Verification Procedure · v1/ }));
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+});

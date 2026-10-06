@@ -17,7 +17,17 @@ export interface ActionOperationPresentation {
 const ACTION_OPERATION_PRESENTATION: Record<string, ActionOperationPresentation> = {
   "teams.createChat": { primaryButtonLabel: "Create" },
   "teams.sendMessage": { primaryButtonLabel: "Send" },
+  // Tranche 3 operational cards: confirming a target and approving a
+  // state-changing action. Neither ever executes anything.
+  "operational.confirmTarget": { primaryButtonLabel: "Confirm target" },
+  "operational.procedureAction": { primaryButtonLabel: "Approve" },
 };
+
+/** True for the Tranche 3 operational (troubleshooting) proposals — these are
+ * approve-only: the frontend never calls /execute for them. */
+export function isOperationalOperation(operation: string): boolean {
+  return operation.startsWith("operational.");
+}
 
 const FALLBACK_PRESENTATION: ActionOperationPresentation = { primaryButtonLabel: "Approve" };
 

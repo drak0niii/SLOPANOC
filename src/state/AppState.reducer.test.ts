@@ -2519,3 +2519,39 @@ describe("reducer — RUN_STOPPED (pre-4H refinement Stop control)", () => {
     expect(state.chats[CHAT_ID].runTraces?.[secondAssistantId]).toEqual({ steps: [], expanded: false });
   });
 });
+
+describe("reducer — OPERATIONAL_APPROVAL_SUCCEEDED (Tranche 3)", () => {
+  it("confirming a target replaces the card on the same message with the server-issued approval card", () => {
+    let state = seedChatWithPendingAction({ operation: "operational.confirmTarget" });
+    state = reducer(state, { type: "APPROVAL_APPROVE_STARTED", payload: { chatId: CHAT_ID, proposalId: PROPOSAL_ID } });
+    const approvalCard = pendingAction({ proposal_id: "p2", operation: "operational.procedureAction" });
+    const next = reducer(state, {
+      type: "OPERATIONAL_APPROVAL_SUCCEEDED",
+      payload: { chatId: CHAT_ID, proposalId: PROPOSAL_ID, pendingAction: approvalCard },
+    });
+    expect(next.chats[CHAT_ID].pendingAction).toEqual(approvalCard);
+    expect(record(next, ASSISTANT_MSG_ID)?.proposalId).toBe("p2");
+    expect(record(next, ASSISTANT_MSG_ID)?.approvalCard).toBeUndefined();
+  });
+
+  it("approving the same operational proposal clears the in-flight phase (never 'executing')", () => {
+    let state = seedChatWithPendingAction({ operation: "operational.procedureAction" });
+    state = reducer(state, { type: "APPROVAL_APPROVE_STARTED", payload: { chatId: CHAT_ID, proposalId: PROPOSAL_ID } });
+    const approved = pendingAction({ proposal_id: PROPOSAL_ID, operation: "operational.procedureAction", status: "approved" });
+    const next = reducer(state, {
+      type: "OPERATIONAL_APPROVAL_SUCCEEDED",
+      payload: { chatId: CHAT_ID, proposalId: PROPOSAL_ID, pendingAction: approved },
+    });
+    expect(record(next, ASSISTANT_MSG_ID)?.pendingAction).toEqual(approved);
+    expect(record(next, ASSISTANT_MSG_ID)?.approvalCard).toBeUndefined();
+  });
+
+  it("a stale operational response is a no-op", () => {
+    const state = seedChatWithPendingAction({ operation: "operational.procedureAction" });
+    const next = reducer(state, {
+      type: "OPERATIONAL_APPROVAL_SUCCEEDED",
+      payload: { chatId: CHAT_ID, proposalId: "other", pendingAction: pendingAction({ proposal_id: "p9" }) },
+    });
+    expect(next).toBe(state);
+  });
+});

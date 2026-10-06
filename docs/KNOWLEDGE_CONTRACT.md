@@ -2205,3 +2205,59 @@ Phase 6/7 target architecture for the Skill definition and how it is
 expected to consume Knowledge Context (this document), Experience
 Memory, Case Context, and Operational Context without owning or
 duplicating any of them.
+
+## 23. Hybrid relevance and retrieval observability (troubleshooting tranche 1)
+
+`KnowledgeRetrievalService` accepts an optional `DenseSimilarityProvider`
+(async Protocol in `retrieval/scoring.py`; the concrete Vertex AI
+`text-embedding-005` provider lives outside the KM packages in
+`backend/tools/knowledge/dense_similarity.py`). Runtime composition
+(`backend/tools/knowledge/runtime.py`) enables it when
+`SLOPANOC_KNOWLEDGE_RETRIEVAL_MODE=hybrid` (default) and
+`GOOGLE_GENAI_USE_VERTEXAI` is true; otherwise retrieval is lexical exactly as in §16.
+
+Order is unchanged for governance: current-version resolution and
+applicability evaluation run first; NOT_APPLICABLE families are never
+scored. Eligible sections are then scored lexically (`TokenOverlapRelevanceScorer`)
+and semantically (raw cosine); a section is a candidate if it has lexical
+overlap or its similarity reaches `SLOPANOC_KNOWLEDGE_DENSE_MIN_SIMILARITY`
+(default 0.65). The two rankings are fused with reciprocal rank fusion
+(`reranking.compute_reciprocal_rank_fusion`), normalized to `[0, 1]`, and
+ranked by the unchanged `_item_sort_key`. RELEVANCE != AUTHORITY still holds:
+applicability outcomes, lifecycle and version are copied from governance,
+UNKNOWN/PARTIAL_MATCH are never upgraded, and selection/provenance/command
+authority are untouched. A dense failure or timeout falls back to lexical for
+that query and is reported (`dense_status`); no synthetic embedding is ever
+substituted.
+
+Each result carries observability-only ranking diagnostics (sparse/dense
+score and rank, fused score), delivered to the ADK adapter through
+`KnowledgeToolService.search(..., diagnostics_sink=...)` — never through
+`KnowledgeSearchExecutionResult` or the model payload. The adapter records a
+run-scoped diagnostic trace (`backend/tools/knowledge/diagnostic_trace.py`):
+every search (query, limit, as_of, applicability context, mode, ranked result
+identities, scores, applicability, lifecycle), every selection decision, and
+every command-authority decision. It is snapshotted and discarded at turn end,
+logged on `backend.knowledge.retrieval_trace` (WARNING when the turn failed
+closed), and persisted per turn in session state `turn_retrieval_diagnostics`
+(last 20 turns). It contains identities, titles/headings, scores and
+decisions only — never section content — and is never read as evidence.
+
+## 24. Knowledge evidence -> ProcedureAction (troubleshooting tranche 2)
+
+```text
+Knowledge evidence (SELECTED)  ->  ProcedureAction  ->  ResolvedCommandCandidate  ->  AuthorizedCommand
+```
+
+A ProcedureAction is a deterministic, derived view of one governed section
+(`knowledge_id` / `version_label` / `section_id` / `source_locator` + the exact
+command-formatted text). It is NOT governed knowledge, NOT a second source of
+operational truth and NOT authorization: it carries no lifecycle or
+applicability copy, is re-derived from the current run's SELECTED evidence on
+every use, and every command it yields must still pass the existing Command
+Authority. Its `action_id` hashes the source identity including the version,
+so a new version never reuses an old action. Materialization happens at the
+TAE evidence-validation boundary rather than at ingestion, so no schema
+change or backfill is required and stale derived copies cannot exist. See
+`docs/TROUBLESHOOTING_STRATEGY.md` §14.8 for the resolver and parameter-trust
+rules.

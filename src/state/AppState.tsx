@@ -62,6 +62,7 @@ import { runBackendChat } from "../api/runBackendChat";
 // mock ActionProposal system, `state.actionProposals`/`cancelAction`) and
 // would otherwise shadow this import.
 import { approveAction as approveActionApi, executeApprovedAction, rejectAction as rejectActionApi } from "../api/approval";
+import { isOperationalOperation } from "../lib/actionOperationLabels";
 import { chooseSelection as chooseSelectionApi, skipSelection as skipSelectionApi } from "../api/selections";
 import { classifyApprovalFailure } from "../lib/approvalCard";
 import { classifyAttachmentUploadFailure } from "../lib/attachmentError";
@@ -627,6 +628,10 @@ export type Action =
   | { type: "RUN_STOPPED"; payload: { chatId: string; runToken: string } }
   // --- Phase 4G: real approval card (approve -> execute lifecycle) ---
   | { type: "APPROVAL_APPROVE_STARTED"; payload: { chatId: string; proposalId: string } }
+  | {
+      type: "OPERATIONAL_APPROVAL_SUCCEEDED";
+      payload: { chatId: string; proposalId: string; pendingAction: PendingActionDTO | null };
+    }
   | {
       type: "APPROVAL_APPROVE_SUCCEEDED";
       payload: { chatId: string; proposalId: string; pendingAction: PendingActionDTO | null };
@@ -1431,6 +1436,28 @@ export function reducer(state: AppState, action: Action): AppState {
         }),
         (chat) => ({ ...chat, pendingAction: pendingAction ?? chat.pendingAction }),
       );
+    }
+
+    case "OPERATIONAL_APPROVAL_SUCCEEDED": {
+      // Tranche 3 operational cards are approve-only (never /execute). Confirming a
+      // target makes the backend issue the approval card for the SAME action, which
+      // replaces the confirmation card on the same owning message; approving ends at
+      // "ready for execution".
+      const { chatId, proposalId, pendingAction } = action.payload;
+      const chat = state.chats[chatId];
+      if (!chat || chat.pendingAction?.proposal_id !== proposalId || !pendingAction) return state;
+      if (pendingAction.proposal_id === proposalId) {
+        return withMatchingProposal(
+          state,
+          chatId,
+          proposalId,
+          (record) => ({ ...record, pendingAction, approvalCard: undefined }),
+          (c) => ({ ...c, pendingAction }),
+        );
+      }
+      const ownerId = chat.pendingActionMessageId;
+      if (!ownerId) return state;
+      return { ...state, chats: { ...state.chats, [chatId]: upsertActionCardForProposal(chat, ownerId, pendingAction) } };
     }
 
     case "APPROVAL_EXECUTE_SUCCEEDED": {
@@ -3549,6 +3576,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       dispatch({ type: "APPROVAL_APPROVE_STARTED", payload: { chatId, proposalId } });
       try {
         const approveResponse = await approveActionApi(sessionId, proposalId);
+        if (isOperationalOperation(chat.pendingAction?.operation ?? "")) {
+          // Never call /execute for operational actions: SLOPANOC does not execute
+          // state-changing actions (the backend refuses it as well).
+          dispatch({
+            type: "OPERATIONAL_APPROVAL_SUCCEEDED",
+            payload: { chatId, proposalId, pendingAction: approveResponse.pending_action },
+          });
+          return;
+        }
         dispatch({
           type: "APPROVAL_APPROVE_SUCCEEDED",
           payload: { chatId, proposalId, pendingAction: approveResponse.pending_action },

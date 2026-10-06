@@ -181,6 +181,7 @@ from backend.api import approval_service
 from backend.api import attachment_service as attachment_orchestration
 from backend.api import case_service as case_orchestration
 from backend.api import execution_service
+from backend.api import operational_execution_service
 from backend.api import selection_service
 from backend.api import source_images
 from backend.api.chat_service import ChatService, get_chat_service
@@ -189,6 +190,7 @@ from backend.api.identity import UserContext, resolve_user_context
 from backend.api import session_history_service
 from backend.api.streaming_events import format_sse
 from backend.api.schemas import (
+    ReadExecutionResponse,
     AddCaseContextItemRequest,
     AddCaseMemberRequest,
     ApprovalRequest,
@@ -519,6 +521,17 @@ def create_app() -> FastAPI:
         it; this is the only route that can.
         """
         return await execution_service.execute(session_service, session_id, body.proposal_id, user.user_id)
+
+    @app.post("/api/sessions/{session_id}/diagnostic-checks/{check_id}/execute", response_model=ReadExecutionResponse)
+    async def execute_diagnostic_read_endpoint(
+        session_id: str,
+        check_id: str,
+        user: UserContext = Depends(resolve_user_context),
+        session_service: ApiSessionService = Depends(get_session_service),
+    ) -> ReadExecutionResponse:
+        """Tranche 3: operator-requested controlled execution of one authorized DIAGNOSTIC READ
+        through an explicitly registered adapter. Never state-changing; never automatic."""
+        return await operational_execution_service.execute_read(session_service, session_id, check_id, user.user_id)
 
     # --- Interactive selection (interaction-capability extension) ---------
 

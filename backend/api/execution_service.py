@@ -68,7 +68,7 @@ from starlette.concurrency import run_in_threadpool
 from backend.api.pending_action import map_pending_action
 from backend.api.schemas import ExecuteActionResponse, ExecutedActionDTO
 from backend.api.session_service import DEFAULT_USER_ID, ApiSessionService
-from backend.approval.schemas import ApprovalDenialReason, ProposalStatus, WriteOperation
+from backend.approval.schemas import ApprovalDenialReason, OperationalOperation, ProposalStatus, WriteOperation
 from backend.approval.service import PENDING_ACTION_PROPOSAL_STATE_KEY, effective_status, load_active_proposal
 from backend.gateway.safe_error import ErrorCode, SafeError, SafeErrorException, internal_error
 from backend.tools.teams.execute_write import teams_create_chat, teams_send_message
@@ -121,6 +121,16 @@ async def execute(
             raise _denial_exception(ApprovalDenialReason.NO_PENDING_PROPOSAL)
         if proposal.proposal_id != proposal_id:
             raise _denial_exception(ApprovalDenialReason.PROPOSAL_ID_MISMATCH)
+        if isinstance(proposal.operation, OperationalOperation):
+            # Tranche 3: operational actions end at READY_FOR_EXECUTION. There is no state-changing
+            # execution adapter and this route never invokes one.
+            raise SafeErrorException(
+                SafeError(
+                    error_code="action_failure",
+                    user_message="State-changing operational actions are approved for execution only; SLOPANOC does not execute them.",
+                    reason="state_change_execution_not_enabled",
+                )
+            )
 
         status = effective_status(proposal)
         if status == ProposalStatus.CONSUMED:

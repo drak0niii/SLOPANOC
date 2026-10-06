@@ -20,10 +20,12 @@ from backend.gateway.safe_error import internal_error, validation_error
 from backend.knowledge.provenance.contracts import KnowledgeEvidenceSelectionError, KnowledgeEvidenceSelectionKey
 from backend.knowledge.repository.contracts import KnowledgeRepositoryCorruptionError
 from backend.knowledge.tools.contracts import KnowledgeSearchToolRequest
+from backend.tools.knowledge import diagnostic_trace
 from backend.tools.knowledge.runtime import (
     KnowledgeRuntimeError,
     get_knowledge_tool_service,
     get_or_init_run_state,
+    note_search_outcome,
     record_search_result,
     select_evidence,
 )
@@ -52,6 +54,23 @@ binds a fresh, unique `run_id` before the Runner starts, so this constant
 is never reached in that path and cross-run leakage between two real
 turns remains structurally impossible either way.
 """
+
+
+def _trace_safely(fn: Any, **kwargs: Any) -> None:
+    """Diagnostic tracing must never change a tool's outcome."""
+    try:
+        fn(**kwargs)
+    except Exception:  # pragma: no cover - defensive
+        _perf_logger.warning("knowledge diagnostic trace recording failed: %s", fn.__name__)
+
+
+def _configured_retrieval_mode() -> str:
+    try:
+        from backend.config.settings import get_settings
+
+        return get_settings().knowledge_retrieval_mode
+    except Exception:
+        return "unknown"
 
 
 def _run_key() -> str:
@@ -83,8 +102,9 @@ async def knowledge_search(
     is no requirement to call this on every turn. If it returns no
     result, say so; never invent knowledge to fill the gap.
 
-    `relevance_score` on each returned item is a lexical relevance signal
-    only -- NOT a confidence, correctness, or authority score.
+    `relevance_score` on each returned item is a retrieval relevance signal
+    only (lexical, or lexical fused with semantic similarity) -- NOT a
+    confidence, correctness, applicability, or authority score.
     `applicability_outcome` of `PARTIAL_MATCH` or `UNKNOWN` means
     applicability to the current situation is not fully proven; do not
     treat it as equivalent to `MATCH`.
@@ -132,18 +152,34 @@ async def knowledge_search(
     report_activity(ActivityKind.KNOWLEDGE_SEARCH_STARTED)
 
     try:
-        execution = await service.search(request, run_state.execution_context)
+        retrieval_diagnostics: list[Any] = []
+        execution = await service.search(request, run_state.execution_context, diagnostics_sink=retrieval_diagnostics.append)
         record_search_result(run_id, execution)
     except KnowledgeRepositoryCorruptionError:
+        note_search_outcome(run_id, request.query_text, "error", error="repository_corruption")
         _perf_logger.info("perf stage=knowledge_search_complete run_id=%s status=error error=repository_corruption", run_id)
+        _trace_safely(diagnostic_trace.record_search_failure, query_text=request.query_text, limit=request.limit, error="repository_corruption")
         report_activity(ActivityKind.KNOWLEDGE_SEARCH_FAILED)
         return _internal_error_result("Governed knowledge could not be read right now. Please try again.")
     except KnowledgeRuntimeError:
+        note_search_outcome(run_id, request.query_text, "error", error="runtime_error")
         _perf_logger.info("perf stage=knowledge_search_complete run_id=%s status=error error=runtime_error", run_id)
+        _trace_safely(diagnostic_trace.record_search_failure, query_text=request.query_text, limit=request.limit, error="runtime_error")
         report_activity(ActivityKind.KNOWLEDGE_SEARCH_FAILED)
         return _internal_error_result("Governed knowledge could not be reconciled for this request. Please try again.")
 
+    _trace_safely(
+        diagnostic_trace.record_search,
+        query_text=request.query_text,
+        limit=request.limit,
+        as_of=run_state.execution_context.as_of,
+        applicability_context=run_state.execution_context.applicability_context.dimensions,
+        configured_mode=_configured_retrieval_mode(),
+        execution=execution,
+        diagnostics=retrieval_diagnostics[0] if retrieval_diagnostics else None,
+    )
     item_count = len(execution.agent_payload.items)
+    note_search_outcome(run_id, request.query_text, "ok", result_count=item_count)
     _perf_logger.info(
         "perf stage=knowledge_search_complete run_id=%s status=success item_count=%d",
         run_id,
@@ -216,17 +252,25 @@ async def knowledge_select_evidence(
             for item in selections
         ]
     except ValidationError as exc:
+        _trace_safely(diagnostic_trace.record_selection, requested=[s for s in selections if isinstance(s, dict)], status="invalid")
         report_activity(ActivityKind.KNOWLEDGE_EVIDENCE_SELECTION_FAILED)
         return _validation_error_result(str(exc.errors()[0]["msg"]) if exc.errors() else "Invalid selection entry.")
 
     try:
         validated = select_evidence(run_id, selection_keys)
     except KnowledgeEvidenceSelectionError:
+        _trace_safely(diagnostic_trace.record_selection, requested=selection_keys, status="rejected_unavailable")
         report_activity(ActivityKind.KNOWLEDGE_EVIDENCE_SELECTION_FAILED)
         return _validation_error_result(
             "One or more selected evidence identities were not part of this run's own knowledge_search results."
         )
 
+    _trace_safely(
+        diagnostic_trace.record_selection,
+        requested=selection_keys,
+        status="accepted" if selection_keys else "explicit_empty",
+        accepted=[item.reference for item in validated],
+    )
     report_activity(ActivityKind.KNOWLEDGE_EVIDENCE_SELECTION_SUCCEEDED, {"evidence_count": len(validated)})
     return {
         "status": "accepted",

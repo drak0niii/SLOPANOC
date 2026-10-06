@@ -24,8 +24,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Optional
 
-from backend.api.schemas import PendingActionDTO
-from backend.approval.schemas import WriteOperation
+from backend.api.schemas import OperationalActionDTO, PendingActionDTO
+from backend.approval.schemas import OperationalOperation, WriteOperation
 from backend.approval.service import effective_status, load_active_proposal
 from backend.tools.teams.expiry_presentation import compute_expires_in_minutes, compute_expires_in_seconds
 
@@ -54,6 +54,8 @@ def map_pending_action(session_state: Mapping[str, Any]) -> Optional[PendingActi
         chat_id = proposal.payload.get("chatId")
         message = proposal.payload.get("message")
 
+    operational = _operational_details(session_state, proposal) if isinstance(proposal.operation, OperationalOperation) else None
+
     return PendingActionDTO(
         proposal_id=proposal.proposal_id,
         operation=proposal.operation.value,
@@ -67,4 +69,39 @@ def map_pending_action(session_state: Mapping[str, Any]) -> Optional[PendingActi
         expires_in_seconds=expires_in_seconds,
         expires_in_minutes=compute_expires_in_minutes(expires_in_seconds),
         target_display_name=proposal.target_display_name,
+        operational=operational,
+    )
+
+
+def _operational_details(session_state: Mapping[str, Any], proposal: Any) -> Optional[OperationalActionDTO]:
+    """Card details from the control plane's trusted context only (never from model text)."""
+    from backend.operations.control_plane import load_control
+    from backend.operations.targets import load_target_confirmation
+
+    control_id = proposal.payload.get("control_id") if isinstance(proposal.payload, dict) else None
+    record = load_control(session_state, control_id)  # type: ignore[arg-type]
+    if record is None:
+        return None
+    context = record.context
+    confirmation = load_target_confirmation(session_state, record.confirmation_id)  # type: ignore[arg-type]
+    return OperationalActionDTO(
+        kind="target_confirmation" if proposal.operation is OperationalOperation.CONFIRM_TARGET else "approval",
+        control_id=context.control_id,
+        what=context.description or context.intent,
+        command=context.command,
+        operation_type=context.operation_type,
+        risk="state_changing" if context.action_type == "state_change" else "read_only",
+        target_type=context.target.target_type,
+        target=context.target.display_value,
+        reason=context.reason or None,
+        source_title=context.source.title,
+        source_section=context.source.heading,
+        source_id=context.source.canonical_source_id,
+        source_version=context.source.version_label,
+        restrictions=list(context.restrictions),
+        control_stage=record.stage.value,
+        approval_status=record.approval_status.value if record.approval_status else None,
+        confirmed_by=confirmation.confirmed_by if confirmation else None,
+        approved_by=record.approved_by,
+        invalidation_reason=record.invalidation_reason,
     )

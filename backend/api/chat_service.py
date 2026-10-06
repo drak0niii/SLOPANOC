@@ -109,6 +109,12 @@ from backend.agents.team_manager.read_continuation_enforcement import (
     stash_active_read_continuation,
 )
 from backend.agents.team_manager.read_continuation_execution import execute_read_continuation
+from backend.agents.team_manager.operational_routing import (
+    OPERATIONAL_ROUTE_UNAVAILABLE_TEXT,
+    discard_operational_route,
+    evaluate_operational_route,
+    record_operational_route,
+)
 from backend.agents.team_manager.read_continuation_presentation import (
     PENDING_SPECIALIST_RESULT_STATE_KEY,
     TRUSTED_SPECIALIST_RESULT_ENVELOPE_STATE_KEY,
@@ -169,6 +175,25 @@ from backend.api.multimodal_turn_context import (
     trusted_image_parts_from_content,
 )
 from backend.agents.incident_manager.schemas import TroubleshootingGuidance
+from backend.agents.technical_authority_engineer import (
+    enforce_technical_authority_synthesis_boundary,
+)
+from backend.agents.technical_authority_engineer.evidence_acquisition import (
+    render_evidence_acquisition_response,
+    supporting_identities,
+)
+from backend.agents.technical_authority_engineer.clarification_continuity import (
+    pending_clarification_follow_up_text,
+    render_clarification_meta_response,
+)
+from backend.agents.technical_authority_engineer.procedure_actions import discard_issued_actions
+from backend.agents.technical_authority_engineer.validation import discard_integrity_decisions
+from backend.agents.technical_authority_engineer.synthesis_boundary import (
+    NO_GOVERNED_PROCEDURE_SELECTED_TEXT,
+    enforce_response_completeness,
+    render_applicability_clarification_response,
+    render_technical_authority_negative_selection_response,
+)
 from backend.agents.technical_authority_engineer.execution_context import (
     discard_technical_authority_execution,
     get_technical_authority_execution,
@@ -184,6 +209,13 @@ from backend.api.troubleshooting_guidance_context import (
 )
 from backend.api.turn_context import bind_run_id, pop_message_texts, reset_run_id
 from backend.api.turn_final_answers import TURN_FINAL_ANSWERS_STATE_KEY, build_turn_final_answers_delta
+from backend.api.command_egress import (
+    StreamingEgressGate,
+    current_turn_command_authorizations,
+    enforce_command_egress,
+    governed_command_strings,
+    log_egress,
+)
 from backend.api.turn_presentation import TURN_PRESENTATION_STATE_KEY, build_turn_presentation_delta
 from backend.api.turn_source_references import TURN_SOURCE_REFERENCES_STATE_KEY, build_turn_source_references_delta
 from backend.attachments.repository import AttachmentRepository
@@ -193,13 +225,56 @@ from backend.cases.service import CaseService, get_case_service
 from backend.config.settings import get_settings
 from backend.gateway.safe_error import SafeErrorException, run_failure, validation_error
 from backend.selection.service import PENDING_READ_CONTINUATION_STATE_KEY, pop_read_continuation
-from backend.tools.knowledge.runtime import discard_knowledge_run_evidence_state, snapshot_selected_knowledge_evidence
+from backend.tools.knowledge.diagnostic_trace import (
+    RETRIEVAL_DIAGNOSTICS_STATE_KEY,
+    build_retrieval_diagnostics_delta,
+    discard_diagnostic_trace,
+    format_diagnostic_trace,
+    snapshot_diagnostic_trace,
+    summarize_technical_authority,
+)
+from backend.tools.knowledge.runtime import (
+    discard_knowledge_run_evidence_state,
+    get_evidence_applicability_outcome,
+    snapshot_selected_knowledge_evidence,
+)
 from backend.tools.teams.state_keys import (
     SELECTED_TEAMS_CHAT_ID_STATE_KEY,
     SELECTED_TEAMS_CHAT_TOPIC_STATE_KEY,
 )
 
 _logger = logging.getLogger(__name__)
+_retrieval_trace_logger = logging.getLogger("backend.knowledge.retrieval_trace")
+
+
+def _final_response_kind(final_text: Optional[str], clarification: bool = False, acquisition: bool = False) -> str:
+    if acquisition:
+        return "evidence_acquisition"
+    if clarification:
+        return "clarification"
+    if final_text == SAFE_COMPLETION_FAILURE_TEXT:
+        return "governed_fail_closed"
+    if isinstance(final_text, str) and final_text.startswith(NO_GOVERNED_PROCEDURE_SELECTED_TEXT):
+        return "no_governed_procedure_selected"
+    return "answer"
+
+
+def _emit_retrieval_diagnostics(snapshot: Optional[dict[str, Any]], final_kind: str, level: int) -> None:
+    """One structured+readable log record per turn that touched governed knowledge.
+    WARNING when the turn failed closed or errored (visible under the default logging
+    setup); INFO otherwise. Identities, scores and decisions only -- never content."""
+    if snapshot is None:
+        return
+    try:
+        _retrieval_trace_logger.log(
+            level,
+            "retrieval_trace run_id=%s final=%s\n%s",
+            snapshot.get("run_id"),
+            final_kind,
+            format_diagnostic_trace(snapshot),
+        )
+    except Exception:
+        _logger.warning("chat_service: retrieval diagnostic formatting failed")
 
 # Sentinel put on a turn's relay queue to mark "no more events, the
 # logical turn -- and its hold on the session lock -- is over" (see
@@ -430,6 +505,18 @@ class _MergedEvent(NamedTuple):
 
     source: str
     item: Any
+
+
+def _runner_stage_after(event: Any, current: str) -> str:
+    """Observability only: the stage the runner enters after `event` -- a tool call executes next
+    (`tool:<name>`); anything else returns to the Team Manager model."""
+    try:
+        calls = event.get_function_calls() if hasattr(event, "get_function_calls") else []
+    except Exception:
+        return current
+    if calls:
+        return "tool:" + ",".join(str(getattr(call, "name", "") or "unknown") for call in calls)[:120]
+    return "team_manager_model"
 
 
 async def _merge_adk_and_activity_events(
@@ -1058,6 +1145,7 @@ class ChatService:
         run_config = RunConfig(streaming_mode=StreamingMode.SSE)
 
         final_text: Optional[str] = None
+        operational_route = None
         status_cleared = False
         first_event_seen = False
         # A5 live UI corrective pass -- FINAL trust-gate closure: turn-
@@ -1080,6 +1168,14 @@ class ChatService:
         # text, `final_text` would remain None unless recovered from the text
         # already verified and streamed to the user.
         emitted_delta_texts: list[str] = []
+        # Universal command egress (command_egress.py): live-streamed prose passes the same command
+        # detection as the final answer; once a command candidate appears, live streaming stops and
+        # the sanitized `message.completed` text is authoritative.
+        egress_gate = StreamingEgressGate()
+        # Which producer the final user-visible text came from (diagnostics of the egress boundary).
+        final_producer = "team_manager"
+        # The final-answer completeness boundary's decision of this turn (diagnostics only).
+        completeness_decision: dict[str, Any] = {}
         # POST-5.1 B4B DEFECT FIX -- captured (in-memory only, no session
         # I/O) the moment the first event of a real turn is observed; the
         # ACTUAL saved-chat bookkeeping write is deferred until this
@@ -1113,6 +1209,7 @@ class ChatService:
         # references from authoritative backend data, never from model
         # text/agent_payload.
         selected_knowledge_evidence: list[Any] = []
+        selected_applicability: dict[tuple[str, str, Optional[str]], Optional[str]] = {}
         # A5 final corrective pass: same snapshot-before-discard shape as
         # `selected_knowledge_evidence` immediately above -- the
         # completion-boundary override that consumes this lives AFTER
@@ -1121,6 +1218,9 @@ class ChatService:
         # must be captured into this local BEFORE that clear, never
         # re-popped from the (by then already-cleared) store later.
         captured_troubleshooting_guidance: Optional[TroubleshootingGuidance] = None
+        # Governed-knowledge diagnostic trace (observability only, never evidence):
+        # snapshotted in the `finally` below before run-scoped KM state is discarded.
+        retrieval_diagnostics: Optional[dict[str, Any]] = None
         run_id_token = bind_run_id(sequencer.run_id)
         # Phase 2 (Runtime Activity Truthfulness): registered in the SAME
         # place, for the SAME reason, as `bind_run_id` above -- this
@@ -1146,8 +1246,32 @@ class ChatService:
         # against direct_read_fast_path.py's own registry at that later
         # point (which would already have been cleared).
         direct_fast_path_trust_validation_failed = False
+        # Observability only: the processing stage a swallowed exception is attributed to.
+        failure_stage = "turn_setup"
         try:
             perf.mark("runner_invocation_start")
+
+            # Server-owned operational continuation routing (operational_routing.py): decided from the
+            # AUTHORITATIVE progression and the operator's exact message BEFORE the Team Manager runs.
+            # A forced route is enforced at the model-request level (the Team Manager's
+            # `enforce_operational_route` callback) and declared here as requiring governed knowledge
+            # -- the server, not the model, decides that this turn needs current governed progression.
+            if error is None and pending_read_continuation is None:
+                try:
+                    operational_route = await evaluate_operational_route(
+                        session.state, session_id=session_id, text=message_text,
+                        specialist_available=get_settings().technical_authority_enabled,
+                    )
+                except Exception:
+                    _logger.warning("chat_service: operational routing evaluation failed run_id=%s", sequencer.run_id, exc_info=True)
+                    operational_route = None
+                record_operational_route(sequencer.run_id, operational_route)
+                if operational_route is not None and operational_route.route_required:
+                    source_requirements_capture.record_external_declaration(False, True)
+                    _logger.info(
+                        "chat_service: governed operational route forced run_id=%s reason=%s",
+                        sequencer.run_id, operational_route.reason,
+                    )
 
             # Production hardening pass #2: if a `ResolvedReadContinuation`
             # was consumed for this turn (popped above, at session load),
@@ -1180,6 +1304,7 @@ class ChatService:
                         yield trace_event
                 delegation_timer.observe(call_event)
 
+                failure_stage = "read_continuation"
                 specialist_result = await self._execute_read_continuation(
                     session_service=self._session_service.adk_session_service,
                     user_id=user_id,
@@ -1287,6 +1412,7 @@ class ChatService:
                     _logger.info(
                         "perf stage=trusted_result_presentation_mode run_id=%s", sequencer.run_id
                     )
+                failure_stage = "team_manager_model"
                 async with Aclosing(
                     turn_runner.run_async(
                         user_id=user_id, session_id=session_id, new_message=content, run_config=run_config
@@ -1312,6 +1438,7 @@ class ChatService:
                                 yield sequencer.build(StreamEventType.STATUS, activity_status)
                             continue
                         event = _merged.item
+                        failure_stage = _runner_stage_after(event, failure_stage)
                         if not first_event_seen:
                             first_event_seen = True
                             perf.mark("first_model_event")
@@ -1499,12 +1626,15 @@ class ChatService:
                             pending_texts = buffered_delta_texts
                             buffered_delta_texts = []
                             for pending_text in pending_texts:
+                                released = egress_gate.accept(pending_text)
+                                if not released:
+                                    continue
                                 if not status_cleared:
                                     yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
                                     status_cleared = True
                                     perf.mark("first_message_delta")
-                                yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": pending_text})
-                                emitted_delta_texts.append(pending_text)
+                                yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": released})
+                                emitted_delta_texts.append(released)
 
                         # Contributor-accuracy fix + performance pass: start
                         # (or restart, for a superseded chat_id) the
@@ -1535,14 +1665,18 @@ class ChatService:
                             # event's OWN delta text specifically:
                             if not source_requirements_capture.declared:
                                 # Still UNKNOWN -- buffer verbatim unless
-                                # troubleshooting guidance was already registered.
-                                if not has_troubleshooting_guidance(sequencer.run_id):
+                                # troubleshooting guidance or technical authority was already registered.
+                                if (
+                                    not has_troubleshooting_guidance(sequencer.run_id)
+                                    and not has_technical_authority_executed(sequencer.run_id)
+                                ):
                                     buffered_delta_texts.append(delta_text)
                             elif (
                                 source_requirements_capture.requires_governed_knowledge
                                 or has_troubleshooting_guidance(sequencer.run_id)
+                                or has_technical_authority_executed(sequencer.run_id)
                             ):
-                                # EXPLICIT GOVERNED OR TROUBLESHOOTING GUIDANCE -- discard; never
+                                # EXPLICIT GOVERNED OR TROUBLESHOOTING GUIDANCE OR TECHNICAL AUTHORITY -- discard; never
                                 # emitted, never held onto past this point.
                                 pass
                             else:
@@ -1553,17 +1687,20 @@ class ChatService:
                                 # before this pass for a turn whose
                                 # declaration arrives before its first delta
                                 # (the common case).
-                                if not status_cleared:
-                                    yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
-                                    status_cleared = True
-                                    perf.mark("first_message_delta")
-                                yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": delta_text})
-                                emitted_delta_texts.append(delta_text)
+                                released = egress_gate.accept(delta_text)
+                                if released:
+                                    if not status_cleared:
+                                        yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
+                                        status_cleared = True
+                                        perf.mark("first_message_delta")
+                                    yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": released})
+                                    emitted_delta_texts.append(released)
 
                         text = _extract_final_text(event)
                         if text is not None:
                             final_text = text
 
+                failure_stage = "final_projection"
                 if specialist_result_state_written and final_text is None:
                     # EMPTY-RESPONSE FIX (pre-4H correction pass): evidence
                     # was already successfully retrieved and validated --
@@ -1593,9 +1730,13 @@ class ChatService:
                         user_content=content,
                     )
                     if retry_text:
+                        # Same universal command egress as every final answer (no authorization
+                        # record exists for a trusted Teams presentation).
+                        retry_text = enforce_command_egress(retry_text, producer="trusted_presentation", run_id=sequencer.run_id).text
                         yield sequencer.build(StreamEventType.MESSAGE_DELTA, {"text": retry_text})
                         emitted_delta_texts.append(retry_text)
                         final_text = retry_text
+                        final_producer = "trusted_presentation"
                     else:
                         _logger.warning(
                             "chat_service: trusted presentation still produced no final text after retry -- "
@@ -1609,6 +1750,19 @@ class ChatService:
         except Exception:
             # Never propagate a raw model/runtime exception (could include
             # implementation detail) -- see errors.py's module docstring.
+            # The operator still sees only the safe message; the server log
+            # keeps the actual exception + stack trace and the identifiers
+            # needed to reconstruct the failed turn (never secrets, never the
+            # message body).
+            _logger.exception(
+                "chat_service: turn failed stage=%s session_id=%s run_id=%s invocation_id=%s case_id=%s first_event_seen=%s",
+                failure_stage,
+                session_id,
+                sequencer.run_id,
+                turn_invocation_id,
+                case_id,
+                first_event_seen,
+            )
             error = ("run_failure", "The assistant could not complete this request. Please try again.")
         finally:
             # BUGFIX (evidence-mailbox lifecycle audit): both cleanup calls
@@ -1685,10 +1839,35 @@ class ChatService:
             # snapshot-then-use-later shape. Never the model's own
             # agent_payload/text -- always the trusted backend accessor.
             selected_knowledge_evidence = snapshot_selected_knowledge_evidence(sequencer.run_id)
+            # Server-evaluated applicability of each selected identity (presentation provenance:
+            # a source whose applicability is not MATCH is shown as a candidate, never authoritative).
+            selected_applicability = {
+                identity: get_evidence_applicability_outcome(sequencer.run_id, identity)
+                for identity in (
+                    (item.reference.knowledge_id, item.reference.version_label, item.reference.section_id)
+                    for item in selected_knowledge_evidence
+                )
+            }
             # Specialist-aware completion boundary: snapshot whether technical_authority_engineer
             # evaluated a fault in this turn before discarding run-scoped execution tracking.
             technical_authority_execution = get_technical_authority_execution(sequencer.run_id)
             discard_technical_authority_execution(sequencer.run_id)
+            discard_operational_route(sequencer.run_id)
+            try:
+                retrieval_diagnostics = snapshot_diagnostic_trace(
+                    sequencer.run_id,
+                    [
+                        (item.reference.knowledge_id, item.reference.version_label, item.reference.section_id)
+                        for item in selected_knowledge_evidence
+                    ],
+                    summarize_technical_authority(technical_authority_execution),
+                )
+            except Exception:
+                _logger.warning("chat_service: retrieval diagnostic snapshot failed run_id=%s", sequencer.run_id)
+                retrieval_diagnostics = None
+            discard_diagnostic_trace(sequencer.run_id)
+            discard_issued_actions(sequencer.run_id)
+            discard_integrity_decisions(sequencer.run_id)
             # Same discipline for the Generic KM tool adapter's own
             # run-id-keyed trusted evidence state
             # (backend/tools/knowledge/runtime.py) -- guarantees no
@@ -1797,8 +1976,62 @@ class ChatService:
         pending_action_active = map_pending_action(refreshed_session.state) is not None
         has_pending_interaction = pending_selection_active or pending_action_active
 
+        # Clarification continuity (docs/TROUBLESHOOTING_STRATEGY.md "Clarification Continuity"):
+        # a clarification / meta response -- which information the investigation still needs -- is
+        # rendered from TRUSTED SERVER STATE (the fault's pending clarification). It carries no
+        # operational guidance, so it needs no governed knowledge selection and is not a governed
+        # fail-closed case. Accepted only from a validated TAE meta record (no step, no command, no
+        # governed evidence) or, when the specialist was not consulted, from the authoritative
+        # progression for a follow-up question. Every operational answer keeps the gates below.
+        clarification_meta_text: Optional[str] = None
+        acquisition_text: Optional[str] = None
+        if error is None:
+            if technical_authority_execution is not None:
+                clarification_meta_text = render_clarification_meta_response(technical_authority_execution)
+                # Evidence acquisition decided by the server (governed acquisition gap, acquisition
+                # failure, evidence acquired from an approved source): rendered from the server record,
+                # never from model prose -- and never an operator request for a command.
+                acquisition_text = None if clarification_meta_text else render_evidence_acquisition_response(technical_authority_execution)
+            elif not has_pending_interaction and not source_requirements_capture.requires_teams:
+                clarification_meta_text = await pending_clarification_follow_up_text(
+                    refreshed_session.state, session_id, message_text
+                )
+        if clarification_meta_text is not None:
+            _logger.info(
+                "chat_service: clarification continuity response rendered from server state run_id=%s",
+                sequencer.run_id,
+            )
+            final_text = clarification_meta_text
+            final_producer = "server_clarification"
+            # A meta response is not derived from any governed source: no Source is attached.
+            selected_knowledge_evidence = []
+        elif acquisition_text is not None:
+            _logger.info("chat_service: evidence acquisition response rendered from server state run_id=%s", sequencer.run_id)
+            final_text = acquisition_text
+            final_producer = "server_evidence_acquisition"
+            clarification_meta_text = acquisition_text
+
         if (
             error is None
+            and operational_route is not None
+            and operational_route.route_required
+            and technical_authority_execution is None
+        ):
+            # The server routed this turn through the governed operational pipeline, but the
+            # specialist produced no validated record (it failed, or was never reached). Fail closed
+            # with the operational limitation -- never Team Manager-generated operational advice.
+            _logger.warning(
+                "chat_service: governed operational route forced but no specialist record -- failing closed run_id=%s",
+                sequencer.run_id,
+            )
+            final_text = OPERATIONAL_ROUTE_UNAVAILABLE_TEXT
+            final_producer = "server_operational_route"
+            clarification_meta_text = final_text
+            selected_knowledge_evidence = []
+
+        if (
+            error is None
+            and clarification_meta_text is None
             and final_text is not None
             and not specialist_result_state_written
             and not has_pending_interaction
@@ -1849,6 +2082,7 @@ class ChatService:
                     sequencer.run_id,
                 )
                 final_text = SAFE_DECLARATION_FAILURE_TEXT
+                final_producer = "server_safe_failure"
                 selected_knowledge_evidence = []
             else:
                 requires_teams_declared, requires_governed_knowledge_declared = declaration
@@ -1866,13 +2100,52 @@ class ChatService:
                 # whether the declaration came from the main turn or from
                 # this remediation.
 
-        if error is None and source_requirements_capture.requires_governed_knowledge and not selected_knowledge_evidence:
+        if (
+            error is None
+            and clarification_meta_text is None
+            and source_requirements_capture.requires_governed_knowledge
+            and not selected_knowledge_evidence
+        ):
             if technical_authority_execution:
-                _logger.info(
-                    "chat_service: technical_authority_engineer evaluated the fault in this turn -- "
-                    "skipping incident_manager governed-knowledge completion override run_id=%s",
-                    sequencer.run_id,
+                clarification = (
+                    technical_authority_execution.get("applicability_clarification")
+                    if isinstance(technical_authority_execution, dict)
+                    else None
                 )
+                if isinstance(clarification, dict) and clarification.get("missing_dimensions") and clarification.get("text"):
+                    # Unresolved applicability (deterministic evaluation) is not a governed-knowledge
+                    # failure: ask only for the dimensions the server reported missing. No command.
+                    _logger.info(
+                        "chat_service: technical_authority_engineer requires applicability clarification "
+                        "missing_dimensions=%s run_id=%s",
+                        clarification.get("missing_dimensions"),
+                        sequencer.run_id,
+                    )
+                    final_text = str(clarification["text"])
+                    final_producer = "technical_authority_engineer"
+                else:
+                    # A validated non-operational outcome (escalation / insufficient evidence) whose
+                    # selection contract the specialist completed with an explicit empty selection is
+                    # rendered deterministically from the TAE record. Every other shape -- any command,
+                    # command source or step, or no explicit selection decision -- fails closed.
+                    negative_selection_text = render_technical_authority_negative_selection_response(
+                        technical_authority_execution if isinstance(technical_authority_execution, dict) else None
+                    )
+                    if negative_selection_text is not None:
+                        _logger.info(
+                            "chat_service: technical_authority_engineer non-operational outcome with explicit "
+                            "negative governed selection -- rendering validated record run_id=%s",
+                            sequencer.run_id,
+                        )
+                        final_text = negative_selection_text
+                        final_producer = "technical_authority_engineer"
+                    else:
+                        _logger.warning(
+                            "chat_service: technical_authority_engineer executed but no governed knowledge was selected -- "
+                            "failing closed run_id=%s",
+                            sequencer.run_id,
+                        )
+                        final_text = SAFE_COMPLETION_FAILURE_TEXT
             elif has_pending_interaction:
                 _logger.info(
                     "chat_service: pending interaction active (selection=%s action=%s) -- "
@@ -1910,6 +2183,7 @@ class ChatService:
                         if source_requirements_capture.requires_teams
                         else None
                     )
+                    final_producer = "governed_completion"
                     final_text, selected_knowledge_evidence = await enforce_governed_knowledge_at_completion(
                         question=_remediation_question(message_text),
                         chat_topic=chat_topic,
@@ -1931,29 +2205,83 @@ class ChatService:
                     final_text = SAFE_COMPLETION_FAILURE_TEXT
                     selected_knowledge_evidence = []
 
-        if error is None and final_text is not None:
-            # A5 final corrective pass -- the HARD, deterministic one-
-            # command-at-a-time override: if incident_manager populated
-            # `troubleshooting_guidance` anywhere in this turn (captured
-            # by evidence.py's own after_agent_callback the instant its
-            # structured response was parsed, regardless of which of the
-            # call paths above produced it), the final answer the user
-            # sees is UNCONDITIONALLY replaced with the deterministic
-            # Python rendering of that typed field -- never team_
-            # manager's own free-form presentation of it, which live
-            # testing proved does not reliably stay bounded to one
-            # action on its own. A turn that never populated the field
-            # (every non-troubleshooting request) is completely
-            # unaffected: `pop_troubleshooting_guidance` returns `None`
-            # and `final_text` is left exactly as team_manager produced
-            # it.
-            if captured_troubleshooting_guidance is not None:
-                final_text = render_troubleshooting_guidance(captured_troubleshooting_guidance)
+        if (
+            error is None
+            and final_text is not None
+            and clarification_meta_text is None
+            and final_producer not in ("server_safe_failure", "governed_completion")
+            and isinstance(technical_authority_execution, dict)
+        ):
+            # Unresolved governed applicability: the operator is asked ONLY for the dimensions the
+            # server evaluation reported missing, rendered from the validated TAE record -- never a
+            # synthesis that adds requests the validated progression state does not need yet.
+            applicability_text = render_applicability_clarification_response(technical_authority_execution)
+            if applicability_text is not None:
+                final_text = applicability_text
+                final_producer = "server_clarification"
 
-        if error is None and final_text is None and emitted_delta_texts:
-            recovered_text = "".join(emitted_delta_texts)
+        if error is None and final_text is not None:
+            # Deterministic post-synthesis validation boundary (Step 3):
+            # When Technical Authority Engineer executed in this run, Team Manager's
+            # synthesis must not introduce operational instructions beyond validated TAE output.
+            if technical_authority_execution is not None:
+                final_text = enforce_technical_authority_synthesis_boundary(
+                    final_text=final_text,
+                    technical_authority_execution=technical_authority_execution,
+                )
+                # Completeness: an actionable continued investigation never ends with nothing, and a
+                # validated step's authorized command is never dropped by synthesis.
+                final_text = enforce_response_completeness(final_text, technical_authority_execution, completeness_decision)
+                if final_producer == "team_manager":
+                    final_producer = "technical_authority_engineer"
+                completeness_decision["final_producer"] = final_producer
+            elif captured_troubleshooting_guidance is not None and clarification_meta_text is None:
+                final_text = render_troubleshooting_guidance(captured_troubleshooting_guidance)
+                final_producer = "troubleshooting_guidance"
+
+        if error is None and final_text is None and (emitted_delta_texts or egress_gate.raw):
+            recovered_text = egress_gate.raw or "".join(emitted_delta_texts)
             if recovered_text.strip():
                 final_text = recovered_text
+
+        command_egress_view: Optional[dict[str, Any]] = None
+        if error is None and final_text is not None:
+            # UNIVERSAL COMMAND EGRESS BOUNDARY (command_egress.py): whatever produced the final
+            # text -- TAE synthesis, Team Manager, Incident Manager, forced governed completion,
+            # troubleshooting-guidance rendering, a fallback -- no operational command survives
+            # unless THIS run's TAE record authorizes that exact command for the fault in focus.
+            # Governed provenance, informational / "example" / syntax framing, and later approval
+            # requirements never authorize anything here.
+            try:
+                from backend.agents.technical_authority_engineer.troubleshooting_threads import load_active_thread
+
+                active_thread = load_active_thread(dict(refreshed_session.state))
+                active_fault_id = active_thread.fault_id if active_thread is not None else None
+            except Exception:
+                active_fault_id = None
+            authorizations, rejected_authorizations = current_turn_command_authorizations(
+                sequencer.run_id, technical_authority_execution, active_fault_id=active_fault_id
+            )
+            corpus = governed_command_strings(
+                [str(item.section.content or "") for item in selected_knowledge_evidence or []]
+                + [
+                    str(ev.get("content_snippet") or "")
+                    for ev in ((technical_authority_execution or {}).get("verified_evidence") or [])
+                    if isinstance(ev, dict) and ev.get("source_type") == "governed_knowledge"
+                ]
+            )
+            egress = enforce_command_egress(
+                final_text,
+                authorizations=authorizations,
+                rejected_authorizations=rejected_authorizations,
+                producer=final_producer + ("+incident_manager" if selected_knowledge_evidence and technical_authority_execution is None else ""),
+                run_id=sequencer.run_id,
+                corpus=corpus,
+            )
+            final_text = egress.text
+            log_egress(egress)
+            if egress.decisions or egress.rejected_authorizations:
+                command_egress_view = egress.view()
 
         if error is None and final_text is None:
             # A turn that produced no final text at all is itself an
@@ -1966,6 +2294,7 @@ class ChatService:
             yield sequencer.build(StreamEventType.STATUS_CLEAR, {})
 
         if error is not None:
+            _emit_retrieval_diagnostics(retrieval_diagnostics, "error", logging.WARNING)
             if contributors_task is not None and not contributors_task.done():
                 contributors_task.cancel()
             code, message = error
@@ -2116,7 +2445,11 @@ class ChatService:
         # from the SAME already-safe list -- never two independently
         # "mostly deduplicated" lists that could drift apart.
         knowledge_sources = dedupe_knowledge_source_references(
-            build_knowledge_source_references(selected_knowledge_evidence)
+            build_knowledge_source_references(
+                selected_knowledge_evidence,
+                selected_applicability,
+                supporting_identities(technical_authority_execution) if technical_authority_execution is not None else None,
+            )
         )
         if knowledge_sources:
             message_completed_data["knowledge_sources"] = [
@@ -2174,6 +2507,32 @@ class ChatService:
 
         pending_action = map_pending_action(refreshed_session.state)
         pending_selection = map_pending_selection(refreshed_session.state)
+
+        if completeness_decision and retrieval_diagnostics is not None:
+            # The final-answer completeness decision of this turn (diagnostics only).
+            retrieval_diagnostics = {**retrieval_diagnostics, "completeness_decision": completeness_decision}
+        if command_egress_view is not None:
+            # Persisted with this turn's retrieval diagnostics (a turn that never touched governed
+            # knowledge gets a minimal entry carrying only the egress decision).
+            retrieval_diagnostics = {
+                **(retrieval_diagnostics or {"run_id": sequencer.run_id}),
+                "command_egress": command_egress_view,
+            }
+        if retrieval_diagnostics is not None:
+            final_kind = _final_response_kind(
+                final_text, clarification=clarification_meta_text is not None, acquisition=acquisition_text is not None
+            )
+            _emit_retrieval_diagnostics(
+                retrieval_diagnostics,
+                final_kind,
+                logging.WARNING if final_kind == "governed_fail_closed" else logging.INFO,
+            )
+            if turn_invocation_id is not None:
+                state_delta_to_persist[RETRIEVAL_DIAGNOSTICS_STATE_KEY] = build_retrieval_diagnostics_delta(
+                    refreshed_session.state.get(RETRIEVAL_DIAGNOSTICS_STATE_KEY),
+                    turn_invocation_id,
+                    {**retrieval_diagnostics, "final_response_kind": final_kind},
+                )
 
         # Durable per-turn presentation persistence (Defect 3)
         # Captures run trace steps, execution duration, and selection state.

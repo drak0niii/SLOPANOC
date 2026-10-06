@@ -71,6 +71,14 @@ class KnowledgeRetrievalItem(BaseModel):
     applicability_outcome: ApplicabilityOutcome = Field(
         description="MATCH, PARTIAL_MATCH, or UNKNOWN -- NOT_APPLICABLE sections are excluded before an item is ever constructed. Uncertainty (PARTIAL_MATCH/UNKNOWN) is retained explicitly, never silently upgraded to MATCH."
     )
+    unresolved_applicability_dimensions: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Names of this item's constrained applicability dimensions the query context could not evaluate "
+            "(per-dimension UNKNOWN), taken verbatim from the deterministic applicability evaluation. Dimension "
+            "names only -- never values. Empty for MATCH."
+        ),
+    )
     relevance_score: float = Field(description="0.0-1.0, from the KnowledgeRelevanceScorer that produced this item. Zero-relevance sections are excluded before an item is ever constructed.")
     is_derived: bool = Field(
         default=False,
@@ -119,12 +127,52 @@ class KnowledgeRetrievalDiagnostic(BaseModel):
     detail: Optional[str] = None
 
 
+class KnowledgeRetrievalRankingDiagnostic(BaseModel):
+    """Observability-only ranking record for ONE returned item (same order as
+    `KnowledgeRetrievalResult.items`). Identity plus scores/ranks only -- never
+    section content. Confers no authority: selection, provenance, applicability
+    and command authorization never read it.
+
+    `sparse_*` is the lexical scorer's signal; `dense_*` the semantic similarity
+    signal (raw cosine, `None` when the dense stage did not run); `fused_score`
+    is the relevance actually used for ranking (equal to the sparse score in
+    lexical mode, the normalized reciprocal-rank-fusion score in hybrid mode).
+    Ranks are 1-based within the eligible candidate set; `None` = not ranked
+    by that signal (e.g. zero lexical overlap, or below the dense floor).
+    """
+
+    knowledge_id: str
+    version_label: str
+    section_id: str
+    sparse_score: float
+    sparse_rank: Optional[int] = None
+    dense_similarity: Optional[float] = None
+    dense_rank: Optional[int] = None
+    fused_score: float
+
+
+class KnowledgeRetrievalMode(str, Enum):
+    LEXICAL = "lexical"
+    HYBRID = "hybrid"
+
+
 class KnowledgeRetrievalResult(BaseModel):
     """The typed, bounded retrieval output. `items` never exceeds the
     requesting query's `limit`. An empty `items` list with no
     `excluded_families` is a normal, successful "nothing matched"
     result -- never an error.
+
+    `mode` / `dense_status` / `eligible_section_count` / `candidate_count` /
+    `ranking` are observability-only (see `KnowledgeRetrievalRankingDiagnostic`).
+    `mode` is the mode actually applied to THIS query: a configured hybrid
+    retrieval whose dense stage was unavailable is reported as LEXICAL with the
+    reason in `dense_status`.
     """
 
     items: list[KnowledgeRetrievalItem] = Field(default_factory=list)
     excluded_families: list[KnowledgeRetrievalDiagnostic] = Field(default_factory=list)
+    mode: KnowledgeRetrievalMode = KnowledgeRetrievalMode.LEXICAL
+    dense_status: str = "not_configured"
+    eligible_section_count: int = 0
+    candidate_count: int = 0
+    ranking: list[KnowledgeRetrievalRankingDiagnostic] = Field(default_factory=list)

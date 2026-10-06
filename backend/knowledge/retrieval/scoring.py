@@ -11,7 +11,7 @@ it (see docs/KNOWLEDGE_CONTRACT.md's Phase 5.1G section).
 from __future__ import annotations
 
 import re
-from typing import Protocol
+from typing import Protocol, Sequence
 
 from backend.knowledge.domain.models import KnowledgeObject, KnowledgeSection
 
@@ -40,6 +40,34 @@ class KnowledgeRelevanceScorer(Protocol):
         """Return a relevance score in `[0.0, 1.0]` -- `0.0` means no
         relevance at all (the caller excludes such sections); `1.0`
         means the strongest match this scorer can produce.
+        """
+        ...
+
+
+def section_retrieval_text(knowledge_object: KnowledgeObject, section: KnowledgeSection) -> str:
+    """The one retrieval text surface for a section (title, tags, heading, content) --
+    shared by lexical and semantic relevance so both judge the same text."""
+    parts = [knowledge_object.title, " ".join(knowledge_object.metadata.tags), section.heading or "", section.content]
+    return " ".join(p for p in parts if p)
+
+
+class DenseSimilarityProvider(Protocol):
+    """Async semantic-similarity contract used by hybrid retrieval. Implementations
+    (embedding-model backed) live OUTSIDE this package; this package never imports an
+    embedding SDK. Relevance only: a similarity never affects currentness,
+    applicability, lifecycle, selection, provenance, or command authority.
+    """
+
+    @property
+    def model_name(self) -> str:
+        ...
+
+    async def similarities(
+        self, query_text: str, candidates: Sequence[tuple[KnowledgeObject, KnowledgeSection]]
+    ) -> list[float]:
+        """Raw cosine similarity in [-1.0, 1.0] per candidate, same order and length as
+        `candidates`. MUST raise on any failure -- never substitute a synthetic vector;
+        the caller then records the failure and falls back to lexical relevance only.
         """
         ...
 

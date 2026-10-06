@@ -72,6 +72,9 @@ export function ApprovalCard({ chatId, messageId }: { chatId: string; messageId:
   const pendingAction = record.pendingAction;
   const view = deriveApprovalCardView(pendingAction, record.approvalCard);
   const createChat = isCreateChat(pendingAction.operation);
+  // Tranche 3 — operational (troubleshooting) target-confirmation / approval card.
+  // Details come only from the backend's deterministic OperationalActionDTO.
+  const operational = pendingAction.operational ?? null;
   const { primaryButtonLabel } = getActionOperationPresentation(pendingAction.operation);
 
   const busy = view.kind === "approving" || view.kind === "executing" || view.kind === "rejecting";
@@ -104,12 +107,16 @@ export function ApprovalCard({ chatId, messageId }: { chatId: string; messageId:
   const isFromEarlierTurn =
     chatMessageIds.length > 0 && chatMessageIds[chatMessageIds.length - 1] !== messageId;
   const showEarlierCompletedWording = view.kind === "completed" && isFromEarlierTurn && !expanded;
-  const headlineText = showEarlierCompletedWording ? "Earlier action completed" : headline(view.kind, createChat);
+  const headlineText = showEarlierCompletedWording
+    ? "Earlier action completed"
+    : operational
+      ? operationalHeadline(view.kind, operational.kind)
+      : headline(view.kind, createChat);
 
   return (
     <div
       role="group"
-      aria-label="Pending Teams action approval"
+      aria-label={operational ? "Operational action approval" : "Pending Teams action approval"}
       aria-busy={busy}
       className={cn(
         "anim-fade mt-3 max-w-[420px] rounded-xl border px-4 py-3.5 transition-colors duration-200",
@@ -138,7 +145,22 @@ export function ApprovalCard({ chatId, messageId }: { chatId: string; messageId:
       {expanded && (
         <div className="anim-fade">
           <div className="mt-2.5 flex flex-col gap-1 text-sm approval-card-mono">
-            {createChat ? (
+            {operational ? (
+              <>
+                <DetailRow label="What will happen" value={operational.what || "—"} />
+                <DetailRow label="Target" value={`${operational.target} (${operational.target_type})`} />
+                <DetailRow label="Command" value={operational.command} />
+                <DetailRow label="Why" value={operational.reason || "—"} />
+                <DetailRow
+                  label="Source"
+                  value={`${operational.source_title || operational.source_id}${operational.source_section ? ` — ${operational.source_section}` : ""} (${operational.source_version})`}
+                />
+                <DetailRow label="Risk" value={operational.risk === "state_changing" ? "State-changing" : "Read-only"} />
+                <DetailRow label="Restrictions" value={operational.restrictions.join(" ") || "—"} />
+                {operational.confirmed_by && <DetailRow label="Target confirmed by" value={operational.confirmed_by} />}
+                {operational.approved_by && <DetailRow label="Approved by" value={operational.approved_by} />}
+              </>
+            ) : createChat ? (
               <>
                 <DetailRow label="Chat title" value={pendingAction.title || "—"} />
                 <DetailRow label="Participants" value={pendingAction.members.join(", ") || "—"} />
@@ -188,6 +210,12 @@ export function ApprovalCard({ chatId, messageId }: { chatId: string; messageId:
             </p>
           )}
 
+          {view.kind === "ready" && operational && (
+            <p role="status" className="approval-card-mono mt-2.5 text-sm text-success">
+              Approved — ready for execution. {operational.execution_note}
+            </p>
+          )}
+
           {view.kind === "rejected" && (
             <p role="status" className="approval-card-mono mt-2.5 text-sm text-tertiary">
               Action rejected.
@@ -231,6 +259,7 @@ function toneClasses(kind: ApprovalCardView["kind"]): string {
     case "pending":
       return "border-warning/60 bg-surface-raised";
     case "completed":
+    case "ready":
       return "border-success/60 bg-surface-raised";
     case "rejected":
       return "border-subtle/50 bg-transparent";
@@ -250,6 +279,7 @@ function toneClasses(kind: ApprovalCardView["kind"]): string {
 function StatusIcon({ kind }: { kind: ApprovalCardView["kind"] }) {
   switch (kind) {
     case "completed":
+    case "ready":
       return <Check className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />;
     case "rejected":
       return <X className="h-3.5 w-3.5 shrink-0 text-tertiary" aria-hidden="true" />;
@@ -288,6 +318,23 @@ function headline(kind: ApprovalCardView["kind"], createChat: boolean): string {
       return "Execution status could not be confirmed";
     case "failed":
       return "Action failed";
+    case "ready":
+      return "Approved — ready for execution";
+  }
+}
+
+function operationalHeadline(kind: ApprovalCardView["kind"], cardKind: "target_confirmation" | "approval"): string {
+  switch (kind) {
+    case "pending":
+      return cardKind === "target_confirmation" ? "Confirm the target for a state-changing action" : "State-changing action requires approval";
+    case "approving":
+      return cardKind === "target_confirmation" ? "Confirming target…" : "Approving…";
+    case "ready":
+      return "Approved — ready for execution";
+    case "failed":
+      return "Action no longer valid";
+    default:
+      return headline(kind, false);
   }
 }
 

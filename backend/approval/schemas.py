@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -26,6 +26,20 @@ class WriteOperation(str, Enum):
 
     TEAMS_CREATE_CHAT = "teams.createChat"
     TEAMS_SEND_MESSAGE = "teams.sendMessage"
+
+
+class OperationalOperation(str, Enum):
+    """Operational (troubleshooting) actions gated by this same proposal lifecycle (Tranche 3).
+
+    Deliberately a SEPARATE closed enum from `WriteOperation`, which is also part of a
+    model-facing Incident Manager output schema -- operational proposals are created only by the
+    deterministic control plane (backend/operations/control_plane.py), never by a model tool.
+    Neither value has an execution path: `/execute` refuses both (state-changing execution is
+    not enabled; approval ends at READY_FOR_EXECUTION).
+    """
+
+    CONFIRM_TARGET = "operational.confirmTarget"
+    PROCEDURE_ACTION = "operational.procedureAction"
 
 
 class ProposalStatus(str, Enum):
@@ -81,7 +95,7 @@ class ActionProposal(BaseModel):
     """
 
     proposal_id: str
-    operation: WriteOperation
+    operation: Union[WriteOperation, OperationalOperation]
     payload: dict[str, Any]
     payload_hash: str
     created_at: datetime

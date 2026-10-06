@@ -196,6 +196,11 @@ def test_only_the_expected_routes_exist() -> None:
         # Phase 4G -- the only route that can actually execute an approved
         # proposal (execution_service.py).
         "/api/sessions/{session_id}/execute",
+        # Tranche 3 -- operator-requested execution of ONE already-authorized diagnostic READ via an
+        # explicitly registered read-only adapter (operational_execution_service.py). The client
+        # supplies only the check_id; command/policy/adapter are re-derived server-side. Refuses
+        # every state-changing action; no arbitrary command input exists.
+        "/api/sessions/{session_id}/diagnostic-checks/{check_id}/execute",
         # Interaction-capability extension -- deterministic Teams chat-name
         # disambiguation (selection_service.py); destination resolution
         # only, never write approval/execution.

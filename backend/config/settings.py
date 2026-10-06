@@ -61,6 +61,17 @@ _CHAT_ATTACHMENT_MAX_TOTAL_BYTES_PER_TURN_ENV_VAR = "SLOPANOC_CHAT_ATTACHMENT_MA
 # lifecycle/ownership semantics (see backend/knowledge/ingestion/storage.py),
 # never sharing a bucket/prefix/lifecycle by convention.
 _KNOWLEDGE_ARTIFACTS_BUCKET_ENV_VAR = "SLOPANOC_KNOWLEDGE_ARTIFACTS_BUCKET"
+_DIAGNOSTIC_EXECUTION_CONTEXT_ENV_VAR = "SLOPANOC_DIAGNOSTIC_EXECUTION_CONTEXT"
+_KNOWLEDGE_RETRIEVAL_MODE_ENV_VAR = "SLOPANOC_KNOWLEDGE_RETRIEVAL_MODE"
+_VALID_KNOWLEDGE_RETRIEVAL_MODES = frozenset({"lexical", "hybrid"})
+_DEFAULT_KNOWLEDGE_RETRIEVAL_MODE = "hybrid"
+_KNOWLEDGE_EMBEDDING_MODEL_ENV_VAR = "SLOPANOC_KNOWLEDGE_EMBEDDING_MODEL"
+_DEFAULT_KNOWLEDGE_EMBEDDING_MODEL = "text-embedding-005"
+_KNOWLEDGE_DENSE_MIN_SIMILARITY_ENV_VAR = "SLOPANOC_KNOWLEDGE_DENSE_MIN_SIMILARITY"
+_DEFAULT_KNOWLEDGE_DENSE_MIN_SIMILARITY = 0.65
+_KNOWLEDGE_DENSE_TIMEOUT_ENV_VAR = "SLOPANOC_KNOWLEDGE_DENSE_TIMEOUT_SECONDS"
+_DEFAULT_KNOWLEDGE_DENSE_TIMEOUT_SECONDS = 10.0
+_GOOGLE_GENAI_USE_VERTEXAI_ENV_VAR = "GOOGLE_GENAI_USE_VERTEXAI"
 _KNOWLEDGE_INGESTION_MAX_RECURSION_DEPTH_ENV_VAR = "SLOPANOC_KNOWLEDGE_INGESTION_MAX_RECURSION_DEPTH"
 _KNOWLEDGE_INGESTION_MAX_ARTIFACTS_PER_ROOT_ENV_VAR = "SLOPANOC_KNOWLEDGE_INGESTION_MAX_ARTIFACTS_PER_ROOT"
 _KNOWLEDGE_INGESTION_MAX_ARTIFACT_BYTES_ENV_VAR = "SLOPANOC_KNOWLEDGE_INGESTION_MAX_ARTIFACT_BYTES"
@@ -395,6 +406,64 @@ class Settings:
         """
         raw = self._env.get(_KNOWLEDGE_ARTIFACTS_BUCKET_ENV_VAR)
         return raw.strip() if raw and raw.strip() else None
+
+    @property
+    def diagnostic_execution_context(self) -> Optional[str]:
+        """`SLOPANOC_DIAGNOSTIC_EXECUTION_CONTEXT`: the explicitly configured execution context
+        whose registered read-only adapter may run authorized diagnostic reads. Unset (default)
+        means no read execution anywhere -- never a guessed or local fallback context."""
+        raw = self._env.get(_DIAGNOSTIC_EXECUTION_CONTEXT_ENV_VAR)
+        return raw.strip() if raw and raw.strip() else None
+
+    @property
+    def knowledge_retrieval_mode(self) -> str:
+        """`SLOPANOC_KNOWLEDGE_RETRIEVAL_MODE`: "hybrid" (default: lexical + semantic
+        relevance fused by reciprocal rank fusion) or "lexical". Relevance only --
+        governance, applicability, selection and command authority are identical in
+        both modes. Hybrid needs Vertex AI embeddings (`vertex_ai_enabled`); without
+        them every search is lexical and reports why in its retrieval trace."""
+        raw = (self._env.get(_KNOWLEDGE_RETRIEVAL_MODE_ENV_VAR) or _DEFAULT_KNOWLEDGE_RETRIEVAL_MODE).strip().lower()
+        if raw not in _VALID_KNOWLEDGE_RETRIEVAL_MODES:
+            raise ConfigurationError(
+                f"{_KNOWLEDGE_RETRIEVAL_MODE_ENV_VAR}={raw!r} is not supported "
+                f"(expected one of {sorted(_VALID_KNOWLEDGE_RETRIEVAL_MODES)})."
+            )
+        return raw
+
+    @property
+    def vertex_ai_enabled(self) -> bool:
+        raw = self._env.get(_GOOGLE_GENAI_USE_VERTEXAI_ENV_VAR)
+        return raw is not None and raw.strip().lower() in ("1", "true", "yes", "on")
+
+    @property
+    def knowledge_embedding_model(self) -> str:
+        return (self._env.get(_KNOWLEDGE_EMBEDDING_MODEL_ENV_VAR) or _DEFAULT_KNOWLEDGE_EMBEDDING_MODEL).strip()
+
+    @property
+    def knowledge_dense_min_similarity(self) -> float:
+        raw = self._env.get(_KNOWLEDGE_DENSE_MIN_SIMILARITY_ENV_VAR)
+        if not raw:
+            return _DEFAULT_KNOWLEDGE_DENSE_MIN_SIMILARITY
+        try:
+            value = float(raw)
+        except ValueError:
+            raise ConfigurationError(f"{_KNOWLEDGE_DENSE_MIN_SIMILARITY_ENV_VAR}={raw!r} is not a number.") from None
+        if not -1.0 <= value <= 1.0:
+            raise ConfigurationError(f"{_KNOWLEDGE_DENSE_MIN_SIMILARITY_ENV_VAR} must be within [-1.0, 1.0].")
+        return value
+
+    @property
+    def knowledge_dense_timeout_seconds(self) -> float:
+        raw = self._env.get(_KNOWLEDGE_DENSE_TIMEOUT_ENV_VAR)
+        if not raw:
+            return _DEFAULT_KNOWLEDGE_DENSE_TIMEOUT_SECONDS
+        try:
+            value = float(raw)
+        except ValueError:
+            raise ConfigurationError(f"{_KNOWLEDGE_DENSE_TIMEOUT_ENV_VAR}={raw!r} is not a number of seconds.") from None
+        if value <= 0:
+            raise ConfigurationError(f"{_KNOWLEDGE_DENSE_TIMEOUT_ENV_VAR} must be a positive number of seconds.")
+        return value
 
     @property
     def knowledge_ingestion_max_recursion_depth(self) -> int:

@@ -63,6 +63,7 @@ from backend.cases.schemas import CaseContextSnapshot
 from backend.cases.service import get_case_service
 from backend.cases.snapshot import build_case_context_snapshot
 from backend.cases.troubleshooting_state import TroubleshootingState
+from backend.agents.technical_authority_engineer.applicability_context import read_confirmed_applicability_facts
 from backend.config.settings import get_settings
 from backend.context.assembly import ContextDomain, ContextEngineeringBroker, ContextItem
 from backend.gateway.safe_error import SafeErrorException
@@ -83,7 +84,17 @@ When the user asks for technical troubleshooting, diagnosis of a fault or issue,
 - Relay the specialist's technical interpretation, the single next check, and its justification clearly to the user.
 - Presenting the specialist's diagnostic recommendation:
   * When `diagnostic_step.command` is provided and authorized, display the exact command syntax, any parameter prerequisites, and its supporting governed citation clearly to the user.
-  * When `diagnostic_step.command` is null or not authorized, do NOT instruct the user to execute or run an unspecified command. Explain plainly that operational command execution is not authorized and state precisely what authorization or approved procedure is missing.
+  * When `diagnostic_step.command` is null or not authorized, do NOT instruct the user to execute or run an unspecified command, and do NOT claim that commands can never be provided. Commands ARE provided when a current approved governed procedure is explicitly selected, its applicability matches, and the command passes grounding and authorization. State precisely which of these is still missing. If a governed procedure was selected but its command was stripped, say that the governed procedure is available but no command for this step has passed the current grounding and authorization checks -- never that an approved procedure is missing.
+  * Describe ONLY the current diagnostic step. Never mention later corrective, remediation, restart/reset-type or configuration actions from the procedure, and never say what the current check will lead to operationally.
+  * When the result carries `applicability_clarification`, ask ONLY for its `missing_dimensions` (you may restate its `confirmed_facts`); never re-ask for confirmed facts and never guess a missing value.
+  * When the result carries `parameter_clarification`, ask the operator ONLY for the listed parameters (use its `text`); never guess, complete or suggest a parameter value, and never show the command template with placeholders.
+  * When the result carries `clarification_continuity`, present its `text` as-is: it is rendered from the server-recorded information request. Add no fields, steps, commands or procedure claims.
+  * When the result carries `evidence_acquisition` with a `response_text`, present that text as-is (a governed acquisition gap, an acquisition failure, or evidence the server obtained itself).
+  * Never ask the operator which command, procedure, tool or method to use: establishing an approved acquisition method is the system's responsibility, never an operator fact.
+  * When the result carries `operational_control`, state its `blocker` as the next requirement (e.g. target confirmation and human approval on the action card, or whether a configured adapter can run the read). Never claim an action was confirmed, approved or executed, and never ask the operator to type "yes"/"approve" in chat: confirmation and approval happen only on the action card. SLOPANOC never executes state-changing actions.
+- Applicability facts: pass only what the user literally stated; never map one kind of fact onto another dimension (e.g. a customer/account name is not a vendor). The server retains confirmed facts from earlier turns of this session and validates new ones against governed metadata.
+- Follow-up questions within an active troubleshooting investigation (e.g. asking for the command for a check, or asking about a different component or operation) are delegated to `technical_authority_engineer`. Set `problem_statement` to the operator's LATEST request and fill `current_request` from the latest message ONLY: `subject_component`, `requested_operation`, `explicit_target`, `vendor`, `technology` exactly as the operator wrote them now, and `continues_active_objective` = false when the operator moves to a different component/operation. Never replace the operator's current request with the earlier investigation objective -- the server supplies the active investigation as background automatically.
+- Questions about which information is still needed (e.g. "what details should I provide?", "what is missing?") and the operator's answers to an outstanding information request are delegated to `technical_authority_engineer` like any follow-up: the server answers them from the recorded request of the active fault. Never list the requested information from memory.
 - The specialist operates in an advisory role only: no direct execution, no configuration changes, no approval authority, no Teams write capabilities.
 """
 
@@ -139,6 +150,8 @@ def _render_troubleshooting_state_block(ts: TroubleshootingState) -> str:
         f"Fault ID: {ts.fault_id} (Status: {ts.status.value})",
         f"Symptom summary: {ts.symptom_summary}",
     ]
+    if ts.subject_component:
+        lines.append(f"Subject/component: {ts.subject_component}")
     if ts.node_id:
         lines.append(f"Node: {ts.node_id}")
     if ts.working_hypothesis:
@@ -151,6 +164,57 @@ def _render_troubleshooting_state_block(ts: TroubleshootingState) -> str:
             cmd_info = f" [cmd: `{rec.grounded_command}`]" if rec.grounded_command else ""
             obs_info = f" -> observed: {rec.observed_result}" if rec.observed_result else ""
             lines.append(f"- [{rec.status.value}] {rec.action}{cmd_info}{obs_info}")
+    clarification = _render_pending_clarification(ts)
+    if clarification:
+        lines.append(clarification)
+    requirements = _render_evidence_requirements(ts)
+    if requirements:
+        lines.append(requirements)
+    return "\n".join(lines)
+
+
+def _render_evidence_requirements(ts: TroubleshootingState) -> str:
+    """Unsatisfied evidence requirements of the active fault (read projection), so a request the
+    system has no approved method for is never re-asked of the operator."""
+    lines = []
+    for requirement in ts.evidence_requirements or []:
+        if requirement.get("status") != "unsatisfied":
+            continue
+        reason = requirement.get("blocking_reason")
+        suffix = f" -- no approved acquisition method ({reason}); never ask the operator for a command" if reason in (
+            "no_approved_acquisition_action", "no_applicable_procedure", "no_relevant_evidence_found"
+        ) else (f" -- blocked: {reason}" if reason else "")
+        lines.append(f"- [{requirement.get('kind')}] {requirement.get('description')}{suffix}")
+    return ("Evidence requirements (server-recorded):\n" + "\n".join(lines)) if lines else ""
+
+
+def _render_pending_clarification(ts: TroubleshootingState) -> str:
+    """The active fault's outstanding information request (read projection of the server record)."""
+    pending = ts.pending_clarification or {}
+    unresolved = [str(f) for f in pending.get("unresolved_fields") or []]
+    if not unresolved:
+        return ""
+    return f"Outstanding information request (server-recorded, {pending.get('reason')}): still needed: {', '.join(unresolved)}"
+
+
+def _render_other_fault_threads(state: Any, active: Optional[TroubleshootingState]) -> str:
+    """Other fault threads in this session: identity only, never their histories, so they cannot
+    be mistaken for the active investigation."""
+    from backend.agents.technical_authority_engineer.troubleshooting_threads import load_threads
+
+    try:
+        others = [ts for fid, ts in load_threads(state).items() if active is None or fid != active.fault_id]
+    except Exception:
+        return ""
+    if not others:
+        return ""
+    lines = [
+        "OTHER FAULT THREADS IN THIS SESSION (not the active focus; the server selects the active thread from the "
+        "operator's latest request -- never merge their history into the current request):"
+    ]
+    for ts in sorted(others, key=lambda t: t.updated_at, reverse=True):
+        subject = f" [{ts.subject_component}]" if ts.subject_component else ""
+        lines.append(f"- {ts.fault_id}{subject}: {ts.symptom_summary} (status: {ts.status.value})")
     return "\n".join(lines)
 
 
@@ -176,6 +240,9 @@ def _render_case_context_block(
                 cmd_info = f" [cmd: `{rec.grounded_command}`]" if rec.grounded_command else ""
                 obs_info = f" -> observed: {rec.observed_result}" if rec.observed_result else ""
                 lines.append(f"- [{rec.status.value}] {rec.action}{cmd_info}{obs_info}")
+        clarification = _render_pending_clarification(troubleshooting_state)
+        if clarification:
+            lines.append(clarification)
     if snapshot.external_reference:
         lines.append(f"External reference: {snapshot.external_reference}")
     if snapshot.items:
@@ -224,6 +291,14 @@ def make_team_manager_instruction_provider(
             if "automated_operations_engineer" in tool_names:
                 base_instruction = f"{base_instruction}\n\n{AUTOMATED_OPERATIONS_DELEGATION_ADDENDUM}"
 
+        confirmed_facts = read_confirmed_applicability_facts(ctx.state)
+        if confirmed_facts:
+            rendered = "; ".join(f"{dim} = {', '.join(vals)}" for dim, vals in confirmed_facts.items())
+            base_instruction = (
+                f"{base_instruction}\n\nCONFIRMED APPLICABILITY FACTS (server-retained for this session; "
+                f"do not re-ask): {rendered}"
+            )
+
         ts_raw = ctx.state.get("troubleshooting_state")
         troubleshooting_state: Optional[TroubleshootingState] = None
         if ts_raw and isinstance(ts_raw, dict):
@@ -231,6 +306,10 @@ def make_team_manager_instruction_provider(
                 troubleshooting_state = TroubleshootingState.model_validate(ts_raw)
             except Exception:
                 pass
+
+        other_threads_block = _render_other_fault_threads(ctx.state, troubleshooting_state)
+        if other_threads_block:
+            base_instruction = f"{base_instruction}\n\n{other_threads_block}"
 
         if not case_id:
             if troubleshooting_state:

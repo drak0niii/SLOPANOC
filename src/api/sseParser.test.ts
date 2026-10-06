@@ -226,6 +226,35 @@ describe("parseSSEEvent", () => {
     expect(onWarn).not.toHaveBeenCalled();
   });
 
+  it("keeps a string applicability_outcome and drops a malformed one without dropping the source", () => {
+    const onWarn = vi.fn();
+    const base = {
+      source_id: "ks1",
+      source_type: "knowledge",
+      knowledge_id: "k1",
+      version_label: "v1",
+      section_id: "k1:v1:s0",
+      title: "Guide",
+      content: "Text",
+    };
+    const raw = JSON.stringify({
+      ...BASE_ENVELOPE,
+      type: "message.completed",
+      data: {
+        content: "Answer.",
+        knowledge_sources: [
+          { ...base, applicability_outcome: "unknown" },
+          { ...base, section_id: "k1:v1:s1", applicability_outcome: { forged: true } },
+        ],
+      },
+    });
+    const event = parseSSEEvent(raw, onWarn);
+    const sources = (event?.data as unknown as { knowledge_sources: Record<string, unknown>[] }).knowledge_sources;
+    expect(sources).toHaveLength(2);
+    expect(sources[0].applicability_outcome).toBe("unknown");
+    expect("applicability_outcome" in sources[1]).toBe(false);
+  });
+
   it("drops only the malformed entries within knowledge_sources, keeping valid ones", () => {
     const onWarn = vi.fn();
     const valid = {

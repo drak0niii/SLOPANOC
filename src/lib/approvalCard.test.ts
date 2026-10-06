@@ -137,3 +137,49 @@ describe("classifyApprovalFailure — structured signals only, never message str
     expect(classifyApprovalFailure(error).phase).toBe("unconfirmed");
   });
 });
+
+describe("deriveApprovalCardView — Tranche 3 operational cards", () => {
+  const operational = (overrides: Record<string, unknown> = {}) => ({
+    kind: "approval" as const,
+    control_id: "ctl-1",
+    what: "Recovery",
+    command: "acc PlugInUnit-3 restart",
+    operation_type: "mutating_operational",
+    risk: "state_changing" as const,
+    target_type: "mo",
+    target: "PlugInUnit-3",
+    reason: "Governed step",
+    source_title: "Ops MOP",
+    source_section: "Node alarm",
+    source_id: "K:v1:s",
+    source_version: "v1",
+    restrictions: [],
+    control_stage: "awaiting_approval",
+    approval_status: "pending",
+    confirmed_by: "eng",
+    approved_by: null,
+    invalidation_reason: null,
+    execution_note: "SLOPANOC never executes state-changing actions.",
+    ...overrides,
+  });
+
+  it("approved operational action is 'ready' (never 'unconfirmed', never executing)", () => {
+    const view = deriveApprovalCardView(
+      pendingAction({ operation: "operational.procedureAction", status: "approved", operational: operational({ control_stage: "ready_for_execution" }) }),
+      null,
+    );
+    expect(view.kind).toBe("ready");
+  });
+
+  it("invalidated operational action is a non-actionable failure with its reason", () => {
+    const view = deriveApprovalCardView(
+      pendingAction({ operation: "operational.procedureAction", status: "rejected", operational: operational({ control_stage: "invalidated", invalidation_reason: "binding_changed" }) }),
+      null,
+    );
+    expect(view).toEqual({ kind: "failed", message: "This action is no longer valid (binding_changed)." });
+  });
+
+  it("pending operational action stays pending", () => {
+    expect(deriveApprovalCardView(pendingAction({ operation: "operational.confirmTarget", operational: operational({ kind: "target_confirmation" }) }), null).kind).toBe("pending");
+  });
+});

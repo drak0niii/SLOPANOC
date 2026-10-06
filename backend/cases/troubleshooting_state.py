@@ -37,8 +37,25 @@ class DiagnosticCheckRecord(BaseModel):
     rationale: str
     grounded_command: Optional[str] = None
     command_source_id: Optional[str] = None
+    procedure_action_id: Optional[str] = None
+    """Server-issued governed ProcedureAction this check was resolved from (identity only; the
+    action is re-derived from governed evidence whenever it is used -- this is not authority)."""
+    control_id: Optional[str] = None
+    """Operational control record (backend/operations) correlated with this check, if any."""
+    control_stage: Optional[str] = None
+    """Mirror of the operational control stage: authorized / awaiting_confirmation /
+    awaiting_approval / ready_for_execution / executing / executed / completed / failed /
+    rejected / invalidated. Distinct from `status` (the operator-facing check lifecycle)."""
+    execution_ids: list[str] = Field(default_factory=list)
+    """Controlled read executions whose observed output was recorded on this check."""
     expected_observation: str
     observed_result: Optional[str] = None
+    observed_result_source: Optional[str] = None
+    """Provenance of `observed_result`: 'execution_adapter' (controlled read output) or None
+    (a caller/model-written summary -- never used as parameter evidence)."""
+    operator_observation: Optional[str] = None
+    """The operator's own verbatim message reporting this check's result (bounded). Operator-provided
+    observed evidence: may supply parameter VALUES; never governed command authority."""
     status: CheckLifecycleStatus = Field(default=CheckLifecycleStatus.RECOMMENDED)
     node_id: Optional[str] = None
     fault_id: Optional[str] = None
@@ -53,6 +70,10 @@ class TroubleshootingState(BaseModel):
     fault_id: str = Field(description="Unique identifier for the active fault/incident under investigation")
     status: TroubleshootingStatus = Field(default=TroubleshootingStatus.INVESTIGATING)
     symptom_summary: str = Field(description="Summary of initial observed symptoms or alarm triggers")
+    subject_component: Optional[str] = Field(
+        default=None,
+        description="Component/subject this fault thread is about, as the operator stated it (a session may hold several threads).",
+    )
     session_id: Optional[str] = Field(default=None, description="Active session ID associated with this troubleshooting lifecycle")
     case_id: Optional[str] = Field(default=None, description="Active case ID if associated with a formal case")
     node_id: Optional[str] = Field(default=None, description="Identifier of the node/site under investigation")
@@ -61,6 +82,16 @@ class TroubleshootingState(BaseModel):
     verified_evidence_ids: list[str] = Field(default_factory=list, description="IDs of confirmed evidence items")
     diagnostic_history: list[DiagnosticCheckRecord] = Field(default_factory=list, description="History of checks performed")
     applicable_procedure_ids: list[str] = Field(default_factory=list, description="Applicable governed MOP/SOP IDs")
+    evidence_requirements: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Read projection of this fault's evidence requirements (kind, description, status, blocking "
+        "reason, selected acquisition type). The progression's EvidenceRequirement is the only authority.",
+    )
+    pending_clarification: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Read projection of this fault's OPEN clarification (question_id, reason, requested/unresolved "
+        "fields, resolved values). The progression's OpenQuestion is the only authority.",
+    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -76,6 +107,9 @@ class TroubleshootingState(BaseModel):
         fault_id: Optional[str] = None,
         session_id: Optional[str] = None,
         case_id: Optional[str] = None,
+        procedure_action_id: Optional[str] = None,
+        control_id: Optional[str] = None,
+        control_stage: Optional[str] = None,
     ) -> DiagnosticCheckRecord:
         """Records a newly proposed/recommended diagnostic check.
         Never marks it as completed -- always starts as RECOMMENDED.
@@ -89,6 +123,9 @@ class TroubleshootingState(BaseModel):
             expected_observation=expected_observation,
             grounded_command=grounded_command,
             command_source_id=command_source_id,
+            procedure_action_id=procedure_action_id,
+            control_id=control_id,
+            control_stage=control_stage,
             status=CheckLifecycleStatus.RECOMMENDED,
             node_id=node_id or self.node_id,
             fault_id=fault_id or self.fault_id,
@@ -108,6 +145,7 @@ class TroubleshootingState(BaseModel):
         check_id: Optional[str] = None,
         command: Optional[str] = None,
         observed_result: Optional[str] = None,
+        operator_observation: Optional[str] = None,
     ) -> Optional[DiagnosticCheckRecord]:
         """Transitions a recommended check to EXECUTED upon user reporting execution.
         Observed result is recorded, but the check is NEVER automatically marked COMPLETED;
@@ -142,9 +180,87 @@ class TroubleshootingState(BaseModel):
             matched.status = CheckLifecycleStatus.EXECUTED
             if observed_result:
                 matched.observed_result = observed_result
+            if operator_observation:
+                matched.operator_observation = operator_observation
             self.updated_at = now
 
         return matched
+
+    def set_control_state(self, check_id: str, control_id: str, control_stage: str) -> bool:
+        for rec in self.diagnostic_history:
+            if rec.check_id == check_id:
+                rec.control_id = control_id
+                rec.control_stage = control_stage
+                self.updated_at = datetime.now(timezone.utc)
+                return True
+        return False
+
+    def record_adapter_execution(
+        self,
+        check_id: str,
+        execution_id: str,
+        observed_result: Optional[str],
+        succeeded: bool,
+        control_id: Optional[str] = None,
+        control_stage: Optional[str] = None,
+    ) -> Optional[DiagnosticCheckRecord]:
+        """Correlates a controlled read execution with its check. A successful execution whose
+        output was captured is EXECUTED then COMPLETED (the observation exists); a failed one is
+        recorded but leaves the check awaiting a result. The output is observed evidence only."""
+        now = datetime.now(timezone.utc)
+        for rec in self.diagnostic_history:
+            if rec.check_id != check_id:
+                continue
+            if execution_id not in rec.execution_ids:
+                rec.execution_ids.append(execution_id)
+            if control_id:
+                rec.control_id = control_id
+            if control_stage:
+                rec.control_stage = control_stage
+            if succeeded:
+                rec.status = CheckLifecycleStatus.EXECUTED
+                rec.executed_at = rec.executed_at or now
+                rec.observed_result = observed_result
+                rec.observed_result_source = "execution_adapter"
+                rec.status = CheckLifecycleStatus.COMPLETED
+                rec.completed_at = now
+            self.updated_at = now
+            return rec
+        return None
+
+    def mark_check_skipped(self, check_id: str, reason: Optional[str] = None) -> Optional[DiagnosticCheckRecord]:
+        """The operator reported that this check cannot be performed (recorded, not executed)."""
+        for rec in self.diagnostic_history:
+            if rec.check_id == check_id:
+                rec.status = CheckLifecycleStatus.SKIPPED
+                if reason:
+                    rec.observed_result = f"Not performed: {reason}"
+                self.updated_at = datetime.now(timezone.utc)
+                return rec
+        return None
+
+    def update_check(self, check_id: str, **fields: Any) -> Optional[DiagnosticCheckRecord]:
+        """Refresh identity/command fields of an existing (still pending) check; never its lifecycle."""
+        allowed = {"grounded_command", "command_source_id", "procedure_action_id", "control_id", "control_stage", "action", "expected_observation"}
+        for rec in self.diagnostic_history:
+            if rec.check_id == check_id:
+                for name, value in fields.items():
+                    if name in allowed and value is not None:
+                        setattr(rec, name, value)
+                self.updated_at = datetime.now(timezone.utc)
+                return rec
+        return None
+
+    def trusted_observation_texts(self) -> list[str]:
+        """Operator-provided or controlled-execution observed output recorded in THIS thread, newest
+        first. Parameter evidence only -- never a source of governed command authority."""
+        texts: list[str] = []
+        for rec in reversed(self.diagnostic_history):
+            if rec.operator_observation:
+                texts.append(rec.operator_observation)
+            if rec.observed_result and rec.observed_result_source == "execution_adapter":
+                texts.append(rec.observed_result)
+        return texts
 
     def get_prior_steps_summary(self) -> list[str]:
         """Produces a deterministic summary of prior checks for specialist context."""

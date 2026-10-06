@@ -752,3 +752,61 @@ describe("ApprovalCard — accessibility", () => {
     expect(screen.getByText(/execution status could not be confirmed/i)).toBeInTheDocument();
   });
 });
+
+describe("ApprovalCard — Tranche 3 operational action", () => {
+  function operationalAction(overrides: Partial<PendingActionDTO> = {}, details: Record<string, unknown> = {}): PendingActionDTO {
+    return {
+      ...createChatAction({ operation: "operational.confirmTarget", title: null, members: [], target_display_name: "PlugInUnit-3" }),
+      operational: {
+        kind: "target_confirmation",
+        control_id: "ctl-1",
+        what: "Recovery",
+        command: "acc PlugInUnit-3 restart",
+        operation_type: "mutating_operational",
+        risk: "state_changing",
+        target_type: "mo",
+        target: "PlugInUnit-3",
+        reason: "The governed procedure prescribes this step.",
+        source_title: "Ops MOP",
+        source_section: "Node alarm",
+        source_id: "K:v1:s",
+        source_version: "v1",
+        restrictions: ["State-changing operation: requires trusted target confirmation and existing approval policy."],
+        control_stage: "awaiting_confirmation",
+        approval_status: null,
+        confirmed_by: null,
+        approved_by: null,
+        invalidation_reason: null,
+        execution_note: "SLOPANOC never executes state-changing actions; approval ends at 'ready for execution'.",
+        ...details,
+      },
+      ...overrides,
+    };
+  }
+
+  it("shows what/target/command/why/source/risk/restrictions and a 'Confirm target' button", () => {
+    renderCard({ dto: operationalAction() });
+    expect(screen.getByRole("group", { name: "Operational action approval" })).toBeInTheDocument();
+    expect(screen.getByText("Confirm the target for a state-changing action")).toBeInTheDocument();
+    expect(screen.getByText("acc PlugInUnit-3 restart")).toBeInTheDocument();
+    expect(screen.getByText("PlugInUnit-3 (mo)")).toBeInTheDocument();
+    expect(screen.getByText("State-changing")).toBeInTheDocument();
+    expect(screen.getByText("Ops MOP — Node alarm (v1)")).toBeInTheDocument();
+    expect(screen.queryByText("Chat title:")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm target" }));
+    expect(mockAppState.approvePendingAction).toHaveBeenCalledWith(CHAT_ID, "p1");
+  });
+
+  it("approved action renders 'ready for execution' and never an execute/completed state", () => {
+    renderCard({
+      dto: operationalAction(
+        { operation: "operational.procedureAction", status: "approved" },
+        { kind: "approval", control_stage: "ready_for_execution", approval_status: "approved", confirmed_by: "eng", approved_by: "eng" },
+      ),
+    });
+    expect(screen.getAllByText("Approved — ready for execution").length).toBeGreaterThan(0);
+    expect(screen.getByText(/SLOPANOC never executes state-changing actions/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Action completed")).not.toBeInTheDocument();
+  });
+});

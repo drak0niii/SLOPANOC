@@ -47,6 +47,7 @@ docstring).
 from __future__ import annotations
 
 import uuid
+from typing import Mapping, Optional
 
 from backend.api.schemas import KnowledgeSourceReferenceDTO
 from backend.knowledge.provenance.contracts import KnowledgeEvidenceItem
@@ -64,6 +65,8 @@ def _dto_identity(dto: KnowledgeSourceReferenceDTO) -> tuple[str, str, "str | No
 
 def build_knowledge_source_references(
     selected_items: list[KnowledgeEvidenceItem],
+    applicability_by_identity: "Optional[Mapping[tuple[str, str, str | None], Optional[str]]]" = None,
+    supporting: "Optional[set[tuple[str, str, str]]]" = None,
 ) -> list[KnowledgeSourceReferenceDTO]:
     """One `KnowledgeSourceReferenceDTO` per DISTINCT selected evidence
     identity (`knowledge_id`/`version_label`/`section_id`) -- deduplicated
@@ -74,6 +77,14 @@ def build_knowledge_source_references(
     selected order -- see backend/tools/knowledge/runtime.py's own
     `select_evidence`). An empty input list -- no selection this turn --
     returns an empty list, never a fabricated placeholder.
+
+    `applicability_by_identity`: the server-evaluated applicability outcome of each selected
+    identity for this turn (backend/tools/knowledge/runtime.py), carried as presentation metadata
+    so a source whose applicability has not reached MATCH is never shown as authoritative.
+
+    `supporting`: identities that materially ground what was presented. Selected evidence outside
+    it is `consulted` (kept for audit, not shown as an authoritative Source); None = every selected
+    item is supporting (paths that do not distinguish).
     """
     references: list[KnowledgeSourceReferenceDTO] = []
     seen: set[tuple[str, str, "str | None"]] = set()
@@ -98,6 +109,8 @@ def build_knowledge_source_references(
                 section_heading=item.section.heading,
                 source_locator=item.reference.source_locator,
                 content=item.section.content,
+                applicability_outcome=(applicability_by_identity or {}).get(identity),
+                support_role="supporting" if supporting is None or identity in supporting else "consulted",
             )
         )
     return references

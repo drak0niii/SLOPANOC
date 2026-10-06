@@ -292,6 +292,21 @@ describe("SourceChip — Knowledge (kind: 'knowledge', Phase 5.1J correction pas
     expect(screen.getByText('"Confirm the checksum is 7319 and the status is GREEN."')).toBeInTheDocument();
   });
 
+  it("presents a source whose applicability is not MATCH as a candidate, with a pending notice", () => {
+    render(<SourceChip kind="knowledge" source={makeKnowledgeSource({ applicability_outcome: "unknown" })} />);
+    const trigger = screen.getByRole("button", { name: /Candidate source · Aurora Relay Verification Procedure/ });
+    expect(screen.queryByRole("button", { name: /^Source ·/ })).not.toBeInTheDocument();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("note")).toHaveTextContent(/pending applicability confirmation/);
+    expect(screen.getByRole("note")).toHaveTextContent(/applicability: unknown/);
+  });
+
+  it("keeps the authoritative 'Source' presentation for a MATCH outcome (no notice)", () => {
+    render(<SourceChip kind="knowledge" source={makeKnowledgeSource({ applicability_outcome: "match" })} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Source · Aurora Relay Verification Procedure/ }));
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+
   it("never renders source_uri anywhere, even though it is not part of the DTO at all", () => {
     render(<SourceChip kind="knowledge" source={makeKnowledgeSource()} />);
     fireEvent.click(screen.getByRole("button"));

@@ -15,6 +15,7 @@ from google.adk.agents import Agent
 from google.genai import types
 
 from backend.agents.technical_authority_engineer.agent_tool import TechnicalAuthorityAgentTool
+from backend.agents.technical_authority_engineer.procedure_actions import procedure_action_catalog
 from backend.agents.technical_authority_engineer.prompts import TECHNICAL_AUTHORITY_ENGINEER_INSTRUCTION
 from backend.agents.technical_authority_engineer.schemas import (
     TechnicalAuthorityRequest,
@@ -75,6 +76,8 @@ technical_authority_engineer = Agent(
         # Consumes the shared Generic Knowledge Management context service
         knowledge_search,
         knowledge_select_evidence,
+        # Server-issued governed ProcedureAction catalog for SELECTED evidence (Tranche 2)
+        procedure_action_catalog,
     ],
     input_schema=TechnicalAuthorityRequest,
     output_schema=TechnicalAuthorityResponse,

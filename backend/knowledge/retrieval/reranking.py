@@ -59,6 +59,7 @@ def compute_reciprocal_rank_fusion(
                 source=base_item.source,
                 relevance_score=min(max(score, 0.0), 1.0),
                 applicability_outcome=base_item.applicability_outcome,
+                unresolved_applicability_dimensions=list(base_item.unresolved_applicability_dimensions),
                 is_derived=base_item.is_derived,
             )
         )

@@ -9,6 +9,8 @@ import {
   formatKnowledgeSourceLabel,
   formatSourceFooter,
   formatSourcePeriod,
+  isPendingApplicability,
+  knowledgeSourcePrefix,
   type KnowledgeSourceGroup,
 } from "../../lib/sourceReference";
 
@@ -78,13 +80,13 @@ export function SourceChip(props: SourceChipProps) {
           {props.kind === "knowledge" && (
             <>
               <NotebookText className="mt-0.5 h-3 w-3 shrink-0" />
-              Source · {formatKnowledgeSourceLabel(props.source)}
+              {knowledgeSourcePrefix(isPendingApplicability(props.source))} · {formatKnowledgeSourceLabel(props.source)}
             </>
           )}
           {props.kind === "knowledge-group" && (
             <>
               <NotebookText className="mt-0.5 h-3 w-3 shrink-0" />
-              Source · {formatKnowledgeSourceGroupLabel(props.group)}
+              {knowledgeSourcePrefix(props.group.pendingApplicability)} · {formatKnowledgeSourceGroupLabel(props.group)}
             </>
           )}
         </button>
@@ -252,10 +254,27 @@ function formatDocumentType(documentType: string): string {
  * turn (never every item `knowledge_search` merely returned). Never
  * shows `source_uri` — deliberately absent from the DTO itself, not just
  * hidden here (see docs/KNOWLEDGE_CONTRACT.md's Phase 5.1J section). */
+/** Shown while the server has not evaluated this source's applicability as
+ * MATCH for the current context: the source is a candidate, not an
+ * authoritative procedure for this case (presentation only). */
+function PendingApplicabilityNotice({ outcome }: { outcome?: string | null }) {
+  return (
+    <p
+      role="note"
+      className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-sm text-warning"
+    >
+      Candidate source, pending applicability confirmation
+      {outcome ? <span className="text-tertiary"> (applicability: {outcome.replace(/_/g, " ")})</span> : null}. It
+      is not confirmed as applicable to this context.
+    </p>
+  );
+}
+
 function KnowledgeSourceDetails({ source }: { source: KnowledgeSourceReferenceDTO }) {
   return (
     <>
       <DrawerTitle>{source.title}</DrawerTitle>
+      {isPendingApplicability(source) && <PendingApplicabilityNotice outcome={source.applicability_outcome} />}
 
       <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
         <span className="rounded-full bg-accent/10 px-2 py-0.5 font-medium text-accent">
@@ -304,6 +323,11 @@ function KnowledgeSourceGroupDetails({ group }: { group: KnowledgeSourceGroup })
   return (
     <>
       <DrawerTitle>{group.title || "Governed knowledge"}</DrawerTitle>
+      {group.pendingApplicability && (
+        <PendingApplicabilityNotice
+          outcome={group.sections.find((section) => isPendingApplicability(section))?.applicability_outcome}
+        />
+      )}
 
       <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
         <span className="rounded-full bg-accent/10 px-2 py-0.5 font-medium text-accent">
