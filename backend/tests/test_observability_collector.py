@@ -140,6 +140,10 @@ def test_sdk_sample_travels_through_actual_local_collector(tmp_path, sample_kind
                             from backend.observability.finops.metrics import record as accounting_record
                             accounting_record(r,'ledger_persisted',1)
                             accounting_record(r,'admission_duration',.005)
+                            from backend.observability.finops.billing_metrics import Metrics
+                            financial_metrics=Metrics(r,'development')
+                            financial_metrics.add('publications','DETAILED_BILLING',1)
+                            financial_metrics.duration('DETAILED_BILLING',.006)
                             from backend.observability.slo_metrics import record, publish_result
                             from backend.observability.slo_alerts import confirm_safety
                             from backend.observability.slo_evaluator import evaluate, Snapshot, Bucket, Counts
@@ -325,6 +329,10 @@ def test_sdk_sample_travels_through_actual_local_collector(tmp_path, sample_kind
                 from urllib.request import Request, urlopen
                 metric_messages=[ExportMetricsServiceRequest.FromString(item[1]) for item in metrics_capture]
                 metrics=[m for message in metric_messages for rm in message.resource_metrics for scope in rm.scope_metrics for m in scope.metrics]
+                financial=next(m for m in metrics if m.name=='slopanoc.finops.billing.publications')
+                assert financial.sum.data_points[0].as_int==1 and financial.unit=='1'
+                financial_duration=next(m for m in metrics if m.name=='slopanoc.finops.billing.ingestion_duration')
+                assert financial_duration.histogram.data_points[0].sum==.006 and financial_duration.unit=='s'
                 accounting=next(m for m in metrics if m.name=='slopanoc.accounting.ledger_persisted')
                 assert accounting.sum.data_points[0].as_int==1 and accounting.unit=='1'
                 admission=next(m for m in metrics if m.name=='slopanoc.accounting.admission_duration')
@@ -342,6 +350,8 @@ def test_sdk_sample_travels_through_actual_local_collector(tmp_path, sample_kind
                 poison.attributes.append(KeyValue(key='run_id',value=AnyValue(string_value='M9_SYNTHETIC_PRIVATE_MARKER')))
                 account_target=next(m for rm in injected.resource_metrics for scope in rm.scope_metrics for m in scope.metrics if m.name=='slopanoc.accounting.ledger_persisted')
                 account_target.sum.data_points[0].attributes.append(KeyValue(key='attempt_id',value=AnyValue(string_value='M10_SYNTHETIC_PRIVATE_MARKER')))
+                financial_target=next(m for rm in injected.resource_metrics for scope in rm.scope_metrics for m in scope.metrics if m.name=='slopanoc.finops.billing.publications')
+                financial_target.sum.data_points[0].attributes.append(KeyValue(key='billing_account',value=AnyValue(string_value='M11_SYNTHETIC_PRIVATE_MARKER')))
                 before=len([x for x in sink.snapshot() if x[0]=='/v1/metrics'])
                 with urlopen(Request(f'http://127.0.0.1:{port}/v1/metrics',data=injected.SerializeToString(),headers={'Content-Type':'application/x-protobuf'}),timeout=2) as response:
                     assert response.status==200
@@ -349,7 +359,7 @@ def test_sdk_sample_travels_through_actual_local_collector(tmp_path, sample_kind
                 while time.monotonic()<deadline and len([x for x in sink.snapshot() if x[0]=='/v1/metrics'])<=before:time.sleep(.02)
                 forwarded=[x for x in sink.snapshot() if x[0]=='/v1/metrics']
                 assert len(forwarded)>before
-                assert not any(b'M9_SYNTHETIC_PRIVATE_MARKER' in x[1] or b'M10_SYNTHETIC_PRIVATE_MARKER' in x[1] for x in forwarded)
+                assert not any(b'M9_SYNTHETIC_PRIVATE_MARKER' in x[1] or b'M10_SYNTHETIC_PRIVATE_MARKER' in x[1] or b'M11_SYNTHETIC_PRIVATE_MARKER' in x[1] for x in forwarded)
             if sample_kind == 'model':
                 from opentelemetry.proto.collector.metrics.v1.metrics_service_pb2 import ExportMetricsServiceRequest
                 metric_messages = [ExportMetricsServiceRequest.FromString(item[1]) for item in metrics_capture]

@@ -103,6 +103,8 @@ class Runtime:
         register_slo(self)
         from .finops.metrics import register as register_accounting
         register_accounting(self)
+        from .finops.billing_metrics import register as register_billing
+        register_billing(self)
         self.health.initialized = True
 
     def start_logging(self):

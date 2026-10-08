@@ -355,6 +355,32 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         accounting_ledger = Ledger(AccountingRepository(accounting_database.sessions),config,telemetry.runtime)
         install_ledger(accounting_ledger)
         accounting_ledger.start()
+    # M11 server composition may inject reviewed source adapters. No implicit client,
+    # credentials, source bindings, schema DDL or billing jobs at default startup.
+    from backend.observability.finops.billing_service import FinancialSources
+    from backend.observability.finops.billing_contracts import Policy as BillingPolicy
+    from backend.observability.finops.billing_repository import Repository as BillingRepository
+    from backend.observability.finops.billing_ingestion import Ingestion as BillingIngestion
+    billing_database = billing_worker = None
+    billing_policy = BillingPolicy(
+        billing_delayed_seconds=config.finops_billing_delayed_seconds,
+        billing_stale_seconds=config.finops_billing_stale_seconds,
+        pricing_delayed_seconds=config.finops_pricing_delayed_seconds,
+        pricing_stale_seconds=config.finops_pricing_stale_seconds,
+        billing_cadence_seconds=config.finops_billing_cadence_seconds,
+        pricing_cadence_seconds=config.finops_pricing_cadence_seconds)
+    financial_sources = FinancialSources(policy=billing_policy)
+    if config.finops_billing_ingestion_enabled:
+        adapters = tuple(getattr(app.state, 'finops_source_adapters', ()))
+        if config.otel_environment != 'local' and any(a.mode == 'TEST_FIXTURE' for a in adapters):
+            raise ValueError('Financial fixtures require an isolated local environment')
+        if adapters:
+            billing_database = Database(get_settings().resolve_database_url())
+            billing_repository = BillingRepository(billing_database.sessions)
+            billing_worker = BillingIngestion(billing_repository,config.otel_environment,adapters,billing_policy,runtime=telemetry.runtime)
+            financial_sources = FinancialSources(billing_repository,adapters,billing_policy,billing_worker)
+            billing_worker.start()
+    app.state.observability_service.financial_sources = financial_sources
     app.state.observability_service.accounting = accounting_ledger
     app.state.observability_service.slo_provider = CompositeSource(
         app.state.observability_service.slo_provider,
@@ -371,6 +397,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # close() has its own total deadline and daemon cleanup for exporters
         # lacking a timeout; no telemetry network wait on the event loop.
         import time
+        if billing_worker is not None:
+            await billing_worker.close()
+        if billing_database is not None:
+            try:
+                async with asyncio.timeout(3): await billing_database.close()
+            except Exception: pass
         if accounting_ledger is not None:
             try:
                 await accounting_ledger.close()

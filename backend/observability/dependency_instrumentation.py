@@ -18,6 +18,7 @@ _active = ContextVar('slopanoc_dependency', default=None)
 
 # Concrete import/call sites and owning milestone; coverage tests reject new sinks.
 CLIENT_OWNERS = {
+    'backend/observability/finops/bigquery_source.py': 'M11 detached financial source queries (bounded source metrics; no business dependency recursion)',
     'backend/observability/database.py': 'M7 detached projection health (no business dependency recursion)',
     'backend/gateway/power_automate_client.py': 'M5',
     'backend/api/session_service.py': 'M5',

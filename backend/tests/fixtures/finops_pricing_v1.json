@@ -1,0 +1,40 @@
+{
+  "mode": "TEST_FIXTURE",
+  "schema_version": 1,
+  "rows": [
+    {
+      "billing_account_id": "ACCOUNT_SENTINEL",
+      "service": {
+        "id": "service-ai"
+      },
+      "sku": {
+        "id": "sku-input"
+      },
+      "pricing_unit": "seconds",
+      "account_currency_code": "EUR",
+      "currency_conversion_rate": "1",
+      "pricing_as_of_time": "2026-01-10T00:00:00+00:00",
+      "export_time": "2026-01-10T02:00:00+00:00",
+      "list_price": {
+        "aggregation_info": {
+          "aggregation_level": "ACCOUNT",
+          "aggregation_interval": "ONE_MONTH"
+        },
+        "tiered_rates": [
+          {
+            "start_usage_amount": "0",
+            "pricing_unit_quantity": "1",
+            "usd_amount": "100",
+            "account_currency_amount": "100"
+          },
+          {
+            "start_usage_amount": "100",
+            "pricing_unit_quantity": "1",
+            "usd_amount": "50",
+            "account_currency_amount": "50"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -605,3 +605,69 @@ Runtime usage queries cap31days/100groups/page/1000groups traversal with bounded
 concurrency/deadline. UI displays usage and health in existing Settings; later cards
 stay unavailable and effective policy is read-only. Accounting metrics use fixed
 names and environment/operation/status/window labels only, no identifiers/exemplars.
+
+## M11 — financial source projections (local implementation)
+
+Detailed Billing is actual charge authority; Pricing Export is reference tariff
+truth; FOCUS is independent supplementary data. M10's attempts/quantities/immutable
+BASE records and M9 completeness formula are unchanged. M12 reconciliation and
+allocation remain absent. No per-turn catalog estimator is activated.
+
+`finops/bigquery_source.py` owns fixed parameterized queries against versioned
+normalized views in `infra/observability/bigquery`. No query executes in a chat/API
+request. Clients/adapters require explicit server composition; production bindings,
+byte caps/location/partition metadata and source activation must be reviewed and
+approved separately. Default ingestion is disabled and API sources NOT_CONFIGURED.
+Fixture adapters identify TEST_FIXTURE and startup permits them only in local mode.
+
+Per daily usage/as-of partition, the detached worker extracts a complete result,
+normalizes with exact Decimal values, computes currency-specific controls and a
+multiplicity-preserving fingerprint, then commits manifest/cache/current pointer
+atomically under a monotonically fenced revision. Original/negation/replacement
+billing lines remain cumulative source truth in BigQuery. Earlier manifests retain
+row count/control totals/fingerprint; they are never overwritten to simulate a
+correction. DB contains operational manifests and bounded summary/tariff caches,
+not raw warehouse rows. SHA256 multiset identity with independent SHA512 canonical
+witness detects digest collisions without retaining whole source payloads in memory.
+
+Invoice views select invoice.month; usage views select usage_start_time dates.
+Regular gross, signed credits, source adjustments, taxes, rounding and net are
+separate; adjustments already in cost are not added twice. Money and fractional
+usage remain fixed-precision values/decimal strings. Source float fields are cast
+to BIGNUMERIC in SQL before Python; missing source precision is not recoverable.
+Native currencies are never added together. Native EUR is reportable; unsupported
+EUR conversion remains NULL. Billing-line price.* and list-cost evidence remain
+independent from exported catalog list/account/consumption-model tiers.
+
+Pricing snapshots are observed intervals bounded to the daily source window. No
+price before first observation or after known coverage is inferred. Unknown SKU
+mappings remain UNMAPPED and financially counted. Effective-dated mapping Registry
+is deployment-owned/read-only and its version is persisted in manifests; no mutable
+financial mapping/config API. Source queries/scheduling, schema compatibility and
+retention (24month target; deletion disabled) are deployment policy.
+
+Source cycles revisit recent overlap/current-prior usage periods and least-checked
+retained partitions, rebuilding backlog from durable state on restart. Processing
+is bounded per pass; no recent invoice is declared final. Billing/pricing/FOCUS age
+and errors are independent. Pricing age uses pricing_as_of_time, never export time
+alone. Read APIs return age, coverage, generation and provisional policy; cached
+API reads use existing verified FINANCIAL_DATA/environment/rate/concurrency guards.
+Admin has no implicit financial capability. Identifiers/SQL/job payloads/secrets
+never enter financial DTOs, logs or metric labels. Metrics are finite per-source
+names with canonical projection labels and no exemplars; both Collector configs
+independently enforce their allowlist/units.
+
+Three GETs: `/api/observability/finops/billing-health`, `/billing-summary`,
+`/pricing-status` under the same prefix. Summary basis usage/invoice, dates<=31days,
+page<=100, signed scope/generation cursor, query deadline2s. No raw query/row/mutation
+endpoint. Settings FinOps uses existing ReadState/query/layout patterns, independent
+source states and exact native-currency display. Reconciliation remains M12.
+
+Migration d11b4a8c9e32 after c10a8f6e2d41 adds only three application-owned tables.
+Local migration/fixture/Collector/SQL/Terraform evidence does not validate shared
+Cloud SQL, provider export coverage/price history, BigQuery throughput/cost or live
+identity. Rollback disables source worker/uses compatible views and preserves data;
+production downgrade is destructive. No exports, datasets, IAM, scheduler, shared
+migration or deployment was performed. Any such action needs AGENTS.md exact-operation
+approval. Terraform billing module is an inert binding/SQL rendering contract,
+following the existing provider-free sidecar pattern, not deployed infrastructure.

@@ -76,8 +76,12 @@ def health_views():
     # from this scope survive. Foreign scopes/names produce no export record.
     return [View(instrument_name='*', aggregation=DropAggregation())] + [
         View(instrument_name=name, meter_name=SCOPE,
-             attribute_keys={'environment', 'operation'}) for name in INSTRUMENTS] + model_views() + execution_views() + dependency_views() + reliability_views() + slo_views() + accounting_views()
+             attribute_keys={'environment', 'operation'}) for name in INSTRUMENTS] + model_views() + execution_views() + dependency_views() + reliability_views() + slo_views() + accounting_views() + billing_views()
 
+
+def billing_views():
+    from .finops.billing_metrics import views
+    return views()
 
 def accounting_views():
     from .finops.metrics import views
@@ -137,6 +141,7 @@ class HealthMetricExporter(MetricExporter):
         from .reliability_metrics import UNITS as REL_UNITS, safe_point as safe_reliability_point
         from .slo_metrics import UNITS as SRE_UNITS, safe_point as safe_sre_point
         from .finops.metrics import UNITS as ACCOUNTING_UNITS, safe_point as safe_accounting_point
+        from .finops.billing_metrics import UNITS as BILLING_UNITS, safe_point as safe_billing_point
         resources = []
         registry = {'environment':frozenset({self.config.otel_environment}),
                     'operation':frozenset(signal+'_export' for signal in SIGNALS)}
@@ -147,11 +152,14 @@ class HealthMetricExporter(MetricExporter):
                     continue
                 instruments = []
                 for metric in scope.metrics:
-                    if metric.name not in INSTRUMENTS and metric.name not in UNITS and metric.name not in EXEC_UNITS and metric.name not in DEP_UNITS and metric.name not in REL_UNITS and metric.name not in SRE_UNITS and metric.name not in ACCOUNTING_UNITS:
+                    if metric.name not in INSTRUMENTS and metric.name not in UNITS and metric.name not in EXEC_UNITS and metric.name not in DEP_UNITS and metric.name not in REL_UNITS and metric.name not in SRE_UNITS and metric.name not in ACCOUNTING_UNITS and metric.name not in BILLING_UNITS:
                         continue
                     points = []
                     for point in metric.data.data_points:
                         try:
+                            if metric.name in BILLING_UNITS:
+                                points.append(safe_billing_point(metric, point, self.config))
+                                continue
                             if metric.name in ACCOUNTING_UNITS:
                                 points.append(safe_accounting_point(metric, point, self.config))
                                 continue
@@ -181,7 +189,7 @@ class HealthMetricExporter(MetricExporter):
                         points.append(replace(point, attributes=labels, exemplars=[]))
                     if points:
                         instruments.append(replace(metric, description=metric.name,
-                            unit=(UNITS | EXEC_UNITS | DEP_UNITS | REL_UNITS | SRE_UNITS | ACCOUNTING_UNITS).get(metric.name, 'ms' if metric.name.endswith('export_duration_ms') else '1'),
+                            unit=(UNITS | EXEC_UNITS | DEP_UNITS | REL_UNITS | SRE_UNITS | ACCOUNTING_UNITS | BILLING_UNITS).get(metric.name, 'ms' if metric.name.endswith('export_duration_ms') else '1'),
                             data=replace(metric.data, data_points=points)))
                 if instruments:
                     scopes.append(replace(scope, metrics=instruments, scope=safe_scope(), schema_url=SCHEMA_URL))

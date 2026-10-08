@@ -2,13 +2,13 @@
 
 ## Program Status
 
-Current milestone: **M10 — IMPLEMENTED AND LOCALLY VALIDATED**
+Current milestone: **M11 — IMPLEMENTED AND LOCALLY VALIDATED; production pending**
 
-Last completed milestone: **M10 (all blocking local gates PASS; production validation pending)**
+Last completed milestone: **M11 (all31 blocking local gates PASS; production validation pending)**
 
-Next permitted action: **STOP after M10. Local Ready for Next Milestone: YES; M11 requires a separate instruction and has not begun. No deployment or cloud operation authorized.**
+Next permitted action: **STOP after M11. Ready for Next Milestone: YES (local gate only under user section103). M12 NOT STARTED; separate instruction required. No deployment or cloud operation authorized.**
 
-Overall status: **M0 VALIDATED COMPLETE; M1–M10 IMPLEMENTED AND LOCALLY VALIDATED; CLOUD NOT EXECUTED**
+Overall status: **M0 VALIDATED COMPLETE; M1–M11 IMPLEMENTED AND LOCALLY VALIDATED; CLOUD NOT EXECUTED**
 
 Authoritative architecture:
 
@@ -30,9 +30,9 @@ Authoritative architecture:
 | M7 | Persistence + Observability APIs | IMPLEMENTED AND LOCALLY VALIDATED; all blocking local gates PASS; production pending | YES |
 | M8 | UI Operational Visibility | IMPLEMENTED AND LOCALLY VALIDATED; all blocking local gates PASS; production pending | YES |
 | M9 | SRE Metrics + SLOs | IMPLEMENTED AND LOCALLY VALIDATED; production activation pending | YES (local only) |
-| M10 | Accounting-Grade FinOps Runtime Ledger | IMPLEMENTED AND LOCALLY VALIDATED; production validation pending | YES (local only; STOP, M11 not authorized) |
-| M11 | Billing Integration | NOT IMPLEMENTED BY DESIGN; separate instruction required | NO |
-| M12 | Reconciliation + Allocation | BLOCKED BY M11 | NO |
+| M10 | Accounting-Grade FinOps Runtime Ledger | IMPLEMENTED AND LOCALLY VALIDATED; production validation pending | YES (local only; M11 planning authorized) |
+| M11 | Cloud Billing Integration + Pricing Data | IMPLEMENTED AND LOCALLY VALIDATED;31blocking local gates PASS; production pending | YES (local only) |
+| M12 | Reconciliation + Allocation | NOT STARTED — requires separate user instruction | NO (implementation not authorized) |
 | M13 | Unit Economics | BLOCKED BY M12 | NO |
 | M14 | Budgets / Forecasting / Anomalies | BLOCKED BY M13 | NO |
 | M15 | Security / Retention / Sampling Hardening | BLOCKED BY M14 | NO |
@@ -9104,3 +9104,803 @@ activation/use compatible software while preserving ledger; downgrade drops new
 accounting data and is NOT a production-safe rollback method.
 
 Ready for Next Milestone: **YES (local gates)**. **STOP. M11 NOT STARTED.**
+
+## M11 — Cloud Billing Integration + Pricing Data: planning only — 2026-10-08
+
+**M11 — PLANNED — NOT IMPLEMENTED.** This section supersedes historical M11
+not-authorized wording. User authorization covers inspection and planning only.
+Last completed milestone M10; M12 remains blocked. Only this record changes in
+this pass. No implementation, migration, SQL, Terraform resource or UI is authored.
+
+### Entry gate and current-state audit
+
+Entry gate PASS for the explicitly established LOCAL progression model. M0 is
+VALIDATED COMPLETE; M1–M10 are IMPLEMENTED AND LOCALLY VALIDATED, with all blocking
+local gates PASS and local Next Milestone YES. This is not a claim that M0–M10
+are production deployed. M10's completion evidence records 5329 backend passes,
+12 skips, 1000 focused passes, 932 frontend passes, build PASS, crash/restart and
+100000-row performance evidence. These historical tests were not rerun for this
+planning-only pass. Existing production limitations remain in force.
+
+Actual source inspected: finops/contracts.py, models.py, repository.py, service.py,
+usage_ledger.py, slo_source.py and api_models.py; slo_evaluator.py; authorization.py
+and schemas.py; config.py; API observability_routes.py; alembic/env.py; frontend
+api/finops.ts and Settings FinOpsPanel.tsx; infra Terraform/Collector/monitoring
+inventory. Ledger quantities are nullable BigInteger with BASE/ADJUSTMENT semantics;
+no cost/currency/price columns or estimator. AccountingSource builds durable
+populations; CompositeSource sends cost_ledger_completeness to M9 evaluate(), also
+used by the financial completeness route. M11 remains unimplemented in code.
+
+Read AGENTS.md and .agent/PLANS.md and all requested authoritative files under
+ docs/Telemetry/: README, 00, 01, 05, 07, 08, 09, 11, 12, 13, 14, 15, 20, 22, 23
+(the full filenames in that directory are authoritative). User's approved M10
+scope supersedes obsolete roadmap M10 estimator/pricing wording; this planning
+request assigns M11 source normalization only, M12 reconciliation/allocation,
+M13 unit economics and M14 budgets/forecasting/anomalies. No per-turn estimator
+is silently introduced here. Overall production DoD remains incomplete.
+
+### Billing source inventory
+
+| Existing asset | Finding / reuse |
+|---|---|
+| backend/observability/config.py | Validated finops_billing_project/dataset placeholders; fixed Detailed Billing + Pricing source and EUR reporting policy. They do not activate ingestion. |
+| backend/observability/schemas.py | Canonical primary-source names and FOCUS supplementary role; role capability ceilings. |
+| backend/observability/finops/ | M10 runtime accounting only; reuse package ownership and safe contract conventions, not ledger write path for money. |
+| backend/api/observability_routes.py | Three financial GET routes and existing financial dependency. Reuse environment guards, bounded reads, rate limits and signed cursors. |
+| src/components/shell/settings/observability/FinOpsPanel.tsx | Runtime usage, health and completeness available; current misleading future 'Billing reconciliation — M11' card must split source M11 from reconciliation M12 in implementation. |
+| docs/Telemetry/08… | Names finops_billing_normalized, finops_pricing_normalized, finops_resource_cost_daily; specifications only, no executable SQL found. |
+| infra/observability/terraform/ | Provider-free sidecar integration contract and separate monitoring module; no billing export destinations, billing IAM, datasets or pricing objects. Preserve these ownership boundaries. |
+| Repository discovery | No gcp_billing_export/cloud_pricing_export bindings, billing account ID, billing SQL, pricing/FOCUS ingestor or BigQuery client implementation found in inspected source/infra. No billing-specific file paths found. |
+
+No exact billing project, dataset, table, location, account, environment or runtime
+identity is selected by this plan. Infrastructure uses explicit project variables
+and placeholders; unrelated GCP configuration is not proof of a billing destination.
+Secret-bearing local environment files/credentials were not printed or resolved.
+Remote export existence/configuration is UNKNOWN, not asserted absent.
+
+### Source authority and adapter boundaries
+
+| Source | Purpose and authority | Freshness / limitations |
+|---|---|---|
+| M10 runtime ledger | Physical attempts, quantities, workload/agent attribution | Existing durable coverage; no authoritative money. |
+| Detailed Billing Export | ACTUAL_BILLED_COST, source charge/credit/adjustment and invoice truth | Late data and schema evolution; no inference of invoice finality. |
+| Pricing Export/catalog | CATALOG_PRICE reference; separately typed account-contract price if present | Effective/observed versioned pricing; never substitutes for billed charges. |
+| FOCUS | Optional supplementary normalized cross-provider view/validation | Separate source state/schema; never union into primary spend or override it. |
+
+Versioned BillingExportSource, PricingSource and optional FocusSource protocols
+return bounded typed batches/snapshot manifests. Fixture adapters require explicit
+TEST_FIXTURE mode; production missing bindings yield NOT_CONFIGURED and NULL amounts.
+BigQuery adapters own SQL, schema validation and transport. Normalizers/services
+never receive unrestricted query input. No business turn/model/ledger callsite
+queries BigQuery or awaits source ingestion. Source outage cannot change M10
+admission, quantities, BASE events, root/SSE/authority or M9 runtime availability.
+
+### Detailed Billing Export design
+
+Provider schema reference checked 2026-10-08:
+[Google Detailed export](https://docs.cloud.google.com/billing/docs/how-to/export-data-bigquery-tables/detailed-usage).
+Contract projection: billing_account_id; service.id/description; sku.id/description;
+project.id/number; optional resource.name/global_name and location.region;
+usage_start_time/end_time; usage.amount/unit/amount_in_pricing_units/pricing_unit;
+cost, currency, currency_conversion_rate; credits.amount/type/id;
+cost_type; adjustment_info.id/description/type/mode; invoice.month; export_time.
+Keep descriptions only as sanitized financial display metadata where necessary;
+no unrestricted labels/tags/organization hierarchy snapshot. Missing nullable
+resource metadata is explicit, not a schema failure. Missing required monetary,
+currency, SKU/service or temporal fields quarantine the batch and prevent publication.
+
+Source cost/usage may be floating point: cast at the SQL boundary to fixed precision
+before transport; never construct authoritative Python money from a float.
+Provider precision cannot be recovered beyond the export's precision. Tax lines
+are represented by cost_type when supplied; absent taxes are unavailable, never
+calculated. Resource coverage depends on the exporting service; no per-attempt
+billing identity is assumed. New unused columns are ignored; explicit schema
+fingerprint/adapter version protects required field/type semantics.
+
+### Monetary / currency semantics
+
+Separate signed base_cost, credit_total, adjustment_cost, tax_cost, rounding_cost,
+regular_cost and net_cost. source_cost_total = sum(cost) across all included lines;
+net_cost = source_cost_total + sum(credits.amount). adjustment_cost is a subtotal
+of cost_type=adjustment, not added a second time. Report the regular-only gross
+subtotal separately from total pre-credit source cost and scope taxes/rounding.
+Fixture regular100, credits-20, separate adjustment-5: regular gross100,
+adjustment-5, total pre-credit95, net75. Account-specific discounts already reflected
+in cost are not inferred again from catalog pricing; expose credit categories.
+Credit child arrays must not multiply parent cost through a cross join.
+
+Proposed normalized money/quantity/rate type BIGNUMERIC / Decimal with PostgreSQL
+NUMERIC(76,38) for the bounded application cache. Reject overflow/nonfinite values
+and excess scale explicitly; SQL boundary rounding is HALF_AWAY_FROM_ZERO, matched
+by Decimal ROUND_HALF_UP and versioned as source_precision_v1. No currency-minor-unit
+rounding during normalization or aggregation. API money/usage are decimal strings;
+browser formatting never aggregates or converts authoritative amounts. Capture
+precision-loss semantics in audit metadata. Separate values/units and pricing-unit
+quantities; do not relabel requests, characters, time, GiB or other units as tokens.
+
+Preserve native ISO currency and source conversion metadata. Never sum currencies.
+EUR is the mandated reporting target in M11, but docs07 require an effective-dated,
+versioned conversion source. Native EUR is directly reportable; provider USD-to-account
+conversion is retained and only used where it proves the requested EUR conversion.
+For other unsupported pairs return EUR_REPORTING_UNAVAILABLE / NULL, not fabricated
+FX or a substituted USD total. No document assigns FX to a particular later milestone;
+record it as missing authorized conversion input, not an invented M12 requirement.
+
+### Billing row identity / idempotency and late corrections
+
+The inspected schema provides no guaranteed general row primary key. Do not pretend
+that project+SKU+time is unique or use a whole-row hash as a unique row key: legitimate
+identical rows must retain multiplicity. Proposed primary strategy is bounded,
+complete partition snapshots represented as multisets, published by generation.
+Source binding identity includes environment, private account/destination scope and
+adapter version. Canonical typed row fingerprint excludes ingestion clock, mutable
+human text and array order; canonical credit entries are sorted while preserving
+repeated entries. Include immutable dimensions, source times and exact normalized
+financial content in a versioned content hash; group identical fingerprints with
+occurrence_count. SHA256 collisions are checked against canonical projected content;
+a mismatch is quarantined, never silently merged. Do not deduplicate provider rows
+merely because content matches. Optional trustworthy provider row keys can be used
+only if their uniqueness/update semantics are documented by that source adapter.
+
+Persist manifest identity(source, partition, content_digest, schema_version), with
+unique generation and current-generation pointer per scope/partition. Replay of the
+same complete multiset is a no-op. A changed multiset creates a new immutable
+manifest; atomic pointer promotion replaces the current partition contribution,
+retaining prior digests/audit history. Source adjustment rows remain independent
+signed source lines; replacement corrections update the partition's authoritative
+snapshot without double-counting. Without provider keys do not claim to link a
+replacement row to one exact historical original. Partial/failing paginated scans
+never publish or remove previous amounts; pages require a consistent source snapshot
+or export cutoff plus stability check before promotion. Use expiring worker lease
+and fenced generation CAS so concurrent/restarted workers cannot regress publication.
+
+Incremental discovery uses export timestamps with tie-safe inclusive overlap and
+partition manifests, not usage-time-only watermarks. Late rows trigger rescan of
+older usage partitions. Proposed operational lookback7days, plus daily current/prior
+invoice period scans and rotating 24month retained partition checks, are PROVISIONAL,
+not provider guarantees. Persist per-partition checkpoints/backlog so a failed cycle
+resumes. Incremental overlap alone cannot prove completeness after arbitrarily late
+updates; full retained-coverage sweep and its age are separately visible. Missing
+historical coverage stays partial; never present an aged adjustment as permanently
+excluded or an unverified period as settled.
+
+### Watermarks / freshness / bounded metrics
+
+Durable per-source state: binding/config/schema versions, coverage_start/end,
+source max_export_time, pricing_as_of watermark, last_successful_query,
+last_published_generation, processed partitions/periods, remaining backlog,
+last_full_sweep, query cutoff, bounded error code, fencing token/lease expiry.
+Commit watermark only with verified complete publication; failure leaves prior
+cursor and source generation intact. Job heartbeat is not source freshness.
+
+Separate billing/pricing states FRESH, DELAYED, STALE, UNAVAILABLE, NOT_CONFIGURED;
+configured-empty is UNAVAILABLE with NO_DATA reason, not healthy. Last known data
+can remain visible with as_of/age and stale indication. No-row query success alone
+cannot renew data freshness. Explicit scope/currency coverage accompanies health.
+Docs do not approve a cadence/threshold: propose hourly billing discovery, daily
+pricing refresh; billing delayed after24h/stale after72h, pricing delayed after48h/
+stale after7days, all provisional read-only deployment policy pending owner review.
+Source checks must consider snapshot coverage and backlog, not just global max time.
+No new SLO objective/formula or financial outage effect on M9 availability.
+
+Metrics planned: queries, processed/updated/duplicate/late rows, errors, source_age,
+unmapped count/ratio, query_duration seconds, bytes_processed/billed where returned.
+Use finite source/environment/status/category labels only, not billing account,
+project/resource/SKU IDs, hashes, SQL or query job IDs. Query bytes are not monetary
+cost without an authoritative applicable rate; monetary ingestion health does not
+replace M9 capture completeness. Existing SDK views and BOTH Collector allowlists
+must cover any new instruments with privacy/cardinality tests.
+
+### Pricing source design and FOCUS
+
+[Google pricing schema](https://docs.cloud.google.com/billing/docs/how-to/export-data-bigquery-tables/pricing-data)
+uses cloud_pricing_export and daily pricing_as_of_time plus export_time. Normalize
+service/SKU, pricing_unit, account_currency_code, conversion rate, list_price and
+separate billing_account_price; consumption_model_prices when present;
+tiered_rates.start_usage_amount/pricing_unit_quantity/usd_amount/account_currency_amount;
+aggregation_info and contract price_info. Snapshot time is not proof of the original
+price effective date. No retroactive backfill before first proven coverage.
+
+Use finops_price_component-style tariff records per docs20: version/source, SKU,
+service, region, charge_type/modality where proven, consumption model, tier lower/
+upper, units, unit quantity, currency and price kind. Persist observed_from/to and
+proven effective_from/to separately; observed-only validity is explicitly qualified.
+New price snapshots append; historical versions remain. Close intervals only from
+subsequent authoritative observation, preserving provenance and uncertainty.
+No interpolation over missing history or unsupported pricing components. Lookup
+helpers select a proven/qualified interval and tier or return unavailable; no M10
+repricing, per-turn estimator or M12 comparison engine. Tests validate temporal
+selection without implementing production catalog-cost reconciliation.
+
+FOCUS reference:
+[Google FOCUS schema](https://docs.cloud.google.com/billing/docs/how-to/export-data-bigquery-tables/focus-export).
+Optional typed supplementary source includes billing/charge periods, native currency,
+billed/effective/list/contracted values, SKU/service/unit and export metadata as
+available. Each amount retains its FOCUS meaning; no automatic assumption of equality
+to Detailed cost. Preserve schema version and distinct health/coverage. Local fixture
+adapter/schema contract belongs to M11; activation/remote object remains disabled
+without bindings/approval. No other finance providers are introduced.
+
+### SKU / service classification and M12 readiness
+
+Versioned explicit service.id/SKU.id mappings, effective-dated and source-reviewed,
+classify CLOUD_RUN, CLOUD_SQL, BIGQUERY, GCS, MONITORING_LOGGING, NETWORK, MODEL_AI,
+OTHER, UNKNOWN. Unknown SKU is UNMAPPED, remains financially included; distinguish
+service-known/SKU-unmapped from unknown service. No description-substring inference.
+Mapping quality includes row and absolute-value coverage per currency (netting
+credits must not hide mapping gaps); zero eligible yields unavailable ratio.
+
+Common actual M10 dimensions: environment, provider, model, operation/type, region
+(optional), start/finish time, quantities and workload; agent is runtime-only.
+M10 has no persisted billing project/service/SKU identifier. Environment-owned
+project binding and versioned SKU/model/unit mapping may support future grouped
+joins, with ambiguity recorded. Never assume Gemini name=SKU, billing resource=run,
+or exact per-attempt charge. Do not alter M10 to force correlation. M12 owns matching,
+variance, direct/shared/unallocated assignment and chargeback/showback; M11 merely
+normalizes source service/category. M13/M14 remain absent.
+
+### BigQuery query architecture and storage
+
+Billing/Pricing exports -> BigQuery -> versioned normalized views -> asynchronous
+M11 query/ingestion -> operational state/summary cache -> protected financial API.
+BigQuery remains warehouse. Define source-controlled finops_billing_normalized,
+finops_pricing_normalized and finops_resource_cost_daily (source category totals,
+not allocation). Consumers use normalized versions, not raw evolving schemas.
+Keep raw lines, credit breakdowns, manifests and historical price components in
+BigQuery analytical storage; Cloud SQL only source state, publication metadata,
+versioned mapping and bounded summary/price lookup cache. No full warehouse copy.
+
+Parameterized fixed SQL; deployment allowlisted fully qualified identifiers (SQL
+parameters cannot bind table identifiers), private server-owned project/account
+scope, explicit environment and date/partition filters. Verify actual partition
+metadata at later approved discovery; do not assume export_time equals partition
+field. Pair physical partition pruning with logical usage/invoice/export filters;
+retain null partition/new-streaming coverage when the source requires it. No
+SELECT *, user SQL, unbounded joins or frontend-selected destinations. Proposed
+query job timeout30s, max batch1000, max API range31days, summary rows<=100, cached
+API deadline2s, bounded worker concurrency1 per binding; byte ceiling requires
+explicit owner-configured maximum_bytes_billed, absent ceiling blocks live querying.
+LIMIT is not scan-cost protection. Catch-up uses bounded partition jobs, not a
+single years-long scan. Static/local plan checks only in this pass/later local tests.
+
+Cache key includes environment/private scope, currency, interval, source generation,
+pricing/mapping/schema versions. Proposed TTL5minutes, freshness always recomputed;
+expired stale results explicitly marked, never used as fresh after outage. UI reads
+cached summaries only; cache miss returns bounded not-yet-loaded/unavailable state
+and never fires BigQuery synchronously. A complete source snapshot distinguishes
+real zero spend from missing data. 24month analytics retention per docs00/09;
+no deletion executor now. Preserve unresolved billing periods and M10 corrections;
+enterprise retention/settlement holds may extend the policy.
+
+### API, M8 UI and privacy design
+
+Plan GET /api/observability/finops/billing-health, /billing-summary, /pricing-status.
+All require existing verified principal plus Permission.FINANCIAL_DATA and environment
+scope before data/cache access. Canonical role ceilings grant this to FinOps only;
+User/Operator/Developer-SRE/Admin/Auditor have no financial grant. Keep Admin config
+access separate. Existing verified provider returns None until production identity
+integration; tests inject verified principals, not trusted browser headers.
+
+DTOs: schema/source/mode, environment, bounded interval/invoice period, native currency,
+regular gross/pre-credit/credits/adjustment/tax/rounding/net decimal strings,
+category, coverage, as_of/generation and freshness reason. Amount basis explicitly
+ACTUAL_BILLED_COST; CATALOG_PRICE status is separate, never replacing actuals.
+Pricing status shows coverage, version, effective/observed dates and mapping gaps,
+not a full browser catalog. No raw rows, unrestricted query or mutation endpoints.
+Unknown/unconfigured totals NULL, not synthetic0. Reuse shared read semaphore/rate
+admission/cursor signing; include source generation in pagination scope to avoid
+mixing financial snapshots.
+
+Privacy boundary: warehouse restricted provider account/project/resource identifiers;
+DB private scope keys and allowlisted normalized operational metadata only; API/UI
+opaque scope aliases, sanitized categories and aggregates; logs stable error codes
+and counts only. No full IDs, SQL/job payloads, credentials, organizational labels,
+model/prompts/responses/Teams/knowledge bodies. Errors hide provider exception text.
+Metrics only finite taxonomy. Apply source-query access restrictions through exact
+approved IAM later; financial capability never grants conversation access.
+
+UI impact evaluation: (1) M11 creates required Settings source/actual-money health;
+(2) three safe DTOs support that view; (3) billing/pricing cards belong to M11 within
+existing FinOpsPanel, using ReadState/useObservabilityQuery/styles; (4) financial
+RBAC remains server-enforced; (5) effective source/cadence/retention configuration is
+view-only, owned by deployment/IaC. No enable-export button, SQL editor or source
+mutation. Separate query states let billing fail independently of runtime and pricing.
+Show source absence NOT_CONFIGURED, fixture data TEST FIXTURE, native gross/credit/net
+when available, EUR unavailable when unsupported. Split current future card:
+Billing source/Pricing source M11; Reconciliation/Allocation M12; Unit economics M13;
+Budgets/Forecasts/Anomalies M14. Never show 'Reconciled' in M11.
+
+### Implementation order and exact expected paths (future only)
+
+1. Contracts/Decimal fixtures, source identity/multiset and temporal pricing design.
+2. Local normalization, schema compatibility, bounded BigQuery query generation.
+3. Analytical SQL definitions and independent source-state/cache repository;
+   additive application migration; snapshot/fencing/restart tests.
+4. Disabled source worker/config lifecycle; no production startup query by default.
+5. Protected cached read APIs and bounded safe metrics/Collector projections.
+6. Existing FinOps UI source cards, truthful independent unavailable states.
+7. Local correctness/privacy/regression/performance gates; separate live gate report.
+
+New planned paths:
+- backend/observability/finops/billing_contracts.py
+- backend/observability/finops/billing_sources.py
+- backend/observability/finops/bigquery_source.py
+- backend/observability/finops/billing_normalization.py
+- backend/observability/finops/billing_models.py
+- backend/observability/finops/billing_repository.py
+- backend/observability/finops/billing_ingestion.py
+- backend/observability/finops/billing_service.py
+- backend/observability/finops/billing_api_models.py
+- backend/observability/finops/pricing.py
+- backend/observability/finops/sku_mapping.py
+- backend/observability/finops/billing_metrics.py
+- alembic/versions/m11_billing_source_state.py (descriptive filename; revision chosen during implementation)
+- infra/observability/bigquery/finops_billing_normalized.sql
+- infra/observability/bigquery/finops_pricing_normalized.sql
+- infra/observability/bigquery/finops_resource_cost_daily.sql
+- infra/observability/bigquery/README.md
+- infra/observability/terraform/billing/main.tf
+- infra/observability/terraform/billing/variables.tf
+- infra/observability/terraform/billing/versions.tf
+- infra/observability/terraform/billing/outputs.tf
+- infra/observability/terraform/billing/README.md
+- backend/tests/fixtures/finops_billing_v1.json
+- backend/tests/fixtures/finops_pricing_v1.json
+- backend/tests/fixtures/finops_focus_v1.json
+- backend/tests/test_finops_billing_contracts.py
+- backend/tests/test_finops_billing_normalization.py
+- backend/tests/test_finops_billing_ingestion.py
+- backend/tests/test_finops_pricing.py
+- backend/tests/test_finops_billing_api.py
+- backend/tests/test_finops_billing_query.py
+- backend/tests/test_finops_billing_migrations.py
+- backend/tests/test_finops_billing_privacy.py
+- backend/tests/test_finops_billing_metrics.py
+- backend/tests/test_finops_billing_performance.py
+
+Expected modifications:
+- .agent/OBSERVABILITY_EXECUTION.md
+- alembic/env.py
+- backend/observability/config.py
+- backend/api/app.py (independent disabled billing lifecycle only)
+- backend/api/observability_routes.py
+- backend/observability/metrics.py
+- backend/observability/logging.py
+- backend/observability/README.md
+- infra/observability/collector/config.yaml
+- infra/observability/collector/config.local.yaml
+- src/api/finops.ts
+- src/api/finops.test.ts
+- src/api/finops.test-support.ts
+- src/components/shell/settings/observability/FinOpsPanel.tsx
+- src/components/shell/settings/observability/FinOpsPanel.test.tsx
+- src/components/shell/settings/observability/ObservabilitySettings.test.tsx
+- src/components/shell/settings/observability/Panels.test.tsx
+- backend/tests/test_api_security_contract.py
+- backend/tests/test_observability_collector.py
+- backend/tests/test_observability_migrations.py
+
+Migration adds finops_billing_ingest_state, finops_billing_publication,
+finops_sku_mapping, finops_billing_summary_cache, finops_price_lookup_cache;
+scoped unique/check/index constraints and publication FKs. No change to five M10
+tables or ADK metadata. Register separate billing-owned metadata with existing
+Alembic ownership filter. Chain after c10a8f6e2d41. Local upgrade/downgrade and offline
+PostgreSQL DDL only through isolated URL/test harness; downgrade destroys new
+financial cache/state and is not a production recovery strategy. Production rollback
+uses compatible software/disable billing worker, preserving history/watermarks.
+Terraform billing module remains isolated from existing sidecar/monitoring state,
+with explicit environment/project/location/destination inputs and activation disabled.
+No broad IAM grants, secrets, export toggling or scheduler creation in local scope.
+
+### Validation plan and objective M11 exit criteria
+
+Future commands: isolated guarded pytest focused test_finops_billing_*.py and
+ test_finops_pricing.py; existing test_finops_runtime_*.py, test_observability_*.py,
+security/migration/provider regressions; full backend/tests excluding manual tests;
+ npm test -- --run; npm run build; git diff --check. Reuse/inspect existing guarded
+runner before use; strip shared/cloud DB variables and block external network.
+Native Collector tests use loopback only. Terraform fmt -check and validate only
+with no remote backend/provider initialization; dependency absence reported, never
+resolved by deployment. No Terraform plan/apply/import/state mutation, live BigQuery
+job (including billed query/dry run), shared DB upgrade, startup cloud secrets or
+model warmup. Static SQL tests use fixture source metadata and fake BigQuery client.
+Local disposable DB only; PostgreSQL engine confidence remains explicit if unavailable.
+
+| ID | Blocking implementation criterion / evidence required |
+|---|---|
+| C01 | Three truth domains explicit; actual billing cannot be overwritten by catalog/reference or M10 usage. |
+| C02 | Exact versioned Detailed source field/type projection; optional resources and required missing fields tested. |
+| C03 | Pricing adapter, tariffs/units/tier/consumption model and optional contract prices distinguished. |
+| C04 | FOCUS supplementary only; no double ingestion of the same spend. |
+| C05 | Decimal precision, boundaries, rounding/overflow and 100-20-5=75 exact signed fixture pass. |
+| C06 | Native currency preserved; USD/EUR separate; unsupported EUR conversion NULL with reason. |
+| C07 | Repeated complete snapshot leaves totals stable; legitimate identical rows retained with multiplicity. |
+| C08 | Hash collisions/canonical mismatch quarantine; concurrent fenced publication converges without regression. |
+| C09 | Late usage row, export timestamp ties and older-period adjustment captured by overlap/retained sweeps. |
+| C10 | Corrected partition updates current truth, prior manifest retained, adjustment not added twice. |
+| C11 | Crash mid-query/page/publication and restart preserve old truth and durable watermark/backlog. |
+| C12 | Historical price A remains A after later B; missing pre-observation history and tier gaps unavailable. |
+| C13 | Unknown SKU remains UNMAPPED with cost included and mapping coverage accurately bounded. |
+| C14 | Billing/pricing freshness independent; no data/unconfigured/outage never healthy; stale cached data labeled. |
+| C15 | Fixed parameterized scoped SQL, partition filters, ranges/bytes/page/time caps and injection tests pass. |
+| C16 | Source schema extra field tolerated; missing required/type/version changes fail without partial publication. |
+| C17 | Warehouse/application storage boundary, additive local migration/index/FK/unique parity; no M10 schema change. |
+| C18 | All three APIs deny unauthenticated/unverified/wrong capability/environment; Admin financial denial retained. |
+| C19 | API/UI/log/metric adversarial fixture redaction excludes private billing IDs/payloads/SQL/secrets/content. |
+| C20 | Existing M8 panel shows independent runtime/billing/pricing, real NULL/zero distinction and fixture label. |
+| C21 | Metrics finite, seconds unit, both Collector configs native/actual local projection tests pass. |
+| C22 | Source/pricing outage leaves chat/M10 accounting and M9 evaluator semantics unaffected. |
+| C23 | Normalization/batch/duplicate/summary/price lookup/API timings measured with fixture size and limits; no production claim. |
+| C24 | Imports, build, focused and applicable full regressions pass; skips/failures repaired/reported; scoped diff audit pass. |
+| C25 | No M12 matching/variance/allocation or M13/M14 functionality; no hard-coded model prices. |
+| C26 | No remote mutation or live billed query without exact approval; retention execution inactive. |
+| C27 | Roadmap 'provider billed costs load automatically': automatic local fixture worker PASS required; live export/worker end-to-end still pending approved deployment. |
+| C28 | Roadmap 'dashboards use normalized views': static/local API/UI contract uses normalized generations; live view/dashboard integration must be separately proven. |
+
+All C01–C28 implementation validations are NOT RUN / PENDING in this planning pass.
+Planning completeness PASS means criteria and tests are specified, not implemented.
+No cost engine/reconciliation/allocation acceptance test is silently waived: those
+remain subsequent milestone requirements. Local evidence alone does not satisfy
+M11's cloud-dependent formal exits. Ready for Next Milestone remains NO until all
+applicable exits, including approved live automatic loading/normalized-view validation,
+pass or an explicit authoritative separation of deployment gates is approved.
+
+### Cloud status, risks and future approval boundary
+
+Cloud deployment status = **NOT EXECUTED — USER APPROVAL REQUIRED**.
+Planning/local implementation require no cloud changes. Potential pending operations:
+configure existing-or-new Detailed/Pricing/optional FOCUS destinations; create approved
+BigQuery normalized views/manifest storage; grant narrowly scoped query/job access;
+apply additive Cloud SQL migration; deploy worker/backend/frontend/config; optionally
+schedule ingestion. No account/project/dataset/identity/environment selected and no
+operation proposed for immediate approval. Exact source existence must first be
+confirmed by approved/read-only discovery; do not create duplicates by assumption.
+
+Before each remote mutation present all10 AGENTS.md fields (exact action/target/
+resources/necessity/operational/security/cost/data-loss/rollback/environment), plus
+migration revision/table/index/lock/data-risk detail. No blanket approval covers
+later actions. Billed queries are external jobs and cost-bearing; do not run them
+as a planning shortcut. IAM/backend/provider availability is not authorization.
+
+Risks: source key absence requires multiset/snapshot correctness; late corrections
+require old-partition rescan whose cost must be bounded; source floats limit original
+precision; pricing first observation is not historical effective date; authoritative
+EUR conversion input may be missing; SKU/project correlation is incomplete in M10;
+identity integration remains default-denied; real export bindings/partition schemas/
+permissions/location/coverage and price history remain unknown; production PostgreSQL,
+Cloud Run background scheduling and end-to-end loading remain unvalidated. Proposed
+cadences/thresholds/caps need policy review before production activation. These do
+not block authorized local implementation with strict fixture modes and unavailable
+states; they do block production claims and milestone progression where applicable.
+
+### Planning performed and validation results
+
+Actual file changed: .agent/OBSERVABILITY_EXECUTION.md only. Initial git status/diff
+clean. All requested documents/source inspected; provider documentation read through
+public web only, no authenticated cloud inspection or jobs. No tests/builds/migrations
+executed, no implementation errors/repairs claimed. Planning review: source inventory,
+financial hierarchy, precision/FX, row multiplicity, history/freshness, APIs/RBAC/UI,
+paths, tests and individually enumerated gates covered. Final working-tree/diff and
+whitespace verification recorded below after execution. Earlier milestone evidence
+and production limitations retained.
+
+**Ready To Implement M11: YES — local only, requires separate implementation instruction.**
+**Ready for Next Milestone: NO. M12 BLOCKED. STOP after planning.**
+
+Final planning hygiene: git status/untracked inventory and git diff reviewed; only
+.agent/OBSERVABILITY_EXECUTION.md modified, no generated artifacts. git diff --check
+PASS. Initial header-edit command used unavailable python alias; rerun with python3
+succeeded. No implementation/test failure or cloud action occurred.
+
+## M11 implementation start — 2026-10-08
+
+User explicitly authorizes M11 local implementation with cumulative corrective-line
+semantics and section103 blocking local gates. This supersedes planned replacement-row
+wording: source corrections append negation/replacement/adjustment rows; generations
+replace only the current projection pointer, retaining prior manifests. Native pricing
+observations cannot extrapolate outside proven coverage. Inspect approved docs/code,
+reuse M7 authorization/database, M10 isolation and M8 component patterns. Implement
+planned contract/adapter/normalizer/publication/state/SQL/Terraform/API/UI/tests paths,
+with bounded operational summary/tariff cache rather than source warehouse duplication.
+Default activation disabled, no live binding/BigQuery query/cloud mutation. All local
+gates PENDING; M12 blocked. Source-financial config read-only. Test commands and
+C01–C28 remain applicable with user section103 defining local completion and explicit
+production separation. No separate agent work authorized or used.
+
+
+## M11 — implemented financial-source projections — final validation audit
+
+### Authorization, objective and specifications
+
+M11 only. User section103 and Production validation distinction explicitly separate
+blocking local completion from pending production validation; this supersedes the
+planning-only live gate above, without authorizing cloud operations or M12 execution.
+Objective: independently normalize Detailed actual charges, Pricing tariff observations
+and optional FOCUS; publish complete fenced source generations and expose safe M8
+FinOps reads, preserving M10 runtime truth and existing application architecture.
+Read/reused AGENTS.md, .agent/PLANS.md, approved M11 plan; docs/Telemetry README,
+00,01,05,07,08,09,11,12,13,14,15,20,22,23; M10 ledger, M9 SLO providers, M7 application
+Database/Alembic/RBAC/cursors/read guards, M8 query/ReadState/layout/navigation.
+Public Google Detailed/Pricing/FOCUS schema documentation inspected; no authenticated
+source inspection or source jobs. Current local source remains authoritative.
+
+### Implementation and financial evidence
+
+Detailed v1 allowlist preserves invoice.month independently of usage_start/end and
+export_time, service/SKU identity, fractional usage/unit/pricing quantity, cost/currency,
+credit identities/types/signed amounts, cost_type, adjustment identity/type/mode,
+consumption model, conversion metadata and available price.* / cost_at_* evidence.
+Restricted identifiers are ephemeral canonical hashes, absent from public DTOs.
+Unknown unused source fields are ignored; missing required/type/version fields reject
+the entire generation. SQL casts exported numeric floats to BIGNUMERIC before Python;
+normalizers reject floats/nonfinite/overflow. Source float precision cannot be restored.
+
+Actual charge authority is Detailed Billing. Catalog list/account/consumption prices
+are PRICING_EXPORT_CATALOG, independent from BILLING_LINE_PRICE_EVIDENCE. M10 is observed
+runtime usage; no M10 BASE values, quantities, schema or completeness formula changed.
+Tests prove actual80/catalog100 stay distinct and credits/adjustments100-20-5=75.
+
+Billing corrections append negation/replacement/adjustment source lines; original10,
+negation-10 and corrected5 total5, with January invoice10 and February invoice-5.
+No source-event rewrite. New snapshots atomically replace only current pointers;
+previous immutable manifests/control totals remain. BigQuery owns source-line history,
+Cloud SQL does not copy raw billing rows. Invoice queries use invoice month and label
+partial source coverage; usage queries use daily usage partitions. Neither is invoice
+finality or reconciled cost. Late same-day/24h/later-period rows are recovered through
+recent overlap plus retained least-checked partition sweeps after restart.
+
+Canonical SHA256 Counter preserves identical-row multiplicity (A,A,B totals25 versus
+A,B totals15); permutation changes neither controls nor fingerprint. Independent SHA512
+canonical witness detects collisions without retaining full canonical payloads. Complete
+extraction/normalization precede one CAS-fenced publication transaction. Partial query,
+schema failure, publication rollback or stale worker cannot replace known-good data.
+Replay leaves totals stable, ten concurrent workers converge, durable state survives reopen.
+
+Pricing retains full tier lower/upper/quantity/list/account structures, aggregation
+level/interval, consumption model, currency/conversion and as-of/export timestamps.
+Coverage is OBSERVED_DAILY_SNAPSHOT, bounded to proven observation/day; A remains A
+when later B is published. Before first observation/after coverage/gaps/ambiguous
+lookup => PRICE_UNAVAILABLE. No retroactive catalog fallback/interpolation or tier
+calculator. Retention target24months is not a claim of24months pricing coverage.
+
+Credits remain separately signed; regular gross, adjustments, taxes, rounding,
+pre-credit and net are labeled. Null tax dimensions/unknown tax usage stay nullable,
+without invented quantity. Money/usage are Decimal with38fractional/38integer bound,
+100digit calculation context and exact decimal-string DTOs/UI. USD/EUR never summed;
+native EUR is reportable, unsupported EUR normalization is NULL with bounded reason.
+No external FX. Versioned effective-dated exact service/SKU mapping has bounded
+categories; unknown UNMAPPED is fully included. No substring classification/allocation.
+FOCUS has independent source/health/controls and cannot enter Detailed totals.
+
+Durable three-table state stores partition revision, current generation, attempts,
+success/error, coverage/export/as-of, manifest fingerprint/controls/mapping version and
+bounded summary/tariff cache. Backlog reconstructed from states; operational reads
+<=731partitions while prior generations remain retained. No destructive retention.
+Freshness uses source export and pricing_as_of_time, never worker timestamp alone.
+Independent FRESH/DELAYED/STALE/UNAVAILABLE/NOT_CONFIGURED, provisional central thresholds,
+cadence, source mode, counts/coverage and safe reasons. Default disabled/unbound.
+
+Fixed query layer has validated view identifiers; daily time/account/project predicates
+where source supplies project identity; pricing physical-partition overlap, export cutoff,
+max_rows+1 overflow guard, bytes cap/location/job timeout. SDK transport uses only explicit
+injected client, no credential discovery or default job. Fake-client tests assert real
+QueryJobConfig. APIs read caches only; no chat/model request queries BigQuery.
+
+Financial GETs billing-health, billing-summary, pricing-status reuse verified server
+FINANCIAL_DATA/environment/rate/concurrency/cursor guards. All six roles tested, Admin
+has no implicit financial capability. Safe DTOs expose no account/project/resource/SKU
+IDs/raw rows/SQL/secrets/conversation content. Exact strings survive frontend decoding.
+Both Collector configurations allow fixed source metrics/canonical finite labels,
+seconds units, no exemplars/high-cardinality IDs; poison identifier cannot leak.
+
+### UI impact evaluation (all five required questions)
+
+1. Creates Settings financial-source health, actual charge summary and catalog coverage.
+2. Three bounded read APIs provide those contracts; no raw billing access.
+3. Existing Settings > Observability & FinOps > FinOps extended in M11, existing styles,
+query hooks and ReadState reused. Runtime usage remains distinct; invoice/usage selector,
+credits/tax/adjustment labels, fixture mode, missing/stale/partial/EUR unavailable visible.
+4. Existing financial capability server-enforced; revocation/request handling regressions pass.
+5. Effective freshness/cadence policy PROVISIONAL and read-only; source/mapping/IaC secure
+configuration has no mutation endpoint. Reconciliation M12 card remains unavailable.
+
+### Local infrastructure and operational limits
+
+Additive Alembic d11b4a8c9e32 follows c10a8f6e2d41, three application-owned tables only,
+indexes/FKs/unique/checks; isolated SQLite upgrade/downgrade preserves other tables;
+PostgreSQL offline DDL checked. No PostgreSQL server available, so real PostgreSQL
+concurrency/locks and Cloud SQL migration are NOT runtime validated.
+Versioned SELECT-only normalized Detailed/Pricing/FOCUS and restricted resource daily
+SQL authored, static contracts checked. Not compiled/executed by a live BigQuery engine.
+Actual optional columns/partition pruning, including FOCUS partition field and pricing
+physical overlap, require production source discovery. Project-scoped Detailed results
+are scoped/partial; account-level invoice completeness is never claimed.
+Terraform provider-free billing binding/SQL rendering module follows existing contract
+pattern; fmt/validate pass. No resource/provider/backend/production target selected,
+no init/plan/apply/import/state operation. Promotion to actual managed views and IAM
+requires reviewed existing source owner/state and exact-operation approval.
+
+### Validation commands and results
+
+All Python runs use .venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py;
+wrapper strips cloud credentials/settings, forces isolated local DBs and disables
+warmup/model use; sitecustomize blocks all non-loopback sockets. Loopback Collector
+requires approved sandbox escalation. No external connection or live financial job.
+Final M11 focused command: backend/tests/test_finops_billing_*.py excluding performance:
+82 PASS,1warning,16.32s. Full M0–M11 focused and final backend results recorded below.
+Frontend npm test -- --run:57files,938tests PASS; npm run build:TypeScript+Vite PASS,
+2054modules,1.83s. Terraform fmt -check -recursive and validate PASS.
+SQL static/query-contract, local migration/offlineDDL and native Collector validations
+are included in Python gates. git diff --check PASS; final file/diff audit below.
+
+Failures/repairs: initial focused race from SQLite read-to-write upgrade repaired by
+CAS-before-read; retained scheduling unused slot repaired; frozen migration customtype
+repr repaired to sa.DateTime. SDK timeout getter string reflected in meaningful test.
+Full sandbox run5403PASS/12SKIP/11FAIL:10local socket permission errors and new BigQuery
+sink ownership inventory missing. Registered M11 owner; reran with approved loopback
+and external guard:5421PASS/12SKIP. Native Collector standalone9PASS including actual
+pipeline; strengthened final suite also asserts M11 metrics/units and poison isolation.
+Final suite re-run includes last nullable-tax/invoice/policy/mapping fingerprint changes.
+Canonical full-row collision witness used401080320bytes peak growth in initial synthetic
+100k benchmark; replaced retained row dictionaries with independent SHA512 witnesses.
+
+### Performance evidence (local, no production claim)
+
+Final standalone test1PASS/7.76s. Measurement ran alongside backend regressions,
+not an isolated capacity benchmark. Synthetic one-group unique rows; one bulk sample
+per size. Simulated extraction1k0.450ms/10k60.741ms/100k134.915ms; normalization including
+fingerprints/control totals1k50.449ms/10k507.079ms/100k5108.248ms. 100k exact total asserted.
+Row normalization median0.023854ms/p950.035875ms(n30); 1k publication60.002ms(single).
+Repeated identical snapshot median55.954ms/p9556.023ms(n5); cached summary read
+median0.809ms/p952.393ms(n5); API median1.884ms/p953.947ms(n5); pricing lookup
+median0.002583ms/p950.003500ms(n30). macOS peak RSS growth125042688bytes (~119MiB).
+No source extraction network, live BigQuery cost/performance or production DB inference.
+
+### Production status and pending exact-operation approvals
+
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED.
+Billing Export binding: NOT EXECUTED.
+Pricing Export binding: NOT EXECUTED.
+FOCUS binding: NOT EXECUTED (optional).
+BigQuery resource creation: NOT EXECUTED.
+Production IAM: NOT EXECUTED.
+Shared Cloud SQL migration d11b4a8c9e32: NOT EXECUTED.
+Backend/worker/frontend Cloud Run deployment/scheduling: NOT EXECUTED.
+Terraform apply/state operations: NOT EXECUTED.
+Production financial validation: NOT LIVE-VALIDATED.
+M12 reconciliation: NOT IMPLEMENTED BY DESIGN.
+
+Pending operations: verify actual export/account/project/location/schema/partition
+bindings; separately approve export activation/destinations if needed, approved normalized
+views, narrowly scoped query/IAM, shared three-table migration and worker/deployment.
+Source thresholds/query limits/pricing history/external identity/cost need live validation.
+Before any mutation present ten AGENTS.md fields with exact target and operation;
+no exact cloud target currently selected, so no executable approval proposal made.
+Rollback: disable source activation, retain warehouse/history/manifests, use compatible
+views/config; shared downgrade would drop new operational tables and needs own approval.
+No deployment, source binding, billing job, IAM, export/shared DB or external mutation.
+
+### Actual changed files
+
+- .agent/OBSERVABILITY_EXECUTION.md
+- alembic/env.py
+- backend/api/app.py
+- backend/api/observability_routes.py
+- backend/observability/README.md
+- backend/observability/config.py
+- backend/observability/dependency_instrumentation.py
+- backend/observability/metrics.py
+- backend/observability/runtime.py
+- backend/tests/test_api_security_contract.py
+- backend/tests/test_observability_collector.py
+- backend/tests/test_observability_migrations.py
+- infra/observability/collector/config.local.yaml
+- infra/observability/collector/config.yaml
+- src/api/finops.test-support.ts
+- src/api/finops.ts
+- src/components/shell/settings/observability/FinOpsPanel.test.tsx
+- src/components/shell/settings/observability/FinOpsPanel.tsx
+- src/components/shell/settings/observability/Panels.test.tsx
+- alembic/versions/d11b4a8c9e32_billing_source_state.py
+- backend/observability/finops/bigquery_source.py
+- backend/observability/finops/billing_api_models.py
+- backend/observability/finops/billing_contracts.py
+- backend/observability/finops/billing_ingestion.py
+- backend/observability/finops/billing_metrics.py
+- backend/observability/finops/billing_models.py
+- backend/observability/finops/billing_normalization.py
+- backend/observability/finops/billing_repository.py
+- backend/observability/finops/billing_service.py
+- backend/observability/finops/billing_sources.py
+- backend/observability/finops/pricing.py
+- backend/observability/finops/sku_mapping.py
+- backend/tests/_m11_financial.py
+- backend/tests/fixtures/finops_billing_v1.json
+- backend/tests/fixtures/finops_pricing_v1.json
+- backend/tests/test_finops_billing_api.py
+- backend/tests/test_finops_billing_ingestion.py
+- backend/tests/test_finops_billing_metrics.py
+- backend/tests/test_finops_billing_migrations.py
+- backend/tests/test_finops_billing_normalization.py
+- backend/tests/test_finops_billing_performance.py
+- backend/tests/test_finops_billing_query.py
+- infra/observability/bigquery/README.md
+- infra/observability/bigquery/finops_billing_normalized.sql
+- infra/observability/bigquery/finops_focus_normalized.sql
+- infra/observability/bigquery/finops_pricing_normalized.sql
+- infra/observability/bigquery/finops_resource_cost_daily.sql
+- infra/observability/terraform/billing/README.md
+- infra/observability/terraform/billing/main.tf
+- infra/observability/terraform/billing/outputs.tf
+- infra/observability/terraform/billing/variables.tf
+- infra/observability/terraform/billing/versions.tf
+- src/api/financialSources.test.ts
+- src/components/shell/settings/observability/FinancialSourcePanel.test.tsx
+- src/components/shell/settings/observability/FinancialSourcePanel.tsx
+
+### Final local exit criteria and regression results
+
+Final full backend command: backend/tests =>5424PASS,12SKIP,684warnings,
+256.84s. Final M0–M11 focused command: backend/tests/test_observability_*.py and
+backend/tests/test_finops_*.py =>1095PASS,8warnings,175.48s. Both exit0.
+These include M10 accounting/M9 SLO/API RBAC/privacy/migration/static SQL/Collector
+and all M11 tests including final mapping-version fingerprint behavior.
+Skipped11 real-corpus checks lack local validation corpus; one None-pending case is
+intentionally indistinguishable. Warnings include library deprecations/experimental
+ADK behavior and existing broad-suite aiosqlite cleanup threads reaching closed event
+loops (also present in prior approved full run); no M11 focused failure or thread
+warning. Cleanup warnings remain a suite limitation, not hidden or suppressed.
+Final git status --porcelain --untracked-files=all, diff/stat/changed source reviewed;
+all changes M11 plus approved prior planning record, synthetic fixtures only, no
+credentials/raw exports/local databases/build artifacts tracked. git diff --check PASS.
+No unrelated work discarded; no commit or remote change.
+
+The user section103 local exit gate is individually evaluated below. PASS refers to
+implemented/local evidence; live cloud/provider acceptance remains explicitly pending.
+
+| # | Blocking local M11 criterion | Result | Evidence |
+|---|---|---|---|
+| 1 | Financial source authority explicit | PASS | Detailed actual vs independent catalog vs M10 runtime contracts/UI/tests |
+| 2 | M10 runtime usage unchanged | PASS | No ledger/schema/BASE edits; real isolated ledger independence test; M10 regressions |
+| 3 | Detailed Billing adapter implemented | PASS | v1 normalization/fixed query/fixture+fake SDK transport |
+| 4 | Pricing adapter implemented | PASS | independent v1 adapter/tiers/catalog observations |
+| 5 | FOCUS supplemental | PASS | separate controls/health; no double totals |
+| 6 | Source history preserved | PASS | authoritative warehouse rows; earlier immutable manifests retained/reopen test |
+| 7 | Corrections append/cumulative | PASS | original10-10+5=5; no source-event rewrite |
+| 8 | Invoice and usage distinct | PASS | January10/February-5; distinct API bases/period labels |
+| 9 | Identical-row multiplicity | PASS | Counter A,A,B25 vs A,B15; order-invariant multiset test |
+| 10 | Snapshots atomic | PASS | CAS transaction inserts manifest/cache/pointer together; concurrency tests |
+| 11 | Partial generation preserves good data | PASS | incomplete/schema/extraction/publication rollback tests |
+| 12 | Schema evolution bounded | PASS | extras ignored; missing fields/version/type reject |
+| 13 | Effective-dated pricing | PASS | observed daily windows, A and B retained independently |
+| 14 | No historical price fallback | PASS | before/after/gap => PRICE_UNAVAILABLE |
+| 15 | Line-price versus catalog distinction | PASS | independent price.* and cost_at_* evidence; catalog cannot overwrite |
+| 16 | Actual versus catalog distinction | PASS | actual80/catalog100; explicit source/amount basis |
+| 17 | Decimal money | PASS | precision/float/nonfinite/overflow tests; exact string DTOs/UI |
+| 18 | Currency explicit | PASS | native currency every financial group/tariff |
+| 19 | Cross-currency sums prohibited | PASS | USD/EUR separate; unsupportedEUR NULL |
+| 20 | Credits/adjustments/taxes correct | PASS | signed100-20-5=75; all cost types/null tax dimensions |
+| 21 | Late overlap recovery | PASS | automatic cycle/restart/latest and retained sweeps |
+| 22 | Restart-safe watermark/publication | PASS | durable state/history/cache and reopen tests |
+| 23 | Unknown SKU financially included | PASS | UNMAPPED exact stable-ID registry; full cost retained |
+| 24 | Bounded parameterized partition SQL | PASS | static/query/fake SDK config; no arbitrarySQL/no live engine claim |
+| 25 | Independent billing/pricing health | PASS | no data/outage/as-of tests; FOCUS independent too |
+| 26 | Protected financial APIs | PASS | all six roles/identity/env scope; Admin no financial bypass |
+| 27 | M8 source truth unreconciled | PASS | existing panel/ReadState, fixture/missing/stale/exact amounts |
+| 28 | No M12 reconciliation | PASS | scope/code/diff audit; later card unavailable |
+| 29 | Local migration/SQL/Terraform validation | PASS | isolated migration+offlinePGDDL, staticSQL, fmt/validate |
+| 30 | Regressions/build | PASS | final full/focused/backend/frontend/TypeScript/Vite/Collector results |
+| 31 | No cloud/shared-resource mutation | PASS | external socket guard; no live jobs/bindings/deployments/migrations |
+
+Approved plan C01–C28 local evidence is satisfied by this implementation and validation.
+C27 automatic loading is proven with local fixture worker only; C28 normalized-view
+API/UI contract is proven statically/locally only. Neither is a live provider claim.
+The user explicitly approves this local/production distinction in section103.
+Known limitations remain as listed above; none is silently converted to live PASS.
+
+Local implementation status: IMPLEMENTED.
+Local validation status: PASS — all31 blocking local criteria.
+Cloud deployment status: NOT EXECUTED — USER APPROVAL REQUIRED.
+Production source validation: NOT LIVE-VALIDATED.
+Ready for Next Milestone: YES (local gate only).
+Next permitted action: STOP. M12 has NOT started and requires a separate instruction.

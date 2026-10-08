@@ -116,3 +116,22 @@ async def ledger_health(principal=Depends(financial),backend=Depends(service),en
 @router.get('/finops/ledger-completeness',response_model=SLOView)
 async def ledger_completeness(principal=Depends(financial),backend=Depends(service),environment:str|None=Query(None,max_length=16)):
     return await finops.completeness(backend,principal,environment)
+
+# M11 reads published financial projections only, never synchronous BigQuery.
+from datetime import date
+from backend.observability.finops import billing_service
+from backend.observability.finops.billing_api_models import HealthPage, BillingSummary, PricingStatus
+
+@router.get('/finops/billing-health',response_model=HealthPage)
+async def billing_health(principal=Depends(financial),backend=Depends(service),environment:str|None=Query(None,max_length=16)):
+    return await billing_service.health(backend,principal,environment)
+
+@router.get('/finops/pricing-status',response_model=PricingStatus)
+async def pricing_status(principal=Depends(financial),backend=Depends(service),environment:str|None=Query(None,max_length=16)):
+    return await billing_service.pricing_status(backend,principal,environment)
+
+@router.get('/finops/billing-summary',response_model=BillingSummary)
+async def billing_summary(principal=Depends(financial),backend=Depends(service),environment:str|None=Query(None,max_length=16),
+    period_basis:str=Query('usage',max_length=8),start:date|None=None,end:date|None=None,
+    invoice_month:str|None=Query(None,max_length=6),limit:int=Query(50,ge=1,le=100),cursor:str|None=Query(None,max_length=512)):
+    return await billing_service.summary(backend,principal,environment,period_basis,start,end,invoice_month,limit,cursor)

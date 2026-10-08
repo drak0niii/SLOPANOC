@@ -37,6 +37,9 @@ SETTING_NAMES = (
     'FINOPS_ADMISSION_WAIT_SECONDS', 'FINOPS_RECOVERY_BATCH', 'FINOPS_RECOVERY_SECONDS',
     'FINOPS_RECOVERY_ATTEMPTS', 'FINOPS_CHECKPOINT_SECONDS', 'FINOPS_SHUTDOWN_SECONDS',
     'FINOPS_RETENTION_MONTHS',
+    'FINOPS_BILLING_INGESTION_ENABLED', 'FINOPS_BILLING_DELAYED_SECONDS',
+    'FINOPS_BILLING_STALE_SECONDS', 'FINOPS_PRICING_DELAYED_SECONDS', 'FINOPS_PRICING_STALE_SECONDS',
+    'FINOPS_BILLING_CADENCE_SECONDS', 'FINOPS_PRICING_CADENCE_SECONDS',
     'FINOPS_ENABLED', 'FINOPS_CURRENCY', 'FINOPS_PRICE_SOURCE',
     'FINOPS_BILLING_PROJECT', 'FINOPS_BILLING_DATASET',
     'OTEL_EXPORTER_MODE', 'OTEL_PROTOCOL', 'OTEL_EXPORT_TIMEOUT_SECONDS',
@@ -125,6 +128,13 @@ class ObservabilityConfig(BaseModel):
     finops_checkpoint_seconds: float = Field(default=30, gt=0, le=60)
     finops_shutdown_seconds: float = Field(default=3, gt=0, le=5)
     finops_retention_months: int = Field(default=24, ge=24, le=120)
+    finops_billing_ingestion_enabled: bool = False
+    finops_billing_delayed_seconds: int = Field(default=86400,ge=1,le=2592000)
+    finops_billing_stale_seconds: int = Field(default=259200,ge=1,le=2592000)
+    finops_pricing_delayed_seconds: int = Field(default=172800,ge=1,le=2592000)
+    finops_pricing_stale_seconds: int = Field(default=604800,ge=1,le=2592000)
+    finops_billing_cadence_seconds: int = Field(default=3600,ge=60,le=86400)
+    finops_pricing_cadence_seconds: int = Field(default=86400,ge=60,le=604800)
     finops_currency: Literal['EUR'] = 'EUR'
     finops_price_source: Literal['gcp_detailed_billing_and_pricing'] = 'gcp_detailed_billing_and_pricing'
     finops_billing_project: str | None = Field(default=None, pattern=r'^[a-z][a-z0-9-]{4,61}[a-z0-9]$')
@@ -132,6 +142,8 @@ class ObservabilityConfig(BaseModel):
 
     @model_validator(mode='after')
     def policy(self):
+        if self.finops_billing_delayed_seconds >= self.finops_billing_stale_seconds or self.finops_pricing_delayed_seconds >= self.finops_pricing_stale_seconds:
+            raise ValueError('Financial stale policy must exceed delayed policy')
         if self.projection_stale_seconds <= self.projection_checkpoint_seconds + self.projection_retry_seconds + self.projection_attempt_seconds:
             raise ValueError('Stale threshold must exceed checkpoint and retry envelope')
         if self.projection_success_days > self.projection_exceptional_days:
