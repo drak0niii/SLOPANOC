@@ -39,6 +39,7 @@ import logging
 from typing import Any, Optional
 
 from backend.config.settings import get_settings, get_shared_llm
+from backend.observability.model_adapter import instrument_model
 from backend.knowledge.ingestion.image_interpretation import ImageInterpretationResult
 
 _logger = logging.getLogger(__name__)
@@ -53,12 +54,13 @@ _agent_cache: list[Any] = []
 
 def _interpretation_agent() -> Any:
     if not _agent_cache:
-        from google.adk.agents import Agent
+        from backend.observability.adk_adapter import ObservedAgent as Agent
 
         _agent_cache.append(
             Agent(
                 name="km_image_interpreter",
-                model=get_shared_llm(get_settings().gemini_model),
+                model=instrument_model(get_shared_llm(get_settings().gemini_model), "km_image_interpreter",
+                    "image_interpretation", workload="ingestion"),
                 instruction=_INSTRUCTION,
                 tools=[],
             )

@@ -45,6 +45,7 @@ alembic==1.18.4
 
 # --- Google Cloud / Gemini -----------------------------------------------
 google-adk==1.33.0
+# M3 instance-local physical-attempt adapter compatibility pin.
 google-genai==1.75.0
 google-cloud-secret-manager==2.28.0
 # Private GCS storage for durable chat attachment binaries (POST-5.1 B1) --
@@ -89,3 +90,11 @@ openpyxl==3.1.2
 # capability of any kind (no VBA/macro interpreter, no COM/automation) --
 # deliberately not a broader office-automation/forensics framework.
 olefile==0.47
+
+# --- M1 OTel foundation: ADK-compatible cohort; intentional upgrades only ---
+opentelemetry-api==1.41.1
+opentelemetry-sdk==1.41.1
+opentelemetry-exporter-otlp-proto-http==1.41.1
+opentelemetry-exporter-otlp-proto-common==1.41.1
+opentelemetry-proto==1.41.1
+opentelemetry-semantic-conventions==0.62b1

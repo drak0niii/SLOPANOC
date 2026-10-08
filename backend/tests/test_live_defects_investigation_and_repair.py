@@ -48,11 +48,12 @@ async def test_knowledge_repo_bounded_retry_on_interface_error():
             call_count += 1
             if call_count == 1:
                 raise InterfaceError("connection is closed", params=None, orig=Exception("closed"))
-            real_ctx = original_session_factory()
-            return await real_ctx.__aenter__()
+            self.real_ctx = original_session_factory()
+            return await self.real_ctx.__aenter__()
 
         async def __aexit__(self, exc_type, exc_val, exc_tb):
-            pass
+            if hasattr(self, "real_ctx"):
+                return await self.real_ctx.__aexit__(exc_type, exc_val, exc_tb)
 
     repo._session_factory = lambda: FlakySessionContext()
 
@@ -60,6 +61,7 @@ async def test_knowledge_repo_bounded_retry_on_interface_error():
     result = await repo.get("k-test", "v1")
     assert result is None
     assert call_count == 2
+    await repo.close()
 
 
 @pytest.mark.asyncio
@@ -78,6 +80,7 @@ async def test_knowledge_repo_exhaustion_on_repeated_error():
 
     with pytest.raises(InterfaceError):
         await repo.get("k-test", "v1")
+    await repo.close()
 
 
 # --- Defect 2: Troubleshooting confirmation safety & MO binding ---

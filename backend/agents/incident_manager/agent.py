@@ -36,7 +36,7 @@ ever reaches team_manager.
 """
 from __future__ import annotations
 
-from google.adk.agents import Agent
+from backend.observability.adk_adapter import ObservedAgent as Agent
 
 from backend.agents.incident_manager.evidence import capture_known_applicability_context, enforce_incident_manager_response_integrity
 from backend.agents.incident_manager.prompts import INCIDENT_MANAGER_INSTRUCTION
@@ -48,6 +48,7 @@ from backend.agents.incident_manager.tool_call_diagnostics import log_incident_m
 from backend.api.hosted_content_vision_context import inject_pending_hosted_content_image
 from backend.api.perf_timing import after_model_call, before_model_call
 from backend.config.settings import get_settings, get_shared_llm
+from backend.observability.model_adapter import instrument_model
 from backend.tools.knowledge.tools import knowledge_search, knowledge_select_evidence
 from backend.tools.runtime_time import get_current_time_context
 from backend.tools.teams.execute_write import teams_create_chat, teams_send_message
@@ -69,7 +70,7 @@ incident_manager = Agent(
     name="incident_manager",
     # Latency pass: shared model client -- see team_manager/agent.py's own
     # comment and get_shared_llm's docstring (config/settings.py).
-    model=get_shared_llm(_settings.gemini_model),
+    model=instrument_model(get_shared_llm(_settings.gemini_model), "incident_manager", "specialist_reasoning"),
     description=(
         "Teams specialist. Discovers a Teams chat by exact name, retrieves "
         "its messages, and produces a grounded summary or answer using "

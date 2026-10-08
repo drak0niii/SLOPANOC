@@ -165,10 +165,10 @@ def test_team_manager_and_incident_manager_share_the_same_model_client() -> None
     string that ADK would otherwise re-resolve into a fresh client before
     every single model call.
     """
-    assert team_manager.model is incident_manager.model
+    assert team_manager.model.delegate is incident_manager.model.delegate
     from backend.agents.incident_manager.agent import _settings as im_settings
 
-    assert team_manager.model is get_shared_llm(im_settings.gemini_model)
+    assert team_manager.model.delegate is get_shared_llm(im_settings.gemini_model)
 
 
 def test_get_shared_llm_is_cached_per_model_name() -> None:

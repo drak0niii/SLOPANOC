@@ -248,15 +248,15 @@ def test_g_team_manager_and_incident_manager_share_the_exact_get_shared_llm_obje
     `team_manager`/`incident_manager` resolve `.model` to (verified,
     per `LlmAgent.canonical_model`'s own source, to be the exact object
     stored -- `BaseLlm` instances are returned verbatim, never rewrapped)
-    is the SAME object `get_shared_llm` returns for that same model
+    delegates to the SAME object `get_shared_llm` returns for that same model
     string -- the identical function `warmup_shared_model` itself calls
     when no `llm` is injected.
     """
     from backend.config.settings import get_settings
 
     shared = get_shared_llm(get_settings().gemini_model)
-    assert team_manager.model is shared
-    assert incident_manager.model is shared
+    assert team_manager.model.delegate is shared
+    assert incident_manager.model.delegate is shared
 
 
 @pytest.mark.asyncio

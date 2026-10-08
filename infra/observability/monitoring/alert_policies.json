@@ -1,0 +1,1039 @@
+[
+  {
+    "policy_id": "availability_page",
+    "displayName": "Availability PAGE — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0)) or on (environment, operation) ((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.995. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/availability_burn.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "root"
+    }
+  },
+  {
+    "policy_id": "availability_ticket",
+    "displayName": "Availability TICKET — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"availability\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.995. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/availability_burn.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "root"
+    }
+  },
+  {
+    "policy_id": "terminal_completion_page",
+    "displayName": "Terminal completion PAGE — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0)) or on (environment, operation) ((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.999. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/terminal_integrity.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "root"
+    }
+  },
+  {
+    "policy_id": "terminal_completion_ticket",
+    "displayName": "Terminal completion TICKET — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.999. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/terminal_integrity.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "root"
+    }
+  },
+  {
+    "policy_id": "latency_general_page",
+    "displayName": "General latency PAGE — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0)) or on (environment, operation) ((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.95. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/timeout_stall.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "latency_general_ticket",
+    "displayName": "General latency TICKET — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"latency_general\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.95. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/timeout_stall.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "latency_teams_page",
+    "displayName": "Teams lookup latency PAGE — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0)) or on (environment, operation) ((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.95. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/timeout_stall.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "latency_teams_ticket",
+    "displayName": "Teams lookup latency TICKET — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"latency_teams\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.95. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/timeout_stall.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "latency_troubleshooting_page",
+    "displayName": "Governed troubleshooting latency PAGE — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0)) or on (environment, operation) ((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.95. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/timeout_stall.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "latency_troubleshooting_ticket",
+    "displayName": "Governed troubleshooting latency TICKET — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"latency_troubleshooting\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.95. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/timeout_stall.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "latency_complex_page",
+    "displayName": "Complex multi-agent latency PAGE — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0)) or on (environment, operation) ((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.95. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/timeout_stall.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "latency_complex_ticket",
+    "displayName": "Complex multi-agent latency TICKET — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"latency_complex\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.95. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/timeout_stall.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "model_ttft_page",
+    "displayName": "Streaming model TTFT PAGE — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0)) or on (environment, operation) ((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.95. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/model_provider.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "model_ttft_ticket",
+    "displayName": "Streaming model TTFT TICKET — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.05 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"model_ttft\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.95. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/model_provider.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "trace_completeness_page",
+    "displayName": "Trace completeness PAGE — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0)) or on (environment, operation) ((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.999. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/trace_completeness.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "trace_completeness_ticket",
+    "displayName": "Trace completeness TICKET — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.999. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/trace_completeness.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "sse_delivery_page",
+    "displayName": "SSE delivery PAGE — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0)) or on (environment, operation) ((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.999. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/sse_delivery.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "sse_delivery_ticket",
+    "displayName": "SSE delivery TICKET — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.999. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/sse_delivery.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "model_reliability_page",
+    "displayName": "Model reliability PAGE — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0)) or on (environment, operation) ((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.995. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/model_provider.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "model_reliability_ticket",
+    "displayName": "Model reliability TICKET — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.995. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/model_provider.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "dependency_gateway_page",
+    "displayName": "Power Automate / Teams gateway reliability PAGE — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0)) or on (environment, operation) ((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.995. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/power_automate_gateway.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "dependency_gateway_ticket",
+    "displayName": "Power Automate / Teams gateway reliability TICKET — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.995. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/power_automate_gateway.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "dependency_database_page",
+    "displayName": "Database reliability PAGE — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0)) or on (environment, operation) ((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.995. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/database_pool.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "dependency_database_ticket",
+    "displayName": "Database reliability TICKET — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"dependency_database\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.995. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/database_pool.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "dependency_storage_page",
+    "displayName": "Storage reliability PAGE — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0)) or on (environment, operation) ((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.995. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/infrastructure_capacity.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "dependency_storage_ticket",
+    "displayName": "Storage reliability TICKET — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"dependency_storage\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.995. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/infrastructure_capacity.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "dependency_knowledge_page",
+    "displayName": "Knowledge reliability PAGE — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"3600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 14.4) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0)) or on (environment, operation) ((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 6.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"1800\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.995. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/infrastructure_capacity.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "dependency_knowledge_ticket",
+    "displayName": "Knowledge reliability TICKET — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Canonical paired-window burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"dependency_knowledge\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Provisional objective 0.995. PROVISIONAL — CALIBRATION REQUIRED. Runbook: docs/Telemetry/runbooks/infrastructure_capacity.md. One combined condition; notifications may still repeat. Group by environment/service/SLO family; derivative symptoms supply context. Contacts/channels are deployment inputs."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "terminal_integrity",
+    "displayName": "terminal_integrity — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "missing/late/duplicate canonical terminal evidence",
+        "conditionPrometheusQueryLanguage": {
+          "query": "max by (environment) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\",window=\"300\",status=~\"HEALTHY|BREACHED|BURNING\"}) > 0",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "activation_status": "LOCAL_DEFINITION_ONLY",
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "missing/late/duplicate canonical terminal evidence. Runbook: docs/Telemetry/runbooks/terminal_integrity.md. PROVISIONAL — CALIBRATION REQUIRED. Derivative alerts ticket/context; root service burn pages. No guaranteed single notification."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "root"
+    }
+  },
+  {
+    "policy_id": "hard_safety",
+    "displayName": "hard_safety — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "any confirmed bounded safety violation",
+        "conditionPrometheusQueryLanguage": {
+          "query": "sum by (environment, operation) (increase({__name__=\"workload.googleapis.com/slopanoc.safety.violations\",environment=\"__ENVIRONMENT__\"}[5m])) > 0",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "activation_status": "LOCAL_DEFINITION_ONLY",
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "any confirmed bounded safety violation. Runbook: docs/Telemetry/runbooks/safety_violation.md. PROVISIONAL — CALIBRATION REQUIRED. Derivative alerts ticket/context; root service burn pages. No guaranteed single notification."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "root"
+    }
+  },
+  {
+    "policy_id": "timeout_stall_spike",
+    "displayName": "timeout_stall_spike — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "timeouts >5%/15m with20turns or sustained stalled work",
+        "conditionPrometheusQueryLanguage": {
+          "query": "sum by (environment) (increase({__name__=\"workload.googleapis.com/slopanoc.turn.timeouts\",environment=\"__ENVIRONMENT__\"}[15m])) / sum by (environment) (increase({__name__=\"workload.googleapis.com/slopanoc.turn.accepted\",environment=\"__ENVIRONMENT__\"}[15m])) > 0.05 and on (environment) sum by (environment) (increase({__name__=\"workload.googleapis.com/slopanoc.turn.accepted\",environment=\"__ENVIRONMENT__\"}[15m])) >= 20",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "activation_status": "LOCAL_DEFINITION_ONLY",
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "timeouts >5%/15m with20turns or sustained stalled work. Runbook: docs/Telemetry/runbooks/timeout_stall.md. PROVISIONAL — CALIBRATION REQUIRED. Derivative alerts ticket/context; root service burn pages. No guaranteed single notification."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "model_degradation",
+    "displayName": "model_degradation — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "model reliability burn / sustained provider failure",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"model_reliability\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "activation_status": "LOCAL_DEFINITION_ONLY",
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "model reliability burn / sustained provider failure. Runbook: docs/Telemetry/runbooks/model_provider.md. PROVISIONAL — CALIBRATION REQUIRED. Derivative alerts ticket/context; root service burn pages. No guaranteed single notification."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "gateway_degradation",
+    "displayName": "gateway_degradation — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Power Automate reliability burn / sustained throttling",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.005 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"dependency_gateway\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "activation_status": "LOCAL_DEFINITION_ONLY",
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "Power Automate reliability burn / sustained throttling. Runbook: docs/Telemetry/runbooks/power_automate_gateway.md. PROVISIONAL — CALIBRATION REQUIRED. Derivative alerts ticket/context; root service burn pages. No guaranteed single notification."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "db_acquisition_degradation",
+    "displayName": "db_acquisition_degradation — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "pool exhaustion >=3/5m plus acquisition saturation",
+        "conditionPrometheusQueryLanguage": {
+          "query": "sum by (environment) (increase({__name__=\"workload.googleapis.com/slopanoc.db.pool.exhaustion\",environment=\"__ENVIRONMENT__\"}[5m])) >= 3",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "activation_status": "LOCAL_DEFINITION_ONLY",
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "pool exhaustion >=3/5m plus acquisition saturation. Runbook: docs/Telemetry/runbooks/database_pool.md. PROVISIONAL — CALIBRATION REQUIRED. Derivative alerts ticket/context; root service burn pages. No guaranteed single notification."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "persistence_degradation",
+    "displayName": "persistence_degradation — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "failed/rejected/terminal_unpersisted with pending work",
+        "conditionPrometheusQueryLanguage": {
+          "query": "max by (environment) (delta({__name__=\"workload.googleapis.com/slopanoc.persistence.failed\",environment=\"__ENVIRONMENT__\"}[5m])) > 0 and on (environment) max by (environment) ({__name__=\"workload.googleapis.com/slopanoc.persistence.pending\",environment=\"__ENVIRONMENT__\"}) > 0",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "activation_status": "LOCAL_DEFINITION_ONLY",
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "failed/rejected/terminal_unpersisted with pending work. Runbook: docs/Telemetry/runbooks/diagnostic_persistence.md. PROVISIONAL — CALIBRATION REQUIRED. Derivative alerts ticket/context; root service burn pages. No guaranteed single notification."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "telemetry_export_failure",
+    "displayName": "telemetry_export_failure — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "sustained exporter loss/queue pressure5m",
+        "conditionPrometheusQueryLanguage": {
+          "query": "sum by (environment) (delta({__name__=\"workload.googleapis.com/slopanoc.telemetry.failed\",environment=\"__ENVIRONMENT__\",operation=\"trace_export\"}[5m])) > 0",
+          "duration": "300s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "activation_status": "LOCAL_DEFINITION_ONLY",
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "sustained exporter loss/queue pressure5m. Runbook: docs/Telemetry/runbooks/telemetry_exporter.md. PROVISIONAL — CALIBRATION REQUIRED. Derivative alerts ticket/context; root service burn pages. No guaranteed single notification."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "trace_completeness",
+    "displayName": "trace_completeness — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "structural completeness burn",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "activation_status": "LOCAL_DEFINITION_ONLY",
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "structural completeness burn. Runbook: docs/Telemetry/runbooks/trace_completeness.md. PROVISIONAL — CALIBRATION REQUIRED. Derivative alerts ticket/context; root service burn pages. No guaranteed single notification."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "sse_delivery",
+    "displayName": "sse_delivery — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "eligible receipt burn / server delivery failure",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(((max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"259200\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) / 0.001 > 1.0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) >= 100) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"21600\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0))) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\",window=\"2419200\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "activation_status": "LOCAL_DEFINITION_ONLY",
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "eligible receipt burn / server delivery failure. Runbook: docs/Telemetry/runbooks/sse_delivery.md. PROVISIONAL — CALIBRATION REQUIRED. Derivative alerts ticket/context; root service burn pages. No guaranteed single notification."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "queue_saturation",
+    "displayName": "queue_saturation — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": ">=3confirmed saturation events/5m",
+        "conditionPrometheusQueryLanguage": {
+          "query": "sum by (environment) (increase({__name__=\"workload.googleapis.com/slopanoc.queue.saturation\",environment=\"__ENVIRONMENT__\"}[5m])) >= 3",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "activation_status": "LOCAL_DEFINITION_ONLY",
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": ">=3confirmed saturation events/5m. Runbook: docs/Telemetry/runbooks/timeout_stall.md. PROVISIONAL — CALIBRATION REQUIRED. Derivative alerts ticket/context; root service burn pages. No guaranteed single notification."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "infrastructure_capacity",
+    "displayName": "infrastructure_capacity — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [],
+    "activation_status": "SOURCE_OR_BASELINE_PENDING",
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "platform capacity baseline pending. Runbook: docs/Telemetry/runbooks/infrastructure_capacity.md. PROVISIONAL — CALIBRATION REQUIRED. Derivative alerts ticket/context; root service burn pages. No guaranteed single notification."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "planning_source_gaps",
+    "displayName": "planning_source_gaps — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [],
+    "activation_status": "SOURCE_OR_BASELINE_PENDING",
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "sustained baseline deviation; safe gap not availability failure. Runbook: docs/Telemetry/runbooks/planning_source_gaps.md. PROVISIONAL — CALIBRATION REQUIRED. Derivative alerts ticket/context; root service burn pages. No guaranteed single notification."
+    },
+    "userLabels": {
+      "severity": "medium",
+      "notification_route": "context"
+    }
+  },
+  {
+    "policy_id": "synthetic_failure",
+    "displayName": "synthetic_failure — PROVISIONAL — CALIBRATION REQUIRED",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [],
+    "activation_status": "SOURCE_OR_BASELINE_PENDING",
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "3consecutive safe synthetic failures. Runbook: docs/Telemetry/runbooks/synthetic_checks.md. PROVISIONAL — CALIBRATION REQUIRED. Derivative alerts ticket/context; root service burn pages. No guaranteed single notification."
+    },
+    "userLabels": {
+      "severity": "high",
+      "notification_route": "context"
+    }
+  }
+]

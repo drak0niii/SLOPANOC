@@ -79,6 +79,8 @@ before this pass -- zero behavior change for the non-multimodal case.
 """
 from __future__ import annotations
 
+from backend.observability.model_context import model_activity
+
 import logging
 from typing import Any, Optional, Sequence
 
@@ -120,6 +122,7 @@ never derived from team_manager's own discarded, unproven answer text.
 """
 
 
+@model_activity("incident_manager", "remediation")
 async def enforce_governed_knowledge_at_completion(
     *,
     question: str,

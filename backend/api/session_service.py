@@ -103,6 +103,8 @@ contract and `Runner.rewind_async`'s own internal use of the identical
 shape (P3, session/event-hygiene pass).
 """
 from __future__ import annotations
+from backend.observability.deadlines import operation
+from backend.observability.reliability_contract import Category
 
 import uuid
 from functools import lru_cache
@@ -146,7 +148,14 @@ def create_session_service_backend(settings: Optional[Settings] = None) -> BaseS
     # test suite).
     from google.adk.sessions import DatabaseSessionService
 
-    return DatabaseSessionService(settings.resolve_database_url())
+    from backend.observability.dependency_database import pool_kwargs, observe_session_service
+    from sqlalchemy.pool import StaticPool
+    from sqlalchemy.engine import make_url
+    url = settings.resolve_database_url()
+    kwargs = {"poolclass": StaticPool} if make_url(url).get_backend_name() == "sqlite" and make_url(url).database in (None, ":memory:") else {}
+    service = DatabaseSessionService(url, **pool_kwargs(url, kwargs, "session_db"))
+    observe_session_service(service)
+    return service
 
 
 class ApiSessionService:
@@ -169,6 +178,7 @@ class ApiSessionService:
     def adk_session_service(self) -> BaseSessionService:
         return self._adk
 
+    @operation(Category.SESSION)
     async def create_session(self, user_id: str = DEFAULT_USER_ID) -> str:
         """Generates the session id server-side -- callers cannot supply
         one, and there is no parameter here through which a client could
@@ -198,6 +208,7 @@ class ApiSessionService:
         )
         return session_id
 
+    @operation(Category.SESSION)
     async def get_session(self, session_id: str, user_id: str = DEFAULT_USER_ID) -> Session:
         """Raises a `SafeErrorException` (`not_found`) for an unknown
         session id, OR a session that exists but belongs to a different
@@ -213,6 +224,7 @@ class ApiSessionService:
         session = await self._adk.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
         return session is not None
 
+    @operation(Category.SESSION)
     async def list_sessions(self, user_id: str = DEFAULT_USER_ID) -> list[Session]:
         """POST-5.1 B4B: the ONE place `list_sessions` is called, exactly
         like `get_session`/`create_session` are the one place their own
@@ -238,6 +250,7 @@ class ApiSessionService:
         response = await self._adk.list_sessions(app_name=APP_NAME, user_id=user_id)
         return list(response.sessions)
 
+    @operation(Category.PERSISTENCE)
     async def persist_state_delta(self, session: Session, delta: dict[str, Any]) -> None:
         """Persist `delta` into `session`'s real, stored state via ADK's
         own event/state-delta mechanism (see module docstring's "STATE

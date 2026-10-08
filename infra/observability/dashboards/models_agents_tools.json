@@ -1,0 +1,166 @@
+{
+  "displayName": "SLOPANOC Models Agents Tools",
+  "mosaicLayout": {
+    "columns": 12,
+    "tiles": [
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 0,
+        "yPos": 0,
+        "widget": {
+          "title": "Provider duration (descriptive p95)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"workload.googleapis.com/gen_ai.client.operation.duration\" AND metric.labels.environment=\"__ENVIRONMENT__\"",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_PERCENTILE_95"
+                    }
+                  }
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 6,
+        "yPos": 0,
+        "widget": {
+          "title": "First provider output (descriptive p95)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"workload.googleapis.com/slopanoc.model.ttft\" AND metric.labels.environment=\"__ENVIRONMENT__\"",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_PERCENTILE_95"
+                    }
+                  }
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 0,
+        "yPos": 4,
+        "widget": {
+          "title": "Retries",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "{__name__=\"workload.googleapis.com/slopanoc.model.retries\",environment=\"__ENVIRONMENT__\"}"
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 6,
+        "yPos": 4,
+        "widget": {
+          "title": "Token volume",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "{__name__=\"workload.googleapis.com/slopanoc.model.input_tokens\",environment=\"__ENVIRONMENT__\"}"
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 0,
+        "yPos": 8,
+        "widget": {
+          "title": "Agent duration (descriptive p95)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"workload.googleapis.com/slopanoc.agent.duration\" AND metric.labels.environment=\"__ENVIRONMENT__\"",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_PERCENTILE_95"
+                    }
+                  }
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 6,
+        "yPos": 8,
+        "widget": {
+          "title": "Tool failures",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "{__name__=\"workload.googleapis.com/slopanoc.tool.failures\",environment=\"__ENVIRONMENT__\"}"
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "dashboardFilters": [
+    {
+      "labelKey": "environment",
+      "templateVariable": "environment",
+      "filterType": "METRIC_LABEL",
+      "stringValue": "__ENVIRONMENT__"
+    }
+  ]
+}

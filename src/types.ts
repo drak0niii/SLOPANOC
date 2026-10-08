@@ -614,7 +614,7 @@ export interface ScheduledTask {
 
 export type WorkspaceScope = { type: "general" } | { type: "project"; projectId: string };
 
-export type SettingsSection = "usage" | "connectors" | "skills";
+export type SettingsSection = "usage" | "connectors" | "skills" | "observability";
 
 export type ProjectSettingsSection = "name" | "instructions" | "connectors" | "files";
 

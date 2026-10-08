@@ -299,9 +299,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     warmup.py's own docstring): it never raises, so a warm-up failure or
     timeout can never prevent `yield` from being reached and the
     application from becoming ready for normal traffic. Existing shutdown
-    behavior (after `yield`) is unmodified -- there is nothing for this
-    pass to clean up (the shared model client is never closed; see model_
-    warmup.py's own docstring on why).
+    behavior closes only M1-owned telemetry after `yield`; the shared
+    model client remains owned by its existing lifecycle.
 
     POST-A5 refinement (Track A): `validate_runtime_database_
     configuration` runs FIRST, before warm-up -- unlike warm-up this is
@@ -311,17 +310,78 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     a resolved URL/credential.
     """
     session_backend_name, knowledge_backend_name = validate_runtime_database_configuration(get_settings())
-    _logger.info(
-        "startup database_backend session=%s knowledge=%s",
-        session_backend_name,
-        knowledge_backend_name,
-    )
-    await warmup_shared_model()
-    yield
+    # M1: use this sole lifecycle, after the existing mandatory DB gate.
+    # Lazy runtime import preserves disabled startup and inert contract imports.
+    from backend.observability.runtime import acquire
+    import asyncio
+
+    telemetry = acquire(get_settings().observability_config)
+    app.state.observability = telemetry.runtime
+    from backend.observability.service import Service
+    from backend.observability.persistence import Coordinator, install_coordinator, release_coordinator
+    from backend.observability.database import Database
+    from backend.observability.repository import Repository
+    projection = database = repository = None
+    config = get_settings().observability_config
+    if config.projection_enabled:
+        try:
+            # Engine creation only. No create_all, connection or migration here.
+            database = Database(get_settings().resolve_database_url())
+            repository = Repository(database.sessions, config)
+            projection = Coordinator(repository, config)
+            install_coordinator(projection)
+            projection.start()
+            telemetry.runtime.projection = projection
+        except Exception:
+            from backend.observability.persistence_metrics import ProjectionHealth
+            (projection.health if projection is not None else ProjectionHealth()).add('failed')
+    from backend.observability.slo_rollups import Rollups
+    from backend.observability.slo_sources import Writer, RuntimeProvider
+    sre_writer = None
+    telemetry.runtime.sre = None
+    if config.slo_enabled and database is not None:
+        sre_rollups = Rollups(database.sessions)
+        sre_writer = Writer(sre_rollups, config, telemetry.runtime)
+        telemetry.runtime.sre = sre_writer
+    app.state.observability_service = Service(repository,config,projection,telemetry.runtime)
+    app.state.observability_service.slo_provider = RuntimeProvider(sre_writer.rollups, config) if sre_writer else None
+    try:
+        _logger.info(
+            "startup database_backend session=%s knowledge=%s",
+            session_backend_name,
+            knowledge_backend_name,
+        )
+        await warmup_shared_model()
+        yield
+    finally:
+        # close() has its own total deadline and daemon cleanup for exporters
+        # lacking a timeout; no telemetry network wait on the event loop.
+        import time
+        if sre_writer is not None:
+            await sre_writer.close()
+            telemetry.runtime.sre = None
+        projection_deadline = time.monotonic()+config.projection_shutdown_seconds
+        if projection is not None:
+            try:
+                await projection.close(max(0,config.projection_shutdown_seconds-min(config.projection_attempt_seconds,config.projection_shutdown_seconds/2)))
+            finally:
+                release_coordinator(projection)
+                telemetry.runtime.projection = None
+        if database is not None:
+            try:
+                async with asyncio.timeout(max(.001,projection_deadline-time.monotonic())):
+                    await database.close()
+            except Exception:
+                if projection is not None:
+                    projection.health.add('shutdown_incomplete')
+        await asyncio.to_thread(telemetry.close)
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="SLOPANOC API", version="0.4.0-phase4g", lifespan=_lifespan)
+
+    from backend.api.observability_routes import router as observability_router
+    app.include_router(observability_router)
 
     app.add_exception_handler(SafeErrorException, handle_safe_error)
     app.add_exception_handler(RequestValidationError, handle_request_validation_error)
@@ -422,12 +482,13 @@ def create_app() -> FastAPI:
 
         async def event_source():
             async with Aclosing(
-                chat_service.execute_turn_events(session_id, body.message, user.user_id, body.attachment_ids)
+                chat_service.execute_turn_events(session_id, body.message, user.user_id, body.attachment_ids, sse_expected=True)
             ) as events:
                 async for event in events:
-                    yield format_sse(event)
+                    yield ": heartbeat\n\n" if event is None else format_sse(event)
 
-        return StreamingResponse(
+        from backend.observability.delivery import ReliableStreamingResponse
+        return ReliableStreamingResponse(
             event_source(),
             media_type="text/event-stream",
             # Latency-diagnosis pass: without these, an intermediary

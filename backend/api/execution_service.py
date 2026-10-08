@@ -63,7 +63,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, MutableMapping, cast
 
-from starlette.concurrency import run_in_threadpool
+from backend.observability.blocking_work import isolated_call as run_in_threadpool
 
 from backend.api.pending_action import map_pending_action
 from backend.api.schemas import ExecuteActionResponse, ExecutedActionDTO

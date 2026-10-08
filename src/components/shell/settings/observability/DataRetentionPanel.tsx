@@ -1,0 +1,5 @@
+import { getObservabilityConfig } from '../../../../api/observability';
+import { useObservabilityQuery } from './useObservabilityQuery';
+import { ReadState } from './ReadState';
+import { ConfigTable } from './ConfigTable';
+export function DataRetentionPanel() { const q = useObservabilityQuery('retention', getObservabilityConfig); return <section><h3 className="mb-3 text-base font-medium text-primary">Data & Retention</h3><ReadState query={q}>{c => <ConfigTable config={c} include={k => /^projection_(terminal_hours|success_days|exceptional_days|checkpoint_seconds|stale_seconds|clock_grace_seconds)$/.test(k) || k === 'telemetry_schema_version' || k === 'trace_sample_rate'}/>}</ReadState><p className="mt-4 text-sm text-tertiary">M7 v1 contract: timeline cap of 128 significant events. This is a contract limit, not an editable setting.</p><p className="mt-2 text-sm text-tertiary">Telemetry backend retention and sampling are not reported as effective configuration. Production retention scheduling is pending. Final policy controls belong to M15.</p></section>; }

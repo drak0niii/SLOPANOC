@@ -27,7 +27,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 from fastapi import UploadFile
-from starlette.concurrency import run_in_threadpool
+from backend.observability.blocking_work import run_blocking
+from backend.observability.reliability_contract import Category
 
 from backend.api.session_service import ApiSessionService
 from backend.attachments.models import ChatAttachmentRecord, ChatAttachmentStatus
@@ -48,6 +49,10 @@ from backend.gateway.safe_error import (
     unsupported_media_type,
     validation_error,
 )
+
+async def run_in_threadpool(fn, *args, **kwargs):
+    return await run_blocking(fn, *args, category=Category.STORAGE, **kwargs)
+
 
 logger = logging.getLogger(__name__)
 

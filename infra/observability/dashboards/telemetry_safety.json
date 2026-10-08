@@ -1,0 +1,148 @@
+{
+  "displayName": "SLOPANOC Telemetry Safety",
+  "mosaicLayout": {
+    "columns": 12,
+    "tiles": [
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 0,
+        "yPos": 0,
+        "widget": {
+          "title": "Exporter queue",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "{__name__=\"workload.googleapis.com/slopanoc.telemetry.queue_size\",environment=\"__ENVIRONMENT__\"}"
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 6,
+        "yPos": 0,
+        "widget": {
+          "title": "Exporter loss",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "{__name__=\"workload.googleapis.com/slopanoc.telemetry.dropped\",environment=\"__ENVIRONMENT__\"}"
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 0,
+        "yPos": 4,
+        "widget": {
+          "title": "Diagnostic pending",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "{__name__=\"workload.googleapis.com/slopanoc.persistence.pending\",environment=\"__ENVIRONMENT__\"}"
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 6,
+        "yPos": 4,
+        "widget": {
+          "title": "Trace completeness",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "{__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"trace_completeness\"}"
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 0,
+        "yPos": 8,
+        "widget": {
+          "title": "SSE delivery",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "{__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"sse_delivery\"}"
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 6,
+        "yPos": 8,
+        "widget": {
+          "title": "Safety",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "{__name__=\"workload.googleapis.com/slopanoc.safety.violations\",environment=\"__ENVIRONMENT__\"}"
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "dashboardFilters": [
+    {
+      "labelKey": "environment",
+      "templateVariable": "environment",
+      "filterType": "METRIC_LABEL",
+      "stringValue": "__ENVIRONMENT__"
+    }
+  ]
+}

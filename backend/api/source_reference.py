@@ -62,6 +62,7 @@ parsing model output -- `teams_get_members` is a deterministic tool call,
 exactly like `teams_get_messages`.
 """
 from __future__ import annotations
+from backend.observability.blocking_work import run_blocking
 
 import asyncio
 import logging
@@ -297,7 +298,9 @@ async def resolve_authoritative_contributors(chat_id: Optional[str]) -> list[str
     # thread hop) is unaffected either way -- this coroutine itself still
     # runs on the event loop.
     report_activity(ActivityKind.TEAMS_MEMBERS_RETRIEVAL_STARTED)
-    result = await asyncio.to_thread(teams_get_members, chat_id)
+    from backend.observability.tool_instrumentation import tool_scope, observe_result
+    with tool_scope('teams_get_members', 'system') as telemetry:
+        result = observe_result(telemetry, await run_blocking(teams_get_members, chat_id))
     if "error" in result:
         # teams_get_members already logged the underlying gateway failure
         # detail (safely) -- this line just marks where in the pipeline

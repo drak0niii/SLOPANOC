@@ -13,6 +13,8 @@ Enforces a server-validated context envelope:
 """
 from __future__ import annotations
 
+from backend.observability.model_context import model_activity
+
 import json
 import logging
 import re
@@ -1328,7 +1330,9 @@ async def _server_governed_search(
     else:
         from backend.tools.knowledge.tools import knowledge_search
 
-        result = await knowledge_search(query_text=query)
+        from backend.observability.tool_instrumentation import tool_scope, observe_result
+        with tool_scope('knowledge_search', 'technical_authority_engineer') as telemetry:
+            result = observe_result(telemetry, await knowledge_search(query_text=query))
         if not isinstance(result, dict) or "error" in result:
             record["status"] = "search_failed"
             record["results"] = []
@@ -2669,6 +2673,8 @@ def _apply_procedure_action(
         step["procedure_action_id"] = None  # a fabricated / stale id is never carried forward
     result = dict(raw_result)
     result["diagnostic_step"] = step
+    from backend.observability.tool_instrumentation import governance_decision
+    governance_decision('procedure_action.resolved', resolution.status is ProcedureActionResolutionStatus.RESOLVED)
     return result, resolution, model_command
 
 
@@ -2716,6 +2722,9 @@ def _finalize_procedure_action(
                 missing.append(clarification["text"])
             result["missing_information"] = missing
     result["diagnostic_step"] = step
+    from backend.observability.tool_instrumentation import governance_decision
+    if authority is not None:
+        governance_decision('command_authority.completed', authority == 'authorized')
     summary = resolution_summary(resolution, authority)
     summary["model_command_ignored"] = model_command if model_command and model_command != step.get("command") else None
     record_action_resolution(summary)
@@ -2745,6 +2754,11 @@ async def _run_specialist_message(
                 if payload is not None:
                     payloads.append(payload)
     return last_content, last_grounding_metadata, payloads
+
+
+@model_activity("technical_authority_engineer", "remediation")
+async def _run_model_remediation(*args, **kwargs):
+    return await _run_specialist_message(*args, **kwargs)
 
 
 def _finalization_agent(agent: Any) -> Any:
@@ -2778,6 +2792,7 @@ async def _run_tool_free_message(
     return await _run_specialist_message(finalizer_runner, session, message, tool_context)
 
 
+@model_activity("technical_authority_engineer", "structured_output_repair")
 async def _regenerate_structured_output(
     runner: Any,
     session: Any,
@@ -2795,6 +2810,7 @@ async def _regenerate_structured_output(
         return None, None, []
 
 
+@model_activity("technical_authority_engineer", "action_reselection")
 async def _reselect_procedure_action(
     runner: Any,
     session: Any,
@@ -2853,6 +2869,9 @@ async def _recover_structured_output(
     regeneration (budget shared by this invocation). A valid answer -- whatever its outcome -- is
     returned untouched with no extra model call. Returns (content, grounding, payloads, regenerated)."""
     failure = classify_structured_output(content, output_schema)
+    if failure is not None:
+        from backend.observability.model_instrumentation import observe_invalid_output
+        observe_invalid_output(runner.agent.name)
     if failure is None and phase == "final":
         return content, grounding, payloads, False  # already-valid remediation answer: nothing to record
     recovery.observe(failure, phase=phase)
@@ -2866,6 +2885,8 @@ async def _recover_structured_output(
         )
         regenerated = True
         failure = classify_structured_output(r_content, output_schema)
+        if failure is not None:
+            observe_invalid_output(runner.agent.name)
         recovery.observe(failure, phase="regeneration")
         if r_content is not None:
             content, grounding, payloads = r_content, r_grounding, list(r_payloads)
@@ -3347,7 +3368,7 @@ class TechnicalAuthorityAgentTool(AgentTool):
                     )
                     instruction = _selection_discovery_message(discovery_record)
                 remediation = types.Content(role="user", parts=[types.Part.from_text(text=instruction)])
-                r_content, r_grounding, r_payloads = await _run_specialist_message(
+                r_content, r_grounding, r_payloads = await _run_model_remediation(
                     runner, session, remediation, tool_context
                 )
                 all_payloads.extend(r_payloads)
@@ -3367,7 +3388,7 @@ class TechnicalAuthorityAgentTool(AgentTool):
                 remediation = types.Content(
                     role="user", parts=[types.Part.from_text(text=SELECTION_CONTRACT_REMEDIATION_INSTRUCTION)]
                 )
-                r_content, r_grounding, r_payloads = await _run_specialist_message(
+                r_content, r_grounding, r_payloads = await _run_model_remediation(
                     runner, session, remediation, tool_context
                 )
                 all_payloads.extend(r_payloads)
@@ -3402,7 +3423,7 @@ class TechnicalAuthorityAgentTool(AgentTool):
                     acquisition_remediation, known_acquisition, discovery_record,
                     progression.progression.requirement(known_acquisition.requirement_id) if known_acquisition else bound_requirement,
                 ))])
-                r_content, r_grounding, r_payloads = await _run_specialist_message(runner, session, remediation, tool_context)
+                r_content, r_grounding, r_payloads = await _run_model_remediation(runner, session, remediation, tool_context)
                 all_payloads.extend(r_payloads)
                 if r_content is not None and r_payloads:
                     last_content, last_grounding_metadata = r_content, r_grounding
@@ -3426,7 +3447,7 @@ class TechnicalAuthorityAgentTool(AgentTool):
                     remediation = types.Content(role="user", parts=[types.Part.from_text(text=action_choice_instruction(
                         action_choice["requirement"], action_choice["actions"],
                     ))])
-                    r_content, r_grounding, r_payloads = await _run_specialist_message(runner, session, remediation, tool_context)
+                    r_content, r_grounding, r_payloads = await _run_model_remediation(runner, session, remediation, tool_context)
                     all_payloads.extend(r_payloads)
                     if r_content is not None and r_payloads:
                         last_content, last_grounding_metadata = r_content, r_grounding
@@ -3442,7 +3463,7 @@ class TechnicalAuthorityAgentTool(AgentTool):
                     remediation = types.Content(role="user", parts=[types.Part.from_text(text=recovery_instruction(
                         gap_recovery["requirement"], gap_recovery["alternatives"], repeated=gap_recovery["repeated"],
                     ))])
-                    r_content, r_grounding, r_payloads = await _run_specialist_message(runner, session, remediation, tool_context)
+                    r_content, r_grounding, r_payloads = await _run_model_remediation(runner, session, remediation, tool_context)
                     all_payloads.extend(r_payloads)
                     if r_content is not None and r_payloads:
                         last_content, last_grounding_metadata = r_content, r_grounding
@@ -3467,7 +3488,7 @@ class TechnicalAuthorityAgentTool(AgentTool):
                     remediation = types.Content(role="user", parts=[types.Part.from_text(text=gap_continuation_instruction(
                         gap_continuation["requirement"], gap_continuation["gap_reason"], repeated=gap_continuation["repeated"],
                     ))])
-                    r_content, r_grounding, r_payloads = await _run_specialist_message(runner, session, remediation, tool_context)
+                    r_content, r_grounding, r_payloads = await _run_model_remediation(runner, session, remediation, tool_context)
                     all_payloads.extend(r_payloads)
                     if r_content is not None and r_payloads:
                         last_content, last_grounding_metadata = r_content, r_grounding
@@ -3498,7 +3519,7 @@ class TechnicalAuthorityAgentTool(AgentTool):
                     remediation = types.Content(role="user", parts=[types.Part.from_text(text=resume_choice_instruction(
                         resolved_applicability_clarification.resolved_values, resume_actions,
                     ))])
-                    r_content, r_grounding, r_payloads = await _run_specialist_message(runner, session, remediation, tool_context)
+                    r_content, r_grounding, r_payloads = await _run_model_remediation(runner, session, remediation, tool_context)
                     all_payloads.extend(r_payloads)
                     if r_content is not None and r_payloads:
                         last_content, last_grounding_metadata = r_content, r_grounding

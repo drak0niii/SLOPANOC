@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any, Optional
 
-from google.adk.agents import Agent
+from backend.observability.adk_adapter import ObservedAgent as Agent
 from google.genai import types
 
 from backend.agents.technical_authority_engineer.agent_tool import TechnicalAuthorityAgentTool
@@ -29,6 +29,7 @@ from backend.api.applicability_context_capture import register_known_applicabili
 from backend.api.perf_timing import after_model_call, before_model_call
 from backend.api.turn_context import current_run_id
 from backend.config.settings import get_settings, get_shared_llm
+from backend.observability.model_adapter import instrument_model
 from backend.knowledge.domain.applicability import ApplicabilityContext
 from backend.tools.knowledge.tools import knowledge_search, knowledge_select_evidence
 
@@ -65,7 +66,7 @@ async def capture_technical_authority_applicability_context(callback_context: An
 
 technical_authority_engineer = Agent(
     name="technical_authority_engineer",
-    model=get_shared_llm(_settings.gemini_model),
+    model=instrument_model(get_shared_llm(_settings.gemini_model), "technical_authority_engineer", "specialist_reasoning"),
     description=(
         "Level 2 Technical Authority advisory specialist for technical problem "
         "interpretation, diagnostic strategy, governed procedure evaluation, "

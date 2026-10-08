@@ -1,0 +1,81 @@
+import { it, expect, vi, afterEach } from "vitest";
+import { renderHook, act, cleanup } from '@testing-library/react';
+import { useObservabilityQuery } from './useObservabilityQuery';
+import { ApiError } from '../../../../api/client';
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
+async function flush() { await act(async () => { await Promise.resolve(); await Promise.resolve(); }); }
+it('15 second completion cadence, no overlap, cancellation and inactive cleanup', async () => {
+    vi.useFakeTimers();
+    let resolve!: (v: number) => void;
+    let signal: AbortSignal | undefined;
+    const load = vi.fn((s: AbortSignal) => { signal = s; return new Promise<number>(r => { resolve = r; }); });
+    const h = renderHook(() => useObservabilityQuery('active', load, () => true));
+    await flush();
+    expect(load).toHaveBeenCalledTimes(1);
+    act(() => h.result.current.refresh());
+    expect(load).toHaveBeenCalledTimes(1);
+    await act(async () => { resolve(1); });
+    await act(async () => { vi.advanceTimersByTime(14999); });
+    expect(load).toHaveBeenCalledTimes(1);
+    await act(async () => { vi.advanceTimersByTime(1); });
+    expect(load).toHaveBeenCalledTimes(2);
+    h.unmount();
+    expect(signal?.aborted).toBe(true);
+    await act(async () => vi.advanceTimersByTime(30000));
+    expect(load).toHaveBeenCalledTimes(2);
+});
+it.each([401, 403, 429])('revocation/throttling %i clears data and stops polling', async (status) => {
+    vi.useFakeTimers();
+    const load = vi.fn().mockResolvedValueOnce({ technical: 'authorized' }).mockRejectedValue(new ApiError('secret', status));
+    const h = renderHook(() => useObservabilityQuery('active', load, () => true));
+    await flush();
+    expect(h.result.current.data).toBeDefined();
+    await act(async () => vi.advanceTimersByTime(15000));
+    expect(h.result.current.data).toBeUndefined();
+    expect(h.result.current.error).toBeDefined();
+    await act(async () => vi.advanceTimersByTime(60000));
+    expect(load).toHaveBeenCalledTimes(2);
+});
+it('pauses hidden document, resumes when visible and ignores obsolete response', async () => {
+    vi.useFakeTimers();
+    let hidden = false;
+    vi.spyOn(document, 'hidden', 'get').mockImplementation(() => hidden);
+    let resolve!: (v: number) => void;
+    const load = vi.fn().mockImplementationOnce(() => new Promise<number>(r => { resolve = r; })).mockResolvedValue(2);
+    const h = renderHook(() => useObservabilityQuery('active', load, () => true));
+    await flush();
+    hidden = true;
+    act(() => document.dispatchEvent(new Event('visibilitychange')));
+    await act(async () => { resolve(1); vi.advanceTimersByTime(30000); });
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(h.result.current.data).toBeUndefined();
+    hidden = false;
+    act(() => document.dispatchEvent(new Event('visibilitychange')));
+    await flush();
+    expect(h.result.current.data).toBe(2);
+});
+it('finite loading timeout even for a transport that ignores AbortSignal', async () => { vi.useFakeTimers(); const load = vi.fn(() => new Promise<number>(() => { })); const h = renderHook(() => useObservabilityQuery('slow', load)); await act(async () => vi.advanceTimersByTime(10000)); expect(h.result.current.loading).toBe(false); expect(h.result.current.error).toBe('failed'); });
+it('terminal or stale policy suppresses automated refresh', async () => { vi.useFakeTimers(); const load = vi.fn().mockResolvedValue({ classification: 'STALE' }); renderHook(() => useObservabilityQuery('detail', load, () => false)); await flush(); await act(async () => vi.advanceTimersByTime(60000)); expect(load).toHaveBeenCalledTimes(1); });
+it('changed key cancels old request and old result cannot replace new selection', async () => { let oldResolve!: (v: number) => void; const load = vi.fn().mockImplementationOnce(() => new Promise<number>(r => { oldResolve = r; })).mockResolvedValue(2); const h = renderHook(({ key }) => useObservabilityQuery(key, load), { initialProps: { key: 'first' } }); h.rerender({ key: 'second' }); await flush(); await act(async () => oldResolve(1)); expect(h.result.current.data).toBe(2); });
+it('uses actual RunDetail backend policy to stop for terminal and stale outcomes', async () => {
+    const { activeRun } = await import('./RunDetail');
+    const { run } = await import('./fixtures.test-support');
+    expect(activeRun(run({ status: 'RUNNING', classification: 'ACTIVE' }))).toBe(true);
+    expect(activeRun(run({ status: 'STALLED' }))).toBe(true);
+    expect(activeRun(run({ status: 'RUNNING', classification: 'STALE' }))).toBe(false);
+    for (const status of ['COMPLETED', 'FAILED', 'TIMEOUT', 'CANCELLED'] as const)
+        expect(activeRun(run({ status, classification: 'TERMINAL' }))).toBe(false);
+});
+it('inactive section cancels polling and clears data before reactivation', async () => {
+    vi.useFakeTimers();
+    const load = vi.fn().mockResolvedValue(1);
+    const h = renderHook(({ active }) => useObservabilityQuery('active', load, () => true, active), { initialProps: { active: true } });
+    await flush();
+    h.rerender({ active: false });
+    expect(h.result.current.data).toBeUndefined();
+    await act(async () => vi.advanceTimersByTime(60000));
+    expect(load).toHaveBeenCalledTimes(1);
+    h.rerender({ active: true });
+    await flush();
+    expect(load).toHaveBeenCalledTimes(2);
+});

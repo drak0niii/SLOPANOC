@@ -90,7 +90,12 @@ already-persisted state survive past one call.
 """
 from __future__ import annotations
 
+from backend.observability.model_context import model_activity
+
 import asyncio
+from backend.observability.deadlines import bind as bind_budget, DeadlineExceeded, cleanup_scope, policy as reliability_policy, current_controller, check as deadline_check, cleanup_operation
+from backend.observability.watchdog import Watchdog
+from backend.observability.delivery import DeliveryBuffer, Backpressure, HEARTBEAT
 import logging
 import uuid
 from functools import lru_cache
@@ -150,6 +155,13 @@ from backend.api.conversation_target_capture import ConversationTargetCapture
 from backend.api.pending_action import map_pending_action
 from backend.api.source_requirements_capture import SourceRequirementsCapture
 from backend.api.pending_selection import map_pending_selection
+# M2 observation helpers; SDK initialization remains owned by FastAPI lifespan.
+from backend.observability.turn_trace import begin_turn, notify, signal, phase, attach_turn
+from backend.observability.tracing import Operation
+from backend.observability.stages import Stage as TelemetryStage
+from backend.observability.errors import ErrorCode as TelemetryError
+
+
 from backend.api.perf_timing import DelegationTimer, PerfTimer, discard_model_call_tracking
 from backend.api.run_trace import RunTraceRecorder
 from backend.api.schemas import ActiveCaseDTO, AssistantMessage, ChatResponse, PendingActionDTO
@@ -394,6 +406,7 @@ def _build_presentation_runner(session_service: ApiSessionService) -> _Runner:
     )
 
 
+@model_activity("team_manager", "presentation")
 async def _retry_trusted_presentation_once(
     *, user_id: str, run_id: str, validated_result: dict[str, Any], user_content: types.Content
 ) -> Optional[str]:
@@ -520,6 +533,10 @@ def _runner_stage_after(event: Any, current: str) -> str:
     return "team_manager_model"
 
 
+from backend.observability.deadlines import iterator_operation
+from backend.observability.reliability_contract import Category
+
+@iterator_operation(Category.ORCHESTRATION)
 async def _merge_adk_and_activity_events(
     agen: AsyncIterator[Any], activity_channel: "Optional[asyncio.Queue[Any]]"
 ) -> AsyncIterator[_MergedEvent]:
@@ -584,94 +601,48 @@ async def _merge_adk_and_activity_events(
             yield _MergedEvent("adk", event)
         return
 
-    _ADK_ITEM = "item"
-    _ADK_DONE = "done"
-    _ADK_ERROR = "error"
-    adk_queue: "asyncio.Queue[tuple[str, Any]]" = asyncio.Queue()
+    from backend.observability.deadlines import close_iterator
+    buffer = DeliveryBuffer()
 
-    async def _drain_agen() -> None:
-        # The ONE and ONLY place `agen` is ever resumed -- see this
-        # function's own docstring above. A real exception from `agen`
-        # (never `StopAsyncIteration`, which `async for` already absorbs
-        # as normal completion) is relayed, not swallowed, so it still
-        # propagates out of `_merge_adk_and_activity_events` exactly as
-        # it did before this correction.
+    async def _drain_agen():
+        error = None
         try:
             async for event in agen:
-                await adk_queue.put((_ADK_ITEM, event))
-        except BaseException as exc:  # noqa: BLE001 -- relayed to the consumer below, never swallowed
-            # DEADLOCK FIX (found by the D2 focused-test/full-regression
-            # pass, not merely theorized): `agen` -- e.g. a real ADK
-            # Runner, or a fake one in tests that simulates a mid-stream
-            # failure -- can raise `asyncio.CancelledError` directly, not
-            # only via this Task being externally `.cancel()`'d. That is
-            # a `BaseException`, not an `Exception` -- an `except
-            # Exception:` clause here does NOT catch it, so it would
-            # propagate straight out of `_drain_agen` WITHOUT ever
-            # reaching either `adk_queue.put()` call below, leaving the
-            # consumer's `adk_queue.get()` awaiting forever (a genuine
-            # deadlock, not merely a missed error -- reproduced directly
-            # by `test_chat_service_turn_context_lifecycle.py`'s own
-            # `test_cleanup_after_asyncio_cancelled_error_raised_mid_run`,
-            # whose fake runner does exactly this). Catching
-            # `BaseException` here and relaying it through the SAME
-            # queue as any other error restores the original,
-            # pre-correction propagation contract exactly: the consumer
-            # below re-raises whatever `agen` raised, byte-for-byte,
-            # including `CancelledError`. If THIS Task is itself being
-            # genuinely, externally cancelled at the same moment (the
-            # `finally` block's own `task.cancel()` below), the `await
-            # adk_queue.put(...)` call is safe either way -- `adk_queue`
-            # is unbounded, so `put()` never truly suspends.
-            await adk_queue.put((_ADK_ERROR, exc))
-            return
-        await adk_queue.put((_ADK_DONE, None))
+                await buffer.put(event)
+        except BaseException as exc:
+            error = exc
+        finally:
+            try:
+                await close_iterator(agen)
+            except BaseException as exc:
+                error = error or exc
+            buffer.finish(error)
 
-    adk_task: "asyncio.Task[None]" = asyncio.ensure_future(_drain_agen())
-    adk_get_task: "asyncio.Task[tuple[str, Any]]" = asyncio.ensure_future(adk_queue.get())
-    queue_task: "asyncio.Task[Any]" = asyncio.ensure_future(activity_channel.get())
+    # ONE persistent owner resumes and closes ADK's context-sensitive generator.
+    adk_task = _owned_task(_drain_agen())
+    adk_get_task = asyncio.create_task(buffer.get())
+    queue_task = asyncio.create_task(activity_channel.get())
     try:
         while True:
-            done, _pending = await asyncio.wait({adk_get_task, queue_task}, return_when=asyncio.FIRST_COMPLETED)
-
+            done, _ = await asyncio.wait({adk_get_task,queue_task},return_when=asyncio.FIRST_COMPLETED)
             if queue_task in done:
-                activity_event = queue_task.result()
-                yield _MergedEvent("activity", activity_event)
-                queue_task = asyncio.ensure_future(activity_channel.get())
-
+                yield _MergedEvent("activity",queue_task.result())
+                queue_task = asyncio.create_task(activity_channel.get())
             if adk_get_task in done:
-                kind, payload = adk_get_task.result()
-                if kind == _ADK_ITEM:
-                    yield _MergedEvent("adk", payload)
-                    adk_get_task = asyncio.ensure_future(adk_queue.get())
+                payload = adk_get_task.result()
+                if payload is not None:
+                    yield _MergedEvent("adk",payload)
+                    adk_get_task = asyncio.create_task(buffer.get())
                     continue
-
-                # Either genuine completion or a real error -- both mean
-                # the outer Runner is done producing events. A tool
-                # called deep inside the LAST nested `incident_manager`
-                # call may have reported activity with no `await` between
-                # that call and the Runner's own final yield -- a real
-                # race against `queue_task`'s own "done" propagation
-                # (asyncio schedules a `put_nowait` waiter's wakeup on the
-                # next loop tick, which is not guaranteed to land in the
-                # SAME `asyncio.wait()` call as `adk_get_task`'s own
-                # resolution). One final non-blocking drain here means a
-                # genuinely-reported activity event is never silently
-                # lost merely because it arrived on the very last
-                # iteration.
                 while not activity_channel.empty():
-                    yield _MergedEvent("activity", activity_channel.get_nowait())
-                if kind == _ADK_ERROR:
-                    raise payload
+                    yield _MergedEvent("activity",activity_channel.get_nowait())
                 return
     finally:
-        for task in (adk_get_task, queue_task, adk_task):
+        for task in (adk_get_task,queue_task,adk_task):
             if not task.done():
                 task.cancel()
-                try:
-                    await task
-                except (asyncio.CancelledError, StopAsyncIteration, Exception):
-                    pass
+        async with cleanup_scope():
+            await asyncio.gather(adk_get_task,queue_task,adk_task,return_exceptions=True)
 
 
 def _active_events(events: list[Any]) -> list[Any]:
@@ -742,8 +713,10 @@ class ChatService:
         ] = None,
         attachment_service: Optional[AttachmentService] = None,
         attachment_storage: Optional[ChatAttachmentStorage] = None,
+        observability_runtime: Any = None,
     ) -> None:
         self._session_service = session_service
+        self._observability_runtime = observability_runtime
         self._runner = runner if runner is not None else _build_runner(session_service)
         # R1 FIX: injectable exactly like `runner` above -- the tools-free
         # Runner used ONLY for a turn presenting a just-validated
@@ -828,6 +801,7 @@ class ChatService:
         message_text: str,
         user_id: str = DEFAULT_USER_ID,
         attachment_ids: Sequence[str] = (),
+        *, sse_expected: bool = False,
     ) -> AsyncIterator[StreamEvent]:
         """THE canonical pipeline. PRECONDITION: the caller has already
         verified session ownership (`run_turn` below and the SSE route in
@@ -886,51 +860,132 @@ class ChatService:
         # safety contract: developer-log-only, never part of any SSE
         # event, never in the user-facing RunTrace.
         perf = PerfTimer(sequencer.run_id)
-        yield sequencer.build(StreamEventType.RUN_STARTED, {})
-
+        lifecycle = begin_turn(sequencer.run_id, session_id, self._observability_runtime)
+        from backend.observability.slo_sources import observe as sre_observe
+        sre_observe(lifecycle, "activate", user_id, sse_expected)
         run_key = (session_id, sequencer.run_id)
-        queue: "asyncio.Queue[Any]" = asyncio.Queue()
+        controller = Watchdog(lifecycle, self._observability_runtime.config if self._observability_runtime is not None else reliability_policy())
+        if lifecycle is not None:
+            notify(lifecycle, 'bind_reliability', controller)
+        queue = DeliveryBuffer(capacity=controller.config.business_queue_capacity, byte_limit=controller.config.business_queue_bytes)
+
+        def signal_done():
+            queue.finish()
 
         async def _drive() -> None:
-            try:
-                async with self._session_service.lock_for(session_id, user_id):
-                    async with Aclosing(
-                        self._run_turn_events(sequencer, session_id, message_text, user_id, perf, attachment_ids)
-                    ) as events:
-                        async for event in events:
-                            await queue.put(event)
-            finally:
-                # Always signals completion, even on an unexpected
-                # exception OR a cancellation (see `cancel_run` below) --
-                # so a caller still draining this generator (e.g.
-                # `run_turn` below) can never hang waiting for an item
-                # that will never come. Cancellation delivers
-                # `asyncio.CancelledError` at whatever `await` this task
-                # is currently suspended on (inside the `async with`
-                # blocks above, or inside `_run_turn_events` itself) --
-                # this `finally` still runs during that unwind (a single
-                # `cancel()` call does not prevent one more `await` in a
-                # `finally`), then the `CancelledError` re-raises and the
-                # task ends in the "cancelled" state. Both `async with`
-                # blocks release their resource (the session lock;
-                # `Aclosing`'s own `.aclose()`) on ANY exit, cancellation
-                # included -- nothing here is a new cancellation-safety
-                # mechanism, this is Python's own `asyncio`/`async with`
-                # semantics doing exactly what they already do.
-                await queue.put(_TURN_DONE)
+            failure = None
+            with attach_turn(lifecycle), bind_budget(controller.work, controller):
+                controller.start(asyncio.current_task())
+                try:
+                    from backend.observability.deadlines import boundary
+                    from backend.observability.reliability_contract import Category
+                    lock = self._session_service.lock_for(session_id, user_id)
+                    acquired = False
+                    lock_started = controller.clock()
+                    try:
+                        async with boundary(Category.LOCK):
+                            await lock.__aenter__()
+                        acquired = True
+                        from backend.observability.deadlines import observed
+                        observed('lock_wait', Category.LOCK, controller.clock()-lock_started)
+                        events = self._run_turn_events(sequencer, session_id, message_text, user_id, perf, attachment_ids)
+                        try:
+                            async for event in events:
+                                if controller.sealed:
+                                    raise controller.cause or asyncio.CancelledError()
+                                deadline_check()
+                                if event.type == StreamEventType.MESSAGE_COMPLETED:
+                                    sre_observe(lifecycle, "emit")
+                                if event.type == StreamEventType.RUN_COMPLETED:
+                                    notify(lifecycle, 'wire_result', event.data.get('outcome'))
+                                try:
+                                    await queue.put(event)
+                                except Backpressure:
+                                    # Explicit stream failure, independent backend persists/completes.
+                                    sre_observe(lifecycle, 'relay', 'backpressure_failed')
+                                    notify(lifecycle, 'relay_closed', False)
+                                    queue.detach()
+                        finally:
+                            controller.seal()
+                            async with cleanup_scope():
+                                await events.aclose()
+                    finally:
+                        if acquired:
+                            # asyncio.Lock release cannot await or exceed cleanup budget.
+                            # Do it even if preceding generator cleanup exhausted reserve.
+                            if isinstance(lock, asyncio.Lock):
+                                lock.release()
+                            else:
+                                import sys
+                                async with cleanup_scope():
+                                    await lock.__aexit__(*sys.exc_info())
+                except BaseException as exc:
+                    failure = controller.cause or exc
+                    notify(lifecycle, 'failure', failure)
+                    if isinstance(failure, TimeoutError):
+                        queue.finish(DeadlineExceeded(controller.work))
+                    elif isinstance(failure, Backpressure):
+                        queue.finish(failure)
+                    if failure is not exc:
+                        raise failure from None
+                    raise
+                finally:
+                    controller.seal()
+                    try:
+                        async with cleanup_scope():
+                            await controller.stop()
+                    except BaseException as exc:
+                        if failure is None:
+                            failure = exc
+                        # Original timeout/cancel remains authoritative.
+                    notify(lifecycle, 'finish', failure)
+                    signal_done()
 
-        task = asyncio.create_task(_drive())
+        def completion_backstop(task):
+            # Also runs when cancellation happened before _drive's first instruction.
+            notify(lifecycle, 'backstop', task)
+            signal_done()
+
+        driver = _drive()
+        try:
+            task = asyncio.create_task(driver)
+        except BaseException as exc:
+            driver.close()
+            notify(lifecycle, 'finish', exc)
+            raise
+        task._slopanoc_sre_turn = lifecycle
         self._background_turns.add(task)
         self._run_tasks[run_key] = task
+        task.add_done_callback(completion_backstop)
         task.add_done_callback(self._background_turns.discard)
         task.add_done_callback(lambda _task, key=run_key: self._run_tasks.pop(key, None))
         task.add_done_callback(_log_unexpected_background_turn_exception)
 
-        while True:
-            item = await queue.get()
-            if item is _TURN_DONE:
-                break
-            yield item
+        relayed = False
+        try:
+            # Register execution before the first yield: closing the relay here must
+            # not strand an accepted root or stop the independently owned task.
+            yield sequencer.build(StreamEventType.RUN_STARTED, {})
+            while True:
+                try:
+                    item = await queue.get(heartbeat=controller.config.heartbeat_seconds)
+                except (Backpressure, TimeoutError):
+                    # No successful empty result on a failed/incomplete stream.
+                    yield sequencer.build(StreamEventType.ERROR, {"code":"run_failure", "message":"The request or its delivery timed out. Please check the saved conversation."})
+                    yield sequencer.build(StreamEventType.RUN_COMPLETED, {"outcome":"error"})
+                    break
+                if item is HEARTBEAT:
+                    # SSE comment heartbeat is transport liveness, never material progress.
+                    yield None
+                    continue
+                if item is None:
+                    relayed = True
+                    break
+                yield item
+        finally:
+            queue.detach()
+            sre_observe(lifecycle, 'relay', 'relay_succeeded' if relayed else 'client_disconnected')
+            notify(lifecycle, 'relay_closed', relayed)
 
     async def _run_turn_events(
         self,
@@ -975,7 +1030,9 @@ class ChatService:
         yield sequencer.build(StreamEventType.STATUS, status_data(Stage.PROCESSING, "Processing your request"))
         translator.note_external_status(Stage.PROCESSING)
 
-        session = await self._session_service.get_session(session_id, user_id)
+        with phase(Operation.SESSION, TelemetryStage.SESSION_LOAD_STARTED, TelemetryStage.SESSION_LOAD_COMPLETED):
+            session = await self._session_service.get_session(session_id, user_id)
+            signal('confirm_session', session.id)
         perf.mark("session_loaded")
 
         # Production-hardening pass: consume (single-use) whatever
@@ -993,7 +1050,9 @@ class ChatService:
         # what lets `enforce_read_continuation` -- team_manager's
         # `before_tool_callback` -- find it for this SAME turn's
         # `incident_manager` call, if team_manager's model makes one.
-        pending_read_continuation = pop_read_continuation(session.state)
+        with phase(Operation.PENDING, TelemetryStage.PENDING_INTERACTION_RESOLVE_STARTED,
+                   TelemetryStage.PENDING_INTERACTION_RESOLVE_COMPLETED):
+            pending_read_continuation = pop_read_continuation(session.state)
         if pending_read_continuation is not None:
             await self._session_service.persist_state_delta(
                 session, {PENDING_READ_CONTINUATION_STATE_KEY: None}
@@ -1094,14 +1153,15 @@ class ChatService:
             # own docstring has the full list). Never trusts the
             # frontend's own upload/draft state.
             try:
-                prepared_attachments = await prepare_attachments_for_turn(
-                    attachment_service=self._attachment_service,
-                    storage=self._attachment_storage,
-                    settings=get_settings(),
-                    user_id=user_id,
-                    session_id=session_id,
-                    attachment_ids=list(attachment_ids),
-                )
+                with phase(Operation.ATTACHMENTS, TelemetryStage.ATTACHMENTS_STARTED, TelemetryStage.ATTACHMENTS_COMPLETED):
+                    prepared_attachments = await prepare_attachments_for_turn(
+                        attachment_service=self._attachment_service,
+                        storage=self._attachment_storage,
+                        settings=get_settings(),
+                        user_id=user_id,
+                        session_id=session_id,
+                        attachment_ids=list(attachment_ids),
+                    )
             except SafeErrorException as exc:
                 error = (exc.safe_error.error_code, exc.safe_error.user_message)
 
@@ -1249,6 +1309,7 @@ class ChatService:
         direct_fast_path_trust_validation_failed = False
         # Observability only: the processing stage a swallowed exception is attributed to.
         failure_stage = "turn_setup"
+        orchestration_phase = signal('start_phase', Operation.ORCHESTRATION, TelemetryStage.AGENT_TEAM_MANAGER)
         try:
             perf.mark("runner_invocation_start")
 
@@ -1324,6 +1385,7 @@ class ChatService:
                 perf.mark("read_continuation_executed")
 
                 if specialist_result is None:
+                    signal("failure", error_code=TelemetryError.SPECIALIST_FAILED)
                     # Safe failure (section 11): never fall back to team_
                     # manager's own turn with stale/no data -- that risks
                     # exactly the hallucinated-summary outcome this pass
@@ -1353,7 +1415,7 @@ class ChatService:
                     current_chat_id = source_capture.captured_chat_id()
                     if current_chat_id and current_chat_id != contributors_task_chat_id:
                         contributors_task_chat_id = current_chat_id
-                        contributors_task = asyncio.create_task(
+                        contributors_task = _owned_task(
                             self._resolve_teams_contributors(current_chat_id)
                         )
 
@@ -1422,6 +1484,7 @@ class ChatService:
                     async for _merged in _merge_adk_and_activity_events(
                         agen, get_activity_channel(sequencer.run_id)
                     ):
+                        signal("progress")
                         if _merged.source == "activity":
                             # Phase 2 (Runtime Activity Truthfulness): a
                             # real, observed inner Knowledge/Teams tool
@@ -1500,6 +1563,7 @@ class ChatService:
                             # and its own real `.timestamp` once it is
                             # safe to do so.
                             turn_invocation_id = event.invocation_id
+                            signal('bind_turn_id', turn_invocation_id)
 
                             # POST-5.1 B5 -- atomic bulk attachment
                             # linkage, INLINE at this exact point (never
@@ -1538,7 +1602,8 @@ class ChatService:
                                         session_id,
                                         turn_invocation_id,
                                     )
-                                except Exception:
+                                except Exception as exc:
+                                    signal("failure", exc, TelemetryError.DATABASE_PERSISTENCE_ERROR)
                                     # Instruction section 25: a link
                                     # failure AFTER the genuine user turn
                                     # exists must never present a
@@ -1574,7 +1639,10 @@ class ChatService:
                         source_capture.observe(event)
                         delegation_timer.observe(event)
                         conversation_target_capture.observe(event)
+                        was_declared = source_requirements_capture.declared
                         source_requirements_capture.observe(event)
+                        if source_requirements_capture.declared and not was_declared:
+                            signal('event', TelemetryStage.SOURCE_REQUIREMENTS_COMPLETED)
 
                         # A5 live UI corrective pass -- FINAL trust-gate
                         # closure. `SourceRequirementsCapture` has THREE
@@ -1653,7 +1721,7 @@ class ChatService:
                             if contributors_task is not None and not contributors_task.done():
                                 contributors_task.cancel()
                             contributors_task_chat_id = current_chat_id
-                            contributors_task = asyncio.create_task(
+                            contributors_task = _owned_task(
                                 self._resolve_teams_contributors(current_chat_id)
                             )
 
@@ -1748,7 +1816,8 @@ class ChatService:
                             "run_failure",
                             "The assistant could not complete this request. Please try again.",
                         )
-        except Exception:
+        except Exception as exc:
+            signal('failure', exc)
             # Never propagate a raw model/runtime exception (could include
             # implementation detail) -- see errors.py's module docstring.
             # The operator still sees only the safe message; the server log
@@ -1947,6 +2016,8 @@ class ChatService:
             if turn_invocation_id is not None:
                 await self._finalize_user_turn_activity(session_id, user_id, turn_invocation_id, message_text)
 
+        signal('end_phase', orchestration_phase)
+        finalization_phase = signal('start_phase', Operation.FINALIZATION, TelemetryStage.SYNTHESIS_STARTED)
         perf.mark("generation_complete")
         if delegation_timer.call_count:
             perf.log_duration("incident_manager_delegation", delegation_timer.total_seconds)
@@ -2025,6 +2096,7 @@ class ChatService:
                 "chat_service: governed operational route forced but no specialist record -- failing closed run_id=%s",
                 sequencer.run_id,
             )
+            signal("failure", error_code=TelemetryError.SPECIALIST_FAILED)
             final_text = OPERATIONAL_ROUTE_UNAVAILABLE_TEXT
             final_producer = "server_operational_route"
             clarification_meta_text = final_text
@@ -2069,7 +2141,8 @@ class ChatService:
                     question=_remediation_question(message_text),
                     run_id=f"{sequencer.run_id}::declaration-remediation",
                 )
-            except Exception:
+            except Exception as exc:
+                signal("failure", exc)
                 _logger.warning(
                     "chat_service: source-requirements declaration remediation raised -- failing closed run_id=%s",
                     sequencer.run_id,
@@ -2077,6 +2150,7 @@ class ChatService:
                 declaration = None
 
             if declaration is None:
+                signal("failure")
                 _logger.warning(
                     "chat_service: source-requirements declaration still missing after remediation -- "
                     "failing closed run_id=%s",
@@ -2198,7 +2272,8 @@ class ChatService:
                         # live-failure narrative this closes.
                         image_parts=trusted_image_parts_from_content(content),
                     )
-                except Exception:
+                except Exception as exc:
+                    signal("failure", exc)
                     _logger.warning(
                         "chat_service: governed-knowledge completion remediation raised -- failing closed run_id=%s",
                         sequencer.run_id,
@@ -2285,6 +2360,7 @@ class ChatService:
             )
             final_text = egress.text
             log_egress(egress)
+            signal("event", TelemetryStage.COMMAND_EGRESS_COMPLETED)
             if egress.decisions or egress.rejected_authorizations:
                 command_egress_view = egress.view()
 
@@ -2302,12 +2378,15 @@ class ChatService:
             _emit_retrieval_diagnostics(retrieval_diagnostics, "error", logging.WARNING)
             if contributors_task is not None and not contributors_task.done():
                 contributors_task.cancel()
+            signal('end_phase', finalization_phase)
+            delivery_phase = signal('start_phase', Operation.DELIVERY, TelemetryStage.SSE_STARTED)
             code, message = error
             yield sequencer.build(StreamEventType.ERROR, {"code": code, "message": message})
             failed_trace = trace_recorder.record(**response_failed_trace_step())
             if failed_trace is not None:
                 yield failed_trace
             yield sequencer.build(StreamEventType.RUN_COMPLETED, {"outcome": "error"})
+            signal("end_phase", delivery_phase, TelemetryStage.SSE_COMPLETED)
             perf.log_duration("total_run", perf.elapsed_seconds())
             return
 
@@ -2456,6 +2535,8 @@ class ChatService:
                 supporting_identities(technical_authority_execution) if technical_authority_execution is not None else None,
             )
         )
+        signal('event', TelemetryStage.AUTHORITY_SELECTED)
+        signal('event', TelemetryStage.PROVENANCE_COMPLETED)
         if knowledge_sources:
             message_completed_data["knowledge_sources"] = [
                 reference.model_dump(mode="json") for reference in knowledge_sources
@@ -2580,22 +2661,29 @@ class ChatService:
 
         if state_delta_to_persist:
             try:
-                await self._session_service.persist_state_delta(refreshed_session, state_delta_to_persist)
+                with phase(Operation.PERSISTENCE, TelemetryStage.PERSISTENCE_STARTED, TelemetryStage.PERSISTENCE_COMPLETED):
+                    await self._session_service.persist_state_delta(refreshed_session, state_delta_to_persist)
             except Exception as exc:
+                signal('failure', exc, TelemetryError.DATABASE_PERSISTENCE_ERROR)
                 _logger.error(
                     "chat_service: failed to persist final response state delta run_id=%s turn_id=%s: %s",
                     sequencer.run_id,
                     turn_invocation_id,
                     exc,
                 )
+                signal('end_phase', finalization_phase)
+                delivery_phase = signal('start_phase', Operation.DELIVERY, TelemetryStage.SSE_STARTED)
                 yield sequencer.build(
                     StreamEventType.ERROR,
                     {"code": "persistence_failure", "message": "Failed to persist final response. Please try again."},
                 )
                 yield sequencer.build(StreamEventType.RUN_COMPLETED, {"outcome": "error"})
+                signal("end_phase", delivery_phase, TelemetryStage.SSE_COMPLETED)
                 perf.log_duration("total_run", perf.elapsed_seconds())
                 return
 
+        signal('end_phase', finalization_phase, TelemetryStage.SYNTHESIS_COMPLETED)
+        delivery_phase = signal('start_phase', Operation.DELIVERY, TelemetryStage.SSE_STARTED)
         yield sequencer.build(StreamEventType.MESSAGE_COMPLETED, message_completed_data)
 
         if pending_action is not None:
@@ -2621,6 +2709,7 @@ class ChatService:
             yield generated_trace
 
         yield sequencer.build(StreamEventType.RUN_COMPLETED, {"outcome": "ok"})
+        signal('end_phase', delivery_phase, TelemetryStage.SSE_COMPLETED)
         perf.log_duration("total_run", perf.elapsed_seconds())
 
     async def _safe_case_title(self, user_id: str, case_id: str) -> Optional[str]:
@@ -2632,6 +2721,7 @@ class ChatService:
             return None
         return case.title
 
+    @cleanup_operation
     async def _reload_and_persist_cleanup_delta(
         self, session_id: str, user_id: str, delta: dict[str, Any], perf: Optional[PerfTimer] = None
     ) -> None:
@@ -2685,6 +2775,7 @@ class ChatService:
                 session_id,
             )
 
+    @cleanup_operation
     async def _finalize_user_turn_activity(
         self, session_id: str, user_id: str, invocation_id: str, message_text: str
     ) -> None:
@@ -2760,6 +2851,8 @@ class ChatService:
             self.execute_turn_events(session_id, message_text, user_id, attachment_ids)
         ) as events:
             async for event in events:
+                if event is None:
+                    continue
                 if event.type == StreamEventType.MESSAGE_COMPLETED:
                     final_text = event.data.get("content")
                 elif event.type == StreamEventType.ACTION_PENDING:
@@ -2896,6 +2989,10 @@ class ChatService:
         task = self._run_tasks.get((session_id, run_id))
         if task is None or task.done():
             return False
+        from backend.observability.slo_contract import CancelOrigin
+        turn = getattr(task, "_slopanoc_sre_turn", None)
+        if getattr(turn, "sre", None) is not None:
+            turn.sre.cancel_origin = CancelOrigin.USER
         task.cancel()
         return True
 
@@ -2913,3 +3010,9 @@ def get_chat_service() -> ChatService:
         attachment_service=get_attachment_service(),
         attachment_storage=get_attachment_storage(),
     )
+
+
+def _owned_task(awaitable):
+    task = asyncio.create_task(awaitable)
+    controller = current_controller()
+    return controller.track(task) if controller is not None else task

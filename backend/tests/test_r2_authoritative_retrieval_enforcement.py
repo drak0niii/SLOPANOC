@@ -175,7 +175,9 @@ async def test_hallucinated_ok_without_any_retrieval_is_rejected(monkeypatch: py
         parent_state=dict(session.state),
         attachment_service=_attachment_service(),
         attachment_storage=_attachment_storage(),
-        continuation=_resolved_continuation(),
+        # Exercise the existing model-driven path, as the positive control does;
+        # the no-time-range path now retrieves deterministically before synthesis.
+        continuation=_resolved_continuation(requested_time_range="the last 7 days"),
     )
 
     assert result is not None  # a safe, explicit failure -- never None/silently dropped
@@ -268,7 +270,9 @@ async def test_rejected_result_leaves_no_leaked_internal_session(monkeypatch: py
         parent_state=dict(session.state),
         attachment_service=_attachment_service(),
         attachment_storage=_attachment_storage(),
-        continuation=_resolved_continuation(),
+        # Exercise the existing model-driven path, as the positive control does;
+        # the no-time-range path now retrieves deterministically before synthesis.
+        continuation=_resolved_continuation(requested_time_range="the last 7 days"),
     )
 
     internal_session_id = execution_module._internal_session_id(session_id, "run-cleanup-check")

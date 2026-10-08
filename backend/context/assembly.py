@@ -12,6 +12,10 @@ prevent stale context reuse and enforce token budgeting.
 """
 from __future__ import annotations
 
+from backend.observability.turn_trace import observe_phase
+from backend.observability.tracing import Operation
+from backend.observability.stages import Stage as TelemetryStage
+
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
@@ -106,6 +110,7 @@ class ContextEngineeringBroker:
         self._max_context_items = max_context_items
         self._max_token_budget = max_token_budget
 
+    @observe_phase(Operation.CONTEXT, TelemetryStage.CONTEXT_SELECTION_STARTED, TelemetryStage.CONTEXT_SELECTION_COMPLETED)
     def assemble(
         self,
         query: str,

@@ -85,6 +85,7 @@ tool-thread-pool path (`flows/llm_flows/functions.py`'s
 directly on the same event-loop thread, so propagation is trivial anyway.
 """
 from __future__ import annotations
+from backend.observability.blocking_work import defer_business
 
 import contextvars
 import threading
@@ -120,6 +121,7 @@ def reset_run_id(token: "contextvars.Token") -> None:
     _CURRENT_RUN_ID.reset(token)
 
 
+@defer_business
 def record_message_texts(run_id: Optional[str], texts: dict[str, str]) -> None:
     """Called by `teams_get_messages` with this call's own already-
     filtered, retrieved messages. A no-op for a missing `run_id` or an

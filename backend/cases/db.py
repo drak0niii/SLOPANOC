@@ -36,6 +36,7 @@ from typing import Optional
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
+from backend.observability.dependency_database import pool_kwargs, observe_engine, observe_factory
 
 from backend.cases.models import Base
 from backend.config.settings import Settings, get_settings
@@ -65,10 +66,12 @@ class CaseDatabase:
 
     def __init__(self, database_url: Optional[str] = None, settings: Optional[Settings] = None) -> None:
         url = database_url if database_url is not None else (settings or get_settings()).resolve_database_url()
-        self._engine: AsyncEngine = create_async_engine(url, **_engine_kwargs(url))
+        self._engine: AsyncEngine = create_async_engine(url, **pool_kwargs(url, _engine_kwargs(url), "case_db"))
         self._session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
             bind=self._engine, expire_on_commit=False
         )
+        observe_engine(self._engine, "case_db")
+        observe_factory(self._session_factory)
         self._schema_ready = False
 
     def session(self) -> AsyncSession:

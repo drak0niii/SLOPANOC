@@ -33,6 +33,13 @@ from backend.api.streaming_events import StreamEventType
 from backend.tests._api_fakes import FakeEvent, FakeFunctionCall, FakeFunctionResponse, FakeRunner
 
 
+@pytest.fixture(autouse=True)
+def local_contributor_lookup(monkeypatch):
+    # These routing tests fake the runner; the Source drawer lookup must also
+    # use an explicit local double, rather than the real Teams gateway.
+    async def contributors(_chat_id): return []
+    monkeypatch.setattr("backend.api.chat_service.resolve_authoritative_contributors", contributors)
+
 async def _collect(chat_service: ChatService, session_id: str, message: str, user_id: str = "api-user") -> list:
     return [event async for event in chat_service.execute_turn_events(session_id, message, user_id)]
 

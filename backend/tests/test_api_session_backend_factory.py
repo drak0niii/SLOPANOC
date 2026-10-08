@@ -117,7 +117,8 @@ def test_factory_never_constructs_two_authoritative_backends_for_one_call() -> N
 
     source = inspect.getsource(create_session_service_backend)
     assert source.count("return InMemorySessionService()") == 1
-    assert source.count("return DatabaseSessionService(") == 1
+    assert source.count("DatabaseSessionService(") == 1
+    assert source.count("return service") == 1
 
 
 def test_get_session_service_singleton_uses_the_factory(monkeypatch: pytest.MonkeyPatch) -> None:

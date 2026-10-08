@@ -1,0 +1,12 @@
+{
+  "enabled": false,
+  "workload": "synthetic",
+  "checks": [
+    "general",
+    "teams_fixture_or_approved_tenant",
+    "governed_knowledge",
+    "isolated_db_session",
+    "sse_receipt"
+  ],
+  "remote_execution": "EXACT_OPERATION_APPROVAL_REQUIRED"
+}

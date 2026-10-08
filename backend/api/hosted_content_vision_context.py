@@ -150,6 +150,7 @@ validation succeeded but the image was NOT queued for visual reasoning --
 never silently dropped, never claimed as reviewed.
 """
 from __future__ import annotations
+from backend.observability.blocking_work import defer_business, owner_business
 
 import logging
 import threading
@@ -206,6 +207,7 @@ _message_metadata: dict[str, dict[str, tuple[str, str]]] = {}
 _delivered: dict[str, list[DeliveredVisualEvidence]] = {}
 
 
+@defer_business
 def record_message_hosted_content_order(message_id: str, hosted_content_ids: Sequence[str]) -> None:
     """Called by `teams_get_messages` (get_messages.py) with one message's
     own TRUE, already-truncated, HTML-source-order `hosted_content_ids` --
@@ -289,6 +291,7 @@ def already_retrieved_this_run(chat_id: str, message_id: str, hosted_content_id:
         return False
 
 
+@defer_business
 def record_message_metadata(message_id: str, author: str, sent_at: str) -> None:
     """Teams Visual Evidence milestone -- called by `teams_get_messages`
     (get_messages.py) alongside `record_message_hosted_content_order`, for
@@ -310,6 +313,7 @@ def record_message_metadata(message_id: str, author: str, sent_at: str) -> None:
         per_run[message_id] = (author, sent_at)
 
 
+@owner_business
 def stash_pending_hosted_content_image(
     chat_id: str, message_id: str, hosted_content_id: str, mime_type: str, data: bytes
 ) -> bool:

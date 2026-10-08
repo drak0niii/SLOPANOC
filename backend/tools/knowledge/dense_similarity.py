@@ -73,7 +73,9 @@ class VertexEmbeddingSimilarityProvider:
     async def _embed(self, texts: list[str], task_type: str) -> list[list[float]]:
         from google.genai import types
 
-        response = await self._get_client().aio.models.embed_content(
+        from backend.observability.model_provider import embedding_request
+        response = await embedding_request(self._get_client(), agent="knowledge_retrieval",
+            operation="embedding_query" if task_type == _QUERY_TASK else "embedding_document",
             model=self._model_name,
             contents=[t[: self._max_chars] for t in texts],
             config=types.EmbedContentConfig(task_type=task_type, output_dimensionality=self._dimension),

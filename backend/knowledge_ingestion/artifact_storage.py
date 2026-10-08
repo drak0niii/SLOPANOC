@@ -55,6 +55,7 @@ from functools import lru_cache
 from typing import Optional
 
 from backend.config.settings import get_settings
+from backend.observability.dependency_storage import storage_call
 
 _OBJECT_KEY_PREFIX = "knowledge-artifacts"
 
@@ -118,19 +119,19 @@ class KnowledgeArtifactStorage:
         """
         bucket = self._require_bucket()
         blob = bucket.blob(object_name)
-        if blob.exists():
+        if storage_call("knowledge_artifacts", "exists", blob.exists):
             return False
-        blob.upload_from_string(data, content_type=content_type)
+        storage_call("knowledge_artifacts", "upload", blob.upload_from_string, data, content_type=content_type, byte_count=len(data))
         return True
 
     def get_bytes(self, object_name: str) -> bytes:
         bucket = self._require_bucket()
         blob = bucket.blob(object_name)
-        return blob.download_as_bytes()
+        return storage_call("knowledge_artifacts", "download", blob.download_as_bytes, byte_count="result")
 
     def exists(self, object_name: str) -> bool:
         bucket = self._require_bucket()
-        return bucket.blob(object_name).exists()
+        return storage_call("knowledge_artifacts", "exists", bucket.blob(object_name).exists)
 
     def uri_for(self, object_name: str) -> str:
         """The internal `gs://` URI for one artifact's binary.

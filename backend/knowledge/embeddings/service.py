@@ -75,7 +75,8 @@ class VectorEmbeddingService:
                 from google.genai import Client
                 # In live Vertex environment, use text-embedding-005
                 client = Client()
-                res = await client.aio.models.embed_content(
+                from backend.observability.model_provider import embedding_request
+                res = await embedding_request(client, agent="knowledge_embedding", operation="embedding",
                     model=self._model_name,
                     contents=text,
                     config={"output_dimensionality": self._dimension},

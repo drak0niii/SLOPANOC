@@ -1,0 +1,5 @@
+import { getObservabilityConfig } from '../../../../api/observability';
+import { useObservabilityQuery } from './useObservabilityQuery';
+import { ReadState } from './ReadState';
+import { ConfigTable } from './ConfigTable';
+export function ReliabilityPanel() { const q = useObservabilityQuery('reliability', getObservabilityConfig); return <section><h3 className="text-base font-medium text-primary">Reliability</h3><p className="my-3 text-sm text-warning">Provisional defaults — configurable — not production-approved SLOs.</p><p className="mb-3 text-sm text-tertiary">Configured timeouts, stall thresholds and UI deadline displays are separate concepts. These values are read-only.</p><ReadState query={q}>{c => <ConfigTable config={c} include={k => k.endsWith('_timeout_seconds') || /^(heartbeat|watchdog|retry_|blocking_|business_queue|projection_(capacity|stale|clock_grace))/.test(k)}/>}</ReadState><p className="mt-4 text-sm text-tertiary">Dense retrieval timeout and aggregate timeout/stall/cancellation counters are not reported by the current API.</p></section>; }

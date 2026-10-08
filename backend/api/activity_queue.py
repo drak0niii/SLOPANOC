@@ -57,6 +57,7 @@ one that already calls `discard_knowledge_run_evidence_state`/
 reach it identically.
 """
 from __future__ import annotations
+from backend.observability.blocking_work import defer_business
 
 import asyncio
 from enum import Enum
@@ -147,6 +148,7 @@ def get_activity_channel(run_id: str) -> "Optional[asyncio.Queue[ActivityEvent]]
     return _channels.get(run_id)
 
 
+@defer_business
 def report_activity(kind: ActivityKind, safe_metadata: Optional[dict[str, int]] = None) -> None:
     """Best-effort, non-blocking, never-raising activity report. Derives
     the run identity exclusively from `current_run_id()` -- a caller can
@@ -168,4 +170,6 @@ def report_activity(kind: ActivityKind, safe_metadata: Optional[dict[str, int]] 
     try:
         queue.put_nowait(event)
     except asyncio.QueueFull:
-        pass
+        from backend.observability.deadlines import observed
+        from backend.observability.reliability_contract import Category
+        observed("queue_saturation", Category.QUEUE)

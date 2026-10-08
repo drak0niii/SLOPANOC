@@ -79,6 +79,8 @@ never from parsing prose.
 """
 from __future__ import annotations
 
+from backend.observability.model_context import model_activity
+
 import json
 import logging
 from typing import Any, Optional
@@ -319,6 +321,7 @@ def _merged_final_text(content: Optional[types.Content]) -> Optional[str]:
     return merged.strip() or None
 
 
+@model_activity("incident_manager", "remediation")
 async def _run_compliance_retry(
     *, run_id: str, question: Optional[str], prior_answer_text: str, available_items: list[KnowledgeEvidenceItem]
 ) -> Optional[str]:

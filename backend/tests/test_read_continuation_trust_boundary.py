@@ -346,11 +346,13 @@ async def test_deterministic_execution_uses_the_caller_supplied_canonical_sessio
 
 @pytest.mark.asyncio
 async def test_derived_session_never_appears_in_the_users_own_session_listing(
-    _fake_incident_manager_runner: dict,
+    _fake_incident_manager_runner: dict, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The internal specialist session must never be listable alongside
     the user's real SLOPANOC sessions (e.g. the sidebar's chat history).
     """
+    # Deterministic retrieval precedes the fake Runner; isolate that boundary too.
+    monkeypatch.setattr(pac_module.requests, "post", _counting_gateway([], {}, {}))
     canonical = InMemorySessionService()
     await canonical.create_session(app_name=APP_NAME, user_id="api-user", session_id="real-session-1", state={})
 

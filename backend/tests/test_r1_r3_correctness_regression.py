@@ -83,7 +83,7 @@ def test_presentation_team_manager_is_the_same_role_different_capability_set() -
     second agent.
     """
     assert presentation_team_manager.name == team_manager.name == "team_manager"
-    assert presentation_team_manager.model is team_manager.model
+    assert presentation_team_manager.model.delegate is team_manager.model.delegate
     assert presentation_team_manager.instruction is team_manager.instruction
     assert presentation_team_manager.before_tool_callback is None
     assert presentation_team_manager.after_tool_callback is None

@@ -1,0 +1,10 @@
+{
+  "version": "0.160.0",
+  "production_image": "us-docker.pkg.dev/cloud-ops-agents-artifacts/google-cloud-opentelemetry-collector/otelcol-google:0.160.0",
+  "production_validation": "NOT LIVE-VALIDATED",
+  "development_distribution": "otelcol-contrib",
+  "development_version": "0.160.0",
+  "development_archive": "otelcol-contrib_0.160.0_darwin_arm64.tar.gz",
+  "upgrade_policy": "Review component compatibility, config tests, privacy projections and image digest before promotion; never use latest.",
+  "development_archive_sha256": "ceb5309ba16f2587dbef765d54e15c803354d038b0495b0b691e1eb9876d17c9"
+}

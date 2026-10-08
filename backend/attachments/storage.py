@@ -36,6 +36,7 @@ from functools import lru_cache
 from typing import Optional
 
 from backend.config.settings import get_settings
+from backend.observability.dependency_storage import storage_call
 
 _OBJECT_KEY_PREFIX = "chat-attachments"
 
@@ -105,21 +106,21 @@ class ChatAttachmentStorage:
         """
         bucket = self._require_bucket()
         blob = bucket.blob(object_name)
-        blob.upload_from_string(data, content_type=content_type)
+        storage_call("chat_attachments", "upload", blob.upload_from_string, data, content_type=content_type, byte_count=len(data))
 
     def get_bytes(self, object_name: str) -> bytes:
         bucket = self._require_bucket()
         blob = bucket.blob(object_name)
-        return blob.download_as_bytes()
+        return storage_call("chat_attachments", "download", blob.download_as_bytes, byte_count="result")
 
     def delete(self, object_name: str) -> None:
         bucket = self._require_bucket()
         blob = bucket.blob(object_name)
-        blob.delete()
+        storage_call("chat_attachments", "delete", blob.delete)
 
     def exists(self, object_name: str) -> bool:
         bucket = self._require_bucket()
-        return bucket.blob(object_name).exists()
+        return storage_call("chat_attachments", "exists", bucket.blob(object_name).exists)
 
     def uri_for(self, object_name: str) -> str:
         """POST-5.1 B5 -- the internal `gs://` URI Gemini/ADK receives for

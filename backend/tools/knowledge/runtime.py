@@ -381,10 +381,21 @@ def get_knowledge_tool_service() -> KnowledgeToolService:
         from backend.tools.knowledge.dense_similarity import VertexEmbeddingSimilarityProvider
 
         dense_provider = VertexEmbeddingSimilarityProvider(model_name=settings.knowledge_embedding_model)
+    from backend.observability.knowledge_instrumentation import knowledge_stage
+    from backend.observability.slo_sources import knowledge_operation
     retrieval_service = KnowledgeRetrievalService(
         repository,
         dense_provider=dense_provider,
         dense_min_similarity=settings.knowledge_dense_min_similarity,
         dense_timeout_seconds=settings.knowledge_dense_timeout_seconds,
+        execution_guard=knowledge_budget,
+        observer=knowledge_stage,
+        operation_observer=knowledge_operation,
     )
     return KnowledgeToolService(retrieval_service, KnowledgeProvenanceService(repository))
+
+
+def knowledge_budget():
+    from backend.observability.deadlines import boundary
+    from backend.observability.reliability_contract import Category
+    return boundary(Category.KNOWLEDGE)

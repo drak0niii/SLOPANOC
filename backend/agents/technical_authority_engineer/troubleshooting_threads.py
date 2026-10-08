@@ -23,6 +23,10 @@ turn (prior steps, recorded observations, background) belongs to the resolved th
 """
 from __future__ import annotations
 
+from backend.observability.turn_trace import observe_phase
+from backend.observability.tracing import Operation
+from backend.observability.stages import Stage as TelemetryStage
+
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
@@ -148,6 +152,7 @@ def _new_thread(summary: str, subject: Optional[str], session_id: Optional[str],
     )
 
 
+@observe_phase(Operation.THREAD, TelemetryStage.THREAD_RESOLVE_STARTED, TelemetryStage.THREAD_RESOLVE_COMPLETED)
 def resolve_active_thread(
     state: MutableMapping[str, Any],
     contract: Any,

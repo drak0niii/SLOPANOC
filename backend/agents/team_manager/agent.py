@@ -81,7 +81,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from google.adk.agents import Agent
+from backend.observability.adk_adapter import ObservedAgent as Agent
 
 from backend.agents.team_manager.case_context import (
     make_team_manager_instruction_provider,
@@ -106,6 +106,7 @@ from backend.agents.team_manager.state_sync import sync_incident_manager_result_
 from backend.api.perf_timing import after_model_call, before_model_call
 from backend.api.turn_final_answers import project_authoritative_answers_to_contents
 from backend.config.settings import get_settings, get_shared_llm
+from backend.observability.model_adapter import instrument_model
 
 _settings = get_settings()
 
@@ -183,7 +184,7 @@ team_manager = Agent(
     # (config/settings.py) for the ADK-source-verified rationale (avoids
     # rebuilding the underlying model client from scratch before every
     # single model call).
-    model=get_shared_llm(_settings.gemini_model),
+    model=instrument_model(get_shared_llm(_settings.gemini_model), "team_manager", "orchestration"),
     description=(
         "SLOPANOC's orchestrator. Owns the user conversation, asks only "
         "for missing information, and delegates technical troubleshooting to "
@@ -226,6 +227,7 @@ team_manager = Agent(
 
 presentation_team_manager = team_manager.model_copy(
     update={
+        "model": instrument_model(team_manager.model, "team_manager", "presentation"),
         "tools": [],
         "before_tool_callback": None,
         "after_tool_callback": None,

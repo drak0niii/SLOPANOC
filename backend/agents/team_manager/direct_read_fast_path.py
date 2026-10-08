@@ -331,6 +331,8 @@ P2-instrumented with no change needed here.
 """
 from __future__ import annotations
 
+from backend.observability.model_context import model_activity
+
 import json
 import logging
 from typing import Any, Optional
@@ -841,6 +843,7 @@ _fast_path_incident_manager = incident_manager.model_copy(
 ...)` in team_manager/agent.py in place of the base `incident_manager`."""
 
 
+@model_activity("team_manager", "synthesis")
 async def _run_trusted_presentation(
     *, validated_result: dict[str, Any], seed_state: dict[str, Any], user_content: Any, run_id: str
 ) -> Optional[types.Content]:

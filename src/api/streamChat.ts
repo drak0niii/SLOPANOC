@@ -1,6 +1,7 @@
 import { getApiBaseUrl } from "./config";
 import { ApiError } from "./client";
 import { appendAndSplitFrames, extractDataPayload, parseSSEEvent } from "./sseParser";
+import { submitSSEReceipt } from "./sseReceipts";
 import type { SSEEvent } from "./types";
 
 /**
@@ -55,6 +56,7 @@ export async function streamChatMessage({
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  const receipts = new Set<string>();
 
   for (;;) {
     const { value, done } = await reader.read();
@@ -68,7 +70,13 @@ export async function streamChatMessage({
       const rawData = extractDataPayload(frame);
       if (rawData === null) continue;
       const event = parseSSEEvent(rawData);
-      if (event !== null) onEvent(event);
+      if (event !== null) {
+        onEvent(event);
+        if (event.type === "message.completed" && !receipts.has(event.run_id)) {
+          receipts.add(event.run_id);
+          submitSSEReceipt(event.run_id);
+        }
+      }
     }
   }
 

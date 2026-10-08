@@ -67,7 +67,7 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
  * Extracted (POST-5.1 B3) so `postJson` and `postForm` share EXACTLY one
  * error-mapping implementation rather than two copies drifting apart. */
 async function throwForFailedResponse(path: string, response: Response): Promise<never> {
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && !path.startsWith("/api/observability/")) {
     console.debug(`[api] ${path} failed with status ${response.status}`);
   }
   let safe: SafeErrorBody | null = null;
@@ -108,8 +108,8 @@ export async function postJson<T>(path: string, body?: unknown): Promise<T> {
  * Plain GET helper (POST-5.1 B4C). Shares `throwForFailedResponse` with
  * `postJson`/`postForm` — one error-mapping implementation for every verb.
  */
-export async function getJson<T>(path: string): Promise<T> {
-  const response = await apiFetch(path);
+export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const response = await apiFetch(path, signal ? { signal } : undefined);
   if (!response.ok) return throwForFailedResponse(path, response);
   return (await response.json()) as T;
 }

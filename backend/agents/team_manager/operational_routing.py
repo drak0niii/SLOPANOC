@@ -40,6 +40,10 @@ No vendor, technology, fault, procedure or command vocabulary.
 """
 from __future__ import annotations
 
+from backend.observability.turn_trace import observe_phase
+from backend.observability.tracing import Operation
+from backend.observability.stages import Stage as TelemetryStage
+
 import logging
 import threading
 from dataclasses import dataclass, field
@@ -315,6 +319,7 @@ def decide_operational_route(
     )
 
 
+@observe_phase(Operation.PLANNING, TelemetryStage.PLANNING_STARTED, TelemetryStage.PLANNING_COMPLETED)
 async def evaluate_operational_route(
     state: Mapping[str, Any], *, session_id: Optional[str], text: str, specialist_available: bool
 ) -> OperationalRouteDecision:
@@ -351,6 +356,11 @@ def record_operational_route(run_id: Optional[str], decision: Optional[Operation
         return
     with _lock:
         _routes[run_id] = decision
+    from backend.observability.turn_trace import current_turn
+    from backend.observability.slo_sources import observe
+    turn = current_turn()
+    if turn is not None and turn.run_id == run_id:
+        observe(turn, "route", decision.selected_route == OperationalRoute.GOVERNED_OPERATIONAL)
     _trace(decision.trace_view())
 
 
@@ -397,6 +407,12 @@ def record_specialist_invocation(specialist: str, run_id: Optional[str]) -> None
         with _lock:
             _invoked.add(run_id)
     decision = get_operational_route(run_id)
+    if decision is not None and decision.route_required:
+        from backend.observability.agent_instrumentation import observe_primary
+        try:
+            observe_primary(specialist)
+        except Exception:
+            pass  # Observation never affects routing or authority.
     _trace({
         "stage": "specialist_invocation",
         "specialist": specialist,

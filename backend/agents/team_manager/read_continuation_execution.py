@@ -100,6 +100,8 @@ manager` HAS ALWAYS MADE: unchanged from pass #2.
 """
 from __future__ import annotations
 
+from backend.observability.model_adapter import instrument_model
+
 import logging
 import time
 from contextvars import ContextVar
@@ -354,7 +356,8 @@ server-side and therefore never needs (or should be able) to supply one.
 """
 
 _SYNTHESIS_ONLY_INCIDENT_MANAGER = incident_manager.model_copy(
-    update={"tools": [], "instruction": INCIDENT_MANAGER_SYNTHESIS_INSTRUCTION}
+    update={"tools": [], "instruction": INCIDENT_MANAGER_SYNTHESIS_INSTRUCTION,
+        "model": instrument_model(incident_manager.model, "incident_manager", "synthesis")}
 )
 """P4B FIX -- the second half of collapsing the resolved-continuation call
 graph down to ONE Incident Manager model call: when the application has
@@ -958,7 +961,9 @@ async def _execute_via_deterministic_retrieval(
 
     state_capture = _StateCapture(dict(_seeded_state(parent_state, continuation)))
     _perf_logger.info("perf stage=teams_evidence_prepared")
-    retrieval = teams_get_messages(continuation.selected_chat_id, tool_context=state_capture)
+    from backend.observability.tool_instrumentation import tool_scope, observe_result
+    with tool_scope('teams_get_messages', 'system') as telemetry:
+        retrieval = observe_result(telemetry, teams_get_messages(continuation.selected_chat_id, tool_context=state_capture))
 
     if isinstance(retrieval, dict) and "error" in retrieval:
         detail = None

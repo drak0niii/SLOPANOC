@@ -31,6 +31,11 @@ import uuid
 from typing import Any, Optional, Union
 
 import requests
+from backend.observability.dependency_instrumentation import dependency_scope, classify_exception
+from backend.observability.dependency_http import route_projection, response_metadata
+from backend.observability.model_instrumentation import guarded
+from backend.observability.deadlines import synchronous_boundary, current_budget, check
+from backend.observability.reliability_contract import Category
 
 from ..config.settings import ConfigurationError, Settings, get_settings
 from .safe_error import (
@@ -186,7 +191,11 @@ class PowerAutomateClient:
         """
         return self._call("teams.sendMessage", {"chatId": chat_id, "message": message})
 
-    def _call(
+    def _call(self, operation: str, extra_payload: Optional[dict[str, Any]] = None) -> GatewayPayload:
+        with synchronous_boundary(Category.GATEWAY):
+            return self._call_with_budget(operation, extra_payload)
+
+    def _call_with_budget(
         self, operation: str, extra_payload: Optional[dict[str, Any]] = None
     ) -> GatewayPayload:
         try:
@@ -207,50 +216,69 @@ class PowerAutomateClient:
         if extra_payload:
             body.update(extra_payload)
 
-        request_started_at = time.monotonic()
-        try:
-            response = requests.post(
-                gateway_url,
-                json=body,
-                timeout=self._settings.request_timeout_seconds,
-            )
-        except requests.exceptions.Timeout:
-            self._log_gateway_duration(operation, request_started_at, "timeout")
-            raise run_failure(
-                "The Teams connector timed out. Please try again."
-            ) from None
-        except requests.exceptions.RequestException:
-            # Deliberately not str(exc): requests' own exception messages
-            # frequently echo the request URL, which would leak the
-            # gateway secret. See the module docstring.
-            self._log_gateway_duration(operation, request_started_at, "network_error")
-            raise run_failure(
-                "The Teams connector could not be reached. Please try again."
-            ) from None
+        with dependency_scope("power_automate_gateway", operation, "http.client", attributes={
+            "http.request.method": "POST", "http.route": guarded(None, route_projection, operation),
+            "slopanoc.retry_visibility": "unknown",
+            "slopanoc.pagination": operation == "teams.getMessages" and extra_payload is not None and "before" in extra_payload,
+        }) as scope:
+            request_started_at = time.monotonic()
+            try:
+                response = requests.post(
+                    gateway_url,
+                    json=body,
+                    timeout=min(self._settings.request_timeout_seconds, current_budget().remaining),
+                )
+            except requests.exceptions.Timeout as exc:
+                if scope:
+                    guarded(scope.runtime, classify_exception, scope, exc)
+                if scope:
+                    scope.caller_disposition = 'timeout'
+                    scope.outcome_certainty = 'OUTCOME_UNKNOWN' if operation in ('teams.createChat','teams.sendMessage') else None
+                self._log_gateway_duration(operation, request_started_at, "timeout")
+                raise run_failure(
+                    "The Teams connector timed out. Please try again."
+                ) from None
+            except requests.exceptions.RequestException as exc:
+                if scope:
+                    guarded(scope.runtime, classify_exception, scope, exc)
+                # Deliberately not str(exc): requests' own exception messages
+                # frequently echo the request URL, which would leak the
+                # gateway secret. See the module docstring.
+                self._log_gateway_duration(operation, request_started_at, "network_error")
+                raise run_failure(
+                    "The Teams connector could not be reached. Please try again."
+                ) from None
 
-        if response.status_code == 429:
-            self._log_gateway_duration(operation, request_started_at, "rate_limited")
-            raise rate_limited()
-        if response.status_code >= 400:
-            self._log_gateway_duration(operation, request_started_at, f"http_{response.status_code}")
-            raise run_failure(
-                "The Teams connector could not complete this request."
-            )
-        self._log_gateway_duration(operation, request_started_at, "ok")
+            # Late response cannot reach tool/state/proposal mutation after expiry.
+            if current_budget().expired:
+                if scope:
+                    scope.caller_disposition = 'timeout'
+                    scope.outcome_certainty = 'OUTCOME_UNKNOWN' if operation in ('teams.createChat','teams.sendMessage') else None
+                check()
+            guarded(scope.runtime if scope else None, response_metadata, scope, response)
+            if response.status_code == 429:
+                self._log_gateway_duration(operation, request_started_at, "rate_limited")
+                raise rate_limited()
+            if response.status_code >= 400:
+                self._log_gateway_duration(operation, request_started_at, f"http_{response.status_code}")
+                raise run_failure(
+                    "The Teams connector could not complete this request."
+                )
+            self._log_gateway_duration(operation, request_started_at, "ok")
 
-        try:
-            payload = response.json()
-        except ValueError:
-            raise internal_error(
-                "The Teams connector returned an unreadable response."
-            ) from None
+            try:
+                payload = response.json()
+            except ValueError:
+                raise internal_error(
+                    "The Teams connector returned an unreadable response."
+                ) from None
 
-        if not isinstance(payload, (list, dict)):
-            raise internal_error(
-                "The Teams connector returned an unexpected response shape."
-            )
+            if not isinstance(payload, (list, dict)):
+                raise internal_error(
+                    "The Teams connector returned an unexpected response shape."
+                )
 
-        return payload
+            return payload
 
     @staticmethod
     def _log_gateway_duration(operation: str, started_at: float, outcome: str) -> None:

@@ -86,6 +86,8 @@ access and no test-name detection in production code.
 """
 from __future__ import annotations
 
+from backend.observability.model_context import model_activity
+
 import asyncio
 import logging
 import time
@@ -121,6 +123,7 @@ def _reset_warmup_guard_for_tests() -> None:
     _warmup_attempted = False
 
 
+@model_activity("system", "warmup", workload="warmup")
 async def _run_warmup_request(llm: Any, model_name: str) -> None:
     """Builds and fully sends the minimal request, consuming the async
     generator through its terminal response (instruction section 7 -- a
@@ -135,7 +138,9 @@ async def _run_warmup_request(llm: Any, model_name: str) -> None:
         contents=[types.Content(role="user", parts=[types.Part.from_text(text=_WARMUP_PROMPT_TEXT)])],
         config=types.GenerateContentConfig(max_output_tokens=_WARMUP_MAX_OUTPUT_TOKENS),
     )
-    async for _ in llm.generate_content_async(request, stream=False):
+    from backend.observability.model_adapter import instrument_model
+    observed = instrument_model(llm, "system", "warmup", workload="warmup")
+    async for _ in observed.generate_content_async(request, stream=False):
         pass  # No tools, no history, no system instruction, no output schema.
 
 

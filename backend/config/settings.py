@@ -202,6 +202,20 @@ class Settings:
         self._env: Mapping[str, str] = env if env is not None else os.environ
 
     @property
+    def observability_config(self):
+        """Pure observability projection; never activates telemetry or resolves secrets."""
+        from backend.observability.config import ObservabilityConfig
+
+        try:
+            return ObservabilityConfig.from_settings_mapping(
+                self._env,
+                graph_fallback=self.request_timeout_seconds,
+                knowledge_fallback=self.knowledge_dense_timeout_seconds,
+            )
+        except (ValueError, TypeError, ConfigurationError):
+            raise ConfigurationError("Invalid observability configuration") from None
+
+    @property
     def gemini_model(self) -> str:
         return self._env.get(_MODEL_ENV_VAR, _DEFAULT_MODEL)
 
@@ -548,7 +562,8 @@ def _cached_secret_value(secret_resource: str) -> str:
     from google.cloud import secretmanager  # noqa: PLC0415
 
     client = secretmanager.SecretManagerServiceClient()
-    response = client.access_secret_version(name=secret_resource)
+    from backend.observability.dependency_storage import secret_read
+    response = secret_read(client.access_secret_version, name=secret_resource)
     return response.payload.data.decode("utf-8")
 
 
@@ -624,3 +639,9 @@ def get_shared_llm(model_name: str):
     from google.adk.models.registry import LLMRegistry
 
     return LLMRegistry.new_llm(model_name)
+
+
+# M6 dependency inversion: runtime policy reads this existing Settings owner.
+# Registration performs no configuration resolution or external-service access.
+from backend.observability.deadlines import set_policy_provider as _set_reliability_policy_provider
+_set_reliability_policy_provider(lambda: get_settings().observability_config)

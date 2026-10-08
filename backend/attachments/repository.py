@@ -30,6 +30,7 @@ from sqlalchemy import select, update
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
+from backend.observability.dependency_database import pool_kwargs, observe_engine, observe_factory
 
 from backend.attachments.models import Base, ChatAttachmentRecord, ChatAttachmentStatus
 
@@ -56,8 +57,10 @@ class AttachmentRepository:
     """
 
     def __init__(self, database_url: str) -> None:
-        self._engine: AsyncEngine = create_async_engine(database_url, **_engine_kwargs(database_url))
+        self._engine: AsyncEngine = create_async_engine(database_url, **pool_kwargs(database_url, _engine_kwargs(database_url), "attachment_db"))
         self._session_factory = async_sessionmaker(bind=self._engine, expire_on_commit=False)
+        observe_engine(self._engine, "attachment_db")
+        observe_factory(self._session_factory)
         self._schema_ready = False
 
     async def ensure_schema(self) -> None:

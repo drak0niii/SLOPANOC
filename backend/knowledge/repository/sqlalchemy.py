@@ -58,6 +58,8 @@ from sqlalchemy.exc import DBAPIError, IntegrityError, InterfaceError
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.pool import StaticPool
+from backend.observability.model_instrumentation import guarded
+from backend.observability.dependency_database import pool_kwargs, observe_engine, observe_factory, observe_retry, db_read_operation
 
 from backend.knowledge.domain.models import KnowledgeObject
 from backend.knowledge.repository.contracts import (
@@ -120,8 +122,10 @@ class SqlAlchemyKnowledgeRepository:
     """
 
     def __init__(self, database_url: str) -> None:
-        self._engine: AsyncEngine = create_async_engine(database_url, **_engine_kwargs(database_url))
+        self._engine: AsyncEngine = create_async_engine(database_url, **pool_kwargs(database_url, _engine_kwargs(database_url), "knowledge_db"))
         self._session_factory = async_sessionmaker(bind=self._engine, expire_on_commit=False)
+        observe_engine(self._engine, "knowledge_db")
+        observe_factory(self._session_factory)
         self._schema_ready = False
 
     async def ensure_schema(self) -> None:
@@ -165,13 +169,15 @@ class SqlAlchemyKnowledgeRepository:
                     f"{knowledge_object.knowledge_id!r} already exists"
                 ) from exc
 
+    @db_read_operation("knowledge_db")
     async def get(self, knowledge_id: str, version_label: str) -> Optional[KnowledgeObject]:
         await self.ensure_schema()
         try:
             async with self._session_factory() as session:
                 record = await session.get(KnowledgeObjectRecord, (knowledge_id, version_label))
         except (InterfaceError, DBAPIError) as exc:
-            _logger.warning("Transient DB connection error in get, retrying once on fresh session: %s", exc)
+            guarded(None, _logger.warning, "knowledge.database.read_retry")
+            observe_retry("knowledge_db", "SELECT")
             async with self._session_factory() as session:
                 record = await session.get(KnowledgeObjectRecord, (knowledge_id, version_label))
         if record is None:
@@ -196,6 +202,7 @@ class SqlAlchemyKnowledgeRepository:
             record.payload = knowledge_object.model_dump_json()
             await session.commit()
 
+    @db_read_operation("knowledge_db")
     async def list_versions(self, knowledge_id: str) -> list[KnowledgeObject]:
         await self.ensure_schema()
         try:
@@ -215,7 +222,8 @@ class SqlAlchemyKnowledgeRepository:
                 )
                 records = result.scalars().all()
         except (InterfaceError, DBAPIError) as exc:
-            _logger.warning("Transient DB connection error in list_versions, retrying once on fresh session: %s", exc)
+            guarded(None, _logger.warning, "knowledge.database.read_retry")
+            observe_retry("knowledge_db", "SELECT")
             async with self._session_factory() as session:
                 result = await session.execute(
                     select(KnowledgeObjectRecord)
@@ -225,6 +233,7 @@ class SqlAlchemyKnowledgeRepository:
                 records = result.scalars().all()
         return [self._reconstruct(record) for record in records]
 
+    @db_read_operation("knowledge_db")
     async def list_all(self) -> list[KnowledgeObject]:
         """Source-of-truth corpus enumeration -- every governed
         `KnowledgeObject` persisted in this repository, across every
@@ -253,7 +262,8 @@ class SqlAlchemyKnowledgeRepository:
                 )
                 records = result.scalars().all()
         except (InterfaceError, DBAPIError) as exc:
-            _logger.warning("Transient DB connection error in list_all, retrying once on fresh session: %s", exc)
+            guarded(None, _logger.warning, "knowledge.database.read_retry")
+            observe_retry("knowledge_db", "SELECT")
             async with self._session_factory() as session:
                 result = await session.execute(
                     select(KnowledgeObjectRecord).order_by(

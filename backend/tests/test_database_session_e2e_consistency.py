@@ -16,6 +16,7 @@ import uuid
 from typing import Optional
 
 import pytest
+import pytest_asyncio
 from google.adk.events.event import Event, EventActions
 from google.adk.flows.llm_flows.contents import _get_contents
 from google.adk.models.llm_request import LlmRequest
@@ -70,8 +71,8 @@ class DbCompatibleFakeRunner:
             yield event
 
 
-@pytest.fixture
-def real_db_session_service():
+@pytest_asyncio.fixture
+async def real_db_session_service():
     """Provides an ApiSessionService backed by a real SQLite DatabaseSessionService."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
@@ -81,6 +82,7 @@ def real_db_session_service():
     try:
         yield api_service
     finally:
+        await adk_db_service.close()
         if os.path.exists(db_path):
             try:
                 os.remove(db_path)

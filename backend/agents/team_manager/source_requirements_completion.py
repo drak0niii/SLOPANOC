@@ -53,6 +53,8 @@ never this module's.
 """
 from __future__ import annotations
 
+from backend.observability.model_context import model_activity
+
 import logging
 from typing import Any, Optional
 
@@ -118,6 +120,7 @@ def _declaration_only_agent() -> Any:
     return _declaration_only_agent_cache[0]
 
 
+@model_activity("team_manager", "classification")
 async def request_source_requirements_declaration(*, question: str, run_id: str) -> Optional[tuple[bool, bool]]:
     """Runs the declaration-only remediation agent exactly once, against a
     throwaway session, and returns `(requires_teams, requires_governed_

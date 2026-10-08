@@ -11,8 +11,9 @@ from __future__ import annotations
 from typing import Any, Optional
 from pydantic import BaseModel, Field
 
-from google.adk.agents import Agent
+from backend.observability.adk_adapter import ObservedAgent as Agent
 from backend.config.settings import get_settings, get_shared_llm
+from backend.observability.model_adapter import instrument_model
 from backend.api.perf_timing import before_model_call, after_model_call
 
 _settings = get_settings()
@@ -45,7 +46,7 @@ class AutomatedOperationsResponse(BaseModel):
 
 automated_operations_engineer = Agent(
     name="automated_operations_engineer",
-    model=get_shared_llm(_settings.gemini_model),
+    model=instrument_model(get_shared_llm(_settings.gemini_model), "automated_operations_engineer", "specialist_reasoning"),
     description=(
         "Level 1 Operations specialist for scheduled morning briefings, "
         "routine operational health digests, and shift handover summaries."

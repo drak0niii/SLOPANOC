@@ -175,6 +175,13 @@ def test_only_the_expected_routes_exist() -> None:
     documentation routes, not application endpoints.
     """
     expected = {
+        # M7 default-denied, read-only diagnostic APIs; never business authority.
+        '/api/observability/runs', '/api/observability/active',
+        '/api/observability/runs/{run_id}', '/api/observability/runs/{run_id}/timeline',
+        '/api/observability/sessions/{session_id}/runs', '/api/observability/health',
+        '/api/observability/config',
+        '/api/observability/slos', '/api/observability/slos/{slo_id}',
+        '/api/observability/sse-receipts',
         "/health",
         "/api/sessions",
         "/api/sessions/{session_id}/messages",

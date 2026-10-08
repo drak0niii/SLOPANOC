@@ -30,6 +30,7 @@ from typing import Any, MutableMapping, Optional
 from backend.approval.canonical import compute_payload_hash
 from backend.approval.schemas import ActionProposal, ApprovalDenialReason, ProposalStatus, WriteOperation
 from backend.config.settings import get_settings
+from backend.observability.tool_instrumentation import approval_activity
 
 PENDING_ACTION_PROPOSAL_STATE_KEY = "pending_action_proposal"
 
@@ -98,6 +99,7 @@ def effective_status(proposal: ActionProposal, now: Optional[datetime] = None) -
     return proposal.status
 
 
+@approval_activity(requested=True)
 def create_action_proposal(
     operation: str,
     payload: dict[str, Any],
@@ -148,6 +150,7 @@ def create_action_proposal(
     return proposal
 
 
+@approval_activity()
 def approve_proposal(
     proposal_id: str,
     session_state: MutableMapping[str, Any],
@@ -194,6 +197,7 @@ def approve_proposal(
     return ProposalResult(success=True, proposal=approved)
 
 
+@approval_activity(rejected=True)
 def reject_proposal(
     proposal_id: str,
     session_state: MutableMapping[str, Any],

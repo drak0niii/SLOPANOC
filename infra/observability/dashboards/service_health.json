@@ -1,0 +1,104 @@
+{
+  "displayName": "SLOPANOC Service Health",
+  "mosaicLayout": {
+    "columns": 12,
+    "tiles": [
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 0,
+        "yPos": 0,
+        "widget": {
+          "title": "Availability budget",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "{__name__=\"workload.googleapis.com/slopanoc.slo.budget_remaining\",environment=\"__ENVIRONMENT__\",operation=\"availability\"}"
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 6,
+        "yPos": 0,
+        "widget": {
+          "title": "Terminal completion",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "{__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"terminal_completion\"}"
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 0,
+        "yPos": 4,
+        "widget": {
+          "title": "Active execution-local turns",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "{__name__=\"workload.googleapis.com/slopanoc.turn.active\",environment=\"__ENVIRONMENT__\"}"
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "width": 6,
+        "height": 4,
+        "xPos": 6,
+        "yPos": 4,
+        "widget": {
+          "title": "Accepted traffic",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "{__name__=\"workload.googleapis.com/slopanoc.turn.accepted\",environment=\"__ENVIRONMENT__\"}"
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": {
+              "scale": "LINEAR"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "dashboardFilters": [
+    {
+      "labelKey": "environment",
+      "templateVariable": "environment",
+      "filterType": "METRIC_LABEL",
+      "stringValue": "__ENVIRONMENT__"
+    }
+  ]
+}
