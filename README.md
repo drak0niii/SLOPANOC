@@ -76,6 +76,7 @@ Activate the Python environment and install the backend packages:
 # Windows PowerShell
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements-dev.txt
+Invoke-WebRequest -Uri "https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.21.0/cloud-sql-proxy.x64.exe" -OutFile ".\cloud-sql-proxy.exe"
 ```
 
 ```bash
