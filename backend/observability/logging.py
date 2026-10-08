@@ -154,3 +154,19 @@ def emit_dependency_failure(runtime, scope):
         turn_id_origin=turn.turn_id_origin if turn else None, metadata={})
     if runtime.logger is not None:
         runtime.logger.emit(body=value.model_dump(mode='json'), event_name=value.event_name.value)
+
+
+def accounting_failure(runtime):
+    """One safe structured failure envelope; never serialize persistence exceptions."""
+    if runtime is None: return
+    try:
+        from .errors import ErrorCode
+        value = safe_record(runtime.config, OperationalEvent.DEGRADED, severity='ERROR',
+                            error_code=ErrorCode.COST_LEDGER_PERSIST_FAILED)
+        if runtime.logger is not None:
+            runtime.logger.emit(body=value.model_dump(mode='json'),event_name=value.event_name.value)
+        else:
+            import sys
+            sys.stderr.write(value.model_dump_json()+'\n')
+    except Exception:
+        pass

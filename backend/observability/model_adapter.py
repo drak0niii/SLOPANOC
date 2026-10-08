@@ -30,6 +30,8 @@ class ObservedModel(BaseLlm):
             op = ModelOperation(safe_model(self.model), self._attribution, streaming=stream)
         except Exception:
             degraded(None)
+        from .finops.usage_ledger import current as accounting, AdmissionFailed
+        if op is None and accounting() is not None: raise AdmissionFailed()
         iterator = self._delegate.generate_content_async(llm_request, stream=stream)
         error = None
         budget = child_budget(Category.MODEL)
@@ -47,6 +49,7 @@ class ObservedModel(BaseLlm):
                                     op.provider = 'gcp.vertex_ai' if client.vertexai else 'gcp.gemini'
                                 instrument_client(client)
                             except AttributeError:
+                                if accounting() is not None: raise AdmissionFailed()
                                 pass  # injected/non-Gemini BaseLlm still executes
                             client_ready = True
                         async with enforce(budget):
@@ -74,6 +77,8 @@ class ObservedModel(BaseLlm):
                                 degraded(op.runtime)
                     op.responses.clear()
                     guarded(op.runtime, op.finish, error)
+                    for attempt in op.attempts:
+                        if op.accounting is not None: await op.accounting.capture(attempt)
 
     def connect(self, llm_request):
         return self._delegate.connect(llm_request)

@@ -22,7 +22,7 @@ def registry(config):
     return {'environment':frozenset({config.otel_environment}),
         'operation':frozenset(DEFINITIONS)|frozenset(c.value for c in RequestClass)|SAFETY_KINDS|{'accepted','projection'},
         'status':frozenset(s.value for s in State)|{'RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','CONFIRMED'},
-        'window':frozenset(str(w) for w in (*BURN_WINDOWS,WINDOW_SECONDS))|{'event'}}
+        'window':frozenset(str(w) for w in (*BURN_WINDOWS,WINDOW_SECONDS))|{'event','86400'}}
 
 
 def views():
@@ -82,3 +82,14 @@ def safe_point(metric,point,config):
         if not math.isfinite(point.value) or point.value<0 and metric.name!='slopanoc.slo.budget_remaining':raise ValueError('Invalid SRE value')
         if metric.name in COUNTERS and not metric.data.is_monotonic:raise ValueError('SRE counter must be monotonic')
     return replace(point,attributes=attrs,exemplars=[])
+
+
+def publish_cost_coverage(runtime, result):
+    """Canonical M9 operational window; no finite error budget for objective1."""
+    seconds=str(result['window_seconds'])
+    record(runtime,'slopanoc.slo.eligible',result['eligible'],result['slo_id'],result['state'],seconds)
+    record(runtime,'slopanoc.slo.unknown',result['unknown'],result['slo_id'],result['state'],seconds)
+    if result['current_value'] is not None:
+        record(runtime,'slopanoc.slo.bad_fraction',1-result['current_value'],result['slo_id'],result['state'],seconds)
+    if result['source_last_updated'] is not None:
+        record(runtime,'slopanoc.slo.source_age',max(0,(result['evaluated_at']-result['source_last_updated']).total_seconds()),result['slo_id'],result['state'],seconds)

@@ -345,6 +345,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         telemetry.runtime.sre = sre_writer
     app.state.observability_service = Service(repository,config,projection,telemetry.runtime)
     app.state.observability_service.slo_provider = RuntimeProvider(sre_writer.rollups, config) if sre_writer else None
+    # M10 owns its bounded pool/lifecycle regardless of diagnostic/OTel flags.
+    from backend.observability.finops.usage_ledger import Ledger, install as install_ledger, release as release_ledger
+    from backend.observability.finops.repository import Repository as AccountingRepository
+    from backend.observability.finops.slo_source import AccountingSource, CompositeSource
+    accounting_database = accounting_ledger = None
+    if config.finops_enabled:
+        accounting_database = Database(get_settings().resolve_database_url())
+        accounting_ledger = Ledger(AccountingRepository(accounting_database.sessions),config,telemetry.runtime)
+        install_ledger(accounting_ledger)
+        accounting_ledger.start()
+    app.state.observability_service.accounting = accounting_ledger
+    app.state.observability_service.slo_provider = CompositeSource(
+        app.state.observability_service.slo_provider,
+        AccountingSource(accounting_ledger.repository) if accounting_ledger else None)
     try:
         _logger.info(
             "startup database_backend session=%s knowledge=%s",
@@ -357,6 +371,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # close() has its own total deadline and daemon cleanup for exporters
         # lacking a timeout; no telemetry network wait on the event loop.
         import time
+        if accounting_ledger is not None:
+            try:
+                await accounting_ledger.close()
+            finally:
+                release_ledger(accounting_ledger)
+                try:
+                    async with asyncio.timeout(config.finops_shutdown_seconds):
+                        await accounting_database.close()
+                except Exception:
+                    accounting_ledger.signal('persistence_failures')
         if sre_writer is not None:
             await sre_writer.close()
             telemetry.runtime.sre = None

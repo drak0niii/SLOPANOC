@@ -30,7 +30,12 @@ def artifacts():
     manifest={'schema_version':VERSION,'objective_status':'PROVISIONAL','histogram_contract_version':2,
         'duration_bounds_seconds':DURATION_BOUNDS,'definitions':[asdict(d) for d in DEFINITIONS.values()],
         'burn_tiers':[asdict(t) for t in BURN_TIERS],'policy_status':POLICY_STATUS}
-    policies=[]
+    from .slo_alerts import cost_coverage_promql
+    policies=[{'policy_id':'cost_ledger_coverage','displayName':'Accounting completeness below99.99% /24h',
+        'enabled':False,'combiner':'OR','notificationChannels':[],
+        'conditions':[{'displayName':'Durable accounting coverage','conditionPrometheusQueryLanguage':{'query':cost_coverage_promql(),'duration':'0s','evaluationInterval':'60s'}}],
+        'documentation':{'mimeType':'text/markdown','content':'M10 durable source required. No finite burn for100% architectural target. Runbook: docs/Telemetry/runbooks/cost_ledger_completeness.md. Exact deployment approval and notification inputs required.'},
+        'userLabels':{'severity':'critical','notification_route':'accounting'}}]
     for d in DEFINITIONS.values():
         if d.objective==1 or d.source=='DIRECT_GRAPH_UNAVAILABLE':continue
         for action in ('PAGE','TICKET'):

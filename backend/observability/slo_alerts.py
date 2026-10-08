@@ -130,3 +130,21 @@ def signal_conditions(s):
         'synthetic_failure':s.synthetic_consecutive_failures>=3,
     }
     return [Condition(key,sev,action,bool(active.get(key,False) and (key=='hard_safety' or s.available and s.fresh)),s.environment+(':'+key if key in ('hard_safety','terminal_integrity') else ':service-symptoms'),'docs/Telemetry/runbooks/'+book+'.md', 'FRESH' if s.available and s.fresh else 'UNKNOWN') for key,(sev,action,book,_) in SIGNAL_ALERTS.items()]
+
+
+def cost_coverage_condition(result, environment):
+    from .slo_contract import COST_COVERAGE_THRESHOLD, COST_COVERAGE_WINDOW_SECONDS
+    if result['slo_id']!='cost_ledger_completeness' or result['window_seconds']!=COST_COVERAGE_WINDOW_SECONDS:
+        raise ValueError('Expected canonical accounting operational window')
+    usable=result['state'] in (State.HEALTHY.value,State.BREACHED.value)
+    active=usable and result['eligible']>0 and Decimal(result['good'])<Decimal(result['eligible'])*Decimal(str(COST_COVERAGE_THRESHOLD))
+    return Condition('cost_ledger_coverage','CRITICAL','PAGE',active,environment+':accounting','docs/Telemetry/runbooks/cost_ledger_completeness.md',result['source_status'])
+
+
+def cost_coverage_promql():
+    from .slo_contract import COST_COVERAGE_WINDOW_SECONDS
+    window=COST_COVERAGE_WINDOW_SECONDS
+    return ('('+selector('bad_fraction','cost_ledger_completeness',window)+' > 0.0001)'
+        +' and on (environment, operation) ('+selector('eligible','cost_ledger_completeness',window)+' > 0)'
+        +' and on (environment, operation) ('+selector('unknown','cost_ledger_completeness',window)+' == 0)'
+        +' and on (environment, operation) ('+selector('source_age','cost_ledger_completeness',window)+' <= 300)')

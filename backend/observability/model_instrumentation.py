@@ -25,6 +25,9 @@ def protect_content():
 
 
 def error_category(exc=None, code=None):
+    from .finops.usage_ledger import AdmissionFailed
+    if isinstance(exc, AdmissionFailed):
+        return RunStatus.FAILED, ErrorCode.COST_LEDGER_PERSIST_FAILED
     from .deadlines import cancellation_cause
     exc = cancellation_cause(exc)
     if isinstance(exc, (asyncio.CancelledError, GeneratorExit)):
@@ -77,6 +80,8 @@ class ModelOperation:
         self.requests = {}
         self.responses = []
         self.sink = _sink.get()
+        from .finops.usage_ledger import current
+        self.accounting = current()
         self.span = trace.INVALID_SPAN
         self.closed = False
         if self.runtime is not None and self.runtime.enabled:
@@ -239,6 +244,9 @@ class ModelAttempt:
                 completed_at=datetime.now(timezone.utc), duration_ms=duration, ttft_ms=self.ttft,
                 ttft_boundary='first_provider_output' if self.ttft is not None else None,
                 status=status,error_code=error,finish_reasons=self.finish_reasons,usage=self.usage)
+            self.observation = value
+            if op.accounting is not None and not getattr(self, "accounting_started", False):
+                return
             from .slo_sources import model_observation
             guarded(r, model_observation, r, value, op.turn)
             if r is not None and r.enabled:
@@ -278,3 +286,11 @@ def _observe_invalid_output(agent):
         guarded(runtime,native.add_event,Stage.MODEL_REQUEST_FAILED.value,attrs)
         guarded(runtime,native.set_status,Status(StatusCode.ERROR))
         guarded(runtime,native.end)
+
+
+async def finish_attempt(attempt, exc=None, *, code=None):
+    """Finalize M3 once then await M10 safe metadata capture, never provider replay."""
+    guarded(attempt.operation.runtime, attempt.finish, exc, code=code)
+    ledger = attempt.operation.accounting
+    if ledger is not None:
+        await ledger.capture(attempt)

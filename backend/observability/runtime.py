@@ -101,6 +101,8 @@ class Runtime:
         register_reliability(self)
         from .slo_metrics import register as register_slo
         register_slo(self)
+        from .finops.metrics import register as register_accounting
+        register_accounting(self)
         self.health.initialized = True
 
     def start_logging(self):

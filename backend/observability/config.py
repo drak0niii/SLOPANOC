@@ -33,6 +33,10 @@ SETTING_NAMES = (
     'QUEUE_WAIT_TIMEOUT_SECONDS',
     'RETRY_MINIMUM_SECONDS', 'WATCHDOG_CHECK_SECONDS', 'BLOCKING_WORKERS',
     'BLOCKING_PENDING', 'BUSINESS_QUEUE_CAPACITY', 'BUSINESS_QUEUE_BYTES',
+    'FINOPS_WRITE_SECONDS', 'FINOPS_WRITE_ATTEMPTS', 'FINOPS_WRITE_CONCURRENCY',
+    'FINOPS_ADMISSION_WAIT_SECONDS', 'FINOPS_RECOVERY_BATCH', 'FINOPS_RECOVERY_SECONDS',
+    'FINOPS_RECOVERY_ATTEMPTS', 'FINOPS_CHECKPOINT_SECONDS', 'FINOPS_SHUTDOWN_SECONDS',
+    'FINOPS_RETENTION_MONTHS',
     'FINOPS_ENABLED', 'FINOPS_CURRENCY', 'FINOPS_PRICE_SOURCE',
     'FINOPS_BILLING_PROJECT', 'FINOPS_BILLING_DATASET',
     'OTEL_EXPORTER_MODE', 'OTEL_PROTOCOL', 'OTEL_EXPORT_TIMEOUT_SECONDS',
@@ -111,6 +115,16 @@ class ObservabilityConfig(BaseModel):
     business_queue_capacity: int = Field(default=256, gt=0, le=4096)
     business_queue_bytes: int = Field(default=4194304, gt=0, le=67108864)
     finops_enabled: bool = False
+    finops_write_seconds: float = Field(default=2, gt=0, le=5)
+    finops_write_attempts: int = Field(default=3, ge=1, le=3)
+    finops_write_concurrency: int = Field(default=8, ge=1, le=16)
+    finops_admission_wait_seconds: float = Field(default=.25, gt=0, le=1)
+    finops_recovery_batch: int = Field(default=100, ge=1, le=100)
+    finops_recovery_seconds: float = Field(default=2, gt=0, le=5)
+    finops_recovery_attempts: int = Field(default=5, ge=1, le=10)
+    finops_checkpoint_seconds: float = Field(default=30, gt=0, le=60)
+    finops_shutdown_seconds: float = Field(default=3, gt=0, le=5)
+    finops_retention_months: int = Field(default=24, ge=24, le=120)
     finops_currency: Literal['EUR'] = 'EUR'
     finops_price_source: Literal['gcp_detailed_billing_and_pricing'] = 'gcp_detailed_billing_and_pricing'
     finops_billing_project: str | None = Field(default=None, pattern=r'^[a-z][a-z0-9-]{4,61}[a-z0-9]$')
@@ -132,6 +146,8 @@ class ObservabilityConfig(BaseModel):
             raise ValueError('OTel requires observability enabled')
         if self.otel_enabled and self.otel_exporter_mode == 'otlp' and self.otel_exporter_otlp_endpoint is None:
             raise ValueError('Enabled OTel requires explicit endpoint')
+        if self.finops_enabled and self.otel_environment not in ('local','development','staging','production'):
+            raise ValueError('Accounting requires a canonical environment')
         if self.otel_environment == 'production' and self.otel_enabled and self.otel_service_name != 'slopanoc':
             raise ValueError('Production service name must be slopanoc')
         if self.otel_batch_size > self.otel_queue_capacity:

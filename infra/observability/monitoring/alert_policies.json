@@ -1,5 +1,30 @@
 [
   {
+    "policy_id": "cost_ledger_coverage",
+    "displayName": "Accounting completeness below99.99% /24h",
+    "enabled": false,
+    "combiner": "OR",
+    "notificationChannels": [],
+    "conditions": [
+      {
+        "displayName": "Durable accounting coverage",
+        "conditionPrometheusQueryLanguage": {
+          "query": "(max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.bad_fraction\",environment=\"__ENVIRONMENT__\",operation=\"cost_ledger_completeness\",window=\"86400\",status=~\"HEALTHY|BREACHED|BURNING\"}) > 0.0001) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.eligible\",environment=\"__ENVIRONMENT__\",operation=\"cost_ledger_completeness\",window=\"86400\",status=~\"HEALTHY|BREACHED|BURNING\"}) > 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.unknown\",environment=\"__ENVIRONMENT__\",operation=\"cost_ledger_completeness\",window=\"86400\",status=~\"HEALTHY|BREACHED|BURNING\"}) == 0) and on (environment, operation) (max by (environment, operation) ({__name__=\"workload.googleapis.com/slopanoc.slo.source_age\",environment=\"__ENVIRONMENT__\",operation=\"cost_ledger_completeness\",window=\"86400\",status=~\"HEALTHY|BREACHED|BURNING\"}) <= 300)",
+          "duration": "0s",
+          "evaluationInterval": "60s"
+        }
+      }
+    ],
+    "documentation": {
+      "mimeType": "text/markdown",
+      "content": "M10 durable source required. No finite burn for100% architectural target. Runbook: docs/Telemetry/runbooks/cost_ledger_completeness.md. Exact deployment approval and notification inputs required."
+    },
+    "userLabels": {
+      "severity": "critical",
+      "notification_route": "accounting"
+    }
+  },
+  {
     "policy_id": "availability_page",
     "displayName": "Availability PAGE — PROVISIONAL — CALIBRATION REQUIRED",
     "enabled": false,

@@ -11,7 +11,8 @@ from contextvars import ContextVar
 from functools import wraps, lru_cache
 from uuid import uuid4
 from importlib.metadata import version
-from .model_instrumentation import _active, guarded, protect_content
+from .model_instrumentation import _active, guarded, protect_content, finish_attempt
+from .finops.usage_ledger import current as accounting, AdmissionFailed
 from .turn_trace import degraded
 
 COMPATIBLE_GENAI = '1.75.0'
@@ -64,15 +65,15 @@ class _ObservedResponse:
         try:
             payload = await self._iterator.__anext__()
         except StopAsyncIteration:
-            guarded(self._attempt.operation.runtime, self._attempt.finish)
+            await finish_attempt(self._attempt)
             raise
         except BaseException as exc:
-            guarded(self._attempt.operation.runtime, self._attempt.finish, exc)
+            await finish_attempt(self._attempt, exc)
             raise
         guarded(self._attempt.operation.runtime, self._attempt.observe, payload)
         if isinstance(payload, dict) and isinstance(payload.get('error'), dict):
             code = payload['error'].get('code')
-            guarded(self._attempt.operation.runtime, self._attempt.finish, code=code if type(code) is int else 500)
+            await finish_attempt(self._attempt, code=code if type(code) is int else 500)
         return payload
 
 
@@ -99,6 +100,8 @@ class _AwaitableRequest:
 
 async def _physical(fn, *args, **kwargs):
     op = _active.get()
+    if accounting() is not None and (op is None or op.closed):
+        raise AdmissionFailed()
     from .deadlines import check, retry_allowed
     check()
     if op is not None and not op.closed and op.attempts:
@@ -106,16 +109,25 @@ async def _physical(fn, *args, **kwargs):
     attempt = guarded(op.runtime, op.attempt, _submission.get()) if op is not None and not op.closed else None
     if attempt is not None:
         _last_attempt.set(attempt)
+    if op is not None and op.accounting is not None:
+        if attempt is None: raise AdmissionFailed()
+        try:
+            await op.accounting.prepare(attempt)
+        except BaseException:
+            guarded(op.runtime, attempt.finish, AdmissionFailed())
+            raise
     try:
+        # No database transaction spans this dispatch. STARTED is durable dispatch
+        # entry, not proof of provider receipt; crashes here remain outcome unknown.
         result = await fn(*args, **kwargs)
     except BaseException as exc:
         if attempt is not None:
-            guarded(op.runtime, attempt.finish, exc)
+            await finish_attempt(attempt, exc)
         raise
     if attempt is not None:
         code = getattr(result, 'status_code', getattr(result, 'status', 200))
         if type(code) is int and code >= 400:
-            guarded(op.runtime, attempt.finish, code=code)
+            await finish_attempt(attempt, code=code)
     return result
 
 
@@ -139,6 +151,7 @@ def instrument_client(client):
     try:
         if not compatible():
             degraded(runtime)
+            if accounting() is not None: raise AdmissionFailed()
             return client
         api = client._api_client
         if getattr(api, '_slopanoc_model_observed', False):
@@ -156,6 +169,7 @@ def instrument_client(client):
                 return _install_session(session)
             except Exception:
                 degraded(_active.get().runtime if _active.get() else runtime)
+                if accounting() is not None: raise AdmissionFailed()
                 return session
         @wraps(request)
         async def observed_request(*args, **kwargs):
@@ -197,12 +211,12 @@ def instrument_client(client):
                     guarded(attempt.operation.runtime, attempt.observe, payload)
                 except Exception:
                     degraded(attempt.operation.runtime)
-                guarded(attempt.operation.runtime, attempt.finish)
+                await finish_attempt(attempt)
                 return response
             except BaseException as exc:
                 attempt = _last_attempt.get()
                 if attempt is not None:
-                    guarded(attempt.operation.runtime, attempt.finish, exc)
+                    await finish_attempt(attempt, exc)
                 raise
             finally:
                 _last_attempt.reset(token)
@@ -227,8 +241,11 @@ def instrument_client(client):
                 except Exception:
                     degraded(runtime)
             raise
+    except AdmissionFailed:
+        raise
     except Exception:
         degraded(runtime)
+        if accounting() is not None: raise AdmissionFailed() from None
     return client
 
 
@@ -246,6 +263,7 @@ async def embedding_request(client, *, agent, operation, **kwargs):
         degraded(None)
     try:
         if op is None:
+            if accounting() is not None: raise AdmissionFailed()
             from .deadlines import boundary
             from .reliability_contract import Category
             async with boundary(Category.MODEL):
@@ -257,8 +275,12 @@ async def embedding_request(client, *, agent, operation, **kwargs):
             async with boundary(Category.MODEL):
                 result = await client.aio.models.embed_content(**kwargs)
         guarded(op.runtime, op.finish)
+        for attempt in op.attempts:
+            if op.accounting is not None: await op.accounting.capture(attempt)
         return result
     except BaseException as exc:
         if op is not None:
             guarded(op.runtime, op.finish, exc)
+            for attempt in op.attempts:
+                if op.accounting is not None: await op.accounting.capture(attempt)
         raise

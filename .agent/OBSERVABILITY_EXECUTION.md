@@ -2,13 +2,13 @@
 
 ## Program Status
 
-Current milestone: **M9 — IMPLEMENTED AND LOCALLY VALIDATED**
+Current milestone: **M10 — IMPLEMENTED AND LOCALLY VALIDATED**
 
-Last completed milestone: **M9 (all blocking local gates PASS; production activation pending)**
+Last completed milestone: **M10 (all blocking local gates PASS; production validation pending)**
 
-Next permitted action: **STOP after M9. Ready for Next Milestone: YES for local progression, but M10 is not authorized by this M9-only task. No deployment or cloud operation is authorized.**
+Next permitted action: **STOP after M10. Local Ready for Next Milestone: YES; M11 requires a separate instruction and has not begun. No deployment or cloud operation authorized.**
 
-Overall status: **M0 VALIDATED COMPLETE; M1–M9 IMPLEMENTED AND LOCALLY VALIDATED; CLOUD NOT EXECUTED**
+Overall status: **M0 VALIDATED COMPLETE; M1–M10 IMPLEMENTED AND LOCALLY VALIDATED; CLOUD NOT EXECUTED**
 
 Authoritative architecture:
 
@@ -29,9 +29,9 @@ Authoritative architecture:
 | M6 | Reliability Controls | IMPLEMENTED AND LOCALLY VALIDATED; all blocking local gates PASS | YES |
 | M7 | Persistence + Observability APIs | IMPLEMENTED AND LOCALLY VALIDATED; all blocking local gates PASS; production pending | YES |
 | M8 | UI Operational Visibility | IMPLEMENTED AND LOCALLY VALIDATED; all blocking local gates PASS; production pending | YES |
-| M9 | SRE Metrics + SLOs | IMPLEMENTED AND LOCALLY VALIDATED; production activation pending | YES (local only; M10 not started) |
-| M10 | Accounting-Grade FinOps Runtime Ledger | BLOCKED BY M9 | NO |
-| M11 | Billing Integration | BLOCKED BY M10 | NO |
+| M9 | SRE Metrics + SLOs | IMPLEMENTED AND LOCALLY VALIDATED; production activation pending | YES (local only) |
+| M10 | Accounting-Grade FinOps Runtime Ledger | IMPLEMENTED AND LOCALLY VALIDATED; production validation pending | YES (local only; STOP, M11 not authorized) |
+| M11 | Billing Integration | NOT IMPLEMENTED BY DESIGN; separate instruction required | NO |
 | M12 | Reconciliation + Allocation | BLOCKED BY M11 | NO |
 | M13 | Unit Economics | BLOCKED BY M12 | NO |
 | M14 | Budgets / Forecasting / Anomalies | BLOCKED BY M13 | NO |
@@ -8278,3 +8278,829 @@ Added files:
 
 **Exit Criteria: all32 blocking local criteria PASS.**
 **Ready for Next Milestone: YES (local progression only). STOP. M10 not started.**
+
+## M10 — FinOps Runtime Usage Ledger: planning only — 2026-10-08
+
+**M10 — PLANNED — NOT IMPLEMENTED.** Current authorization is audit and planning
+only. This section supersedes historical M10 blocked-by-M9/not-started wording.
+Last completed milestone: M9. M11 remains blocked. Ready for Next Milestone: NO.
+No implementation, migration authoring, tests of new functionality or deployment
+performed in this pass. Only this execution record is changed.
+
+### Entry gate and authoritative scope
+
+Entry gate PASS: matrix and final acceptance sections record M0 VALIDATED COMPLETE
+and M1–M9 IMPLEMENTED AND LOCALLY VALIDATED, with each local progression gate YES.
+M9 completion records all 32 blocking local criteria PASS, 5273 backend tests,
+213 focused tests (overlapping), 926 frontend tests and build/native Collector/IaC
+checks passing. These are historical results, not rerun or newly certified here.
+M9 cost completeness is DEFINED_NOT_EVALUATED; production Monitoring deployment
+pending; M10 ledger unimplemented by design; no cloud mutation recorded.
+Actual source agrees: evaluator explicitly suppresses M10 counts; no FinOps package,
+accounting table or active financial endpoint; FinOpsPanel is a static placeholder.
+
+Read AGENTS.md, .agent/PLANS.md and the execution record; docs/Telemetry/README.md,
+00_MASTER_BUILD_CONTRACT.md, 01_TARGET_ARCHITECTURE.md, 02_TELEMETRY_DATA_CONTRACT.md,
+03_INSTRUMENTATION_AND_RUNTIME.md, 05_STORAGE_APIS_AND_UI.md,
+07_FINOPS_ARCHITECTURE.md, 08_FINOPS_DATA_MODEL_AND_UNIT_ECONOMICS.md,
+09_SECURITY_PRIVACY_RETENTION_SAMPLING.md, 11_SLOPANOC_INTEGRATION_MAP.md,
+12_IMPLEMENTATION_ROADMAP.md, 13_TEST_VALIDATION_ACCEPTANCE.md,
+14_CODEX_EXECUTION_GUIDE.md, 15_DEFINITION_OF_DONE.md, 19_AI_QUALITY_OUTCOMES.md,
+20_FINOPS_ACCOUNTING_DURABILITY.md, 21_SLO_FORMULAS_AND_INITIAL_TARGETS.md,
+22_RELEASE_CONFIG_CORRELATION_CI.md, 23_TERRAFORM_AND_OBSERVABILITY_AS_CODE.md.
+
+The current explicit user scope overrides older roadmap M10 pricing/estimation
+and old M3 durable-ledger wording. M3's approved extension assigns durability to
+M10. M10 now owns quantities, capture/recovery, completeness, safe usage APIs/UI;
+pricing, money, FX, billing, reconciliation, allocation, unit economics, budgets,
+forecasting/anomalies remain later milestones. No billing settings prerequisite
+or BigQuery client is needed for runtime capture. Do not edit the roadmap merely
+to resolve this authorized scope; record the precedence here.
+
+### Existing architecture and reuse
+
+Reuse M3 ModelUsage/ModelUsageObservation, ModelAgent/ModelPurpose, ModelOperation
+and ModelAttempt; model_provider's per-instance transport interception for GenAI
+1.75.0/ADK1.33.0; existing ObservedModel delegation and remediation decorators.
+ModelOperation currently snapshots a ContextVar synchronous sink. ModelAttempt
+finish closes once, constructs the observation, invokes M9 observer then guarded
+sink. No default sink, durable acknowledgement, start receipt or release/config
+accounting fields currently exist. Generic guarded() swallowing is unsuitable as
+an accounting acknowledgement. Preserve its diagnostic isolation elsewhere.
+
+Reuse async SQLAlchemy engine/session conventions, UTCDateTime and Alembic's derived
+application-table include filter; no ADK private engine/schema. M7 Database has a
+bounded pool but lifecycle creation currently depends on projection_enabled.
+M10 needs independent FinOps lifecycle/owned bounded pool against the SAME configured
+application Cloud SQL DB, independent of M7 projection/SLO/OTel enablement. Reuse
+Database class construction where compatible, with explicit accounting pool caps;
+never reuse Coordinator slots or Writer.queue for accounting truth.
+M9 Writer is also best-effort. Reuse its evaluator registry, Snapshot/Counts and
+protected facade, not its publications as completeness denominator. Reuse Service
+query deadlines, rate admission and environment checks; verified Principal/require;
+existing strict frontend decoder, query hook, ReadState and Settings visual patterns.
+Keep canonical chat background execution, session/rewind, governance and SSE intact.
+
+### Complete M3 producer inventory
+
+All following actual provider submissions share model_provider._physical ->
+ModelAttempt.observe -> ModelAttempt.finish authoritative scalar projection.
+Authority here means provider quantity observation, NEVER evidence/command authority.
+
+| Producer / actual paths | Attribution and applicability | Metadata / semantics |
+|---|---|---|
+| Five agents: backend/agents/{team_manager,incident_manager,technical_authority_engineer,problem_manager,automated_operations_engineer}/agent.py | coordination/orchestration or specialist_reasoning; user turn when trusted context exists, background otherwise | streaming and nonstream generate_content; one final observation per physical attempt |
+| Team Manager presentation variant, direct_read_fast_path.py and read_continuation_execution.py variants | presentation, specialist_reasoning, synthesis | same shared delegate/client; multiple model calls remain separate |
+| backend/api/chat_service.py _retry_trusted_presentation_once; team_manager/direct_read_fast_path.py _run_trusted_presentation; source_requirements_completion.py request_source_requirements_declaration | presentation, synthesis, classification | logical business retries generate new operations, separately metered |
+| team_manager/governed_knowledge_completion.py; incident_manager/provenance_compliance.py | incident_manager/remediation | bounded governance retries remain existing owners; capture transport only |
+| technical_authority_engineer/agent_tool.py model remediation, structured output regeneration and action reselection | remediation, structured_output_repair, action_reselection | validation spans alone are not additional provider usage |
+| backend/knowledge_ingestion/gemini_image_interpreter.py | km_image_interpreter/image_interpretation/ingestion; no user run borrowed | image input through generation; usageMetadata if present; no invented image unit counts |
+| backend/config/model_warmup.py _run_warmup_request | system/warmup, no user correlation | real nonstream provider attempt included despite system origin |
+| backend/tools/knowledge/dense_similarity.py _embed | knowledge_retrieval/embedding_query or embedding_document | SDK may split a batch into physical submissions; retain each separately; cached document vectors create no provider event |
+| backend/knowledge/embeddings/service.py embed_text/embed_many | knowledge_embedding/embedding; inferred existing user/background workload | real Vertex request included; empty input, sync pseudo-vector and local fallback vector excluded; failed preceding real attempt remains included |
+| Central SDK retries in model_provider.py (httpx/aiohttp), including aiohttp retry inside request_once | each submission attempt has its own identity/ordinal | retry can incur usage regardless of final transport outcome; do not collapse |
+| Provider fallback | no separate live alternate-provider entrypoint found in source inventory | local pseudo-vector fallback is not metered; any later real fallback must use same producer seam and a new physical identity |
+
+Generation available fields: promptTokenCount -> input; candidatesTokenCount ->
+candidate; cachedContentTokenCount -> cached input; totalTokenCount -> total;
+thoughtsTokenCount -> thought; toolUsePromptTokenCount -> tool input (snake aliases
+accepted). Output exists only if candidate AND thought are present: candidate+thought.
+Streaming snapshots replace, never add. Failed/truncated attempts retain PARTIAL
+quantities. Provider omitted metadata is UNKNOWN. Embeddings: statistics.token_count/
+tokenCount summed only when every physical response item reports valid counts;
+metadata.billable_character_count/billableCharacterCount retained; no output tokens.
+No cache-write, cached-output or authoritative item-count field currently exposed by
+M3: nullable reserved quantity fields may be planned, never inferred or parsed anew.
+Transport errors may yield no usage; this does not prove the request nonbillable.
+Current other-provider/non-Gemini injected delegates can execute without physical
+interception; no live alternate adapter found. Enabled accounting must detect
+unsupported transport and refuse a completeness guarantee, not invent usage.
+
+### Grain, identities, idempotency and quantities
+
+One BASE usage ledger event per potentially metered physical provider attempt.
+Run ID (nullable for system), logical_call_id, provider_request_id (server-generated
+submission UUID, NOT provider billing request ID), attempt_id, ledger event ID are
+separate conceptual fields even though BASE event ID derives from attempt identity.
+Existing attempt_id is UUIDv5(NAMESPACE_URL,
+logical_call_id:provider:provider_request_id:attempt_ordinal). These identities are
+generated before invocation and frozen for accounting replay; UUIDs must not be
+regenerated on ingestion retry. Ordinal is per submission, not globally per run.
+Use versioned UUIDv5 accounting namespace + environment + attempt_id + operation_type
+for usage_event_id; store attempt_id and enforce UNIQUE(environment,attempt_id) for
+BASE events plus PK usage_event_id. Do not rely on run ID or trace export availability.
+Intent/inbox enforce the same physical identity; corrections have separate IDs and
+reference original BASE. Concurrent INSERT ON CONFLICT plus canonical scalar payload
+hash comparison implements idempotent success. Same key/different metered payload is
+an explicit conflict/gap, never update or second BASE. Retry 100+200=300; replay=300.
+
+NULL is unknown; zero only when provider explicitly reports zero. Keep source and
+availability (UNKNOWN/PARTIAL/KNOWN) and semantics_version. Cached input is an input
+subset, never additional total. Candidate/thought are output components, not added
+again to output; tool-input/total retained independently without unsupported formula.
+Preserve M3 conflicts as PARTIAL. Never derive authoritative total from components.
+Aggregate each nullable field with known-event and unknown-event counts; all-null
+sum remains NULL, and partial sums are labelled observed quantities, not exact totals.
+EMBEDDING operation_type keeps input tokens/billable characters, no fabricated output.
+Operation type GENERATION versus EMBEDDING is distinct from ModelPurpose attribution.
+No estimator, currency, price columns or monetary API values implemented in M10.
+
+Workloads map user_turn -> USER_TURN, warmup -> SYSTEM_WARMUP, ingestion -> INGESTION,
+background -> BACKGROUND; invalid/missing attribution becomes explicit UNKNOWN.
+Reuse all nine current ModelAgent values plus safe UNKNOWN; retain all 13 current
+ModelPurpose values plus UNKNOWN, without collapsing repair/reselection/classification.
+Model/provider use safe configured names and registered provider codes; region only
+trusted bounded deployment config, no endpoint URL. Environment canonical values are
+local/development/staging/production (UI may say dev); populations never combined.
+Persist trusted release ID/Git SHA/service revision/config hash from current resource
+config; model/prompt config versions remain null if authoritative source absent.
+Do not mislabel observability config hash as prompt/model configuration version.
+Persist optional run/turn/trace/span; no session ID needed for M10 aggregates, omit.
+No user/chat/case/fault identifiers, prompt/body/vector/error strings or arbitrary JSON.
+
+### Accounting durability and bounded failure policy
+
+Selected doc20 architecture: application-owned transactional Cloud SQL usage inbox
+and immutable ledger with durable pre-call attempt receipts. A same-DB outbox cannot
+survive total DB unavailability by itself; no such claim. No ephemeral Cloud Run disk
+spool or M7 best-effort queue is accepted as cross-instance durability.
+
+1. Enabled accounting creates stable attempt identity and durably commits minimal
+   ATTEMPT_ADMITTED receipt before physical network invocation. Await bounded async
+   SQLAlchemy transaction. Admission write failure means no new provider invocation;
+   return safe bounded dependency failure through existing error handling, never
+   rerun business work to repair accounting. This is an explicit M10 proposed
+   accounting-admission policy, not an existing doc20 guarantee. Optional warmup may
+   skip; embedding keeps existing lexical/local fallback; no authorization changes.
+2. At finalized M3 observation, project once through strict accounting DTO. Await
+   durable inbox insert before reporting capture accepted; attempt settlement and
+   inbox commit occur together. Consumer upserts immutable BASE ledger and updates
+   durable delivery/checkpoint plus aggregate contributions transactionally.
+3. Prefer direct promotion in the same transaction for normal path; recover from
+   previously committed inbox when promotion fails. Durable inbox pending != ledger
+   persisted. An in-memory wake signal is permitted solely to accelerate scanning.
+4. No synchronous SQL or future.result wait on event loop. Add a narrow async capture
+   lifecycle around existing transport/finalization boundaries; current synchronous
+   sink may observe test data but is never treated as durable ack. Await before
+   nonstream return, streaming terminal stop/error and adapter cleanup; handle all
+   SDK retries independently. Do not parse response usage again. Persist even when
+   OTel/projection/SLO disabled. Install process-owned accounting before warmup and
+   use it for ingestion/background tasks; avoid relying on chat-only ContextVar.
+5. Proposed explicit configurable bounds: total attempt admission/capture budget
+   2s each, maximum 3 accounting writes within budget with jitter; bounded concurrent
+   writes 8, admission wait 250ms, recovery batch100, lease30s, recovery pass2s,
+   shutdown3s. All effective read-only; cap by remaining business deadline and reserve
+   cleanup time. Measure; revise defaults from evidence, never silently exceed them.
+   No unbounded queue: backpressure at admission, pending durable rows remain in DB.
+
+Crash boundaries: before intent commit no provider call; after commit/before dispatch
+receipt conservatively denotes an uncertain attempt (may not have executed); during
+provider or after response/before inbox commit receipt becomes unresolved accounting
+debt, quantities potentially irrecoverable. After inbox commit full safe quantities
+survive restart; after ledger commit/before ack replay is idempotent. Never invent
+missing quantities or rerun provider to recover them. Pre-call receipt is not proof
+of provider execution; keep these uncertainties separately visible and prevent a
+HEALTHY claim for affected windows. Exact externally billable usage during this
+nontransactional provider/DB interval cannot be guaranteed; M11 billing may later
+resolve debt, but M10 must expose it now.
+
+If final capture cannot commit, existing provider/business result is preserved,
+COST_LEDGER_PERSIST_FAILED emitted safely, existing durable receipt remains unsettled,
+new model admissions degrade/stop while store inaccessible. Process-local failure
+health is only supplementary. During total DB outage APIs return unavailable, not
+cached healthy. Recovery marks overdue receipts OBSERVATION_MISSING/EXECUTION_UNKNOWN;
+receipt-only debt cannot recover exact quantity. No true pending payload claim if
+payload never committed. Collision uses safe conflict reason code, no payload log.
+
+Recovery workers lease inbox rows using PostgreSQL FOR UPDATE SKIP LOCKED, bounded
+batch/lease/backoff; transactionally insert ledger, verify hash, mark delivered and
+apply exactly-once aggregates. Multiple workers and expired leases converge. Exhausted
+records remain durably visible for later bounded retry/operator investigation;
+no deletion or automatic provider/tool/command/user-response replay. Shutdown timeout
+leaves durable pending work recoverable. Tests inject cancellation at every boundary.
+
+### Planned dedicated schema / migration / corrections
+
+New backend/observability/finops/models.py owns separate FinOpsBase; same application
+DB, logically independent tables. Reuse UTCDateTime; import metadata into Alembic
+filter explicitly. Additive revision path
+alembic/versions/c10a8f6e2d41_finops_runtime_usage.py follows b37e90a14c62;
+verify revision uniqueness and actual head immediately before implementation.
+
+| Table | Planned columns / integrity |
+|---|---|
+| finops_runtime_attempt | environment+attempt_id PK; logical/submission IDs, ordinal, provider/model/type/attribution, UTC admitted/start/deadline/settlement, bounded applicability/state, durable gap reason; no quantities guessed |
+| ai_usage_ledger | usage_event_id PK; environment/physical IDs/type; immutable quantities listed above (signed adjustment only for correction); source/availability/semantics/accounting schema versions; timestamps observed/start/end/created; safe correlation/release/config; record_kind/original_event_id/correction reason/process; BASE uniqueness and nonnegative int64 checks |
+| finops_usage_inbox | immutable allowlisted scalar accounting payload/hash, unique BASE identity; mutable delivery state, attempts, next_attempt_at, lease owner/expiry, bounded failure reason, persisted/delivered times; no raw provider object |
+| finops_usage_bucket | environment/time bucket/registered safe dimension tuple, quantities with known/unknown counters and counts; transactional idempotent event contribution; no identifiers in dimension keys |
+| finops_accounting_source | per environment coverage start/checkpoint/last observation/last persistence/freshness; durable gap/uncertainty state, recovery generation; no healthy reset on restart |
+
+Initial indexes: ledger(environment,observed_at,usage_event_id), attempts(environment,
+state,deadline_at), inbox(state,next_attempt_at,lease_expires_at), buckets(environment,
+bucket_at). Add provider/model filtering composite only from measured query needs.
+No speculative reconciliation-status index or partitioning now; benchmark PostgreSQL
+before optional monthly partitions (unique identity enforcement must remain global).
+No remote autogenerate, create_all on startup or shared schema application.
+
+Doc20 requires explicit correction/reversal and late provider reports. Include minimal
+immutable quantity-adjustment support in M10: original reference, bounded reason,
+trusted process identity, UTC timestamp, exactly-once correction ID; original BASE
+never updated. Unknown-to-known late usage uses referenced supplement semantics
+without interpreting null as zero; repeated late observation must suppress duplicates.
+No public correction editor, estimated token generation, billing reconciliation or
+price adjustment yet. Correction events never increment physical attempt denominator.
+
+Retention target confirmed doc00/doc09: runtime usage ledger/billing analytics24months,
+enterprise may extend. Record calendar-month cutoff semantics, not invented730days.
+No destructive pruning in M10; preserve originals, linked corrections, unfinished
+inbox, unresolved attempts and future reconciliation holds. Later approved retention
+must expire relationships safely; never cascade from session/conversation deletion.
+Schema/quantity semantics version1 explicit on every event; optional monetary schemas
+later migrate independently. No arbitrary provider-specific JSON extension required.
+
+### Completeness source, metrics and M9 integration
+
+Use canonical doc21 numerator exactly: physical eligible attempts with exactly one
+persisted BASE accounting event / observed potentially billable provider operations.
+Denied-before-provider, synthetic callback/local fake without provider submission,
+cache hit/empty input/pseudo-vector excluded. Real failure/timeout/cancelled attempt
+with possible billing remains eligible even with UNKNOWN quantities. Exclusion for
+explicit nonbillable attempt requires server-owned proof, never status alone.
+Duplicates/corrections add neither denominator nor numerator. Known observation
+population is durably settled with inbox; unresolved pre-call receipts provide
+additional uncertainty/debt. They cannot be silently dropped to report100%. Do not
+use traces, ordinary model request metrics or M9 lossy receipt counts as denominator.
+
+Pending inbox = eligible missing ledger until promotion, counts bad after settlement
+watermark, never good. Late promotion moves original event-time bad->good via
+transactional version guard, not append a second denominator. Gap/uncertain receipt
+contributes unknown coverage and capture_complete=false so incomplete population
+cannot show healthy even if measured ratio is100%. Separate quantity metadata coverage
+KNOWN/PARTIAL/UNKNOWN by provider/type expectation (do not demand chat output for
+embeddings). Unknown quantities can still be a good durable BASE capture.
+
+FinOps source provides M9 Snapshot/Counts from durable buckets, coverage_start,
+updated_at/watermark and capture_complete; finite half-open UTC window semantics
+remain M9-owned. Composite source dispatches cost only to accounting, all others to
+existing rollups. Remove hardcoded M10 suppression ONLY for activated durable source;
+disabled source remains truthful DEFINED_NOT_EVALUATED. Registry remains formula
+owner; source-independent definition does not imply deployed accounting. 100%
+architectural target keeps budget/burn NULL; canonical operational threshold
+<99.99% over24h receives real source via M9 alert registry, no divide by zero.
+Expose observed ratio with freshness/coverage qualification, never healthy at zero,
+stale source, pending uncertainty or truncated window. Source clock advances only
+with successful durable coverage checks, not UI polling or provider-event count.
+
+Bounded pipeline counters: observations_received, ledger_accepted, duplicate_suppressed,
+persist_failed, replayed, retry_exhausted, accounting_gap, metadata_incomplete,
+identity_conflict. Gauges pending/oldest_pending_age/source_age; capture/insert duration
+seconds histograms. Register finite instrument names and exact labels environment,
+provider (finite), operation_type, bounded status/reason only. No model IDs unless
+mapped to existing finite registry, no event/run/trace/lease/user labels or exemplars.
+Operational metrics are not financial totals/source of accounting truth. Extend SDK
+and BOTH Collector validation configs together; machine-test poison labels/payloads.
+
+### Protected APIs and M8 UI impact
+
+Plan GET /api/observability/finops/runtime-usage, /ledger-health,
+/ledger-completeness in existing observability router using require(FINANCIAL_DATA),
+verified principal, role ceilings, explicit environment authorization and bounded
+query facade. Existing FinOps is sole financial capability ceiling; Admin and SRE
+DO NOT automatically have FINANCIAL_DATA. Health safe technical subset may separately
+allow TECHNICAL_DIAGNOSTICS; no role union broadening or FinOps diagnostic access.
+General M9 SLO view can expose only content-free completeness health under existing
+operational capability; FinOps endpoint exposes same backend evaluator without
+requiring operational_metadata. Test existing role distinctions, no frontend grants.
+
+Aggregate usage request UTC [start,end), max31days, defaults24h, hourly/day bucket,
+one approved grouping among provider/model/agent/workload/purpose/type; max100rows,
+opaque scope-bound pagination max1000groups; safe filters and query budget2s,
+concurrency4/rate60perminute reuse. Runtime backend bucket aggregates avoid raw ledger
+scan per UI refresh; prohibit arbitrary dimensions/query/SQL. Responses include
+quantity-known/unknown counts, attempts, exclusions, coverage and schema version;
+no business correlation IDs or content. Health last observation/persistence/checkpoint,
+pending/oldest age, gaps/exhaustion/conflict/freshness. Completeness delegates to M9.
+Raw event endpoint is unnecessary and not planned. No monetary fields or false zeros.
+
+UI-impact rule: (1) creates usage/health facts for Settings→Observability & FinOps;
+(2) dedicated safe typed contracts needed; (3) replace current FinOpsPanel runtime
+placeholder within M10, preserve later unavailable cards; (4) backend capabilities
+apply, include denial/loading/error/no-data/stale/partial states; (5) settings are
+view-only effective policy, no mutation/replay buttons. Existing layout, typography,
+query cancellation/revocation clearing preserved. No browser financial/SLO formulas;
+all quantities and completeness backend-owned. Normal chat receives no financial
+or diagnostic data. Data & Retention may describe24month target as policy, never
+claim active pruning; Access can explain unchanged financial capability gate.
+
+### Ordered implementation plan and exact expected paths
+
+When separately authorized, implement only M10 in order:
+1. contracts/producer admission and final capture design tests;
+2. FinOps models/additive migration/transactional repository;
+3. durable admission/inbox/ledger/recovery and failure tests;
+4. narrow M3 async integration for all producer paths including warmup;
+5. transactional aggregate/completeness adapter and M9 activation;
+6. protected APIs/typed FinOps panel and end-to-end tests;
+7. full local validation/performance/diff review and individually evaluate gates.
+No milestone progression until all gates pass.
+
+New planned paths:
+- backend/observability/finops/__init__.py
+- backend/observability/finops/contracts.py
+- backend/observability/finops/models.py
+- backend/observability/finops/repository.py
+- backend/observability/finops/usage_ledger.py
+- backend/observability/finops/recovery.py
+- backend/observability/finops/metrics.py
+- backend/observability/finops/api_models.py
+- backend/observability/finops/service.py
+- backend/observability/finops/slo_source.py
+- alembic/versions/c10a8f6e2d41_finops_runtime_usage.py
+- backend/tests/test_finops_runtime_contract.py
+- backend/tests/test_finops_runtime_ledger.py
+- backend/tests/test_finops_runtime_recovery.py
+- backend/tests/test_finops_runtime_postgres.py
+- backend/tests/test_finops_runtime_api.py
+- backend/tests/test_finops_runtime_metrics.py
+- backend/tests/test_finops_runtime_integration.py
+- backend/tests/test_finops_runtime_performance.py
+- src/api/finopsTypes.ts
+- src/api/finopsContract.ts
+- src/api/finops.ts
+- src/api/finops.test.ts
+- src/components/shell/settings/observability/FinOpsPanel.test.tsx
+
+Existing planned modifications:
+- .agent/OBSERVABILITY_EXECUTION.md
+- backend/observability/{model_context,model_usage,model_instrumentation,model_provider,model_adapter,config,runtime,schemas,slo_sources,slo_evaluator,slo_contract,slo_alerts,slo_iac}.py
+- backend/api/{app,observability_routes}.py
+- backend/config/settings.py
+- alembic/env.py
+- backend/tests/{test_observability_migrations,test_observability_model_coverage,test_observability_model_provider,test_observability_model_instrumentation,test_observability_slo_evaluator,test_observability_slo_api,test_observability_slo_iac,test_api_security_contract,test_observability_collector}.py
+- src/components/shell/settings/observability/{FinOpsPanel,AccessPanel,DataRetentionPanel}.tsx (last two only truthful policy/capability text if needed)
+- src/components/shell/settings/observability/Panels.test.tsx and src/components/shell/settings/observability/contract.test.ts
+- src/api/{sloContract,sloTypes}.ts (only if strict decoder requires new source states)
+- infra/observability/collector/{config,config.local}.yaml
+- infra/observability/monitoring/{slo_manifest,alert_policies}.json (generated canonical artifact updates only)
+- docs/Telemetry/runbooks/cost_ledger_completeness.md
+- backend/observability/README.md
+No business callsite refactor planned; all producers reuse centralized M3 ownership.
+
+### Validation commands and required evidence (future, NOT RUN this pass)
+
+Use existing /private/tmp/slopanoc-m7-test-guard/run_tests.py and network guard after
+re-auditing isolation; remove cloud credentials/proxies, disable real models/warmup,
+use explicit disposable DB. Never invoke app/secret resolver with inherited cloud
+config. Planned commands:
+- .venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests/test_finops_runtime_contract.py backend/tests/test_finops_runtime_ledger.py backend/tests/test_finops_runtime_recovery.py backend/tests/test_finops_runtime_postgres.py backend/tests/test_finops_runtime_api.py backend/tests/test_finops_runtime_metrics.py backend/tests/test_finops_runtime_integration.py backend/tests/test_finops_runtime_performance.py
+- same runner for every backend/tests/test_observability_*.py (explicit argv glob expansion), then backend/tests --ignore=backend/tests/manual
+- npm test -- --run; npm run build
+- isolated migration test suite includes disposable SQLite upgrade/downgrade and
+  PostgreSQL offline SQL without configured remote URL; real PostgreSQL roundtrip,
+  constraints/concurrency/lease/crash transaction tests when available
+- native Collector validate for both configs with production exporter never started;
+  local SDK→Collector→loopback sentinel/cardinality test
+- generated M9 artifact drift and alert dry-run tests; git diff --check
+
+No postgres/initdb command found on PATH; docker exists but daemon/image availability
+not checked and no container started. Future use genuine disposable loopback Postgres
+only after verifying no remote Docker context, no shared mounts/network/credentials.
+Missing Postgres evidence is a named validation limitation, never SQLite equivalence.
+Concurrency blocking test remains required; production PostgreSQL confidence must
+remain unproven until isolated genuine engine evidence passes.
+
+Test scenarios: single authoritative attempt;20concurrent identical inserts;100/200
+retry plus duplicates/late repeats;100/150/200cumulative stream yields200; nulllimits/
+explicitzero/partial/conflicting tokens; failed/truncated/successful unknown usage;
+embeddings/batch splitting/absent stats/cache/pseudo-vector; warmup and image/system;
+all existing agent variants/attributions; FinOps independently on with OTel off;
+unsupported SDK adapter degrades/admission fails before unobserved provider request;
+DB unavailable before/after provider with exact business/provider invocation counts;
+crashes before dispatch/after usage/before inbox/after inbox/after ledger; multiple
+workers, expired leases, replay exhaustion, collisions, late quantity supplements;
+privacy sentinels across inbox/ledger/log/API/metrics/UI; verified principal denial,
+all6roles/capability/environment boundaries; migration unrelated schema preserved;
+M9 100/100,99/100,pending,duplicate,unknown quantities,stale,zero,partial28day/24h
+windows; UI future cards/no money/revocation/unknown counts; metric poison tests.
+
+Measure capture separately from provider latency: median/p95/max admission, inbox,
+insert, duplicate, aggregate/health query and recovery100batch; realistic100000event
+synthetic dataset; concurrency/backpressure and outage latency; quantify total turn
+and event-loop overhead against doc01 <3% CPU/<10ms instrumentation target (durable
+network writes separately reported). No production capacity claim from SQLite.
+
+### Individually planned exit criteria
+
+Every implementation gate below PENDING; planning does not mark them PASS.
+
+| ID | Blocking acceptance criterion / evidence |
+|---|---|
+| C01 | complete producer inventory and AST no-bypass gate |
+| C02 | one BASE grain, stable physical identities and server-only attribution |
+| C03 | DB uniqueness, duplicate hash conflict and20way concurrency proof |
+| C04 | separate retry usage100+200=300 despite replays |
+| C05 | cumulative streaming final200 not450 and truncated semantics |
+| C06 | unknown versuszero preserved end-to-end and aggregate coverage |
+| C07 | embedding quantities/no output/vector/fallback event inflation |
+| C08 | warmup/image/background captured outside user correlation |
+| C09 | immutable BASE and idempotent referenced corrections/late reports |
+| C10 | durable inbox/admission stronger than M7, OTel/projection independent |
+| C11 | crash receipt debt honest; post-inbox recovery survives restart |
+| C12 | concurrent workers/replay/lease recovery converge exactly once |
+| C13 | bounded failure/backpressure; no provider/tool/command/response replay |
+| C14 | no raw payload/privacy sentinel across every accounting sink |
+| C15 | bounded SDK/Collector accounting instruments, no ID labels |
+| C16 | exact durable numerator/denominator and unresolved coverage |
+| C17 | M9 source activation,100% no finite burn;24h99.99% alert dry-run |
+| C18 | zero/stale/partial/gap cannot show healthy; metadata coverage separate |
+| C19 | protected bounded aggregate APIs, allrole/env gates default-deny |
+| C20 | M8 FinOps usage/health only, existing visual/query patterns |
+| C21 | no monetary/pricing/billing/M11 functionality |
+| C22 | additive isolated migrations/index/constraints preserve unrelated schema |
+| C23 | real PostgreSQL concurrency/recovery semantics or explicitly blocked confidence gate |
+| C24 |24month retention/version policy with no destructive/reconciliation-unsafe purge |
+| C25 | measured overhead/high volume/backpressure/performance bounds |
+| C26 | imports/full applicable regressions/frontend build pass |
+| C27 | repository diff/untracked/secret hygiene and execution record evidence |
+| C28 | no remote/cloud/shared DB mutation; pending activation explicit |
+
+### Planning validation, risks and cloud status
+
+Planning review confirms source inventory/ownership, identity formula, quantity
+semantics, durable boundary and RBAC mismatch with assumed technical/Admin financial
+access. Important risks: synchronous-to-async transport integration; pre-call receipt
+uncertainty; same DB cannot save response payload during total outage; SDK compatibility
+must not silently bypass accounting; potential durable write latency; no real Postgres
+available on PATH; no current production verified identity; future reconciliation and
+retention holds not implemented. These are explicit implementation/test work, not
+permission to weaken accounting/governance. Ready To Implement M10: YES (local scope;
+all implementation gates still pending; separate instruction required).
+
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED.
+No cloud change needed for planning/local implementation. Pending eventual actions:
+apply additive c10a8f6e2d41 to exact approved shared Cloud SQL environment after verified
+predecessor revisions; deploy backend/frontend/Collector accounting configuration;
+activate environment-owned FinOps policy/verified identity and M9 coverage alert
+artifacts if separately approved. Exact project/account/environment not selected.
+No BigQuery/billing export/IAM/secrets changes required by M10; never infer permission.
+Each actual proposal needs AGENTS.md all10operation/impact/rollback fields, with
+migration lock/index/rollback risks and target revision. Additive downgrade drops
+accounting data and is not a production rollback; prefer disable activation and
+compatible software rollback, preserve ledger. No operation submitted for approval.
+Local and live validation are separate; cloud-dependent claims stay NOT LIVE-VALIDATED.
+
+Planning tests/builds NOT RUN (no implementation). Initial audit shell used absent
+python executable; corrected to .venv/bin/python for local file hash snapshot.
+No implementation failure, no remote action, no automatic approval rejection.
+**Ready for Next Milestone: NO. M11 BLOCKED. STOP after planning.**
+
+Planning final hygiene: git status shows only this tracked execution-record change;
+git diff --check PASS; no new repository files. Hash audit of939files also detected
+logs/backend-20261008-210639.log changing during this read-only source audit. No log
+write, app startup or test was invoked by this pass; treat this as concurrent local
+runtime activity, preserve it untouched and do not claim all non-plan hashes stable.
+Initial strict baseline assertion therefore failed; scoped tracked diff and added-file
+review establish this pass's planned edit. No log contents exported or inspected.
+Accounting safe failure logging also needs existing backend/observability/logging.py,
+redaction.py and attributes.py allowlists extended alongside schemas.py/metrics.py;
+these are additional exact expected modification paths. Register typed event codes
+without exception strings or payloads, reuse doc18 JSON/error correlation conventions.
+
+## M10 local implementation authorization — 2026-10-08
+
+User explicitly authorizes M10 only with attached accounting-state clarifications.
+All implementation gates PENDING; M11 blocked. ADMITTED never enters denominator;
+STARTED means physical transport dispatch boundary entered (not provider billing
+confirmation). Commit admission and dispatch state in separate bounded transactions,
+never hold a transaction across provider I/O. Started-but-uncaptured obligations
+survive via durable receipt, even when final failure update cannot reach the DB.
+Existing results survive final capture failures. Separate quantity coverage required.
+Local code/migration/isolated tests authorized; no external mutation authorized.
+
+
+## M10 — implementation and local validation evidence — 2026-10-08
+
+Status: IMPLEMENTED AND LOCALLY VALIDATED. All blocking local gates PASS.
+This supersedes historical planning-only status above. M11 NOT IMPLEMENTED BY DESIGN.
+Ready for Next Milestone: YES for local progression only; STOP, no M11 authorization.
+Production accounting readiness is NOT claimed.
+
+### Implementation performed and ownership
+
+Read the approved M10 plan and accounting-state clarification, current M3 physical
+provider/usage path, M9 evaluator/source/pipeline, existing M7 verified principal/
+capability/environment/query guards and M8 Settings patterns. Authoritative scope:
+docs/Telemetry/README.md, 00_MASTER_BUILD_CONTRACT.md, 12_IMPLEMENTATION_ROADMAP.md,
+14_CODEX_EXECUTION_GUIDE.md, 15_DEFINITION_OF_DONE.md, 13_TEST_VALIDATION_ACCEPTANCE.md,
+01_TARGET_ARCHITECTURE.md, 07_FINOPS_ARCHITECTURE.md, 09_SECURITY_PRIVACY_RETENTION_SAMPLING.md,
+18_STRUCTURED_LOGGING_STANDARD.md, 20_FINOPS_ACCOUNTING_DURABILITY.md and the
+cost_ledger_completeness runbook. Existing detailed plan/inventory above remains
+engineering memory; actual paths/evidence below are authoritative for implementation.
+
+M3 remains the only scalar provider metadata extractor. M10 consumes the finalized
+validated ModelUsageObservation, never logs, intermediate stream snapshots or raw
+response objects. The physical SDK transport wrapper invokes awaited accounting
+prepare before fn(); unsupported SDK/client shape fails closed while accounting is
+active. ModelOperation captures the process-owned accounting service independently
+of tracing/sampling/projection flags. No business callsite ownership was replaced.
+AST producer/no-bypass inventory, M3 variants, direct embeddings and image adapters
+remain in the focused regression gate. Tests cover actual pinned ADK/GenAI transport
+with fake HTTP provider and separate DB reads before invocation.
+
+Canonical closed states: ADMITTED, STARTED, PROVIDER_FINISHED, USAGE_CAPTURED,
+NOT_STARTED, FINAL_CAPTURE_PENDING, FINAL_CAPTURE_FAILED, OUTCOME_UNKNOWN, CONFLICT.
+Admission commits before STARTED, which commits before transport invocation. No DB
+transaction spans provider I/O. STARTED is a durable conservative dispatch-entry
+obligation, not evidence that a remote provider received or billed the request.
+The unavoidable commit-to-network crash window remains durable outcome uncertainty.
+Expired never-started ADMITTED closes as NOT_STARTED, excluded from denominator.
+
+Admission+start has a 2s total default deadline, 8 concurrent writes, .25s semaphore
+wait, <=3 DB attempts, short bounded backoff and at most .25s cleanup after failure.
+Failure means zero physical provider calls, no BASE, no started population; existing
+safe connector error carries accounting cause, not provider failure. Final accounting
+has a separate 2s total budget plus <=.25s failure annotation. It cannot replay a
+provider or change a successful result merely to recover accounting. Cancellation
+retains its existing semantics and durable started receipt. If all DB writes fail
+after the provider, the earlier STARTED receipt still records the unresolved debt;
+the final quantities may be irrecoverably unknown. Recovery never fabricates them.
+
+### Schema, identity, replay and corrections
+
+Separate FinOpsBase contains five additive tables: finops_runtime_attempt,
+finops_usage_inbox, ai_usage_ledger, finops_usage_bucket, finops_accounting_source.
+Attempt state/delivery state may transition; BASE and referenced ADJUSTMENT events
+are append-only through repository APIs. Strict allowlisted payloads persist scalar
+M3 quantities, bounded provider/model/agent/purpose/workload, safe correlation,
+release/revision/Git SHA/region/config hash, UTC times, usage source/availability and
+schema/quantity-semantics/idempotency versions (all v1). No prompts, messages,
+commands, SQL, URLs, tool data, credentials, response bodies or vectors.
+
+Event identity is UUIDv5 over fixed v1 namespace + environment + physical attempt
+UUID + operation_type, generated from stable server-owned identity. Logical call,
+provider submission UUID and retry number are preserved in safe identity. Event PK
+and partial unique environment+attempt BASE index enforce DB uniqueness. Hash
+conflicts preserve original and mark bounded CONFLICT/debt. Twenty concurrent local
+SQLite duplicates converge to one BASE and one aggregate contribution. No claim
+of PostgreSQL-engine concurrency validation is made.
+
+Capture durably commits strict safe payload to inbox; materialization atomically
+inserts immutable ledger, adjusts compact minute bucket population/quantities and
+marks delivery. Locks follow attempt -> inbox, are short-lived transaction worker
+leases, SKIP LOCKED on PostgreSQL and released on crash. Background recovery only
+replays accounting materialization: <=100 items/pass, <=2s process loop pass,
+<=5 per-item failure attempts with bounded backoff; exhausted inbox stays durable
+and visible. Background cadence30s; shutdown drain total3s plus DB-close <=3s.
+Inbox retry never reruns providers, agents, tools, commands or responses.
+
+Referenced signed corrections include original, reason, trusted process, timestamp
+and unique correction ID. Late provider supplements can fill unknown quantities
+using immutable adjustments, improving per-component known counts and quantity
+coverage without changing original NULL or adding a BASE/denominator. Replay is
+idempotent. Known quantities require explicit correction/reversal, not a silent
+second supplement. No pricing/estimation/reconciliation engine was introduced.
+24month retention policy is validated and reported read-only; no destructive
+retention execution/scheduler activated, preserving future reconciliation history.
+
+### Crash, semantic and safety evidence
+
+A: before admission no execution/population. B: committed ADMITTED not dispatched
+stays excluded and expires NOT_STARTED. C: committed STARTED then missing capture
+survives repository/DB reopen as durable unresolved obligation; checkpoint marks
+OUTCOME_UNKNOWN, provider count stays one. D: committed inbox reopens/replays exactly
+once, including actual child os._exit(73) after commit. E: committed materialization
+then acknowledgement loss/replay leaves one immutable BASE and unchanged totals.
+Window E is deterministic crash-boundary simulation, not a production process-kill
+validation. Local restart/crash tests are not a live Cloud Run/Cloud SQL guarantee.
+
+Provider retries100+200 aggregate300 and replay changes nothing. Cumulative streaming
+100/150/200 produces a single final200 BASE. HTTP retry transport tests create two
+physical attempts; unavailable failed-attempt usage remains NULL. Unknown and
+explicit provider0 remain distinct in ledger, safe DTO and UI. Embedding captures
+M3 authoritative input7 with operation_type EMBEDDING, no invented output or vectors.
+Warmup is SYSTEM_WARMUP with no user-run correlation. Additional transport tests
+cover ingestion image interpretation and background repair/remediation, no estimates;
+M3's existing nonturn default BACKGROUND is preserved. Restricted-field allowlist
+negative tests cover prompts/responses/Teams/commands/tool args/SQL/URLs/credentials/
+vectors/chain-of-thought at payload and nested identity boundaries. Existing M3
+sentinels and actual Collector poisoned IDs are excluded from accounting sinks.
+
+### M9 source, API, Settings and RBAC
+
+M10 minute buckets feed M9 Snapshot(source=DURABLE_ACCOUNTING); M9 alone evaluates.
+Eligible=durable STARTED obligations, good=durably materialized BASE; uncaptured
+started obligations are bad. ADMITTED/NOT_STARTED do not enter either population.
+Unknown quantities can satisfy BASE capture, while quantity_known/captured and
+per-component known/unknown stay separate. Tests prove100/100=100%,99/100=99%,
+90starts from100admitted/90captured=100%,100BASE with5unknown=100% capture/95%
+quantity coverage. Zero eligible is INSUFFICIENT_DATA; source>300s old is STALE_DATA;
+unavailable/conflicts/partial history cannot masquerade as healthy. The architectural
+100% target has no finite error budget/burn. Separate canonical24h operational
+coverage alert triggers below99.99%, only with fresh nonzero usable data. Artifact
+is disabled/no notification channels and remains undeployed; M9 formula ownership
+and existing evaluator/alert pipeline are reused.
+
+Accounting pipeline counters: admissions_attempted, admissions_failed,
+provider_started, observations, inbox_accepted, ledger_persisted, duplicates,
+conflicts, replayed, persistence_failures, metadata_missing. Gauges pending/debt;
+histograms admission_duration/capture_duration in seconds. SDK views/safety and
+both Collector configs use finite names/labels (environment, operation, status,
+window); no accounting/run/trace/session/user IDs or exemplars. Native pinned
+Collector0.160 validation and actual SDK->Collector->isolated sink pass. JSON safe
+failure logging reuses DEGRADED/COST_LEDGER_PERSIST_FAILED without exception text.
+
+Three financial capability GET APIs: /api/observability/finops/runtime-usage,
+/ledger-health, /ledger-completeness. No raw ledger or mutation endpoint. Existing
+verified principal, FINANCIAL_DATA capability, environment guard, HMAC scoped
+cursor, shared read semaphore/rate limits and2s query cap remain server-owned.
+Usage range<=31days, minute-aligned bounds, page<=100, aggregate scan<=1000groups.
+Tests cover all roles, unauthenticated/unverified-production, denied financial
+capability, allowed FinOps, invalid range/cursor/environment and safe DTOs. Existing
+operational SLO and financial completeness endpoints share one M9/M10 source.
+
+UI impact evaluation: creates Settings information (usage/coverage/health/freshness)
+required now; supplies only aggregated safe API contracts; M8 FinOps panel update
+belongs to M10; financial RBAC applies server-side; retention/config is view-only.
+Existing SLO panel needs no new formula or separate data path. React formats backend
+values, uses shared cancellable/stale/access read-state patterns and fixed page
+ranges, preserves layout and M11–M14 future cards. No money/currency/pricing or
+chat/governance changes. No Terraform/UI runtime configuration mutation path.
+
+### Actual files changed
+
+- `.agent/OBSERVABILITY_EXECUTION.md`
+- `alembic/env.py`
+- `alembic/versions/c10a8f6e2d41_finops_runtime_usage.py`
+- `backend/api/app.py`
+- `backend/api/observability_routes.py`
+- `backend/observability/README.md`
+- `backend/observability/config.py`
+- `backend/observability/finops/__init__.py`
+- `backend/observability/finops/api_models.py`
+- `backend/observability/finops/contracts.py`
+- `backend/observability/finops/metrics.py`
+- `backend/observability/finops/models.py`
+- `backend/observability/finops/recovery.py`
+- `backend/observability/finops/repository.py`
+- `backend/observability/finops/service.py`
+- `backend/observability/finops/slo_source.py`
+- `backend/observability/finops/usage_ledger.py`
+- `backend/observability/logging.py`
+- `backend/observability/metrics.py`
+- `backend/observability/model_adapter.py`
+- `backend/observability/model_instrumentation.py`
+- `backend/observability/model_provider.py`
+- `backend/observability/runtime.py`
+- `backend/observability/slo_alerts.py`
+- `backend/observability/slo_api_models.py`
+- `backend/observability/slo_contract.py`
+- `backend/observability/slo_evaluator.py`
+- `backend/observability/slo_iac.py`
+- `backend/observability/slo_metrics.py`
+- `backend/observability/slo_sources.py`
+- `backend/tests/test_api_security_contract.py`
+- `backend/tests/test_finops_runtime_api.py`
+- `backend/tests/test_finops_runtime_integration.py`
+- `backend/tests/test_finops_runtime_ledger.py`
+- `backend/tests/test_finops_runtime_metrics.py`
+- `backend/tests/test_finops_runtime_migrations.py`
+- `backend/tests/test_finops_runtime_performance.py`
+- `backend/tests/test_finops_runtime_recovery.py`
+- `backend/tests/test_observability_collector.py`
+- `backend/tests/test_observability_migrations.py`
+- `docs/Telemetry/runbooks/cost_ledger_completeness.md`
+- `infra/observability/collector/config.local.yaml`
+- `infra/observability/collector/config.yaml`
+- `infra/observability/monitoring/alert_policies.json`
+- `src/api/finops.test-support.ts`
+- `src/api/finops.test.ts`
+- `src/api/finops.ts`
+- `src/components/shell/settings/observability/FinOpsPanel.test.tsx`
+- `src/components/shell/settings/observability/FinOpsPanel.tsx`
+- `src/components/shell/settings/observability/ObservabilitySettings.test.tsx`
+- `src/components/shell/settings/observability/Panels.test.tsx`
+
+### Validation commands and actual results
+
+All backend tests used /private/tmp/slopanoc-m7-test-guard/run_tests.py: inherited
+cloud/shared DB/proxy variables removed, isolated SQLite/test doubles, external
+network blocked; Collector ports are loopback only. Approved sandbox escalation
+was solely for these authorized local loopback tests. No approval rejection.
+
+- `.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests --ignore=backend/tests/manual`: **5329 PASS,12 SKIP,687 warnings,201.21s**. Existing optional skips; no new blocking test waived.
+- Focused `backend/tests/test_observability_*.py backend/tests/test_finops_runtime_*.py --ignore=backend/tests/test_finops_runtime_performance.py`: **1000 PASS,8 warnings,119.00s**. Includes M0–M10, M3/provider, M6, M7/security, M9 and native/actual Collector integration.
+- Supplemental final ledger/integration run after adding10 strict payload negatives and3 nonturn attribution cases: **34 PASS**. These final test-only additions were validated independently after broad suite collection; production implementation was already final for that suite.
+- Earlier final focused ledger/API/recovery/integration: **46 PASS**, including shared financial/operational source, abrupt exit/reopen, late supplement and cancellation/failure bounds.
+- Final standalone100000-row performance gate: **1 PASS,54.67s**, actual report below.
+- `npm test -- --run`: **55files,932 PASS,11.69s**.
+- `npm run build`: **PASS** (TypeScript `tsc` plus Vite production build;2053modules,3.54s).
+- Both Collector configs native validate and all seven actual local pipeline sample classes PASS in focused/full tests; accounting duration unit and poisoned ID validated.
+- Additive upgrade/downgrade/index/FK/check parity and offline PostgreSQL DDL PASS; full existing migration graph/regressions PASS. No startup automatic DDL.
+- `git status --short`, tracked diff/stat, new file inventory and `git diff --check`: scoped M10 only, no secrets/data exports/local DB contents in changes; PASS.
+
+Failures and repairs: initial test exporter API mismatch corrected to records;
+frontend fixture import/name corrected; existing FinOps heading retained for Settings
+navigation; local Collector environment variables supplied. Initial unprivileged
+loopback bind failed; authorized local escalation ran Collector tests. Actual
+Collector revealed duration unit reset to1; both configs corrected to seconds and
+native/actual pipelines rerun. TypeScript test fixture's null-only inference fixed
+with nullable-number type. Final review standardized transaction lock ordering,
+bounded prepare/final-capture totals and failure annotation, preserved cancellation,
+added persisted usage source/availability, and corrected late-supplement aggregate
+known/coverage handling. New remediation test initially expected UNKNOWN; actual M3
+nonturn default is BACKGROUND, corrected test to preserve owner semantics. All final
+blocking validations pass; no architecture criterion silently waived.
+
+### Local performance evidence
+
+Isolated SQLite, shared local machine also running regressions, not production
+PostgreSQL/Cloud SQL capacity. Hot-path sample count30, read sample count5;
+recovery batch measurement is1 observation (median/p95 both that observation).
+100000-row bulk fixture is index/read-load setup, NOT runtime ingestion throughput.
+Bounded fixture batch1000,100030 persisted BASE rows before100pending replay items.
+Reported raw RSS peak growth is macOS bytes; this measures fixture memory growth,
+not production stability or a CPU overhead/capacity guarantee.
+
+| Operation | median ms | p95 ms | n |
+|---|---:|---:|---:|
+| admission | 1.745 | 2.345 | 30 |
+| capture | 2.502 | 4.224 | 30 |
+| completeness_100000 | 151.497 | 153.644 | 5 |
+| duplicate_capture | 2.126 | 2.609 | 30 |
+| duplicate_materialization | 1.014 | 1.249 | 30 |
+| health_100000 | 9.866 | 77.985 | 5 |
+| materialization | 4.762 | 8.482 | 30 |
+| recovery_100_batch | 501.814 | 501.814 | 1 |
+| start | 2.737 | 4.156 | 30 |
+| usage_100000 | 47.004 | 54.327 | 5 |
+
+Bulk fixture100000 rows: 50.298s; RSS peak growth 74579968bytes (~71.1MiB), bounded1000rows/batch. Failed admission/start tests prove0 provider calls; timeout/cancellation/backpressure preserve durable obligation. Durability is not weakened to reduce latency.
+
+### Exit criteria — individually evaluated
+
+User-approved section86 local blocking criteria:
+
+| Criterion | Result |
+|---|---|
+| Accounting attempt state machine is explicit | PASS |
+| ADMITTED is distinct from provider STARTED | PASS |
+| Provider cannot start before durable admission | PASS |
+| Failed admission results in zero provider calls | PASS |
+| Started-but-uncaptured attempts leave durable debt | PASS |
+| Accounting debt survives restart | PASS |
+| Committed inbox survives restart | PASS |
+| Immutable BASE ledger exists | PASS |
+| DB-enforced idempotency works | PASS |
+| Concurrent duplicates produce one event | PASS |
+| Conflicting duplicates are visible and preserve the original | PASS |
+| Provider retries count separately | PASS |
+| Accounting replay never invokes the provider | PASS |
+| Streaming cumulative usage is not double-counted | PASS |
+| Unknown remains distinct from zero | PASS |
+| Embeddings are represented correctly | PASS |
+| Warmup/system usage is retained | PASS |
+| Bounded attribution is preserved | PASS |
+| Privacy passes | PASS |
+| Ledger completeness uses accounting-required starts, not admissions | PASS |
+| Quantity coverage remains separate | PASS |
+| M9 completeness evaluates from M10 data | PASS |
+| M8 FinOps shows runtime usage and health only | PASS |
+| No monetary calculation exists | PASS |
+| Local migration passes | PASS |
+| Failure/restart tests pass | PASS |
+| Applicable regressions pass | PASS |
+| M11 remains unimplemented | PASS |
+| No cloud/shared DB mutation occurred | PASS |
+
+Approved planning C01–C28 map to these implementation/test gates. C23 is PASS for
+explicitly reporting the production confidence block, as the user permits strongest
+isolated validation when real PostgreSQL is unavailable; PostgreSQL-engine
+concurrency is NOT represented as proven. No later roadmap cloud exit criterion
+has been treated as permission to deploy.
+
+### Known limitations and pending cloud operations
+
+- Shared Cloud SQL migration: NOT EXECUTED — USER APPROVAL REQUIRED.
+- Production PostgreSQL concurrency: NOT LIVE-VALIDATED. PostgreSQL server tools not available; installed Docker desktop-linux daemon/socket unavailable on read-only inspection. No shared DB fallback attempted. Offline PostgreSQL DDL and SQLite20way convergence do not prove production locking/isolation.
+- Production provider/accounting crash behavior: NOT LIVE-VALIDATED.
+- Production FinOps API/frontend/Collector deployment, verified financial identity and performance/capacity: NOT LIVE-VALIDATED.
+- Crash after STARTED commit before actual remote receipt remains outcome uncertainty/debt; no provider billing confirmation is inferred.
+- Total DB outage after provider can irrecoverably lose final quantities; durable started obligation survives and is exposed, never converted to zero or estimated usage.
+- Admission-failure health counter is execution-process aggregate; durable started/pending/conflict debt is cross-restart DB truth. A DB outage cannot durably record another admission-failure update to that same DB.
+- Quantity corrections are internal trusted referenced events only; no reconciliation/billing/price workflow. Retention execution disabled;24month policy encoded only.
+- Local performance/memory measurements are environment-specific; no production throughput/CPU/memory guarantee.
+- M11 billing integration: NOT IMPLEMENTED BY DESIGN.
+
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED.
+Exact pending actions: apply additive c10a8f6e2d41 after b37e90a14c62 to separately
+approved shared Cloud SQL target; deploy approved backend/frontend and Collector
+configuration; enable environment-owned FINOPS policy and verified principal
+integration; create/activate disabled source-controlled accounting coverage alert
+only with exact project/environment/notification inputs. No exact remote target is
+selected. Each proposal needs all10 AGENTS.md operation/impact/security/cost/risk/
+rollback fields and migration-specific lock/data/index/rollback detail. No remote
+mutation proposed/executed in this implementation. Recovery rollback should disable
+activation/use compatible software while preserving ledger; downgrade drops new
+accounting data and is NOT a production-safe rollback method.
+
+Ready for Next Milestone: **YES (local gates)**. **STOP. M11 NOT STARTED.**

@@ -182,6 +182,8 @@ def test_only_the_expected_routes_exist() -> None:
         '/api/observability/config',
         '/api/observability/slos', '/api/observability/slos/{slo_id}',
         '/api/observability/sse-receipts',
+        '/api/observability/finops/runtime-usage', '/api/observability/finops/ledger-health',
+        '/api/observability/finops/ledger-completeness',
         "/health",
         "/api/sessions",
         "/api/sessions/{session_id}/messages",

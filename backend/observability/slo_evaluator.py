@@ -61,8 +61,13 @@ def paired(long, short, tier, usable=True):
         and not long.unknown and not short.unknown)
 
 
-def evaluate(slo_id, snapshot, *, now):
+def evaluate(slo_id, snapshot, *, now, window_seconds=None):
     definition=DEFINITIONS[slo_id]; now=utc(now)
+    if window_seconds is not None:
+        from dataclasses import replace
+        from .slo_contract import COST_COVERAGE_WINDOW_SECONDS
+        if slo_id!='cost_ledger_completeness' or window_seconds!=COST_COVERAGE_WINDOW_SECONDS:raise ValueError('Invalid SLO operational window')
+        definition=replace(definition,window_seconds=window_seconds)
     end=minute(snapshot.watermark or now); start=end-timedelta(seconds=definition.window_seconds)
     if end>now: raise ValueError('Future SRE watermark')
     accumulated={s:[0,0,0,0] for s in (*BURN_WINDOWS,definition.window_seconds)}
@@ -75,12 +80,13 @@ def evaluate(slo_id, snapshot, *, now):
             if 0<age<=seconds:
                 values[0]+=c.good;values[1]+=c.bad;values[2]+=c.unknown;values[3]+=c.excluded
     totals={seconds:Counts(*values) for seconds,values in accumulated.items()}
-    if definition.source in ('M10_COST_LEDGER','DIRECT_GRAPH_UNAVAILABLE'):
+    accounting_active = snapshot.source == 'DURABLE_ACCOUNTING'
+    if definition.source=='DIRECT_GRAPH_UNAVAILABLE' or definition.source=='M10_COST_LEDGER' and not accounting_active:
         totals={seconds:Counts() for seconds in totals}
     count=totals[definition.window_seconds]
     updated=utc(snapshot.updated_at) if snapshot.updated_at is not None else None
     source_state='AVAILABLE'; reason='FRESH'
-    if definition.source=='M10_COST_LEDGER': state=State.DEFINED;source_state='DATA_SOURCE_AVAILABLE_IN_M10';reason=source_state
+    if definition.source=='M10_COST_LEDGER' and not accounting_active: state=State.DEFINED;source_state='DATA_SOURCE_AVAILABLE_IN_M10';reason=source_state
     elif definition.source=='DIRECT_GRAPH_UNAVAILABLE' or not snapshot.available or updated is None:
         state=State.UNAVAILABLE;source_state='UNAVAILABLE';reason='SOURCE_UNAVAILABLE'
     elif updated>now or (now-updated).total_seconds()>definition.freshness_seconds:

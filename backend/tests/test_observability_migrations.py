@@ -65,7 +65,7 @@ async def test_actual_alembic_environment_isolated_upgrade_downgrade(tmp_path,mo
     target='sqlite+aiosqlite:///'+str(tmp_path/'alembic.sqlite')
     monkeypatch.setattr('backend.config.settings.get_settings',lambda:Settings({'SLOPANOC_DATABASE_URL':target}))
     cfg=Config();cfg.set_main_option('script_location','alembic')
-    assert ScriptDirectory.from_config(cfg).get_current_head()=='b37e90a14c62'
+    assert ScriptDirectory.from_config(cfg).get_current_head()=='c10a8f6e2d41'
     db=Database(target,isolated_test=True)
     try:
         async with db.engine.begin() as c:

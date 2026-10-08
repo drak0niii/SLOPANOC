@@ -75,6 +75,7 @@ class Writer:
                         from .slo_metrics import publish_result,record
                         provider=RuntimeProvider(self.rollups,self.config)
                         for key in DEFINITIONS:
+                            if key=='cost_ledger_completeness' and self.config.finops_enabled:continue
                             snapshot=await provider.snapshot(self.config.otel_environment,key,self.clock())
                             publish_result(self.runtime,evaluate(key,snapshot,now=self.clock()))
                         projection=getattr(self.runtime,'projection',None)

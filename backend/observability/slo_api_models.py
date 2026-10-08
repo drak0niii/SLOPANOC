@@ -38,7 +38,7 @@ class SLOView(Contract):
     reason: Literal['FRESH','SOURCE_UNAVAILABLE','STALE_SOURCE','INCOMPLETE_COVERAGE','LOW_VOLUME_OR_PARTIAL_WINDOW','DATA_SOURCE_AVAILABLE_IN_M10']
     data_source: Literal['SRE_ROLLUPS','M10_COST_LEDGER','DIRECT_GRAPH_UNAVAILABLE']
     source_status: Literal['AVAILABLE','UNAVAILABLE','STALE','DATA_SOURCE_AVAILABLE_IN_M10']
-    source_kind: Literal['ISOLATED_FIXTURE','RUNTIME_ROLLUPS','CLOUD_MONITORING_NOT_ACTIVATED']
+    source_kind: Literal['ISOLATED_FIXTURE','RUNTIME_ROLLUPS','CLOUD_MONITORING_NOT_ACTIVATED','DURABLE_ACCOUNTING']
     coverage: float | None = Field(default=None,ge=0,le=1)
     evaluated_at: AwareDatetime
     source_last_updated: AwareDatetime | None = None

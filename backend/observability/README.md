@@ -60,7 +60,7 @@ TTFT/planning/provenance stages from these broad marks.
 - M6 watchdog/errors: deadlines/heartbeat/stall/retry policy. STALLED is nonterminal;
   terminal status cannot reopen. A disconnect need not cancel backend mutation.
 - M7 repositories/api_models: summaries, timelines, authorization and retention.
-- M8 UI; M9 SRE/SLO; M10 durable accounting/pricing/estimation; M11–M14 billing/reconciliation/allocation/
+- M8 UI; M9 SRE/SLO; M10 durable accounting/runtime usage; M11–M14 billing/pricing/reconciliation/allocation/
   economics/budgets; M15 security hardening; M16 validation; M17 operationalization;
   M18 IaC/release/CI/W3C; M19 outcomes/profiling. M0 implements none of these runtimes.
 
@@ -563,3 +563,45 @@ Cloud metric names, ingestion, platform inputs and noise are not live-validated.
 `CloudMonitoringProvider` is an unavailable future read-only seam, not a production client.
 Safe synthetic adapters are explicit and disabled by default; no remote scheduler
 or tenant discovery is installed. Direct Graph and cost-ledger sources remain unavailable.
+
+## M10 runtime usage accounting
+
+`finops/` owns durable runtime quantities only; M3 remains the sole provider usage
+extractor, and M9 owns completeness formulas. Enable `SLOPANOC_FINOPS_ENABLED` only
+with the additive accounting migration present. The sole lifespan installs accounting
+before warmup, independently of OTel, M7 projection and SLO flags. No startup DDL.
+Production verified identity remains required/default-denied for protected reads.
+
+Admission and STARTED commit in separate short transactions before physical transport
+entry. ADMITTED is not metered. STARTED records dispatch entry, not proof that the
+remote provider received/billed a request. A crash immediately after the STARTED commit
+is conservatively an unresolved obligation, never silently complete. Final M3 metadata
+is committed to the inbox before materialization; recovery replays only that safe
+payload. No DB transaction spans provider I/O. Unrecoverable pre-inbox quantity loss
+remains visible debt; it is never reconstructed by provider/business replay.
+
+One immutable BASE per environment/attempt, deterministic versioned UUIDv5 identity,
+DB partial unique index, transactional duplicate/hash-conflict handling. Quantity
+corrections append referenced ADJUSTMENT rows. Null is unknown, explicit zero is zero;
+provider totals and cached/candidate/thought components retain M3 semantics. Aggregates
+show observed sums with known/unknown counts and separate quantity coverage. No money,
+pricing, invoice, FX, allocation or billing integration exists.
+
+Operational bounds (environment-owned, read-only): admission+STARTED total2s; final
+capture total2s plus failure-state update at most250ms;3write attempts;8write slots;
+250ms admission wait;100record recovery batch;2s recovery pass;5recovery attempts;
+30s checkpoint;3s shutdown. PostgreSQL's transaction row lock is the short materializer
+lease (`FOR UPDATE SKIP LOCKED`); a crashed transaction releases it automatically.
+Recovery never holds locks across provider work. Exhausted work remains visible;
+there is no HTTP retry/replay mutation endpoint. Runtime ledger retention target24
+calendar months; no destructive retention execution in M10, pending debt/corrections
+preserved for future reconciliation. No session-deletion cascade.
+
+Financial reads: `/api/observability/finops/runtime-usage`, `/ledger-health`,
+`/ledger-completeness`; verified FINANCIAL_DATA capability plus environment scope.
+Existing FinOps ceiling grants financial data only; SRE/Admin do not automatically
+gain it. General M9 operational reads may show content-free accounting completeness.
+Runtime usage queries cap31days/100groups/page/1000groups traversal with bounded query
+concurrency/deadline. UI displays usage and health in existing Settings; later cards
+stay unavailable and effective policy is read-only. Accounting metrics use fixed
+names and environment/operation/status/window labels only, no identifiers/exemplars.

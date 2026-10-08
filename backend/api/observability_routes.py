@@ -97,3 +97,22 @@ async def sse_receipt(body:SSEReceipt,principal=Depends(verified_principal),back
     except Exception: raise denied('connector_unavailable','Receipt source unavailable.') from None
     if not accepted: raise denied('not_found','Receipt target unavailable.')
     return Response(status_code=204)
+
+# Financial access is a distinct server capability; it grants no run diagnostics.
+from backend.observability.finops.api_models import UsagePage, LedgerHealth
+from backend.observability.finops import service as finops
+financial = require(Permission.FINANCIAL_DATA)
+
+@router.get('/finops/runtime-usage',response_model=UsagePage)
+async def runtime_usage(principal=Depends(financial),backend=Depends(service),
+    environment:str|None=Query(None,max_length=16),start:datetime|None=None,end:datetime|None=None,
+    group:str=Query('model',max_length=32),limit:int=Query(50,ge=1,le=100),cursor:str|None=Query(None,max_length=512)):
+    return await finops.runtime_usage(backend,principal,environment,start,end,group,limit,cursor)
+
+@router.get('/finops/ledger-health',response_model=LedgerHealth)
+async def ledger_health(principal=Depends(financial),backend=Depends(service),environment:str|None=Query(None,max_length=16)):
+    return await finops.ledger_health(backend,principal,environment)
+
+@router.get('/finops/ledger-completeness',response_model=SLOView)
+async def ledger_completeness(principal=Depends(financial),backend=Depends(service),environment:str|None=Query(None,max_length=16)):
+    return await finops.completeness(backend,principal,environment)
