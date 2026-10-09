@@ -15,6 +15,8 @@ The specialist is the PRODUCTION agent (tools and callbacks) with only its model
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation
+
 import json
 from typing import Any
 
@@ -59,7 +61,7 @@ def _recovery_catalog(request: LlmRequest) -> list[str]:
 
 def _assert_failed_closed(turn: dict[str, Any], action_id: str) -> None:
     resolution = _resolution(turn)
-    assert resolution["action_id"] == action_id and resolution["status"] == "unknown_action"
+    assert correlation(resolution["action_id"]) == correlation(action_id) and resolution["status"] == "unknown_action"
     assert not [c for c in _trace(turn).get("command_authority", []) if c["decision"] == "authorized"]
     assert "`st pluginunit`" not in turn["final"]
 
@@ -86,7 +88,7 @@ async def test_valid_current_run_id_makes_no_recovery_call(conversation) -> None
     conv = await _start(conversation)
     t2 = await _result_turn(conv, [SEARCH, DOC.select(), CATALOG, PLUGIN_STEP])
     assert not _recovery(t2) and len(_requests(t2)) == 4
-    assert _resolution(t2)["action_id"] == PLUGIN_ID and _authorized(t2, "st pluginunit")
+    assert correlation(_resolution(t2)["action_id"]) == correlation(PLUGIN_ID) and _authorized(t2, "st pluginunit")
 
 
 # 2 / 3 / 8 / 9. Mistyped id -> ONE tool-free re-selection -> exact id -> normal validation continues
@@ -97,18 +99,18 @@ async def test_mistyped_id_is_reselected_once_and_validated_normally(conversatio
     conv = await _start(conversation)
     t2 = await _result_turn(conv, [SEARCH, DOC.select(), CATALOG, _governed(MISTYPED, "Check plug-in unit states"), PLUGIN_STEP])
     request_event, result_event = _recovery(t2)
-    assert request_event["initial_action_id"] == MISTYPED and request_event["reason"] == "unknown_action"
+    assert correlation(request_event["initial_action_id"]) == correlation(MISTYPED) and request_event["reason"] == "unknown_action"
     assert request_event["retry"] == 1 and request_event["tools_enabled"] is False
-    assert result_event["returned_action_id"] == PLUGIN_ID and result_event["exact_match"] is True
+    assert correlation(result_event["returned_action_id"]) == correlation(PLUGIN_ID) and result_event["exact_match"] is True
     # Exactly one extra, tool-free call over THIS run's issued catalog; nothing searched or issued again.
     assert len(_requests(t2)) == 5
     _assert_tool_free(_requests(t2)[-1])
     issued = [a["action_id"] for c in _trace(t2)["action_catalogs"] for a in c["actions"]]
-    assert sorted(_recovery_catalog(_requests(t2)[-1])) == sorted(issued) and PLUGIN_ID in issued
+    assert sorted(correlation(v) for v in _recovery_catalog(_requests(t2)[-1])) == sorted(issued) and correlation(PLUGIN_ID) in issued
     assert _tool_counts(t2) == (1, 1, 1)
     # The normal chain decided: resolver, Command Authority, progression.
     (resolution,) = _trace(t2)["action_resolutions"]
-    assert resolution["action_id"] == PLUGIN_ID and resolution["status"] == "resolved"
+    assert correlation(resolution["action_id"]) == correlation(PLUGIN_ID) and resolution["status"] == "resolved"
     assert _authorized(t2, "st pluginunit") and "`st pluginunit`" in t2["final"]
     _assert_alt_result_bound(t2)
 
@@ -124,7 +126,7 @@ async def test_reselection_returning_another_invalid_id_fails_closed(conversatio
         _governed(OTHER_INVALID, "Check plug-in unit states"), PLUGIN_STEP,
     ])
     _, result_event = _recovery(t2)
-    assert result_event["returned_action_id"] == OTHER_INVALID and result_event["exact_match"] is False
+    assert correlation(result_event["returned_action_id"]) == correlation(OTHER_INVALID) and result_event["exact_match"] is False
     assert len(_requests(t2)) == 5, "one re-selection; the scripted third answer is never requested"
     _assert_failed_closed(t2, MISTYPED)
 
@@ -149,7 +151,7 @@ async def test_similar_id_is_never_substituted(conversation, reselected) -> None
         _governed(reselected, "Check plug-in unit states"),
     ])
     _, result_event = _recovery(t2)
-    assert result_event["returned_action_id"] == reselected and result_event["exact_match"] is False
+    assert correlation(result_event["returned_action_id"]) == correlation(reselected) and result_event["exact_match"] is False
     _assert_failed_closed(t2, MISTYPED)
     assert PLUGIN_ID not in [r["action_id"] for r in _trace(t2)["action_resolutions"]]
 
@@ -169,7 +171,7 @@ async def test_historical_action_id_is_not_accepted(conversation) -> None:
     finally:
         pa.discard_issued_actions("run-previous")
     request_event, result_event = _recovery(t2)
-    assert request_event["initial_action_id"] == HISTORICAL and result_event["exact_match"] is False
+    assert correlation(request_event["initial_action_id"]) == correlation(HISTORICAL) and result_event["exact_match"] is False
     _assert_failed_closed(t2, HISTORICAL)
 
 
@@ -207,4 +209,4 @@ async def test_known_id_rejected_downstream_is_not_reselected(conversation) -> N
     # ALT_ID is issued in this run but is the step whose result was just supplied: progression decides.
     t2 = await _result_turn(conv, [SEARCH, DOC.select(), CATALOG, _governed(ALT_ID, "Check active alarms on the node")])
     assert not _recovery(t2) and len(_requests(t2)) == 4
-    assert _resolution(t2)["action_id"] == ALT_ID and _resolution(t2)["status"] != "unknown_action"
+    assert correlation(_resolution(t2)["action_id"]) == correlation(ALT_ID) and _resolution(t2)["status"] != "unknown_action"

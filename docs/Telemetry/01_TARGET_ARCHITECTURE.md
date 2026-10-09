@@ -219,3 +219,20 @@ Persist:
 - terminal_at.
 
 Writes occur on material stage transitions, watchdog events, terminal transition and bounded heartbeat interval—not every micro-event.
+
+## Exceptional full-trace archive — approved M15 planning adaptation
+
+B01 is RESOLVED BY ARCHITECTURE ADAPTATION, not waived. Google Cloud Trace remains
+the Operational Trace Store with 30-day full-span retention. ExceptionalTraceArchive
+preserves sanitized full exceptional traces for a 90-day primary archive horizon:
+days 0–30 in both stores, days 31–90 in the archive only. Operational summaries,
+logs, metrics and financial records are separate and cannot satisfy full-trace retention.
+
+After producer allowlisting, environment checks and Collector redaction, eligible
+exceptional traces flow through a stable OTLP exporter to an Exceptional Trace
+Archive Bridge and a dedicated environment-isolated GCS archive bucket. Cloud Trace
+export stays independently available. This observability component is never evidence,
+command authority, business persistence or a second application event store.
+The transport-independent contract, safe OTLP schema and local sink are in
+`16_PRODUCTION_TELEMETRY_BACKEND.md`. No cloud mutation is required for M15 local
+validation; deployment/IAM/GCS lifecycle/live validation remain separately approved.

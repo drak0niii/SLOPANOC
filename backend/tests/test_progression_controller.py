@@ -9,6 +9,8 @@ selection, ProcedureAction resolution, Command Authority, policy and HITL are un
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation
+
 import re
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -113,7 +115,7 @@ async def test_what_is_next_cmd_stays_on_the_pending_pluginunit_step(isolated_km
 
     t4 = await conv.turn("what is next cmd?", specialist_step, tm_final)
     request = t4["tae_request"]
-    assert request["pending_step"]["procedure_action_id"] == _PIU and request["pending_step"]["turn_kind"] == "command_follow_up"
+    assert correlation(request["pending_step"]["procedure_action_id"]) == correlation(_PIU) and request["pending_step"]["turn_kind"] == "command_follow_up"
     assert request["turn_request_contract"]["focus"] == "continue"
     assert request["turn_request_contract"]["diagnostic_objective"] == f"Resolve the pending diagnostic step: {_PIU_STEP}"
 
@@ -126,10 +128,10 @@ async def test_what_is_next_cmd_stays_on_the_pending_pluginunit_step(isolated_km
         # command request is answered with the PENDING step's own governed action, re-derived from this
         # run's selected evidence and freshly authorized (previously: the step without its command).
         assert _decision(t4)["decision"] == "pending_step_resolved"
-        assert step["action"] == _PIU_STEP and step["command"] == "st pluginunit" and step["procedure_action_id"] == _PIU
+        assert step["action"] == _PIU_STEP and step["command"] == "st pluginunit" and correlation(step["procedure_action_id"]) == correlation(_PIU)
         (continuity,) = [e for e in t4["trace"]["operational_events"] if e.get("stage") == "acquisition_continuity"]
         assert (continuity["rule"], continuity["outcome"], continuity["authority_decision"]) == ("acquisition_request", "server_reconciled", "authorized")
-        assert continuity["model_proposal"]["procedure_action_id"] != _PIU and continuity["governed_search_performed"] is True
+        assert correlation(continuity["model_proposal"]["procedure_action_id"]) != correlation(_PIU) and continuity["governed_search_performed"] is True
         assert t4["final"].startswith(_PIU_STEP) and "`st pluginunit`" in t4["final"], "the operator is answered with the pending step"
         assert not re.search(r"\balt\b", t4["final"]) and "st ru" not in t4["final"]
 
@@ -202,7 +204,7 @@ async def test_bare_follow_up_resolves_the_pending_step(isolated_km_repo, monkey
     check_id = t1["state"]["troubleshooting_state"]["diagnostic_history"][0]["check_id"]
 
     t2 = await conv.turn(follow_up, _propose(_RU, _RU_STEP), "Run st ru.")
-    assert t2["tae_request"]["pending_step"]["procedure_action_id"] == _RU
+    assert correlation(t2["tae_request"]["pending_step"]["procedure_action_id"]) == correlation(_RU)
     contract = t2["tae_request"]["turn_request_contract"]
     assert (contract["focus"], contract["diagnostic_objective"]) == ("continue", f"Resolve the pending diagnostic step: {_RU_STEP}")
     assert (_decision(t2)["turn_kind"], _decision(t2)["decision"]) == ("command_follow_up", "pending_step_resolved")
@@ -310,8 +312,8 @@ async def test_combined_governed_command_is_not_presented_as_one_step(isolated_k
         [_search("radio unit fault"), _select(_KID, _SEC), _CATALOG, legacy], "Run st pluginunit; st fieldr.", {"subject_component": "radio unit"},
     )
     catalog = t1["trace"]["action_catalogs"][0]
-    assert "st pluginunit; st fieldr" not in [a["command_template"] for a in catalog["actions"]]
-    assert any(c["command"] == "st pluginunit; st fieldr" and c["decision"] == "rejected" and c["reason"] == "not a single command invocation: command_separator"
+    assert all("command_template" not in a for a in catalog["actions"])
+    assert any("command" not in c and c["decision"] == "rejected"
                for c in t1["trace"]["command_authority"])
     assert _decision(t1)["decision"] == "rejected_multiple_actions", "the controller rejects the step independently"
     assert t1["record"]["diagnostic_step"] is None and t1["record"]["outcome"] == "insufficient_evidence"

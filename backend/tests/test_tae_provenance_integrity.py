@@ -15,6 +15,8 @@ SELECTED, approved, MATCH evidence) and Command Authority still decides; otherwi
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation, approved
+
 import json
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -124,7 +126,7 @@ def _events(turn: dict[str, Any], stage: str) -> list[dict[str, Any]]:
 
 
 def _authorized(turn: dict[str, Any], command: str) -> list[dict[str, Any]]:
-    return [c for c in _trace(turn).get("command_authority", []) if c["decision"] == "authorized" and c["command"] == command]
+    return approved(turn,command)
 
 
 def _record(turn: dict[str, Any]) -> dict[str, Any]:
@@ -163,7 +165,7 @@ async def test_b_shape2_action_id_with_unsupported_citation_still_resolves_throu
     record = _record(t)
     assert record["outcome"] == "recommended" and record["diagnostic_step"]["command"] == "alt" and _authorized(t, "alt")
     resolution = _trace(t)["action_resolutions"][-1]
-    assert (resolution["action_id"], resolution["status"], resolution["command_authority"]) == (ALT, "resolved", "authorized")
+    assert (resolution["action_id"], resolution["status"], resolution["command_authority"]) == (correlation(ALT), "resolved", "authorized")
     # The citation never became authority: it is replaced by the resolved action's own source.
     assert record["verified_evidence_citations"] == [f"{KID}:{VER}:{S_HC}"]
     phases = {e["phase"]: e for e in _events(t, "integrity")}
@@ -173,9 +175,9 @@ async def test_b_shape2_action_id_with_unsupported_citation_still_resolves_throu
     assert "`alt`" in t["final"]
     # O: trace proof.
     rendered = format_diagnostic_trace(_trace(t))
-    assert "INTEGRITY phase=integrity_callback original=recommended final=recommended" in rendered
-    assert "check=citation_unresolved_but_action_server_resolvable decision=action_resolution_deferred" in rendered
-    assert "check=citation_replaced_by_action_provenance decision=proceed" in rendered
+    assert '"phase":"integrity_callback"' in rendered and '"final_outcome":"recommended"' in rendered
+    assert '"check_triggered":"citation_unresolved_but_action_server_resolvable"' in rendered
+    assert '"check_triggered":"citation_replaced_by_action_provenance"' in rendered
 
 
 @pytest.mark.asyncio
@@ -185,7 +187,7 @@ async def test_g_shape3_legacy_filename_source_resolves_to_the_one_grounding_sec
     t = await _turn(conv, [SEARCH, _select(S_HC, S_LOG), _legacy("alt", FILE)])
     record = _record(t)
     assert record["diagnostic_step"]["command"] == "alt" and record["diagnostic_step"]["command_source"] == f"{KID}:{VER}:{S_HC}"
-    assert any(c["source_id"] == f"{KID}:{VER}:{S_HC}" for c in _authorized(t, "alt"))
+    assert any(correlation(c["source_id"]) == correlation(f"{KID}:{VER}:{S_HC}") for c in _authorized(t, "alt"))
 
 
 @pytest.mark.asyncio
@@ -207,7 +209,7 @@ async def test_j_k_shape4_no_action_id_with_selected_catalog_asks_once_and_recor
     assert set(choice["offered"]) == {ALT, _aid("st ru")} and choice["chosen"] == ALT and choice["declined"] is False
     assert _record(t)["diagnostic_step"]["command"] == "alt" and _authorized(t, "alt")
     assert t["progression"].acquisition_gaps == [], "a valid governed method exists: never a no-method gap"
-    assert "ACTION CHOICE offered=" in format_diagnostic_trace(_trace(t))
+    assert '"stage":"action_choice"' in format_diagnostic_trace(_trace(t))
 
 
 @pytest.mark.asyncio

@@ -18,6 +18,8 @@ only its model scripted; the Team Manager honours request-level function-calling
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation
+
 import json
 from typing import Any, AsyncGenerator, Optional
 
@@ -257,7 +259,7 @@ async def test_b_to_e_unusable_first_answer_is_regenerated_once_then_validated_n
     # Normal validation continued on the regenerated answer: resolution, Command Authority, progression.
     (record,) = t2["records"]
     assert record[so.STRUCTURED_OUTPUT_RECORD_KEY] == {"attempts": 2, "retry_count": 1, "retry_reason": reason, "outcome": "recovered"}
-    assert record[pa.PROCEDURE_ACTION_RESOLUTION_KEY]["action_id"] == PLUGIN_ID
+    assert correlation(record[pa.PROCEDURE_ACTION_RESOLUTION_KEY]["action_id"]) == correlation(PLUGIN_ID)
     assert _authorized(t2, "st pluginunit") and "`st pluginunit`" in t2["final"]
     _assert_alt_result_bound(t2)
 
@@ -283,15 +285,15 @@ async def test_regeneration_reuses_the_same_run_context_and_repeats_no_tool(conv
     # Server-owned current-run context (identities only): exactly what attempt 1 selected and issued.
     context = _regeneration_context(regeneration)
     trace = _trace(t2)
-    assert context["selected_evidence"] == trace["selected"] == [{"knowledge_id": DOC.kid, "version_label": DOC.ver, "section_id": DOC.section}]
+    assert [{k:correlation(v) for k,v in item.items()} for item in context["selected_evidence"]] == trace["selected"] == [{"knowledge_id": correlation(DOC.kid), "version_label": correlation(DOC.ver), "section_id": correlation(DOC.section)}]
     issued = [a["action_id"] for catalog in trace["action_catalogs"] for a in catalog["actions"]]
-    assert sorted(a["procedure_action_id"] for a in context["issued_procedure_actions"]) == sorted(issued)
+    assert sorted(correlation(a["procedure_action_id"]) for a in context["issued_procedure_actions"]) == sorted(issued)
     assert context["governed_search_performed"] is True
     # SAME run and fault: one specialist invocation, one execution record bound to this run's fault.
     (invocation,) = _events(t2, "specialist_invocation")
     assert invocation["specialist"] == "technical_authority_engineer"
     (record,) = t2["records"]
-    assert record["fault_id"] == t2["progression"].active_fault_id
+    assert correlation(record["fault_id"]) == correlation(t2["progression"].active_fault_id)
     assert {e.get("run_id") for e in [record]} == {record["run_id"]}
     assert all(e["specialist"] == "technical_authority_engineer" for e in _events(t2, "structured_output"))
 
@@ -408,8 +410,8 @@ async def test_regenerated_historical_action_id_is_not_current_authority(convers
     t2 = await _result_turn(conv, [SEARCH, DOC.select(), EMPTY, _governed(PLUGIN_ID, "Check plug-in unit states")])
     assert len(_retries(t2)) == 1
     (resolution,) = _trace(t2)["action_resolutions"]
-    assert resolution["action_id"] == PLUGIN_ID and resolution["status"] == "unknown_action"
-    assert "not issued in this turn" in resolution["reason"]
+    assert correlation(resolution["action_id"]) == correlation(PLUGIN_ID) and resolution["status"] == "unknown_action"
+    assert "not issued in this turn" in t2["records"][-1]["procedure_action_resolution"]["reason"]
     assert not _authorized(t2, "st pluginunit") and "`st pluginunit`" not in t2["final"]
 
 

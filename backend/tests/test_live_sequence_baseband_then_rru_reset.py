@@ -12,6 +12,8 @@ path + policy + target confirmation + human approval, and is never executed.
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation
+
 import json
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -180,7 +182,7 @@ async def test_live_sequence_follows_the_rru_objective_without_weakening_governa
         [_search("baseband unit fault"), _select(_BB, _BB_SEC), _respond(outcome="insufficient_evidence")],
         "The baseband unit is disabled.",
     )
-    assert _active(t2["state"])["fault_id"] == baseband_fault
+    assert correlation(_active(t2["state"])["fault_id"]) == correlation(baseband_fault)
     assert t2["tae_request"]["turn_request_contract"]["focus"] == "continue"
     bb_check = _active(t2["state"])["diagnostic_history"][0]
     assert bb_check["status"] == "executed" and "OPER=DISABLED" in bb_check["observed_result"]
@@ -201,9 +203,9 @@ async def test_live_sequence_follows_the_rru_objective_without_weakening_governa
     rru_fault = _active(t3["state"])["fault_id"]
     assert rru_fault != baseband_fault and set(t3["state"][THREADS_STATE_KEY]) == {baseband_fault, rru_fault}
     search = t3["trace"]["searches"][0]
-    assert search["query_text"] == "radio unit recovery reset"
-    assert [(r["knowledge_id"], r["selection_state"]) for r in search["results"] if r["selection_state"] == "SELECTED"] == [(_RRU, "SELECTED")]
-    assert all(r["selection_state"] == "AVAILABLE" for r in search["results"] if r["knowledge_id"] == _BB), "AVAILABLE != SELECTED"
+    assert "query_text" not in search
+    assert [(r["knowledge_id"], r["selection_state"]) for r in search["results"] if r["selection_state"] == "SELECTED"] == [(correlation(_RRU), "SELECTED")]
+    assert all(r["selection_state"] == "AVAILABLE" for r in search["results"] if correlation(r["knowledge_id"]) == correlation(_BB)), "AVAILABLE != SELECTED"
     assert t3["trace"]["selections"][0]["status"] == "accepted"
     # Nothing on the RRU thread is diagnosed yet: the restart is premature (server-evaluated gate).
     assert _progression(t3)["decision"] == "rejected_premature_remediation"
@@ -212,7 +214,7 @@ async def test_live_sequence_follows_the_rru_objective_without_weakening_governa
     assert _progression(t3)["remediation_gate"]["prerequisites"]["relationships"][0]["type"] == "recommended_before"
     assert t3["record"]["diagnostic_step"] is None and t3["record"]["outcome"] == "insufficient_evidence"
     assert "acc RRU-1 restart" not in t3["final"] and "restart" not in t3["final"].lower(), "no fabricated command"
-    assert "THREAD created" in format_diagnostic_trace(t3["trace"])
+    assert '"decision":"created"' in format_diagnostic_trace(t3["trace"])
 
     # 4. Target supplied by the operator: continues the RRU thread. An operator-typed target is a
     #    REQUEST, never case authority: nothing in this fault's trusted evidence shows RRU-2 yet, so
@@ -223,11 +225,11 @@ async def test_live_sequence_follows_the_rru_objective_without_weakening_governa
         "Run acc RRU-2 restart.",
         {"subject_component": "RRU", "explicit_target": "RRU-2", "continues_active_objective": True},
     )
-    assert _active(t4["state"])["fault_id"] == rru_fault, "supplying a target never opens a new thread"
+    assert correlation(_active(t4["state"])["fault_id"]) == correlation(rru_fault), "supplying a target never opens a new thread"
     assert _progression(t4)["decision"] == "rejected_premature_remediation"
     assert {k for k, v in _progression(t4)["remediation_gate"].items() if not v["met"]} == {"diagnostic_evidence", "target_isolated"}
     (gate,) = [e for e in t4["trace"]["operational_events"] if e.get("stage") == "target_gate"]
-    assert gate["passed"] is False and gate["targets"][0]["status"] == "not_observed" and gate["targets"][0]["requested"] == ["RRU-2"]
+    assert gate["passed"] is False and gate["targets"][0]["status"] == "not_observed" and "value" not in gate["targets"][0] and "detail" not in gate["targets"][0]
     assert "operational_control" not in t4["record"] and load_active_proposal(t4["state"]) is None
     assert "acc RRU-2 restart" not in t4["final"]
 
@@ -238,7 +240,7 @@ async def test_live_sequence_follows_the_rru_objective_without_weakening_governa
         "Before any reset, run hget near Rfportref.",
         {"subject_component": "rru", "requested_operation": "reset"},
     )
-    assert _active(t5["state"])["fault_id"] == rru_fault
+    assert correlation(_active(t5["state"])["fault_id"]) == correlation(rru_fault)
     assert t5["tae_request"]["turn_request_contract"]["focus"] == "continue"
     assert t5["record"]["diagnostic_step"]["command"] == "hget near Rfportref"
     assert "hget near Rfportref" in t5["final"]
@@ -284,7 +286,7 @@ async def test_live_sequence_follows_the_rru_objective_without_weakening_governa
         c for c in state[THREADS_STATE_KEY][rru_fault]["diagnostic_history"] if c.get("procedure_action_id") == _RESTART and c.get("control_id")
     )
     assert restart_check["control_stage"] == "ready_for_execution", "HITL state lands on the RRU thread"
-    assert state["troubleshooting_state"]["fault_id"] == rru_fault
+    assert correlation(state["troubleshooting_state"]["fault_id"]) == correlation(rru_fault)
     control_record = cp.OperationalControlRecord.model_validate(state[cp.OPERATIONAL_CONTROLS_STATE_KEY][restart_check["control_id"]])
     assert [e.event for e in control_record.audit][-2:] == ["approved", "execution_not_started"]
     assert control_record.approved_by == "eng" and control_record.context.target.canonical_identifier == "RRU-2"

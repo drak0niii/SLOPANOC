@@ -9,6 +9,8 @@ identifiers are fixtures only.
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlations, correlation
+
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -339,14 +341,19 @@ async def _restart(conv: _Conversation, action_id: str, version: str = "v2") -> 
 
 def _gate(turn: dict[str, Any]) -> dict[str, Any]:
     (gate,) = [e for e in turn["trace"]["operational_events"] if e.get("stage") == "target_gate"]
-    return gate
+    # Exact target values are governed business data; telemetry retains safe decisions only.
+    business=turn['record']['procedure_action_resolution']
+    validation=business['target_validation']
+    assert gate['passed']==validation['passed']
+    assert all('value' not in item and 'detail' not in item for item in gate['targets'])
+    return {**gate,**validation,'condition_check':business.get('condition_check')}
 
 
 def _no_state_change_offered(turn: dict[str, Any]) -> None:
     record = turn["record"]
     assert record["procedure_action_resolution"]["rendered_command"] is None
     assert "operational_control" not in record and load_active_proposal(turn["state"]) is None
-    assert not [c for c in turn["trace"].get("command_authority", []) if "restartunit" in c["command"] and c["decision"] != "rejected"]
+    assert not [c for c in turn["trace"].get("command_authority", []) if c["decision"] == "authorized"]
     assert "restartunit" not in turn["final"]
 
 
@@ -357,7 +364,7 @@ async def test_document1_fixed_rru9_is_never_substituted_for_the_case_target(iso
     await _alarm_observed(conv, "2026-10-02 11:01:45 M HW Partial Fault  FieldReplaceableUnit=RRU-2")
     t3 = await _restart(conv, _action_id(_FIXED))
     catalog = t3["trace"]["action_catalogs"][-1]["actions"]
-    entry = next(a for a in catalog if a["command_template"] == _FIXED)
+    entry = next(a for a in catalog if a["action_id"] == correlation(_action_id(_FIXED)))
     assert (entry["instance_semantics"], entry["state_change_class"]) == ("fixed_instance", "restart")
     gate = _gate(t3)
     assert gate["condition_check"]["passed"] is True, "the scoped alarm IS observed in this fault"
@@ -389,7 +396,7 @@ async def test_explicit_placeholder_binds_only_through_target_authority_and_appr
     await _alarm_observed(conv, "2026-10-02 11:01:45 M HW Partial Fault  FieldReplaceableUnit=RRU-2")
     t3 = await _restart(conv, _action_id(_TEMPLATE, version="v3", content=amended[1][1]), version="v3")
     gate = _gate(t3)
-    assert gate["passed"] is True and [(t["status"], t["value"]) for t in gate["targets"]] == [("validated", "RRU-2")]
+    assert gate["passed"] is True and correlations([(t["status"], t["value"]) for t in gate["targets"]]) == correlations([("validated", "RRU-2")])
     assert t3["record"]["procedure_action_resolution"]["rendered_command"] == "accn FieldReplaceableUnit=RRU-2 restartunit 1 1 1"
     assert t3["record"]["diagnostic_step"]["command"] is None, "a state change is never an in-turn command"
     card = load_active_proposal(t3["state"])

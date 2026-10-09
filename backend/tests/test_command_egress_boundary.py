@@ -14,6 +14,8 @@ source. The literal commands below are regression fixtures only.
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation
+
 import json
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -128,9 +130,10 @@ async def test_exact_live_regression_forced_completion_never_surfaces_the_restar
     assert "restartunit" not in json.dumps(result["state"].get("turn_final_answers"))
     egress = result["egress"]
     assert egress["producer"] == "governed_completion+incident_manager" and egress["decision"] == "sanitized"
-    assert {(c["candidate"], c["decision"], c["reason"]) for c in egress["candidates"]} >= {(RESTART, "removed", "no_current_turn_authorization")}
+    assert {(c["decision"], c["reason"]) for c in egress["candidates"]} >= {("removed", "no_current_turn_authorization")}
+    assert RESTART not in json.dumps(egress)
     assert egress["authorizations"] == []
-    assert "EGRESS producer=governed_completion+incident_manager decision=sanitized" in format_diagnostic_trace(result["diagnostics"][-1])
+    assert json.loads(format_diagnostic_trace(result["diagnostics"][-1]))["command_egress"]["decision"] == "sanitized"
 
 
 # =============================================================================================
@@ -251,8 +254,9 @@ async def test_g_h_current_tae_authorization_survives_historical_one_does_not(co
                          "**Command:** `alt`\n\nPlease run this command and provide the output.", tae_args=tm_args)
     assert "`alt`" in t1["final"], "G: the current-turn TAE authorization renders"
     (egress,) = [d["command_egress"] for d in [list((t1["state"].get(RETRIEVAL_DIAGNOSTICS_STATE_KEY) or {}).values())[-1]]]
-    assert [(c["candidate"], c["decision"], c["procedure_action_id"]) for c in egress["candidates"]] == [("alt", "kept", ALT_ID)]
-    assert egress["authorizations"][0]["run_id"] == _trace(t1)["run_id"]
+    assert [(c["decision"], c["procedure_action_id"]) for c in egress["candidates"]] == [("kept", correlation(ALT_ID))]
+    assert all("candidate" not in c for c in egress["candidates"])
+    assert correlation(egress["authorizations"][0]["run_id"]) == correlation(_trace(t1)["run_id"])
 
     # H: next turn, no TAE run -- the command authorized in the previous run cannot be repeated.
     t2 = await conv.turn("ok, and again?", [], "Run `alt` again and paste the output.", delegate=False, requires_governed_knowledge=False)

@@ -85,7 +85,8 @@ class Runtime:
                 queue = ExportQueue(exporters[signal],signal,config,self.health)
                 self.queues.append(queue)
                 if signal == 'trace':
-                    provider.add_span_processor(processor(queue,self.resource))
+                    self.processor=processor(queue,self.resource,self)
+                    provider.add_span_processor(self.processor)
                 else:
                     provider.add_log_record_processor(processor(queue,self.resource))
         self.tracer = self.tracer_provider.get_tracer(SCOPE, schema_url=SCHEMA_URL)
@@ -105,10 +106,18 @@ class Runtime:
         register_accounting(self)
         from .finops.billing_metrics import register as register_billing
         register_billing(self)
+        from .finops.reconciliation_metrics import register as register_reconciliation
+        register_reconciliation(self)
+        from .finops.control_metrics import register as register_controls
+        register_controls(self)
+        from .finops.unit_economics_metrics import register as register_units
+        register_units(self)
+        from .policy_metrics import register as register_policy
+        register_policy(self)
         self.health.initialized = True
 
     def start_logging(self):
-        if self.enabled and self.logging is None:
+        if (self.enabled or self.config.otel_environment == 'production') and self.logging is None:
             self.logging = ProductionLogging(self.config)
             emit(self,OperationalEvent.INITIALIZED)
 
@@ -138,6 +147,8 @@ class Runtime:
                 return
             self.closed = True
         if not self.enabled:
+            if self.logging:
+                self.logging.close()
             self.health.shutdown_complete = True
             return
         deadline = time.monotonic()+self.config.otel_shutdown_seconds
@@ -195,7 +206,9 @@ def acquire(config):
     """One irreversible global installation, no silent adoption of foreign SDKs."""
     global _runtime, _leases, _fingerprint
     if not (config.observability_enabled and config.otel_enabled):
-        return Lease(Runtime(config))
+        runtime=Runtime(config)
+        runtime.start_logging()
+        return Lease(runtime)
     # Secret values participate only in private equality, never logging/UI output.
     fingerprint = config.model_dump() | {'endpoint':config.otel_exporter_otlp_endpoint.get_secret_value()
         if config.otel_exporter_otlp_endpoint else None}

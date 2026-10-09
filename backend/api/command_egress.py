@@ -414,10 +414,8 @@ def log_egress(result: EgressResult) -> None:
     level = logging.WARNING if result.blocked else logging.INFO
     _logger.log(
         level,
-        "command_egress run_id=%s producer=%s decision=%s removed_units=%s candidates=%s rejected_authorizations=%s",
-        result.run_id, result.producer, view["decision"], result.removed_units,
-        [(d["candidate"], d["decision"], d["reason"], d["procedure_action_id"]) for d in result.decisions],
-        [(r.get("command"), r.get("reason")) for r in result.rejected_authorizations],
+        "command_egress decision=%s removed_units=%s candidate_count=%s rejected_count=%s",
+        view["decision"], result.removed_units, len(result.decisions),len(result.rejected_authorizations),
     )
 
 
@@ -478,4 +476,3 @@ class StreamingEgressGate:
 
 
 _FENCED_OPEN = re.compile(r"```(?:(?!```).)*$", re.DOTALL)
-

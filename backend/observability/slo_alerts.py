@@ -31,6 +31,13 @@ def confirm_safety(runtime,kind):
     condition=safety_condition(kind,True,runtime.config.otel_environment)
     from .slo_metrics import record
     record(runtime,'slopanoc.safety.violations',1,kind,'CONFIRMED')
+    from .turn_trace import current_turn
+    turn=current_turn()
+    processor=getattr(runtime,'processor',None)
+    if turn is not None and processor is not None:
+        with processor._lock:
+            state=processor._populations.get(int(turn.trace_id,16)) if turn.trace_id else None
+            if state is not None:state['safety']=True
     return condition
 
 class DryRun:

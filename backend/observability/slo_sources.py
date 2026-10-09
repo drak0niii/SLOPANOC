@@ -85,7 +85,7 @@ class Writer:
                             record(self.runtime,'slopanoc.persistence.failed',counts['failed'],'projection','RUNNING')
                         self.last_evaluation=self.clock()
                     if self.last_prune is None or self.clock()-self.last_prune>=timedelta(hours=1):
-                        await self.rollups.prune(self.clock());self.last_prune=self.clock()
+                        await self.rollups.prune(self.clock(),self.config.otel_environment);self.last_prune=self.clock()
             except asyncio.CancelledError: raise
             except Exception: self.lost=True
     async def drain(self):

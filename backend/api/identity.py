@@ -78,5 +78,13 @@ async def resolve_user_context(
     docstring -- this is a development-only mechanism with no
     verification.
     """
+    from backend.config.settings import get_settings
+    from backend.observability.authorization import denied
+    try:
+        environment = get_settings().observability_config.otel_environment
+    except Exception:
+        raise denied() from None
+    if environment not in {'local', 'development', 'test'}:
+        raise denied()
     user_id = (x_slopanoc_dev_user or "").strip() or _DEFAULT_DEV_USER_ID
     return UserContext(user_id=user_id)

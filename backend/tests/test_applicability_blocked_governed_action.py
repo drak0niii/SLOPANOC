@@ -15,6 +15,8 @@ Invariant under test:
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlations, correlation
+
 import json
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -199,11 +201,11 @@ async def test_live_sequence_blocked_alt_continues_and_is_freshly_authorized_on_
     # Clarification resolved; retrieval re-run under the confirmed context; same section, MATCH.
     question = t2["progression"].open_questions[0]
     assert question.status is ClarificationStatus.RESOLVED and question.resolved_values == {"vendor": ["Ericsson"], "technology": ["4G"]}
-    assert trace["searches"][-1]["applicability_context"] == {"vendor": ["Ericsson"], "technology": ["4G"]}
-    assert [(r["section_id"], r["applicability_outcome"]) for r in trace["searches"][-1]["results"] if r["selection_state"] == "SELECTED"] == [(DOC.section, "match")]
+    assert "applicability_context" not in trace["searches"][-1]  # M15: raw applicability values stay in governed business state.
+    assert correlations([(r["section_id"], r["applicability_outcome"]) for r in trace["searches"][-1]["results"] if r["selection_state"] == "SELECTED"]) == correlations([(DOC.section, "match")])
     # The normal chain authorized `alt` freshly in THIS turn.
-    assert trace["action_resolutions"][-1]["rendered_command"] == "alt" and trace["action_resolutions"][-1]["command_authority"] == "authorized"
-    assert any(c["decision"] == "authorized" and c["command"] == "alt" and c["source_id"] == DOC.canonical for c in trace["command_authority"])
+    assert t2["records"][-1]["procedure_action_resolution"]["rendered_command"] == "alt" and trace["action_resolutions"][-1]["command_authority"] == "authorized"
+    assert any(c["decision"] == "authorized" and "command" not in c and correlation(c["source_id"]) == correlation(DOC.canonical) for c in trace["command_authority"])
     record = t2["records"][-1]
     assert [(c["command"], c["source_id"]) for c in record["approved_commands_catalog"]] == [("alt", DOC.canonical)]
     # The blocked step CONTINUES -- not REJECTED_PENDING_AWAITS_RESULT.
@@ -286,15 +288,15 @@ async def test_c_different_action_after_match_never_replaces_the_blocked_step(co
     (step,) = t2["progression"].steps
     assert step.step_id == blocked_step.step_id
     assert step.status is StepStatus.PRESENTED and step.procedure_action_id == DOC.action_id("alt") and step.command == "alt"
-    assert record["diagnostic_step"]["command"] == "alt" and record["diagnostic_step"]["procedure_action_id"] == DOC.action_id("alt")
+    assert record["diagnostic_step"]["command"] == "alt" and correlation(record["diagnostic_step"]["procedure_action_id"]) == correlation(DOC.action_id("alt"))
     # The model's different action is never presented (envelope, interpretation, resolution).
     assert "st pluginunit" not in json.dumps({k: record.get(k) for k in ("diagnostic_step", "technical_interpretation", "procedure_action_resolution")})
     assert "''" not in record["diagnostic_step"]["expected_evidence"]
     (continuity,) = [e for e in _trace(t2)["operational_events"] if e.get("stage") == "acquisition_continuity"]
     assert continuity["rule"] == "applicability_clarification_resolved" and continuity["outcome"] == "server_reconciled"
-    assert continuity["model_proposal"]["procedure_action_id"] == DOC.action_id("st pluginunit")
+    assert correlation(continuity["model_proposal"]["procedure_action_id"]) == correlation(DOC.action_id("st pluginunit"))
     # Fresh authority in THIS run only.
-    assert any(c["decision"] == "authorized" and c["command"] == "alt" and c["source_id"] == DOC.canonical for c in _trace(t2)["command_authority"])
+    assert any(c["decision"] == "authorized" and "command" not in c and correlation(c["source_id"]) == correlation(DOC.canonical) for c in _trace(t2)["command_authority"])
     assert "st pluginunit" not in t2["final"] and "`alt`" in t2["final"]
 
 
@@ -426,7 +428,7 @@ def test_f_withdraw_rejected_command_keeps_audit_ids_but_no_actionable_command()
     }
     out = withdraw_rejected_command(result)
     assert out["technical_interpretation"] == "Alarms matter. Report anything unusual."
-    assert out["procedure_action_resolution"]["action_id"] == "pa-1"
+    assert correlation(out["procedure_action_resolution"]["action_id"]) == correlation("pa-1")
     assert "alt" not in json.dumps(out["procedure_action_resolution"])
 
 

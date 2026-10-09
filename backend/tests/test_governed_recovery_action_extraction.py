@@ -13,6 +13,7 @@ target confirmation, policy and human approval. Prose-only recovery guidance sta
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation
 import json
 from datetime import datetime, timezone
 from typing import Any
@@ -189,8 +190,9 @@ async def test_recovery_request_yields_catalog_action_and_full_governed_path(iso
         {"subject_component": "board unit", "requested_operation": "resetting", "explicit_target": "4"},
     )
     catalog = turn["trace"]["action_catalogs"][0]["actions"]
-    entry = next(a for a in catalog if a["action_id"] == restart_id)
-    assert (entry["command_template"], entry["parameters"], entry["source"]) == (_TEMPLATE, ["Board"], f"{_KID}:{_VER}:{_SEC}")
+    entry = next(a for a in catalog if a["action_id"] == correlation(restart_id))
+    assert entry["source"] == correlation(f"{_KID}:{_VER}:{_SEC}")
+    assert "command_template" not in entry
     assert turn["trace"]["selections"][0]["status"] == "accepted", "evidence selection is explicit"
     record = turn["record"]
     assert record["procedure_action_resolution"]["rendered_command"] == "acc Board=4 restartboard"

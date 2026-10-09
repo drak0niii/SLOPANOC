@@ -17,6 +17,10 @@ export function mockApi(options: {
         const path = String(input).split('?')[0];
         if (path === '/api/sessions')
             return response({ sessions: [] });
+        if (path.endsWith('/retention'))
+            return response({run_id: runId, instrumentation: 'UNKNOWN', cloud_trace: 'NOT_LIVE_CONFIRMED', exceptional_archive: 'UNAVAILABLE', production_binding: 'NOT_DEPLOYED'});
+        if (path.endsWith('/access'))
+            return response({ verified: true, capabilities: options.configDenied ? ['operational_metadata'] : ['operational_metadata','effective_configuration'], environments: ['development'] });
         if (path.endsWith('/config'))
             return response(config, options.configDenied ? 403 : 200);
         if (path.endsWith('/health'))

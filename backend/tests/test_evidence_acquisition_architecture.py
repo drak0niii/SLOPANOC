@@ -13,6 +13,8 @@ method is a GOVERNED ACQUISITION GAP -- never an operator task, never a request 
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation
+
 import json
 from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
@@ -128,7 +130,7 @@ async def _to_alt_output(conv: _Conversation) -> dict[str, Any]:
     assert req.selected_acquisition.acquisition_type is AcquisitionType.GOVERNED_ACTION
     assert req.last_authority_decision.status is AuthorityStatus.AUTHORIZED
     assert req.last_authority_decision.execution_actor is ExecutionActor.OPERATOR
-    assert req.last_authority_decision.run_id == _trace(t2)["run_id"]
+    assert correlation(req.last_authority_decision.run_id) == correlation(_trace(t2)["run_id"])
     assert t2["completed"]["knowledge_sources"][0]["support_role"] == "supporting"
     return t2
 
@@ -171,7 +173,7 @@ async def test_live_sequence_sync_evidence_without_method_is_a_governed_gap_not_
     assert (gap.step_id, gap.requirement_id, gap.gap_reason) == (sync_step.step_id, requirement.requirement_id, GapReason.NO_APPROVED_ACQUISITION_ACTION)
     assert gap.sources_searched and all(s["status"] == "ok" for s in gap.sources_searched)
     assert DOC.canonical in gap.sources_consulted and gap.supporting_evidence == [DOC.canonical]
-    assert gap.run_id == _trace(t3)["run_id"] and gap.recorded_at is not None
+    assert correlation(gap.run_id) == correlation(_trace(t3)["run_id"]) and gap.recorded_at is not None
     # (23) deterministic server-grounded response; no request for a command; nothing shown as Source.
     # Other governed checks of the selected procedure remain (the specialist declined them): the gap is
     # one branch's limitation, not a terminal answer (gap_recovery.py).
@@ -213,7 +215,7 @@ async def test_live_sequence_sync_evidence_without_method_is_a_governed_gap_not_
     (gap4,) = progression.acquisition_gaps
     assert gap4.gap_id == gap.gap_id and gap4.status is GapStatus.OPEN and len(gap4.discovery_attempts) == 1
     assert [r.requirement_id for r in progression.evidence_requirements if r.status is RequirementStatus.UNSATISFIED] == [requirement.requirement_id]
-    assert record["evidence_acquisition"]["requirement"]["requirement_id"] == requirement.requirement_id
+    assert correlation(record["evidence_acquisition"]["requirement"]["requirement_id"]) == correlation(requirement.requirement_id)
     assert record["evidence_acquisition"]["discovery_attempts"] == 1 and record["evidence_acquisition"]["gap_repeated"] is True
     assert record["evidence_acquisition"]["gap_id"] == gap.gap_id and record["evidence_acquisition"]["gap_is_new"] is False
 

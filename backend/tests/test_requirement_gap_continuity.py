@@ -15,6 +15,8 @@ safe message.
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlations, correlation
+
 import json
 import logging
 from datetime import datetime, timezone
@@ -343,7 +345,7 @@ async def test_exact_live_sequence_one_requirement_one_gap_many_attempts(convers
     (gap,) = _open_gaps(t3["progression"])
     assert req.semantic_key == "cap:node_sync_status" and req.kind is EvidenceKind.DIAGNOSTIC_RESULT
     assert gap.requirement_id == req.requirement_id and gap.gap_reason is GapReason.NO_APPROVED_ACQUISITION_ACTION
-    assert len(gap.discovery_attempts) == 1 and gap.discovery_attempts[0].run_id == _trace(t3)["run_id"]
+    assert len(gap.discovery_attempts) == 1 and correlation(gap.discovery_attempts[0].run_id) == correlation(_trace(t3)["run_id"])
 
     # Step 4: "what is the command ..." -- live shape: no capability key, different wording.
     t4 = await conv.turn(
@@ -374,11 +376,11 @@ async def test_exact_live_sequence_one_requirement_one_gap_many_attempts(convers
     (same,) = _open(progression)
     assert same.requirement_id == req.requirement_id and "command" not in same.description.lower()
     (hint,) = same.acquisition_hints
-    assert (hint.value, hint.hint_type, hint.authority, hint.run_id) == ("syncstatus", HintType.COMMAND_OR_METHOD, "none", _trace(t5)["run_id"])
+    assert correlations((hint.value, hint.hint_type, hint.authority, hint.run_id)) == correlations(("syncstatus", HintType.COMMAND_OR_METHOD, "none", _trace(t5)["run_id"]))
     (only_gap,) = progression.acquisition_gaps
     assert only_gap.gap_id == gap.gap_id and only_gap.status is GapStatus.OPEN
     # The operator's (untrusted) hint is new context: discovery legitimately runs again for it.
-    assert [a.run_id for a in only_gap.discovery_attempts] == [_trace(t3)["run_id"], _trace(t5)["run_id"]]
+    assert [correlation(a.run_id) for a in only_gap.discovery_attempts] == [_trace(t3)["run_id"], _trace(t5)["run_id"]]
     assert only_gap.discovery_attempts[-1].hints_considered == ["syncstatus"]
     assert only_gap.discovery_attempts[-1].searches[0]["query_text"] == "Ericsson 4G NodeSynch syncstatus"
     # No authority from the hint (D).
@@ -388,7 +390,7 @@ async def test_exact_live_sequence_one_requirement_one_gap_many_attempts(convers
     assert "run syncstatus" not in t5["final"].lower()
     # The specialist sees the open requirement (with its gap and hint) as server-built context.
     view = _view_for(progression, req.fault_id)
-    assert view[0]["requirement_id"] == req.requirement_id and view[0]["acquisition_gap"]["gap_id"] == gap.gap_id
+    assert correlation(view[0]["requirement_id"]) == correlation(req.requirement_id) and view[0]["acquisition_gap"]["gap_id"] == gap.gap_id
     assert view[0]["acquisition_hints"][0]["value"] == "syncstatus" and "untrusted" in view[0]["acquisition_hints"][0]["authority"]
     # Steps: the completed `alt` step only -- no extra steps for the follow-ups.
     assert [s.status for s in progression.steps] == [StepStatus.COMPLETED]
@@ -420,7 +422,7 @@ async def test_open_requirements_are_handed_to_the_specialist(conversation) -> N
         t4 = await conv.turn(COMMAND_QUESTION, [SYNC_SEARCH, DOC.select(), _insufficient([], [{**LIVE_T4_REQUIRED, "requirement_ref": req.requirement_id}])],
                              "x", tae_args={"problem_statement": "ESS Service Unavailable"})
     (open_view,) = seen[-1]["open_evidence_requirements"]
-    assert open_view["requirement_id"] == req.requirement_id and open_view["status"] == "unsatisfied"
+    assert correlation(open_view["requirement_id"]) == correlation(req.requirement_id) and open_view["status"] == "unsatisfied"
     assert open_view["kind"] == "diagnostic_result" and open_view["semantic_key"] == "cap:node_sync_status"
     # The validated reference continues the same requirement.
     assert t4["records"][-1]["evidence_acquisition"]["requirement_continuity"] == "validated_reference"
@@ -463,7 +465,7 @@ async def test_k_hint_steers_discovery_to_an_independently_approved_action(conve
     assert continued.selected_acquisition.acquisition_type is AcquisitionType.GOVERNED_ACTION
     assert continued.selected_acquisition.procedure_action_id == SYNC_ACTION_ID
     assert continued.last_authority_decision.status is AuthorityStatus.AUTHORIZED
-    assert continued.last_authority_decision.run_id == _trace(t4)["run_id"]
+    assert correlation(continued.last_authority_decision.run_id) == correlation(_trace(t4)["run_id"])
     # (H) the existing gap is resolved; no duplicate open gap; history kept.
     (resolved,) = progression.acquisition_gaps
     assert resolved.gap_id == gap.gap_id and resolved.status is GapStatus.RESOLVED and resolved.discovery_attempts

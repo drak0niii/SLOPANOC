@@ -12,6 +12,8 @@ The TAE proposes; the server progresses. Every model drift is scripted to prove 
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation
+
 import json
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -193,15 +195,15 @@ async def test_live_failure_sequence_through_verified_resolution(isolated_km_rep
                                command_source=_SOURCE), "st pluginunit; st fieldr")):
         t = await conv.turn("what is next cmd?", _governed(drift), f"Run {label}.")
         request = t["tae_request"]
-        assert request["pending_step"]["procedure_action_id"] == _PIU and request["pending_step"]["turn_kind"] == "command_follow_up"
+        assert correlation(request["pending_step"]["procedure_action_id"]) == correlation(_PIU) and request["pending_step"]["turn_kind"] == "command_follow_up"
         assert request["turn_request_contract"]["diagnostic_objective"] == "Resolve the pending diagnostic step: Check the plug-in unit the cell depends on"
         assert (_event(t)["decision"], t["record"]["diagnostic_step"]["command"]) == ("pending_step_resolved", "st pluginunit")
         (continuity,) = [e for e in t["trace"]["operational_events"] if e.get("stage") == "acquisition_continuity"]
         assert continuity["outcome"] == "server_reconciled" and continuity["authority_decision"] == "authorized"
         assert label not in t["final"].replace("`st pluginunit`", "")
         assert [s.procedure_action_id for s in _pending(t["state"])] == [_PIU], "no loss of the pending diagnostic objective"
-        assert not any(c["command"] in ("alt", "st ru", "st pluginunit; st fieldr") and c["decision"] == "authorized"
-                       for c in t["trace"]["command_authority"]), "a drifted command is never authorized"
+        assert not any(c["command"] in ("alt", "st ru", "st pluginunit; st fieldr")
+                       for c in t["record"]["approved_commands_catalog"]), "a drifted command is never authorized"
 
     t5 = await conv.turn("what is next cmd?", _governed(_tae(action_id=_PIU, action="Check the plug-in unit the cell depends on")), "Run st pluginunit.")
     assert (_event(t5)["decision"], t5["record"]["diagnostic_step"]["command"]) == ("pending_step_resolved", "st pluginunit")
@@ -219,8 +221,7 @@ async def test_live_failure_sequence_through_verified_resolution(isolated_km_rep
     assert event["decision"] == "new_step" and all(v["met"] for v in event["remediation_gate"].values())
     # The prerequisite came from the STRUCTURED action graph (extraction-time, with provenance).
     assert event["remediation_gate"]["prerequisites"]["relationships"] == [
-        {"action_id": _PIU, "type": "mandatory_prerequisite", "enforced": True, "rule": "explicit mandatory dependency language",
-         "line": 4, "source_locator": "lines:1-7"}
+        {"action_id": correlation(_PIU), "type": "mandatory_prerequisite", "enforced": True}
     ]
     assert (event["lifecycle_stage"], event["remediation"]["state"], [c["status"] for c in event["remediation"]["criteria"]]) == (
         "remediation", "candidate", ["pending", "pending"]

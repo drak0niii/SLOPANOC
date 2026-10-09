@@ -23,6 +23,8 @@ Production code is generic: `st fieldr` / the table are fixtures only.
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlations, correlation
+
 import json
 from typing import Any, Optional
 
@@ -181,9 +183,9 @@ async def test_live_regression_supplied_result_is_consumed_and_never_requested_a
     assert bound.result is not None and bound.result.text == LIVE_RESULT and bound.result.source is ResultSource.OPERATOR_MESSAGE
     assert not bound.candidate_observations and not awaits_result(bound)
     (binding,) = _events(t3, "result_binding")
-    assert binding["binding"] == "matched" and binding["step_id"] == fieldr.step_id and binding["consumed"] is True
+    assert binding["binding"] == "matched" and correlation(binding["step_id"]) == correlation(fieldr.step_id) and binding["consumed"] is True
     assert binding["old_status"] == "presented" and binding["new_status"] == "completed" and binding["result_source"] == "operator_message"
-    assert binding["pending_after_binding"] is None and binding["consumed_step_ids"] == [fieldr.step_id]
+    assert binding["pending_after_binding"] is None and correlations(binding["consumed_step_ids"]) == correlations([fieldr.step_id])
 
     # The specialist reasoned from the UPDATED progression: its next step was accepted as a NEW step.
     progression_event = _events(t3, "progression")[-1]
@@ -191,7 +193,7 @@ async def test_live_regression_supplied_result_is_consumed_and_never_requested_a
     plugin = _step(t3, PLUGIN_ID)
     assert plugin.status is StepStatus.PRESENTED and plugin.step_id != fieldr.step_id
     (state,) = _events(t3, "continuation_state")
-    assert state["consumed_step_ids"] == [fieldr.step_id] and state["next_step_id"] == plugin.step_id
+    assert state["consumed_step_ids"] == [correlation(fieldr.step_id)] and correlation(state["next_step_id"]) == correlation(plugin.step_id)
 
     # Completeness never offered the consumed step as a pending-result candidate.
     completeness = _completeness(t3)
@@ -203,8 +205,8 @@ async def test_live_regression_supplied_result_is_consumed_and_never_requested_a
     assert "`st pluginunit`" in t3["final"] and _authorized(t3, "st pluginunit")
     _assert_turn_state_valid(t3)
     trace = format_diagnostic_trace(_trace(t3))
-    assert "RESULT BINDING" in trace and "binding=matched" in trace and "consumed=True" in trace
-    assert "CONTINUATION STATE" in trace and "COMPLETENESS DECISION decision=project_validated_step" in trace
+    assert '"binding":"matched"' in trace and '"consumed":true' in trace
+    assert '"decision":"project_validated_step"' in trace
 
 
 @pytest.mark.asyncio
@@ -322,7 +324,7 @@ async def test_f_duplicate_result_creates_nothing_and_reopens_nothing(conversati
     pending = _step(t4, PLUGIN_ID)
     assert pending.step_id == plugin.step_id and pending.status is StepStatus.PRESENTED and not pending.candidate_observations
     (binding,) = _events(t4, "result_binding")
-    assert binding["binding"] == "known_result" and binding["known_result_step_id"] == fieldr.step_id and binding["consumed"] is False
+    assert binding["binding"] == "known_result" and binding["known_result_step_id"] == correlation(fieldr.step_id) and binding["consumed"] is False
     assert _events(t4, "progression")[-1]["turn_kind"] == TurnKind.KNOWN_RESULT.value
     # The current (plug-in) step may be requested; the consumed step never is.
     assert f"awaiting its result: {FIELDR_OBJECTIVE}" not in t4["final"]
@@ -402,7 +404,7 @@ def test_h_i_j_bound_result_with_gap_escalation_or_resolution_never_requests_the
     )
     decision: dict[str, Any] = {}
     assert enforce_response_completeness(synthesis, record, decision) == synthesis
-    assert decision["candidate_step_id"] == "step-fieldr" and decision.get("consumed_step_rejected") == "step-fieldr"
+    assert correlation(decision["candidate_step_id"]) == correlation("step-fieldr") and decision.get("consumed_step_rejected") == "step-fieldr"
 
 
 def test_l_stale_pre_binding_snapshot_loses_to_the_post_binding_state() -> None:
@@ -444,7 +446,7 @@ async def test_k_genuine_pending_step_without_a_result_is_still_requested(conver
     _assert_forced(t3, OperationalTurnKind.GENERIC_CONTINUATION)
     assert _step(t3, FIELDR_ID).status is StepStatus.PRESENTED and _step(t3, FIELDR_ID).result is None
     assert t3["final"].startswith(f"The current diagnostic step is still awaiting its result: {FIELDR_OBJECTIVE}")
-    assert _completeness(t3)["pending_step"]["step_id"] == fieldr.step_id and _completeness(t3)["consumed_step_ids"] == []
+    assert correlation(_completeness(t3)["pending_step"]["step_id"]) == correlation(fieldr.step_id) and _completeness(t3)["consumed_step_ids"] == []
 
 
 # =============================================================================================

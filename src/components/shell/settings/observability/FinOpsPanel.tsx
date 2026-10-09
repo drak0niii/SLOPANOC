@@ -1,4 +1,9 @@
 import { useState } from 'react';
+import { BudgetPanel } from './BudgetPanel';
+import { ForecastPanel } from './ForecastPanel';
+import { AnomaliesPanel } from './AnomaliesPanel';
+import { ReconciliationPanel } from './ReconciliationPanel';
+import { UnitEconomicsPanel } from './UnitEconomicsPanel';
 import { FinancialSourcePanel } from './FinancialSourcePanel';
 import { getRuntimeUsage, getLedgerHealth, getLedgerCompleteness } from '../../../../api/finops';
 import { useObservabilityQuery } from './useObservabilityQuery';
@@ -29,6 +34,10 @@ export function FinOpsPanel() {
         <p className="mt-3 text-xs text-tertiary">Ledger retention policy: {health.retention_months} months. Retention execution is not activated. Configuration is read-only.</p>
       </>}</ReadState>
       <FinancialSourcePanel/>
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">{[['Reconciliation','M12'],['Allocation','M12'],['Unit economics','M13'],['Budgets','M14'],['Forecasts','M14'],['Anomalies','M14']].map(([label,m])=><div key={label} className={cardClass}><h4 className="text-sm text-secondary">{label}</h4><p className="mt-1 text-xs text-tertiary">Available after {m}</p></div>)}</div>
+      <ReconciliationPanel/>
+      <UnitEconomicsPanel/>
+      <BudgetPanel/>
+      <ForecastPanel/>
+      <AnomaliesPanel/>
     </section>;
 }

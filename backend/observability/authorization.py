@@ -25,7 +25,7 @@ class Principal:
             self.capabilities <= ROLE_PERMISSIONS[self.role] and
             all(isinstance(p,Permission) for p in self.capabilities) and
             isinstance(self.environments,frozenset) and 1<=len(self.environments)<=16 and
-            all(isinstance(e,str) and re.fullmatch(r'[A-Za-z0-9_.-]{1,64}',e) for e in self.environments))
+            all(e in {'local','development','test','staging','production'} for e in self.environments))
 
 
 async def verified_principal_provider():

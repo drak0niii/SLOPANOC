@@ -1,0 +1,152 @@
+[
+  {
+    "policy_id": "budget-exceeded",
+    "displayName": "FinOps budget-exceeded",
+    "enabled": false,
+    "notificationChannels": [],
+    "userLabels": {
+      "milestone": "m14",
+      "policy_status": "provisional",
+      "notification_route": "none",
+      "group": "financial_source"
+    },
+    "documentation": {
+      "content": "Runbook: docs/runbooks/finops-budget-exceeded.md\nSource quality is the root; suppress financial symptoms during source degradation. Diagnosis only; exact approval required for any external mutation.",
+      "mimeType": "text/markdown"
+    },
+    "conditions": [
+      {
+        "displayName": "budget-exceeded",
+        "conditionPrometheusQueryLanguage": {
+          "query": "sum by (environment) (increase(slopanoc_finops_controls_budget_exceeded{environment=\"__ENVIRONMENT__\"}[24h])) > 0",
+          "duration": "0s"
+        }
+      }
+    ]
+  },
+  {
+    "policy_id": "projected-overrun",
+    "displayName": "FinOps projected-overrun",
+    "enabled": false,
+    "notificationChannels": [],
+    "userLabels": {
+      "milestone": "m14",
+      "policy_status": "provisional",
+      "notification_route": "none",
+      "group": "financial_source"
+    },
+    "documentation": {
+      "content": "Runbook: docs/runbooks/finops-projected-overrun.md\nSource quality is the root; suppress financial symptoms during source degradation. Diagnosis only; exact approval required for any external mutation.",
+      "mimeType": "text/markdown"
+    },
+    "conditions": [
+      {
+        "displayName": "projected-overrun",
+        "conditionPrometheusQueryLanguage": {
+          "query": "sum by (environment) (increase(slopanoc_finops_controls_projected_overrun{environment=\"__ENVIRONMENT__\"}[24h])) > 0",
+          "duration": "0s"
+        }
+      }
+    ]
+  },
+  {
+    "policy_id": "cost-anomaly",
+    "displayName": "FinOps cost-anomaly",
+    "enabled": false,
+    "notificationChannels": [],
+    "userLabels": {
+      "milestone": "m14",
+      "policy_status": "provisional",
+      "notification_route": "none",
+      "group": "financial_source"
+    },
+    "documentation": {
+      "content": "Runbook: docs/runbooks/finops-cost-anomaly.md\nSource quality is the root; suppress financial symptoms during source degradation. Diagnosis only; exact approval required for any external mutation.",
+      "mimeType": "text/markdown"
+    },
+    "conditions": [
+      {
+        "displayName": "cost-anomaly",
+        "conditionPrometheusQueryLanguage": {
+          "query": "sum by (environment) (increase(slopanoc_finops_controls_cost_anomalies{environment=\"__ENVIRONMENT__\"}[24h])) > 0",
+          "duration": "0s"
+        }
+      }
+    ]
+  },
+  {
+    "policy_id": "unit-cost-anomaly",
+    "displayName": "FinOps unit-cost-anomaly",
+    "enabled": false,
+    "notificationChannels": [],
+    "userLabels": {
+      "milestone": "m14",
+      "policy_status": "provisional",
+      "notification_route": "none",
+      "group": "financial_source"
+    },
+    "documentation": {
+      "content": "Runbook: docs/runbooks/finops-unit-cost-anomaly.md\nSource quality is the root; suppress financial symptoms during source degradation. Diagnosis only; exact approval required for any external mutation.",
+      "mimeType": "text/markdown"
+    },
+    "conditions": [
+      {
+        "displayName": "unit-cost-anomaly",
+        "conditionPrometheusQueryLanguage": {
+          "query": "sum by (environment) (increase(slopanoc_finops_controls_unit_cost_anomalies{environment=\"__ENVIRONMENT__\"}[24h])) > 0",
+          "duration": "0s"
+        }
+      }
+    ]
+  },
+  {
+    "policy_id": "unallocated-cost",
+    "displayName": "FinOps unallocated-cost",
+    "enabled": false,
+    "notificationChannels": [],
+    "userLabels": {
+      "milestone": "m14",
+      "policy_status": "provisional",
+      "notification_route": "none",
+      "group": "financial_source"
+    },
+    "documentation": {
+      "content": "Runbook: docs/runbooks/finops-unallocated-cost.md\nSource quality is the root; suppress financial symptoms during source degradation. Diagnosis only; exact approval required for any external mutation.",
+      "mimeType": "text/markdown"
+    },
+    "conditions": [
+      {
+        "displayName": "unallocated-cost",
+        "conditionPrometheusQueryLanguage": {
+          "query": "sum by (environment) (increase(slopanoc_finops_controls_unallocated_surges{environment=\"__ENVIRONMENT__\"}[24h])) > 0",
+          "duration": "0s"
+        }
+      }
+    ]
+  },
+  {
+    "policy_id": "stale-source",
+    "displayName": "FinOps stale-source",
+    "enabled": false,
+    "notificationChannels": [],
+    "userLabels": {
+      "milestone": "m14",
+      "policy_status": "provisional",
+      "notification_route": "none",
+      "group": "financial_source"
+    },
+    "documentation": {
+      "content": "Runbook: docs/runbooks/finops-stale-source.md\nSource quality is the root; suppress financial symptoms during source degradation. Diagnosis only; exact approval required for any external mutation.",
+      "mimeType": "text/markdown"
+    },
+    "conditions": [
+      {
+        "displayName": "stale-source",
+        "conditionPrometheusQueryLanguage": {
+          "query": "sum by (environment) (increase(slopanoc_finops_controls_source_degradation{environment=\"__ENVIRONMENT__\"}[24h])) > 0",
+          "duration": "0s"
+        }
+      }
+    ]
+  }
+]

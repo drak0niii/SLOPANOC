@@ -10,6 +10,8 @@ Diagnostic read: SELECTED -> ProcedureAction -> Command Authority -> Policy (all
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation
+
 import json
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -148,7 +150,8 @@ async def test_t_state_change_flow_ends_at_ready_for_execution_without_execution
     assert any(c["decision"] == "preview_authorized_if_target_confirmed" for c in trace["command_authority"])
     assert not any(c["decision"] == "authorized" for c in trace["command_authority"])
     text = format_diagnostic_trace(trace)
-    assert "POLICY decision=clarification_required" in text and "TARGET required=True confirmed=False" in text
+    assert '"policy_decision":"clarification_required"' in text
+    assert "command_template" not in text and "rendered_command" not in text
 
     # D: explicit operator target confirmation through the trusted endpoint service.
     response = await approval_service.approve(session.session_service, session.session_id, confirm.proposal_id, "eng")
@@ -335,7 +338,7 @@ async def test_u_read_flow_executes_via_test_adapter_and_feeds_next_evaluation(i
     assert check["execution_ids"] == [response.execution.execution_id]
     control = _control(state)
     assert control.executions[0]["execution_id"] == response.execution.execution_id
-    assert control.executions[0]["check_id"] == check_id and control.executions[0]["procedure_action_id"] == _READ_ID
+    assert control.executions[0]["check_id"] == check_id and correlation(control.executions[0]["procedure_action_id"]) == correlation(_READ_ID)
     assert [e.event for e in control.audit][-3:] == ["execution_started", "execution_completed", "observation_recorded"]
     with pytest.raises(SafeErrorException):  # one execution per authorized check; no automatic re-run
         await operational_execution_service.execute_read(session.session_service, session.session_id, check_id, "eng")

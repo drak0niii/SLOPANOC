@@ -108,7 +108,10 @@ The build is complete only when every applicable item is demonstrably true.
 - [ ] No full prompts/responses by default.
 - [ ] RBAC server-enforced.
 - [ ] FinOps/content access separated.
-- [ ] Retention implemented.
+- [ ] Retention implemented: Cloud Trace fixed 30 days; sanitized full exceptional archive 90-day primary horizon, distinct from summaries; provider lifecycle/soft-delete semantics disclosed.
+- [ ] Archive full reconstruction, privacy, eligibility, idempotency and technical-capability/environment isolation locally validated.
+- [ ] Archive completeness/health separate from instrumentation completeness and Cloud Trace export.
+- [ ] Live exceptional archive bridge/GCS/IAM/lifecycle/retrieval and production failure validation completed under exact-operation approval for full production completion (not claimed by M15 local acceptance).
 - [ ] Sampling implemented.
 - [ ] Deletion/anonymization interaction documented.
 - [ ] Secret-leakage tests.

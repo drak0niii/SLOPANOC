@@ -15,6 +15,8 @@ The server may force discovery; it never forces selection.
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlations, correlation, approved
+
 import json
 from typing import Any
 
@@ -71,7 +73,7 @@ def _continuation(turn: dict[str, Any]) -> dict[str, Any]:
 
 
 def _authorized(turn: dict[str, Any], command: str) -> list[dict[str, Any]]:
-    return [c for c in _trace(turn).get("command_authority", []) if c["decision"] == "authorized" and c["command"] == command]
+    return approved(turn,command)
 
 
 def _st_ru_step(action_id: Any = ST_RU_ID) -> list[Any]:
@@ -123,13 +125,13 @@ async def test_what_next_with_known_governed_acquisition_forces_fresh_discovery(
     t2 = await conv.turn(message, [RU_SELECT, _st_ru_step()], RU_PRESENTATION)
     continuation = _continuation(t2)
     assert (continuation["kind"], continuation["rule"]) == ("generic_continuation", "generic_continuation")
-    assert continuation["known_procedure_action_id"] == ST_RU_ID and continuation["known_source_available_in_run"] is False
+    assert correlation(continuation["known_procedure_action_id"]) == correlation(ST_RU_ID) and continuation["known_source_available_in_run"] is False
     (discovery,) = _events(t2, "acquisition_discovery")
     assert discovery["reason"] == "generic_continuation" and discovery["status"] == "searched"
-    assert [(a["section_id"], a["applicability_outcome"]) for a in discovery["available"]] == [(RU_SECTION, "match")]
-    assert _selection_states(t2)[RU_SECTION] == "SELECTED", "selected by the specialist's own call"
+    assert correlations([(a["section_id"], a["applicability_outcome"]) for a in discovery["available"]]) == correlations([(RU_SECTION, "match")])
+    assert _selection_states(t2)[correlation(RU_SECTION)] == "SELECTED", "selected by the specialist's own call"
     resolution = _trace(t2)["action_resolutions"][-1]
-    assert (resolution["action_id"], resolution["status"], resolution["command_authority"]) == (ST_RU_ID, "resolved", "authorized")
+    assert (resolution["action_id"], resolution["status"], resolution["command_authority"]) == (correlation(ST_RU_ID), "resolved", "authorized")
     (step,) = t2["progression"].steps
     assert step.step_id == t1["progression"].steps[0].step_id and step.status is StepStatus.PRESENTED and step.command == "st ru"
     assert "`st ru`" in t2["final"]
@@ -145,7 +147,7 @@ async def test_search_returns_source_but_selection_stays_explicit(conversation) 
     t2 = await conv.turn("what next?", [_st_ru_step(), _st_ru_step()], RU_PRESENTATION)
     (discovery,) = _events(t2, "acquisition_discovery")
     assert discovery["reason"] == "generic_continuation" and discovery["status"] == "searched"
-    assert _selection_states(t2)[RU_SECTION] == "AVAILABLE", "AVAILABLE is never promoted"
+    assert _selection_states(t2)[correlation(RU_SECTION)] == "AVAILABLE", "AVAILABLE is never promoted"
     assert t2["tae_calls"] == 2, "one bounded selection remediation"
     assert not _authorized(t2, "st ru") and not (t2["records"][-1].get("diagnostic_step") or {}).get("command")
     assert "`st ru`" not in t2["final"]
@@ -185,7 +187,7 @@ async def test_fresh_search_returning_nothing_yields_a_governed_acquisition_gap(
     acquisition = t2["records"][-1]["evidence_acquisition"]
     assert acquisition["outcome"] == "gap" and acquisition["gap_reason"] == "no_relevant_evidence_found"
     (candidate,) = [c for c in acquisition["candidates"] if c["acquisition_type"] == "governed_action"]
-    assert candidate["procedure_action_id"] == ST_RU_ID and candidate["validation"] == "rejected_current_run", "kept, never erased"
+    assert correlation(candidate["procedure_action_id"]) == correlation(ST_RU_ID) and candidate["validation"] == "rejected_current_run", "kept, never erased"
     assert not _authorized(t2, "st ru") and "st ru" not in t2["final"]
 
 
@@ -272,8 +274,8 @@ async def test_selection_remediation_searches_first_when_nothing_is_available(co
     # The specialist recommends a governed step without searching or selecting anything.
     t1 = await conv.turn("how do I troubleshoot the radio unit fault?", [_legacy_st_ru(), RU_SELECT, _legacy_st_ru()], RU_PRESENTATION)
     (discovery,) = _events(t1, "selection_discovery")
-    assert discovery["status"] == "searched" and [a["section_id"] for a in discovery["available"]] == [RU_SECTION]
-    assert _selection_states(t1)[RU_SECTION] == "SELECTED", "selected by the specialist after the server's search"
+    assert discovery["status"] == "searched" and correlations([a["section_id"] for a in discovery["available"]]) == correlations([RU_SECTION])
+    assert _selection_states(t1)[correlation(RU_SECTION)] == "SELECTED", "selected by the specialist after the server's search"
     assert t1["records"][-1]["diagnostic_step"]["command"] == "st ru" and t1["records"][-1]["diagnostic_step"]["command_source"] == RU_CANONICAL
 
 
@@ -283,7 +285,7 @@ async def test_selection_remediation_never_selects_on_the_specialists_behalf(con
     await repo.add(_ru_mop())
     t1 = await conv.turn("how do I troubleshoot the radio unit fault?", [_legacy_st_ru(), _legacy_st_ru()], RU_PRESENTATION)
     assert _events(t1, "selection_discovery")[0]["status"] == "searched"
-    assert _selection_states(t1)[RU_SECTION] == "AVAILABLE"
+    assert _selection_states(t1)[correlation(RU_SECTION)] == "AVAILABLE"
     assert not (t1["records"][-1].get("diagnostic_step") or {}).get("command") and "`st ru`" not in t1["final"]
 
 

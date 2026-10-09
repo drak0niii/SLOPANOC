@@ -142,7 +142,7 @@ class Service:
             if set(data)!={'scope','seq'} or type(data.get('seq')) is not int or not 0<=data['seq']<=2**63-1:
                 raise invalid()
             after=data['seq']
-        events=await self.query('timeline',identity,after,limit+1)
+        events=await self.query('timeline',identity,after,limit+1,self.environment_scope(principal))
         state=await self.query('get',identity,self.environment_scope(principal))
         return TimelinePage(items=events[:limit],next_cursor=self.encode(scope=scope,seq=events[limit-1].event_seq) if len(events)>limit else None,
             truncated_count=state.timeline_truncated_count if state else 0)

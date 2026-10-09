@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 import json
 import logging
+from threading import RLock
 from opentelemetry._logs import LogRecord as OTelLogRecord, SeverityNumber
 from opentelemetry.sdk._logs import LogRecordProcessor, ReadableLogRecord
 from .redaction import sanitize_metadata
@@ -92,9 +93,28 @@ class ProductionLogging:
     destinations remain owned by the host. Deployment must use this formatter for
     any additional handlers created after startup.
     """
-    def __init__(self, config):
+    _lease_lock=RLock()
+    _shared=None
+
+    def __init__(self,config):
+        self._delegate=None;self._closed=False
+        if config.otel_environment!='production':return
+        with self._lease_lock:
+            if type(self)._shared is not None:
+                self._delegate=type(self)._shared
+                self._delegate._leases+=1
+                return
+            self._leases=1
+            type(self)._shared=self
+            try:self._install(config)
+            except BaseException:
+                type(self)._shared=None
+                raise
+
+    def _install(self, config):
         self._saved = []
         self._added = None
+        self._original_call_handlers = self._original_add_handler = None
         if config.otel_environment != 'production':
             return
         root = logging.getLogger()
@@ -110,8 +130,45 @@ class ProductionLogging:
                     seen.add(id(handler))
                     self._saved.append((handler, handler.formatter))
                     handler.setFormatter(SafeJsonFormatter(config))
+        self._original_call_handlers = logging.Logger.callHandlers
+        self._original_add_handler = logging.Logger.addHandler
+        standard = frozenset(logging.LogRecord('',0,'',0,'',(),None).__dict__)
+        original_call = self._original_call_handlers
+        original_add = self._original_add_handler
+        owner = self
+        def safe_call(logger,record):
+            severity = 'CRITICAL' if record.levelno>=50 else 'ERROR' if record.levelno>=40 else 'WARNING' if record.levelno>=30 else 'INFO' if record.levelno>=20 else 'DEBUG'
+            # Sanitize before every handler, including handlers installed later or
+            # custom handlers that never invoke a formatter. Never read raw args.
+            record.msg=safe_record(config,severity=severity).model_dump_json()
+            record.args=();record.exc_info=None;record.exc_text=None;record.stack_info=None
+            for key in tuple(record.__dict__):
+                if key not in standard:record.__dict__.pop(key,None)
+            original_call(logger,record)
+        def safe_add(logger,handler):
+            if all(saved is not handler for saved,_ in owner._saved):
+                owner._saved.append((handler,handler.formatter))
+            handler.setFormatter(SafeJsonFormatter(config))
+            original_add(logger,handler)
+        self._safe_call,self._safe_add=safe_call,safe_add
+        logging.Logger.callHandlers=safe_call
+        logging.Logger.addHandler=safe_add
 
     def close(self):
+        with self._lease_lock:
+            if self._closed:return
+            self._closed=True
+            owner=self._delegate or self
+            if not hasattr(owner,'_leases'):return
+            owner._leases-=1
+            if owner._leases:return
+            owner._restore()
+            type(self)._shared=None
+
+    def _restore(self):
+        if self._original_call_handlers is not None:
+            if logging.Logger.callHandlers is self._safe_call:logging.Logger.callHandlers=self._original_call_handlers
+            if logging.Logger.addHandler is self._safe_add:logging.Logger.addHandler=self._original_add_handler
         for handler, formatter in self._saved:
             handler.setFormatter(formatter)
         if self._added:

@@ -123,11 +123,12 @@ Initial targets:
 
 | Data | Retention |
 |---|---:|
-| Normal successful traces | 30 days |
-| Error/timeout/stalled traces | 90 days |
-| Governed operational traces | 90 days |
+| Ordinary full traces in Google Cloud Trace | 30 days, provider-controlled |
+| Exceptional full traces in Google Cloud Trace | First 30 days, provider-controlled |
+| ExceptionalTraceArchive: safety/governed/failed/timeout/stalled and explicitly approved exceptional classes | 90-day primary archive horizon; deletion eligibility after horizon |
+| Operational summaries | 30 / 90 days according to existing outcome class |
 | Structured application logs | 30 days unless policy requires longer |
-| Aggregate metrics | 13 months |
+| Aggregate metrics analytical access | Minimum 13 months; longer provider retention satisfies this, with resolution disclosed |
 | FinOps usage ledger / billing analytics | 24 months |
 | Active-run status | short TTL after terminal state |
 
@@ -143,3 +144,40 @@ After stabilization:
 - healthy general chat may be sampled to 10–20%.
 
 Sampling changes are versioned and observable.
+
+## Exceptional archive privacy and retention semantics
+
+B01 is RESOLVED BY ARCHITECTURE ADAPTATION, not a reduced requirement. Preserve
+sanitized full exceptional OTel traces: Cloud Trace plus archive during days 0–30;
+archive alone during days 31–90. Healthy ordinary traffic is not archived merely to
+extend provider retention. Eligibility uses bounded server-owned metadata, never
+prompt/response/free-form strings. Archive data is at least as restricted as Cloud
+Trace: producer allowlist -> environment validation -> Collector redaction -> tail
+classification -> independent Cloud Trace export and eligible-only archive export.
+
+No prompts/responses, Teams bodies, raw tool args/results, command/SQL/binds,
+sensitive URLs/auth data, credentials/secrets, document bodies/vectors, raw billing
+source identifiers, arbitrary identity or hidden thought/reasoning enter the archive.
+Only explicitly safe validated links may ever be preserved; currently denied links
+remain absent, never broadened implicitly. Retention metadata includes schema,
+redaction and sampling/archive policy versions; trace IDs are restricted lookup
+identifiers, never metric labels. Retrieval requires technical_diagnostics and
+server-enforced environment scope. No destructive UI or manual reclassification.
+
+Dedicated GCS primary lifecycle target is 90 days of archive retention eligibility;
+lifecycle execution is asynchronous and soft-delete retention is separately disclosed.
+No guarantee of physical erasure at exactly day 90. A strict maximum-erasure/legal
+hold requirement would require separate policy disposition, not invented compliance.
+Archive retention has no dependency on M10–M14 financial persistence; deletion of an
+archive object cannot delete its financial or operational derived records.
+
+Google Monitoring retention is provider/type-controlled. Current custom/workload/
+OTLP series can satisfy minimum 13-month analytical access with 24-month retention;
+resolution differs: custom/non-OTLP workload original frequency 6 weeks then
+10-minute intervals; OTLP/Prometheus original frequency 1 week, then 1-minute
+intervals for 5 weeks, then 10-minute intervals. Other metric types may retain only
+6 weeks and require separate analytical coverage if needed for the minimum horizon.
+Do not impose artificial 13-month deletion or claim 13-month exact-minute history
+from M9's 35-day working set. Public provider reference:
+https://docs.cloud.google.com/monitoring/quotas (checked 2026-10-09).
+Archive schema/transport/local-vs-live validation: doc 16.

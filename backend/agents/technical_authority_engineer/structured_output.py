@@ -214,13 +214,13 @@ class StructuredOutputRecovery:
         _trace({
             "stage": "structured_output", "specialist": self.specialist, "attempt": self.attempt, "phase": phase,
             "status": "valid" if failure is None else "invalid",
-            "reason": failure.reason.value if failure else None, "detail": failure.detail if failure else None,
+            "reason": failure.reason.value if failure else None,
         })
         if failure is not None:
             self.first_failure = self.first_failure or failure
             logger.warning(
-                "structured_output specialist=%s run_id=%s attempt=%d phase=%s status=invalid reason=%s detail=%s",
-                self.specialist, self.run_id, self.attempt, phase, failure.reason.value, failure.detail,
+                "structured_output attempt=%d status=invalid reason=%s",
+                self.attempt, failure.reason.value,
             )
         if phase == "regeneration":
             if failure is None:

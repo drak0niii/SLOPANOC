@@ -99,3 +99,25 @@ point is excluded. Ordinary private metric labels are stripped independently.
 The pinned OTTL Len implementation accepts ExemplarSlice; an empty generic list
 is not a valid value for the exemplar setter. Native validation alone is insufficient;
 local pipeline tests verify runtime evaluation.
+
+M15 adds two independent tail decisions after the common environment/scope/typed
+redaction gate. Cloud Trace keeps the five exceptional classes and conservative
+UNKNOWN traffic; healthy production retention is fixed at 100%. The provisional
+10% setting is exercised only by isolated tests. Invalid test policy configuration
+resolves to 100% with bounded DEGRADED_SAFE_FALLBACK metadata. SDK capture stays
+ALWAYS_ON. The archive branch keeps only SAFETY/GOVERNED/FAILED/TIMEOUT/EVER_STALLED,
+then exports stable OTLP HTTP/protobuf without compression to the local bridge.
+It never receives an ordinary healthy trace merely because Cloud Trace kept it.
+
+Pinned contrib 0.160.0 validates both configurations. Resource and scope schema URLs
+are normalized; optional deployment labels have semantic shape validators; scope
+attributes, status messages, trace state, unregistered attributes/content and metric
+exemplars cannot cross the common gate. Archive closure is a bounded server-owned
+population receipt, not an assertion inferred from a terminal root alone.
+
+Tail buffers cap at 256 traces per branch; decision wait defaults to 240 seconds,
+archive staging to 360 seconds with an absolute 600-second cap. Exporter queues,
+transport deadlines and separate pipelines bound local failure propagation. These
+source bounds and local outage tests do not qualify production affinity, memory,
+late-span capacity or sustained throughput. Those remain recorded M16 targets;
+production rollout, identities and endpoint binding remain unexecuted M17 work.

@@ -12,6 +12,8 @@ knowledge gap -- no synthetic restart command.
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation
+
 import json
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -129,16 +131,15 @@ async def test_recovery_command_comes_only_from_governed_template_and_operator_e
     )
     # 1-2. Retrieval stayed on the recovery objective; the action-bearing section was explicitly SELECTED.
     search = t4["trace"]["searches"][0]
-    assert search["query_text"] == "radio recovery restart procedure"
+    assert "query_text" not in search
     assert [r["selection_state"] for r in search["results"]] == ["SELECTED"]
     assert search["results"][0]["applicability_outcome"] == "match" and search["results"][0]["lifecycle_status"] == "approved"
     assert t4["trace"]["selections"][0]["status"] == "accepted"
     # 3. The governed recovery action is in the catalog, verbatim, with exact provenance.
     catalog = t4["trace"]["action_catalogs"][0]["actions"]
-    entry = next(a for a in catalog if a["action_id"] == ids[_TEMPLATE])
-    assert (entry["command_template"], entry["parameters"], entry["source"], entry["action_type"]) == (
-        _TEMPLATE, ["FieldReplaceableUnit"], f"{_KID}:v1:{_SEC}", "state_change"
-    )
+    entry = next(a for a in catalog if a["action_id"] == correlation(ids[_TEMPLATE]))
+    assert entry['action_type']=='state_change' and entry['source']==correlation(f'{_KID}:v1:{_SEC}')
+    assert 'command_template' not in entry
     # 4-7. The model's command and `**4**` never reach resolution; `4` comes from operator output.
     resolution = t4["record"]["procedure_action_resolution"]
     assert resolution["model_command_ignored"] == model_command
@@ -153,9 +154,9 @@ async def test_recovery_command_comes_only_from_governed_template_and_operator_e
     # 8-9. Command Authority re-validates and withholds it pending trusted target confirmation.
     authority = t4["trace"]["command_authority"]
     assert any(
-        c["decision"] == "preview_authorized_if_target_confirmed" and c["command"] == "acc FieldReplaceableUnit=4 restartunit" for c in authority
+        c["decision"] == "preview_authorized_if_target_confirmed" and "command" not in c for c in authority
     ), "grounded against the governed template; authorized only under a HYPOTHETICAL confirmed target"
-    assert not any(c["decision"] == "authorized" and "restartunit" in c["command"] for c in authority)
+    assert not any(c["decision"] == "authorized" for c in authority)
     assert t4["record"]["diagnostic_step"]["command"] is None, "never displayed as immediately executable"
     control = t4["record"]["operational_control"]
     assert (control["control_stage"], control["policy_decision"], control["reason_codes"]) == (
@@ -170,7 +171,7 @@ async def test_recovery_command_comes_only_from_governed_template_and_operator_e
         f"Next command: {model_command}",
         {"intent": "next command", "continues_active_objective": True},
     )
-    assert t5["state"]["troubleshooting_state"]["fault_id"] == t4["state"]["troubleshooting_state"]["fault_id"]
+    assert correlation(t5["state"]["troubleshooting_state"]["fault_id"]) == correlation(t4["state"]["troubleshooting_state"]["fault_id"])
     assert t5["record"]["procedure_action_resolution"]["rendered_command"] == "acc FieldReplaceableUnit=4 restartunit"
     assert t5["record"]["diagnostic_step"]["command"] is None and "restartunit" not in t5["final"]
     card = load_active_proposal(t5["state"])
@@ -213,7 +214,7 @@ async def test_prose_only_recovery_guidance_is_a_knowledge_gap_with_no_synthetic
     )
     catalog = t4["trace"]["action_catalogs"][0]["actions"]
     assert not [a for a in catalog if a["action_type"] == "state_change"], "no governed recovery action exists"
-    rejected = [c for c in t4["trace"]["command_authority"] if c["command"] == model_command]
+    rejected = [c for c in t4["trace"]["command_authority"] if c["decision"] == "rejected"]
     assert rejected and rejected[0]["decision"] == "rejected" and rejected[0]["stage"] == "grounding"
     assert t4["record"]["diagnostic_step"]["command"] is None
     assert "operational_control" not in t4["record"]

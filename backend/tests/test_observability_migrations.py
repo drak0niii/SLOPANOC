@@ -28,8 +28,8 @@ async def test_isolated_migration_upgrade_constraints_indexes_downgrade(tmp_path
                 context=MigrationContext.configure(c)
                 with Operations.context(context):module.upgrade()
                 inspector=inspect(c)
-                assert {name for name in Base.metadata.tables if not name.startswith('observability_sre_')}<=set(inspector.get_table_names())
-                for table in (t for t in Base.metadata.sorted_tables if not t.name.startswith('observability_sre_')):
+                assert {name for name in Base.metadata.tables if not name.startswith(('observability_sre_','observability_archive_','observability_retention_'))}<=set(inspector.get_table_names())
+                for table in (t for t in Base.metadata.sorted_tables if not t.name.startswith(('observability_sre_','observability_archive_','observability_retention_'))):
                     assert {col['name'] for col in inspector.get_columns(table.name)}==set(table.columns.keys())
                     assert {idx['name'] for idx in inspector.get_indexes(table.name)}=={idx.name for idx in table.indexes}
                     assert len(inspector.get_check_constraints(table.name))==len([t for t in table.constraints if isinstance(t,CheckConstraint)])
@@ -65,7 +65,7 @@ async def test_actual_alembic_environment_isolated_upgrade_downgrade(tmp_path,mo
     target='sqlite+aiosqlite:///'+str(tmp_path/'alembic.sqlite')
     monkeypatch.setattr('backend.config.settings.get_settings',lambda:Settings({'SLOPANOC_DATABASE_URL':target}))
     cfg=Config();cfg.set_main_option('script_location','alembic')
-    assert ScriptDirectory.from_config(cfg).get_current_head()=='d11b4a8c9e32'
+    assert ScriptDirectory.from_config(cfg).get_current_head()=='b15e3f7a9c81'
     db=Database(target,isolated_test=True)
     try:
         async with db.engine.begin() as c:

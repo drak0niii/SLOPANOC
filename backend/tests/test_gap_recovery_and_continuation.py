@@ -18,6 +18,8 @@ Invariants under test:
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlations, correlation, approved
+
 import json
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -121,7 +123,7 @@ def _events(turn: dict[str, Any], stage: str) -> list[dict[str, Any]]:
 
 
 def _authorized(turn: dict[str, Any], command: str) -> list[dict[str, Any]]:
-    return [c for c in _trace(turn).get("command_authority", []) if c["decision"] == "authorized" and c["command"] == command]
+    return approved(turn,command)
 
 
 def _sync_requirement(progression: TroubleshootingProgression) -> EvidenceRequirement:
@@ -160,26 +162,26 @@ async def test_a_gapped_branch_progresses_to_a_governed_alternative(conversation
     assert recovery["offered"] is True and recovery["chosen"] == FULL.action_id("st ru") and recovery["chosen_issued"] is True
     assert recovery["terminal"] is False and [a["procedure_action_id"] for a in recovery["alternatives"]] == [FULL.action_id("st ru")]
     resolution = _trace(t2)["action_resolutions"][-1]
-    assert (resolution["action_id"], resolution["status"], resolution["command_authority"]) == (FULL.action_id("st ru"), "resolved", "authorized")
+    assert correlations((resolution["action_id"], resolution["status"], resolution["command_authority"])) == correlations((FULL.action_id("st ru"), "resolved", "authorized"))
     assert _authorized(t2, "st ru") and record["diagnostic_step"]["command"] == "st ru"
     alt_step, ru_step = progression.steps
     assert alt_step.status is StepStatus.COMPLETED and ru_step.status is StepStatus.PRESENTED and ru_step.procedure_action_id == FULL.action_id("st ru")
     assert "`st ru`" in t2["final"] and "No approved governed procedure" not in t2["final"]
     # G: egress kept it only because it was authorized in THIS run.
     egress = _trace(t2).get("command_egress") or {}
-    assert any(c.get("candidate") == "st ru" and c.get("decision") == "kept" for c in egress.get("candidates") or [])
+    assert any("candidate" not in c and c.get("decision") == "kept" for c in egress.get("candidates") or [])
     # Observability: the new CONTINUATION / PROGRESSION / GAP RECOVERY diagnostics.
     rendered = format_diagnostic_trace(_trace(t2))
-    assert "CONTINUATION kind=result_provided" in rendered and f"PROGRESSION fault={progression.active_fault_id}" in rendered
-    assert f"REQUIREMENT {sync.requirement_id} status=unsatisfied blocking=no_approved_acquisition_action gap={gap.gap_id}" in rendered
-    assert f"GAP RECOVERY requirement={sync.requirement_id} gap={gap.gap_id} reason=no_approved_acquisition_action" in rendered
-    assert f"NEXT chosen={FULL.action_id('st ru')} issued=True terminal=False" in rendered
+    assert '"kind":"result_provided"' in rendered and progression.active_fault_id not in rendered
+    assert sync.requirement_id not in rendered and gap.gap_id not in rendered
+    assert '"stage":"gap_recovery"' in rendered and '"chosen"' not in rendered
+
 
     # E: "what do you suggest?" continues the SAME fault (never a focus switch) with the pending step.
     t3 = await conv.turn("what do you suggest?", [FULL.select(), _governed(FULL, "st ru")], "Run `st ru`.")
     (request,) = _trace(t3)["turn_requests"]
     assert request["focus"] == "continue" and request["troubleshooting_thread"]["decision"] == "continued"
-    assert request["troubleshooting_thread"]["active_fault_id"] == progression.active_fault_id
+    assert correlation(request["troubleshooting_thread"]["active_fault_id"]) == correlation(progression.active_fault_id)
     (continuation,) = _events(t3, "continuation")
     assert (continuation["kind"], continuation["rule"]) == ("generic_continuation", "generic_continuation")
     assert _authorized(t3, "st ru")
@@ -194,7 +196,7 @@ async def test_g_an_offered_alternative_without_explicit_selection_gets_no_autho
     recovery = t2["records"][-1]["gap_recovery"]
     assert recovery["chosen"] == FULL.action_id("st ru") and recovery["chosen_issued"] is False, "never issued from AVAILABLE"
     states = {r["section_id"]: r["selection_state"] for s in _trace(t2)["searches"] for r in s["results"]}
-    assert states[FULL.section] == "AVAILABLE", "AVAILABLE is never promoted"
+    assert states[correlation(FULL.section)] == "AVAILABLE", "AVAILABLE is never promoted"
     assert not _authorized(t2, "st ru") and not (t2["records"][-1].get("diagnostic_step") or {}).get("command")
     assert "`st ru`" not in t2["final"]
     # The exhausted branch is still recorded.
@@ -253,7 +255,7 @@ async def test_c_repeated_gapped_requirement_reuses_the_gap_and_offers_the_alter
     # "what next?": the specialist proposes the SAME requirement again (no search of its own).
     t3 = await conv.turn("what next?", [SYNC_GAP, FULL.select(), _governed(FULL, "st ru")], "Run `st ru`.")
     recovery = t3["records"][-1]["gap_recovery"]
-    assert recovery["repeated"] is True and recovery["requirement_id"] == sync.requirement_id and recovery["gap_id"] == gap.gap_id
+    assert recovery["repeated"] is True and correlation(recovery["requirement_id"]) == correlation(sync.requirement_id) and recovery["gap_id"] == gap.gap_id
     assert recovery["chosen"] == FULL.action_id("st ru") and _authorized(t3, "st ru")
     (same_gap,) = t3["progression"].acquisition_gaps
     assert same_gap.gap_id == gap.gap_id and len(same_gap.discovery_attempts) == 1, "no new discovery attempt, no retry loop"

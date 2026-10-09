@@ -13,6 +13,8 @@ identifiers below are fixtures only.
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlations, correlation
+
 import json
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -85,7 +87,12 @@ def _gates(turn: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _gate(turn: dict[str, Any]) -> dict[str, Any]:
     (gate,) = _gates(turn)
-    return gate
+    # Exact target values are governed business data; telemetry retains safe decisions only.
+    business=turn['record']['procedure_action_resolution']
+    validation=business['target_validation']
+    assert gate['passed']==validation['passed']
+    assert all('value' not in item and 'detail' not in item for item in gate['targets'])
+    return {**gate,**validation,'condition_check':business.get('condition_check')}
 
 
 def _assert_blocked(turn: dict[str, Any], status: str) -> dict[str, Any]:
@@ -96,7 +103,7 @@ def _assert_blocked(turn: dict[str, Any], status: str) -> dict[str, Any]:
     assert record["procedure_action_resolution"]["rendered_command"] is None
     assert not (record.get("diagnostic_step") or {}).get("command")
     assert "operational_control" not in record and load_active_proposal(turn["state"]) is None
-    assert not [c for c in turn["trace"].get("command_authority", []) if "restartunit" in c["command"] and c["decision"] != "rejected"]
+    assert not [c for c in turn["trace"].get("command_authority", []) if c["decision"] == "authorized"]
     assert "restartunit" not in turn["final"]
     return gate
 
@@ -114,7 +121,7 @@ async def test_a_wrong_fixed_target_never_reaches_authority_or_confirmation(isol
     t3 = await _restart(conv, "restart it", _FIXED)
     gate = _assert_blocked(t3, "fixed_target_not_in_case")
     assert gate["targets"][0]["value"] == "RRU-9" and "RRU-2" in gate["targets"][0]["detail"]
-    assert [f["identity"] for f in gate["case_target_facts"]] == ["FieldReplaceableUnit=RRU-2"]
+    assert [f["identity"] for f in gate["case_target_facts"]] == [correlation("FieldReplaceableUnit=RRU-2")]
     assert t3["record"]["target_clarification"]["text"]
     assert _progression_gate(t3)["target_isolated"]["met"] is False
 
@@ -152,7 +159,7 @@ async def test_c_l_missing_target_and_no_alias_between_keys(isolated_km_repo, mo
     t3 = await _restart(conv, "restart it", _PARAM)
     gate = _assert_blocked(t3, "missing")
     # RadioUnit=2 is proven; FieldReplaceableUnit is required: never converted, never guessed.
-    assert {f["identity"] for f in gate["case_target_facts"]} == {"Equipment=1", "RadioUnit=2"}
+    assert correlations({f["identity"] for f in gate["case_target_facts"]}) == correlations({"Equipment=1", "RadioUnit=2"})
     assert "FieldReplaceableUnit" in gate["targets"][0]["detail"] and "RadioUnit" in gate["targets"][0]["detail"]
     assert "RRU-2" not in json.dumps(t3["record"])
 
@@ -183,15 +190,16 @@ async def test_k_parameterized_slot_binds_only_from_the_trusted_case_target(isol
     t3 = await _restart(conv, "restart it", _PARAM)
     gate = _gate(t3)
     (decision,) = gate["targets"]
-    assert (decision["status"], decision["value"], decision["requested"]) == ("validated", "RRU-2", [])
+    assert correlations((decision["status"], decision["value"], decision["requested"])) == correlations(("validated", "RRU-2", []))
     assert decision["provenance"][0]["source"] == "operator_message"
     binding = t3["record"]["procedure_action_resolution"]["parameters"][0]
     assert binding["value"] == "RRU-2" and binding["detail"].startswith("current-case target fact")
     assert t3["record"]["diagnostic_step"]["command"] is None, "a state change is never an in-turn command"
-    assert any(c["decision"] == "preview_authorized_if_target_confirmed" and c["command"] == "acc FieldReplaceableUnit=RRU-2 restartunit"
+    assert any(c["decision"] == "preview_authorized_if_target_confirmed" and "command" not in c
                for c in t3["trace"]["command_authority"])
     rendered = format_diagnostic_trace(t3["trace"])
-    assert "TARGET GATE" in rendered and "TARGET FieldReplaceableUnit VALIDATED value='RRU-2'" in rendered
+    assert '"stage":"target_gate"' in rendered and '"status":"validated"' in rendered
+    assert "RRU-2" not in rendered
 
     # Confirmation -> approval: target re-validated against the case at every transition.
     card = load_active_proposal(t3["state"])
@@ -221,7 +229,7 @@ async def test_e_operator_named_target_never_observed_is_not_authority(isolated_
     await _diagnosed(conv, "Equipment=1   OK")
     t3 = await _restart(conv, "restart FieldReplaceableUnit=RRU-7", _PARAM, "RRU-7")
     gate = _assert_blocked(t3, "not_observed")
-    assert gate["targets"][0]["requested"] == ["RRU-7"]
+    assert correlations(gate["targets"][0]["requested"]) == correlations(["RRU-7"])
 
 
 @pytest.mark.asyncio
@@ -231,7 +239,7 @@ async def test_f_operator_target_conflicting_with_the_case_is_rejected(isolated_
     await _diagnosed(conv, "FieldReplaceableUnit=RRU-2   DISABLED   FAULTY")
     t3 = await _restart(conv, "restart FieldReplaceableUnit=RRU-9 instead", _PARAM, "RRU-9")
     gate = _assert_blocked(t3, "conflicting")
-    assert gate["targets"][0]["requested"] == ["RRU-9"] and "RRU-2" in gate["targets"][0]["detail"]
+    assert correlations(gate["targets"][0]["requested"]) == correlations(["RRU-9"]) and "RRU-2" in gate["targets"][0]["detail"]
 
 
 @pytest.mark.asyncio

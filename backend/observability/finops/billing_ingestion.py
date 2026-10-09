@@ -15,6 +15,7 @@ class Ingestion:
         self.adapters={a.source:a for a in adapters}; self.policy=policy or Policy();self.mapping=mapping or Registry()
         self.metrics=Metrics(runtime,environment);self.task=None
         self.lock=asyncio.Lock()
+        self.reconciliation_consumer=None
 
     async def ingest(self,source,window):
         import time
@@ -32,6 +33,12 @@ class Ingestion:
                 self.metrics.add('identical_generations' if result=='IDENTICAL' else 'publications',source)
                 for name,value in [('rows',projection.rows),('late_rows',projection.late_rows),('correction_rows',projection.correction_rows),('unmapped_rows',projection.unmapped_rows)]:
                     self.metrics.add(name,source,value)
+                if result in ('PUBLISHED','IDENTICAL') and self.reconciliation_consumer is not None:
+                    try:self.reconciliation_consumer(self.environment,adapter,extraction,projection,self.mapping)
+                    except Exception:
+                        # Optional derived consumer never changes source publication.
+                        import logging
+                        logging.getLogger('backend.observability.finops').warning('reconciliation_input_unavailable')
                 return result
         except asyncio.CancelledError:
             if key is not None:

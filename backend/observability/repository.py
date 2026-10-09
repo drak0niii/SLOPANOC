@@ -2,6 +2,7 @@
 from datetime import timedelta
 from sqlalchemy import select, update, delete, and_, or_, union_all, func
 from .models import RunRow, SummaryRow, EventRow
+from .policy_models import ArchiveReceipt
 from .projection import RunState, DiagnosticEvent, utcnow, retain_events
 from .retention import expiry
 from .stages import TERMINAL_STATUSES
@@ -26,11 +27,18 @@ class Repository:
     async def persist(self, state):
         # Revalidate at the persistence sink, including frozen nested objects.
         state = RunState.model_validate(state.model_dump(mode='json'))
-        values = state.model_dump(mode='python', exclude={'events'})
+        values = state.model_dump(mode='python', exclude={'events','archive_trace_class','archive_expected_spans','archive_population_closed','archive_population_digest'})
         # JSON contains only the strict detached DependencyState schema.
         values['dependencies'] = [d.model_dump(mode='json') for d in state.dependencies]
         values['expiry_at'] = state.terminal_at + timedelta(hours=self.config.projection_terminal_hours) if state.terminal_at else expiry(state,self.config)
         async with self.sessions() as session, session.begin():
+            from .sampling_policy import EXCEPTIONAL, TraceClass, ARCHIVE_VERSION
+            from .policy_models import ArchiveReceipt
+            if state.terminal_at is not None and state.trace_id and TraceClass(state.archive_trace_class) in EXCEPTIONAL:
+                await session.execute(self.insert(session,ArchiveReceipt).values(environment=state.environment,
+                    trace_id=state.trace_id,trace_class=state.archive_trace_class,expected_spans=state.archive_expected_spans,population_digest=state.archive_population_digest,
+                    terminal_at=state.terminal_at,population_closed=state.archive_population_closed,policy_version=ARCHIVE_VERSION)
+                    .on_conflict_do_nothing(index_elements=['environment','trace_id']))
             saved = (await session.execute(select(SummaryRow).where(SummaryRow.run_id==state.run_id).with_for_update())).scalar_one_or_none()
             if saved is not None:
                 if saved.session_detached:
@@ -121,9 +129,35 @@ class Repository:
                     return self.decode(row)
         return None
 
-    async def timeline(self, run_id, after, limit):
+    async def retention_view(self,run_id,environments,now):
+        from .policy_views import RunRetentionView
+        from .slo_rollups import SREReceiptRow
+        from .retention_registry import duration
+        state=await self.get(run_id,environments)
+        if state is None:return None
+        instrumentation='UNKNOWN';archive='UNAVAILABLE'
+        async with self.sessions() as session:
+            receipt=(await session.execute(select(SREReceiptRow).where(SREReceiptRow.run_id==run_id,
+                SREReceiptRow.environment.in_(environments)))).scalar_one_or_none()
+            if receipt is not None and receipt.payload.get('terminal_at'):
+                assessment=receipt.payload.get('trace_complete')
+                instrumentation='COMPLETE' if assessment is True else 'MISSING' if assessment is False else 'UNKNOWN'
+            metadata=(await session.execute(select(ArchiveReceipt).where(ArchiveReceipt.environment==state.environment,
+                ArchiveReceipt.trace_id==state.trace_id))).scalar_one_or_none() if state.trace_id else None
+            if metadata:
+                archive='PENDING_OR_DEGRADED'
+                if metadata.confirmed_at is not None:
+                    archive='RETAINED' if now<metadata.confirmed_at+duration('exceptional_archive') else 'ELIGIBLE_FOR_DELETION'
+            elif state.retention_class=='normal' and state.terminal_at is not None:
+                archive='NOT_REQUIRED'
+        return RunRetentionView(run_id=run_id,instrumentation=instrumentation,exceptional_archive=archive)
+
+    async def timeline(self, run_id, after, limit, environments=None):
         async with self.sessions() as s:
-            rows = (await s.execute(select(EventRow).where(EventRow.run_id==run_id, EventRow.event_seq>after)
+            scope = environments or (self.config.otel_environment,)
+            permitted = or_(select(RunRow.run_id).where(RunRow.run_id==EventRow.run_id,RunRow.environment.in_(scope)).exists(),
+                select(SummaryRow.run_id).where(SummaryRow.run_id==EventRow.run_id,SummaryRow.environment.in_(scope)).exists())
+            rows = (await s.execute(select(EventRow).where(permitted, EventRow.run_id==run_id, EventRow.event_seq>after)
                 .order_by(EventRow.event_seq).limit(limit))).scalars().all()
             return tuple(DiagnosticEvent.model_validate({k:getattr(row,k) for k in DiagnosticEvent.model_fields}) for row in rows)
 
@@ -155,16 +189,16 @@ class Repository:
         if not 1 <= batch <= 1000:
             raise ValueError('Invalid cleanup batch')
         async with self.sessions() as s, s.begin():
-            terminal_ids = (await s.execute(select(RunRow.run_id).where(RunRow.terminal_at.is_not(None),RunRow.expiry_at<=now)
+            terminal_ids = (await s.execute(select(RunRow.run_id).where(RunRow.environment==self.config.otel_environment,RunRow.terminal_at.is_not(None),RunRow.expiry_at<=now)
                 .order_by(RunRow.expiry_at,RunRow.run_id).limit(batch))).scalars().all()
-            summary_ids = (await s.execute(select(SummaryRow.run_id).where(SummaryRow.expiry_at<=now)
+            summary_ids = (await s.execute(select(SummaryRow.run_id).where(SummaryRow.environment==self.config.otel_environment,SummaryRow.expiry_at<=now)
                 .order_by(SummaryRow.expiry_at,SummaryRow.run_id).limit(batch))).scalars().all()
-            stale_ids = (await s.execute(select(RunRow.run_id).where(RunRow.terminal_at.is_(None),RunRow.expiry_at<=now)
+            stale_ids = (await s.execute(select(RunRow.run_id).where(RunRow.environment==self.config.otel_environment,RunRow.terminal_at.is_(None),RunRow.expiry_at<=now)
                 .order_by(RunRow.expiry_at,RunRow.run_id).limit(batch))).scalars().all()
             # Version-independent deletion remains guarded by expiry at mutation time.
             for ids, model in ((terminal_ids+stale_ids,RunRow),(summary_ids,SummaryRow)):
                 if ids:
-                    await s.execute(delete(model).where(model.run_id.in_(ids),model.expiry_at<=now))
+                    await s.execute(delete(model).where(model.environment==self.config.otel_environment,model.run_id.in_(ids),model.expiry_at<=now))
             ids = summary_ids+stale_ids
             if ids:
                 await s.execute(delete(EventRow).where(EventRow.run_id.in_(ids),

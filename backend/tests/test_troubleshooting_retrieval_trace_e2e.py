@@ -5,6 +5,7 @@ turn failed closed. Observability only: the trace is never read back as evidence
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation
 import json
 import logging
 from typing import Any
@@ -45,22 +46,22 @@ async def test_rejected_model_command_is_fully_reconstructable_from_persisted_tr
     turn = _only_turn(result["state"])
 
     search = turn["searches"][0]
-    assert search["query_text"] == "ESS Service Unavailable"
+    assert "query_text" not in search
     assert search["status"] == "success" and search["retrieval_mode"] == "lexical"
     top = search["results"][0]
-    assert (top["rank"], top["knowledge_id"], top["selection_state"]) == (1, _S4_KID, "SELECTED")
+    assert (top["rank"], top["knowledge_id"], top["selection_state"]) == (1, correlation(_S4_KID), "SELECTED")
     assert top["applicability_outcome"] == "match" and top["lifecycle_status"] == "approved"
     assert top["sparse_score"] is not None and top["fused_score"] is not None
 
     assert turn["selections"][0]["status"] == "accepted"
-    assert [s["knowledge_id"] for s in turn["selected"]] == [_S4_KID]
+    assert [s["knowledge_id"] for s in turn["selected"]] == [correlation(_S4_KID)]
 
-    rejected = [c for c in turn["command_authority"] if c["command"] == "st rilink"]
+    rejected = [c for c in turn["command_authority"] if c["stage"] == "grounding" and c["decision"] == "rejected"]
     assert rejected and rejected[0]["decision"] == "rejected" and rejected[0]["stage"] == "grounding"
-    assert rejected[0]["reason"] == "command text/template not found (or prohibited) in the cited selected section"
+    assert rejected[0]["reason"] == "command_not_grounded"
 
     tae = turn["technical_authority"]
-    assert tae["outcome"] is not None and tae["command"] is None
+    assert tae["outcome"] is not None and "command" not in tae
     # The rejected command named no governed action: its need is answered from server state (gap).
     assert turn["final_response_kind"] in ("answer", "no_governed_procedure_selected", "governed_fail_closed", "evidence_acquisition")
     # Identities and decisions only -- never procedure body text.
@@ -86,7 +87,8 @@ async def test_fail_closed_turn_logs_trace_at_warning_and_persists_it(isolated_k
     records = [r for r in caplog.records if r.name == "backend.knowledge.retrieval_trace"]
     assert records and records[-1].levelno == logging.WARNING
     message = records[-1].getMessage()
-    assert "final=governed_fail_closed" in message and "SEARCH 1" in message and "SELECTED none" in message
+    assert json.loads(message)["final_response_kind"] == "governed_fail_closed"
+    assert "st rilink" not in message
 
 
 def test_tae_prompt_requires_focused_generic_search_queries() -> None:

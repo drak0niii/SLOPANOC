@@ -76,3 +76,16 @@ Scheduled drift detection identifies:
 - alert changes,
 - IAM drift,
 - retention drift.
+
+## Exceptional archive definitions — local authoring boundary
+
+M15 may author only the dedicated environment-isolated GCS archive bucket contract,
+90-day primary lifecycle target, explicit soft-delete/platform encryption assumptions,
+least-privilege writer/reader IAM contract, archive bridge configuration and Collector
+eligible-only stable OTLP routing. Names/projects/service identities and deployment
+bindings must be supplied during later reviewed activation, never inferred from credentials.
+No bucket/IAM/lifecycle/deployment/apply/import/state mutation is authorized by this
+contract. Native Terraform validation remains NOT EXECUTED while CLI unavailable;
+static inspection is not native PASS. Doc 16 defines archive retention eligibility,
+asynchronous deletion, transport independence and M16/M17 handoff. No unsupported
+Cloud Trace 90-day setting or artificial Monitoring 13-month TTL may be authored.

@@ -281,10 +281,8 @@ def _emit_retrieval_diagnostics(snapshot: Optional[dict[str, Any]], final_kind: 
     try:
         _retrieval_trace_logger.log(
             level,
-            "retrieval_trace run_id=%s final=%s\n%s",
-            snapshot.get("run_id"),
-            final_kind,
-            format_diagnostic_trace(snapshot),
+            "%s",
+            format_diagnostic_trace({**snapshot, "final_response_kind": final_kind}),
         )
     except Exception:
         _logger.warning("chat_service: retrieval diagnostic formatting failed")

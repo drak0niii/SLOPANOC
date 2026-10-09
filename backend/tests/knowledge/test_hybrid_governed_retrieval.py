@@ -8,6 +8,7 @@ is test data, never production retrieval behavior.
 from __future__ import annotations
 
 import asyncio
+from backend.tests._m15_privacy_assertions import correlation
 import json
 import logging
 import math
@@ -277,9 +278,9 @@ async def test_e_hybrid_evidence_does_not_authorize_model_command(hybrid_runtime
         catalog = build_server_validated_commands(evidence, [{"command": "st rilink", "source_id": evidence[0].source_id}])
         assert catalog == []
         snap = dt.snapshot_diagnostic_trace(run_id, [])
-        rejected = [c for c in snap["command_authority"] if c["command"] == "st rilink"]
+        rejected = [c for c in snap["command_authority"] if c["decision"] == "rejected"]
         assert rejected and rejected[0]["decision"] == "rejected" and rejected[0]["stage"] == "grounding"
-        assert "not found" in rejected[0]["reason"]
+        assert rejected[0]["reason"] == "command_not_grounded"
 
 
 @pytest.mark.asyncio
@@ -290,7 +291,7 @@ async def test_f_grounded_read_only_command_in_selected_section_is_authorized(hy
         catalog = build_server_validated_commands(evidence, [{"command": "st pluginunit", "source_id": evidence[0].source_id}])
         assert [c.command for c in catalog] == ["st pluginunit"]
         snap = dt.snapshot_diagnostic_trace(run_id, [])
-        assert any(c["decision"] == "authorized" and c["command"] == "st pluginunit" for c in snap["command_authority"])
+        assert any(c["decision"] == "authorized" and "command" not in c for c in snap["command_authority"])
 
 
 @pytest.mark.asyncio
@@ -311,14 +312,14 @@ async def test_g_trace_captures_query_ranking_scores_applicability_and_selection
         snap = dt.snapshot_diagnostic_trace(run_id, selected)
 
     search = snap["searches"][0]
-    assert search["query_text"] == _QUERY and search["limit"] == 5
+    assert "query_text" not in search and search["limit"] == 5
     assert search["retrieval_mode"] == "hybrid" and search["dense_status"] == "ok"
     assert search["eligible_section_count"] == 2 and search["candidate_count"] == 2
     ranks = [(r["rank"], r["knowledge_id"], r["applicability_outcome"], r["selection_state"]) for r in search["results"]]
-    assert ranks == [(1, "MOP-UNK", "unknown", "AVAILABLE"), (2, "MOP-TRX", "match", "SELECTED")]
+    assert ranks == [(1, correlation("MOP-UNK"), "unknown", "AVAILABLE"), (2, correlation("MOP-TRX"), "match", "SELECTED")]
     first = search["results"][0]
     for field in ("sparse_score", "sparse_rank", "dense_similarity", "dense_rank", "fused_score", "relevance_score",
-                  "lifecycle_status", "section_id", "version_label", "title", "section_heading", "source_id", "is_derived"):
+                  "lifecycle_status", "section_id", "version_label", "source_id", "is_derived"):
         assert field in first
     assert first["unresolved_applicability_dimensions"] == ["technology"]
     assert first["lifecycle_status"] == "approved"
@@ -328,8 +329,8 @@ async def test_g_trace_captures_query_ranking_scores_applicability_and_selection
     dumped = json.dumps(snap)
     assert "inspect optical module levels" not in dumped.lower(), "no section body content"
     text = dt.format_diagnostic_trace(snap)
-    assert "SEARCH 1" in text and "query: 'SFP light loss'" in text
-    assert "MOP-TRX" in text and "[SELECTED]" in text and "applicability=unknown" in text
+    assert "SFP light loss" not in text and json.loads(text)["searches"][0]["search_index"]==1
+    assert "MOP-TRX" not in text and '"selection_state":"SELECTED"' in text and '"applicability_outcome":"unknown"' in text
 
 
 @pytest.mark.asyncio
@@ -445,4 +446,4 @@ def test_retrieval_trace_logger_is_warning_on_fail_closed(caplog) -> None:
     with caplog.at_level(logging.INFO, logger="backend.knowledge.retrieval_trace"):
         _emit_retrieval_diagnostics({"run_id": "r", "searches": [], "selected": []}, "governed_fail_closed", logging.WARNING)
     assert caplog.records and caplog.records[0].levelno == logging.WARNING
-    assert "retrieval_trace run_id=r final=governed_fail_closed" in caplog.records[0].getMessage()
+    assert json.loads(caplog.records[0].getMessage())["final_response_kind"] == "governed_fail_closed"

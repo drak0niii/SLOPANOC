@@ -1,6 +1,6 @@
 """Explicit safe diagnostic response DTOs, independent of SQLAlchemy objects."""
 from typing import Literal
-from pydantic import AwareDatetime, Field
+from pydantic import AwareDatetime, Field, field_validator
 from .schemas import Contract, Count, Duration, Code, TraceId, SpanId, Identifier
 from .stages import RunStatus, Stage
 from .errors import ErrorCode
@@ -31,6 +31,14 @@ class TechnicalView(Contract):
     region: Code | None = None
     config_version: str | None = None
     telemetry_schema_version: Literal[1] = 1
+
+    @field_validator('service_version','git_sha','release_id','revision','region',mode='before')
+    @classmethod
+    def safe_deployment_metadata(cls,value,info):
+        from .resource_policy import project
+        key={'service_version':'service.version','git_sha':'slopanoc.git_sha','release_id':'slopanoc.release_id',
+            'revision':'slopanoc.cloud_run_revision','region':'cloud.region'}[info.field_name]
+        return project({key:value}).get(key)
 
 
 class RunView(Contract):

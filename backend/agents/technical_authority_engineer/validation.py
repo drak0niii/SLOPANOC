@@ -603,11 +603,7 @@ def validate_technical_authority_payload(
             if command:
                 cmd_source = step_copy.get("command_source")
                 if not is_command_authorized(command, cmd_source, approved_catalog, verified_evidence):
-                    logger.warning(
-                        "Technical Authority Engineer command stripped: unauthorized command %r (source %r)",
-                        command,
-                        cmd_source,
-                    )
+                    logger.warning("command_stripped_unauthorized")
                     stripped_commands.append(str(command))
                     step_copy["command"] = None
                     step_copy["command_source"] = None

@@ -48,8 +48,9 @@ def test_config_syntax_components_pin_and_native_validate(filename):
     value=yaml.safe_load(path.read_text())
     assert {'memory_limiter','filter/safe_scope','transform/redact','resource/environment','batch'} <= set(value['processors'])
     assert 'health_check' in value['extensions']
-    assert set(value['service']['pipelines'])=={'traces','metrics','logs'}
-    assert 'tail_sampling' not in value['processors']
+    assert set(value['service']['pipelines'])=={'traces','traces/cloud','traces/archive','metrics','logs'}
+    assert {'tail_sampling/cloud','tail_sampling/archive'} <= set(value['processors'])
+    assert value['service']['pipelines']['traces']['exporters']==['forward/cloud','forward/archive']
     if filename=='config.yaml':
         assert 'googlecloud' in value['exporters']
         assert 'resourcedetection/gcp' in value['processors']
@@ -141,6 +142,14 @@ def test_sdk_sample_travels_through_actual_local_collector(tmp_path, sample_kind
                             accounting_record(r,'ledger_persisted',1)
                             accounting_record(r,'admission_duration',.005)
                             from backend.observability.finops.billing_metrics import Metrics
+                            from backend.observability.finops.reconciliation_metrics import Metrics as ReconciliationMetrics
+                            reconciliation_metrics=ReconciliationMetrics(r)
+                            reconciliation_metrics.record('publications')
+                            from backend.observability.finops.unit_economics_metrics import Metrics as UnitMetrics
+                            UnitMetrics(r).record('publications')
+                            from backend.observability.finops.control_metrics import Metrics as ControlMetrics
+                            ControlMetrics(r).record('publications')
+                            reconciliation_metrics.record('duration_seconds',.007)
                             financial_metrics=Metrics(r,'development')
                             financial_metrics.add('publications','DETAILED_BILLING',1)
                             financial_metrics.duration('DETAILED_BILLING',.006)
@@ -329,6 +338,14 @@ def test_sdk_sample_travels_through_actual_local_collector(tmp_path, sample_kind
                 from urllib.request import Request, urlopen
                 metric_messages=[ExportMetricsServiceRequest.FromString(item[1]) for item in metrics_capture]
                 metrics=[m for message in metric_messages for rm in message.resource_metrics for scope in rm.scope_metrics for m in scope.metrics]
+                reconciliation=next(m for m in metrics if m.name=='slopanoc.finops.reconciliation.publications')
+                assert reconciliation.sum.data_points[0].as_int==1 and reconciliation.unit=='1'
+                unit_counter=next(m for m in metrics if m.name=='slopanoc.finops.unit_economics.publications')
+                assert unit_counter.sum.data_points[0].as_int==1 and unit_counter.unit=='1'
+                control_counter=next(m for m in metrics if m.name=='slopanoc.finops.controls.publications')
+                assert control_counter.sum.data_points[0].as_int==1 and control_counter.unit=='1'
+                reconciliation_duration=next(m for m in metrics if m.name=='slopanoc.finops.reconciliation.duration_seconds')
+                assert reconciliation_duration.histogram.data_points[0].sum==.007 and reconciliation_duration.unit=='s'
                 financial=next(m for m in metrics if m.name=='slopanoc.finops.billing.publications')
                 assert financial.sum.data_points[0].as_int==1 and financial.unit=='1'
                 financial_duration=next(m for m in metrics if m.name=='slopanoc.finops.billing.ingestion_duration')
@@ -352,6 +369,12 @@ def test_sdk_sample_travels_through_actual_local_collector(tmp_path, sample_kind
                 account_target.sum.data_points[0].attributes.append(KeyValue(key='attempt_id',value=AnyValue(string_value='M10_SYNTHETIC_PRIVATE_MARKER')))
                 financial_target=next(m for rm in injected.resource_metrics for scope in rm.scope_metrics for m in scope.metrics if m.name=='slopanoc.finops.billing.publications')
                 financial_target.sum.data_points[0].attributes.append(KeyValue(key='billing_account',value=AnyValue(string_value='M11_SYNTHETIC_PRIVATE_MARKER')))
+                reconciliation_target=next(m for rm in injected.resource_metrics for scope in rm.scope_metrics for m in scope.metrics if m.name=='slopanoc.finops.reconciliation.publications')
+                reconciliation_target.sum.data_points[0].attributes.append(KeyValue(key='generation_id',value=AnyValue(string_value='M12_SYNTHETIC_PRIVATE_MARKER')))
+                unit_target=next(m for rm in injected.resource_metrics for scope in rm.scope_metrics for m in scope.metrics if m.name=='slopanoc.finops.unit_economics.publications')
+                unit_target.sum.data_points[0].attributes.append(KeyValue(key='snapshot_id',value=AnyValue(string_value='M13_SYNTHETIC_PRIVATE_MARKER')))
+                control_target=next(m for rm in injected.resource_metrics for scope in rm.scope_metrics for m in scope.metrics if m.name=='slopanoc.finops.controls.publications')
+                control_target.sum.data_points[0].attributes.append(KeyValue(key='budget_id',value=AnyValue(string_value='M14_SYNTHETIC_PRIVATE_MARKER')))
                 before=len([x for x in sink.snapshot() if x[0]=='/v1/metrics'])
                 with urlopen(Request(f'http://127.0.0.1:{port}/v1/metrics',data=injected.SerializeToString(),headers={'Content-Type':'application/x-protobuf'}),timeout=2) as response:
                     assert response.status==200
@@ -359,7 +382,7 @@ def test_sdk_sample_travels_through_actual_local_collector(tmp_path, sample_kind
                 while time.monotonic()<deadline and len([x for x in sink.snapshot() if x[0]=='/v1/metrics'])<=before:time.sleep(.02)
                 forwarded=[x for x in sink.snapshot() if x[0]=='/v1/metrics']
                 assert len(forwarded)>before
-                assert not any(b'M9_SYNTHETIC_PRIVATE_MARKER' in x[1] or b'M10_SYNTHETIC_PRIVATE_MARKER' in x[1] or b'M11_SYNTHETIC_PRIVATE_MARKER' in x[1] for x in forwarded)
+                assert not any(b'M9_SYNTHETIC_PRIVATE_MARKER' in x[1] or b'M10_SYNTHETIC_PRIVATE_MARKER' in x[1] or b'M11_SYNTHETIC_PRIVATE_MARKER' in x[1] or b'M12_SYNTHETIC_PRIVATE_MARKER' in x[1] or b'M13_SYNTHETIC_PRIVATE_MARKER' in x[1] or b'M14_SYNTHETIC_PRIVATE_MARKER' in x[1] for x in forwarded)
             if sample_kind == 'model':
                 from opentelemetry.proto.collector.metrics.v1.metrics_service_pb2 import ExportMetricsServiceRequest
                 metric_messages = [ExportMetricsServiceRequest.FromString(item[1]) for item in metrics_capture]

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { getRunRetention } from '../../../../api/observabilityPolicy';
 import { getRun } from '../../../../api/observability';
 import type { RunView } from '../../../../api/observabilityTypes';
 import { useObservabilityQuery } from './useObservabilityQuery';
@@ -26,6 +27,7 @@ export function RunDetail({ runId, poll = false }: {
  <div className={cardClass}><h4 className="text-sm font-medium text-primary">Dependencies</h4>{r.dependencies.length ? r.dependencies.map((d, i) => <p key={i} className="mt-2 text-sm text-secondary">{dependencyName(d.dependency)} · {d.operation}<br />{name(d.agent)} · {name(d.tool)}<br />Started {timestamp(d.started_at)}</p>) : <p className="mt-2 text-sm text-tertiary">None reported.</p>}</div>
  </div>
  {r.technical ? <Fields title="Deployment & trace correlation" values={{ 'Trace ID': r.technical.trace_id ?? 'Not reported', 'Service version': r.technical.service_version ?? 'Not reported', Release: r.technical.release_id ?? 'Not reported', Revision: r.technical.revision ?? 'Not reported', 'Schema version': String(r.technical.telemetry_schema_version), 'Config version': r.technical.config_version ?? 'Not reported' }}/> : <p className="mt-3 text-sm text-tertiary">Technical metadata is not available with this response.</p>}
+ <RetentionState runId={r.run_id}/>
  <Timeline runId={r.run_id}/>
  </>}</ReadState></section>;
 }
@@ -33,3 +35,8 @@ function Fields({ title, values }: {
     title: string;
     values: Record<string, string>;
 }) { return <section className={`${cardClass} mt-2 min-w-0`}><h4 className="mb-2 text-sm font-medium text-primary">{title}</h4><dl className="space-y-2 text-sm">{Object.entries(values).map(([k, v]) => <div key={k}><dt className="text-tertiary">{k}</dt><dd className="break-words text-secondary [overflow-wrap:anywhere]">{v}</dd></div>)}</dl></section>; }
+
+function RetentionState({runId}: {runId: string}) {
+    const query=useObservabilityQuery(`retention:${runId}`, s=>getRunRetention(runId,s));
+    return <ReadState query={query}>{r=><Fields title="Trace retention" values={{ Instrumentation: r.instrumentation, 'Cloud Trace': 'Live retention not confirmed', 'Exceptional archive': r.exceptional_archive, 'Production archive binding': 'Not deployed' }}/>}</ReadState>;
+}

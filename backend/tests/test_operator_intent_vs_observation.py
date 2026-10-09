@@ -11,6 +11,8 @@ server against trusted observations (AUTHORITY, unchanged). Identifiers below ar
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlations
+
 import pytest
 
 from backend.agents.technical_authority_engineer.result_validation import operator_intent
@@ -62,7 +64,7 @@ async def test_pasted_output_with_several_units_is_observation_and_the_proposed_
     read = next(s for s in progression.steps if s.command == _READ)
     assert read.status is StepStatus.COMPLETED and read.result is not None  # pending-result consumption intact
     (decision,) = _gate(t2)["targets"]
-    assert (decision["status"], decision["value"], decision["requested"]) == ("validated", "RRU-2", ["RRU-2"])
+    assert correlations((decision["status"], decision["value"], decision["requested"])) == correlations(("validated", "RRU-2", ["RRU-2"]))
     assert t2["record"]["operational_control"]["control_stage"] == "awaiting_confirmation"  # HITL unchanged
 
 
@@ -89,7 +91,7 @@ async def test_explicit_operator_target_intent_still_counts(isolated_km_repo, mo
     conv = _Conversation(monkeypatch)
     await _diagnosed_with_units(conv)
     chosen = await _restart(conv, "restart FieldReplaceableUnit=RRU-3", _PARAM, "RRU-3")
-    assert _gate(chosen)["passed"] is True and _gate(chosen)["targets"][0]["requested"] == ["RRU-3"]
+    assert _gate(chosen)["passed"] is True and correlations(_gate(chosen)["targets"][0]["requested"]) == correlations(["RRU-3"])
 
 
 @pytest.mark.asyncio
@@ -99,4 +101,4 @@ async def test_operator_intent_disagreeing_with_the_proposal_stays_ambiguous(iso
     await _diagnosed_with_units(conv)
     disagree = await _restart(conv, "restart FieldReplaceableUnit=RRU-1", _PARAM, "RRU-2")
     gate = _assert_blocked(disagree, "ambiguous")
-    assert sorted(gate["targets"][0]["requested"]) == ["RRU-1", "RRU-2"]
+    assert correlations(sorted(gate["targets"][0]["requested"])) == correlations(["RRU-1", "RRU-2"])

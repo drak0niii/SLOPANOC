@@ -6,6 +6,8 @@ Authority -> final response / troubleshooting history / persisted diagnostic tra
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlations, correlation
+
 import json
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -170,7 +172,7 @@ async def test_m_selected_action_resolves_and_existing_authority_authorizes(isol
     step = record["diagnostic_step"]
     assert step["command"] == "show foo NODE-1"
     assert step["command_source"] == _CANONICAL
-    assert step["procedure_action_id"] == _ACTION_ID
+    assert correlation(step["procedure_action_id"]) == correlation(_ACTION_ID)
     assert [(c["command"], c["source_id"]) for c in record["approved_commands_catalog"]] == [("show foo NODE-1", _CANONICAL)]
     resolution = record[pa.PROCEDURE_ACTION_RESOLUTION_KEY]
     assert resolution["status"] == "resolved" and resolution["command_authority"] == "authorized"
@@ -266,7 +268,7 @@ async def test_o_resolved_action_recorded_and_user_result_advances_lifecycle(iso
     )
     history = _history(second["state"])
     assert history[0]["status"] == "executed"
-    assert history[0]["procedure_action_id"] == _ACTION_ID
+    assert correlation(history[0]["procedure_action_id"]) == correlation(_ACTION_ID)
     assert "alarm state CLEARED" in (history[0]["observed_result"] or "")
     params = second["records"][-1][pa.PROCEDURE_ACTION_RESOLUTION_KEY]["parameters"]
     assert params == [{"name": "target", "state": "verified", "value": "NODE-1", "detail": "confirmed earlier in session"}]
@@ -279,23 +281,16 @@ async def test_p_trace_shows_catalog_selection_binding_render_and_authority(isol
     result = await _Session(monkeypatch).turn([_SEARCH, _SELECT, _CATALOG, _recommend()], "Run show foo NODE-1.")
     trace = _last_turn_trace(result["state"])
     catalog = trace["action_catalogs"][0]["actions"]
-    assert [(a["action_id"], a["command_template"], a["parameters"], a["source"]) for a in catalog] == [
-        (_ACTION_ID, "show foo <target>", ["target"], _CANONICAL)
-    ]
-    resolution = trace["action_resolutions"][0]
-    assert resolution["action_id"] == _ACTION_ID and resolution["status"] == "resolved"
-    assert resolution["parameters"][0]["state"] == "verified"
-    assert resolution["rendered_command"] == "show foo NODE-1" and resolution["command_authority"] == "authorized"
-    assert trace["technical_authority"]["procedure_action_id"] == _ACTION_ID
-    assert any(c["decision"] == "authorized" and c["command"] == "show foo NODE-1" for c in trace["command_authority"])
-    text = format_diagnostic_trace(trace)
-    for expected in (
-        "ACTION CATALOG 1 action(s)",
-        f"ACTION SELECTED id={_ACTION_ID}",
-        "RESOLUTION status=resolved",
-        "PARAMETER target=VERIFIED(NODE-1)",
-        "COMMAND RENDERED 'show foo NODE-1'",
-        "AUTHORITY AUTHORIZED",
-    ):
-        assert expected in text
+    assert [(a['action_id'],a['source']) for a in catalog] == [(correlation(_ACTION_ID),correlation(_CANONICAL))]
+    assert all('command_template' not in a for a in catalog)
+    resolution=trace['action_resolutions'][0]
+    assert correlation(resolution['action_id'])==correlation(_ACTION_ID) and resolution['status']=='resolved'
+    assert resolution['parameters'][0]['state']=='verified'
+    business=result['records'][-1]['procedure_action_resolution']
+    assert business['rendered_command']=='show foo NODE-1' and resolution['command_authority']=='authorized'
+    assert correlation(trace['technical_authority']['procedure_action_id'])==correlation(_ACTION_ID)
+    assert any(c['decision']=='authorized' and 'command' not in c for c in trace['command_authority'])
+    text=format_diagnostic_trace(trace)
+    assert 'show foo' not in text and 'NODE-1' not in text and _ACTION_ID not in text
+    assert json.loads(text)['action_resolutions'][0]['status']=='resolved'
     assert "Do not run" not in json.dumps(trace), "no section body text in the trace"

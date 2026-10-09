@@ -20,6 +20,8 @@ its script tries to answer directly from history -- the live behaviour.
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation
+
 import asyncio
 import dataclasses
 import json
@@ -216,7 +218,7 @@ def _routing(turn: dict[str, Any]) -> dict[str, Any]:
 
 
 def _authorized(turn: dict[str, Any], command: str) -> bool:
-    return any(c["decision"] == "authorized" and c["command"] == command for c in _trace(turn).get("command_authority", []))
+    return any(c["command"]==command for r in turn.get("records", []) for c in r.get("approved_commands_catalog", [])) and any(d.get("decision")=="authorized" for d in _trace(turn).get("command_authority", []))
 
 
 async def _alt_presented(conv: _RoutedConversation) -> dict[str, Any]:
@@ -262,8 +264,8 @@ async def test_a_to_d_continuation_is_routed_through_the_governed_pipeline(conve
     # The pending step stays the current step: re-derived from THIS run's selection and re-authorized.
     (continuation,) = _events(t2, "continuation")
     assert continuation["rule"] == "generic_continuation" and continuation["pending_step"]["status"] == "presented"
-    assert trace["searches"] and trace["selected"] == [{"knowledge_id": DOC.kid, "version_label": DOC.ver, "section_id": DOC.section}]
-    assert trace["action_resolutions"][-1]["action_id"] == ALT_ID and _authorized(t2, "alt")
+    assert trace["searches"] and trace["selected"] == [{"knowledge_id": correlation(DOC.kid), "version_label": correlation(DOC.ver), "section_id": correlation(DOC.section)}]
+    assert correlation(trace["action_resolutions"][-1]["action_id"]) == correlation(ALT_ID) and _authorized(t2, "alt")
     assert "`alt`" in t2["final"] and t2["final"] != "This will allow us to proceed with the troubleshooting."
     (step,) = t2["progression"].steps  # nothing assumed executed, no duplicate step
     assert step.status is StepStatus.PRESENTED and step.result is None
@@ -292,7 +294,7 @@ async def test_e_j_pending_result_is_requested_and_history_never_authorizes(conv
     (step,) = t2["progression"].steps
     assert step.status is StepStatus.PRESENTED and step.result is None
     completeness = t2["records"][-1][tae_agent_tool.RESPONSE_COMPLETENESS_KEY]
-    assert completeness["forced_route"] is True and completeness["pending_step"]["step_id"] == step.step_id
+    assert completeness["forced_route"] is True and correlation(completeness["pending_step"]["step_id"]) == correlation(step.step_id)
 
 
 # =============================================================================================
@@ -315,7 +317,7 @@ async def test_f_k_result_is_bound_and_later_continuation_reenters_governed_prog
                          "Thanks for that.", delegate=False)
     _assert_forced(t3, OperationalTurnKind.GENERIC_CONTINUATION)
     assert _routing(t3)["pending_step"] is None
-    assert _trace(t3)["action_resolutions"][-1]["action_id"] == PLUGIN_ID and _authorized(t3, "st pluginunit")
+    assert correlation(_trace(t3)["action_resolutions"][-1]["action_id"]) == correlation(PLUGIN_ID) and _authorized(t3, "st pluginunit")
     assert "`st pluginunit`" in t3["final"] and t3["final"] != "Thanks for that."
 
 
@@ -528,10 +530,11 @@ def test_routing_trace_renders_the_decision() -> None:
             {"stage": "specialist_invocation", "specialist": "technical_authority_engineer", "forced_by_server": True, "reason": decision.reason},
         ],
     })
-    assert "ROUTING active_fault=F-1 active_operational_investigation=True turn_kind=generic_continuation" in rendered
-    assert "route_required=True selected_route=governed_operational" in rendered
-    assert "SPECIALIST INVOCATION specialist=technical_authority_engineer forced_by_server=True" in rendered
-    assert "ROUTE ENFORCEMENT function_calling=ANY" in rendered
+    assert json.loads(rendered)["operational_events"][0]["turn_kind"] == "generic_continuation"
+    assert "F-1" not in rendered
+    assert json.loads(rendered)["operational_events"][0]["route_required"] is True
+    assert json.loads(rendered)["operational_events"][2]["forced_by_server"] is True
+    assert json.loads(rendered)["operational_events"][1]["mode"] == "ANY"
 
 
 class _FakeRequest:

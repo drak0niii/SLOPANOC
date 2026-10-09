@@ -23,6 +23,8 @@
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlations, correlation, approved
+
 import json
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -69,7 +71,7 @@ def _events(turn: dict[str, Any], stage: str) -> list[dict[str, Any]]:
 
 
 def _authorized(turn: dict[str, Any], command: str) -> list[dict[str, Any]]:
-    return [c for c in _trace(turn).get("command_authority", []) if c["decision"] == "authorized" and c["command"] == command]
+    return approved(turn,command)
 
 
 # =============================================================================================
@@ -86,14 +88,14 @@ async def _continue_known_action(conv: Any, *, catalog_call: bool) -> dict[str, 
     trace = _trace(t2)
     # Clarification resolved; the fresh source is SELECTED by the specialist, MATCH.
     assert t2["progression"].open_questions[0].status is ClarificationStatus.RESOLVED
-    assert [(r["section_id"], r["applicability_outcome"]) for r in trace["searches"][-1]["results"] if r["selection_state"] == "SELECTED"] == [
+    assert correlations([(r["section_id"], r["applicability_outcome"]) for r in trace["searches"][-1]["results"] if r["selection_state"] == "SELECTED"]) == correlations([
         (DOC.section, "match")
-    ]
+    ])
     # Resolved by the normal resolver and authorized by Command Authority in THIS run.
     resolution = trace["action_resolutions"][-1]
-    assert (resolution["action_id"], resolution["status"]) == (ALT_ID, "resolved")
-    assert resolution["rendered_command"] == "alt" and resolution["command_authority"] == "authorized"
-    assert _authorized(t2, "alt") and all(c["source_id"] == DOC.canonical for c in _authorized(t2, "alt"))
+    assert (resolution["action_id"], resolution["status"]) == (correlation(ALT_ID), "resolved")
+    assert t2["records"][-1]["procedure_action_resolution"]["rendered_command"] == "alt" and resolution["command_authority"] == "authorized"
+    assert _authorized(t2, "alt") and all(correlation(c["source_id"]) == correlation(DOC.canonical) for c in _authorized(t2, "alt"))
     (continuity,) = _events(t2, "acquisition_continuity")
     assert continuity["rule"] == ContinuationRule.APPLICABILITY_CLARIFICATION_RESOLVED.value
     assert continuity["outcome"] == "model_continued" and continuity["issued"] is True
@@ -102,7 +104,7 @@ async def _continue_known_action(conv: Any, *, catalog_call: bool) -> dict[str, 
     # The blocked step continues (no duplicate) and is presented with its governed identity.
     record = t2["records"][-1]
     assert record["diagnostic_step"]["command"] == "alt" and record["diagnostic_step"]["command_source"] == DOC.canonical
-    assert record["diagnostic_step"]["procedure_action_id"] == ALT_ID
+    assert correlation(record["diagnostic_step"]["procedure_action_id"]) == correlation(ALT_ID)
     assert [(c["command"], c["source_id"]) for c in record["approved_commands_catalog"]] == [("alt", DOC.canonical)]
     assert _decision(t2) == ProposalDecision.PENDING_STEP_RESOLVED.value
     assert any(e["event"] == "blocked_step_continued" for e in _progression_control(t2)["events"])
@@ -130,7 +132,7 @@ async def test_same_flow_with_explicit_catalog_call_is_unchanged(conversation) -
     await _blocked_turn(conv)
     t2 = await _continue_known_action(conv, catalog_call=True)
     (catalog,) = _trace(t2)["action_catalogs"]
-    assert ALT_ID in [a["action_id"] for a in catalog["actions"]]
+    assert correlation(ALT_ID) in [a["action_id"] for a in catalog["actions"]]
 
 
 @pytest.mark.asyncio
@@ -144,7 +146,7 @@ async def test_known_action_whose_source_is_not_selected_in_this_run_is_blocked(
     t2 = await conv.turn(TURN2_TEXT, [SEARCH, OTHER.select(), _governed(ALT_ID, "Check the active alarms on the node.")], ALT_PRESENTATION)
     trace = _trace(t2)
     states = {r["section_id"]: r["selection_state"] for r in trace["searches"][-1]["results"]}
-    assert states[OTHER.section] == "SELECTED" and states.get(DOC.section) != "SELECTED", "AVAILABLE is never promoted"
+    assert states[correlation(OTHER.section)] == "SELECTED" and states.get(correlation(DOC.section)) != "SELECTED", "AVAILABLE is never promoted"
     (continuity,) = _events(t2, "acquisition_continuity")
     assert continuity["outcome"] == "model_continued" and continuity["issued"] is False
     assert continuity["reconstruction"] == "source_not_selected_in_this_run"
@@ -181,7 +183,7 @@ def test_known_action_issuance_is_server_reconstructed_and_fail_closed() -> None
     out, trace = _reconcile_known_acquisition(_chosen(), known, ContinuationRule.APPLICABILITY_CLARIFICATION_RESOLVED,
                                               run_id="run-issue-1", evidence=[_evidence()], **kw)
     assert _run_issued("run-issue-1") == frozenset({ALT_ID})
-    assert out["diagnostic_step"]["procedure_action_id"] == ALT_ID and out["diagnostic_step"]["command"] is None
+    assert correlation(out["diagnostic_step"]["procedure_action_id"]) == correlation(ALT_ID) and out["diagnostic_step"]["command"] is None
     assert trace["outcome"] == "model_continued" and trace["issued"] is True
 
     # No continuation rule applies (the model also wrote a command of its own): still issued, since the
@@ -287,7 +289,7 @@ async def test_authorized_free_text_read_matching_current_procedure_action_persi
     (continuity,) = _events(t2, "acquisition_continuity")
     assert continuity["rule"] == ContinuationRule.ACQUISITION_REQUEST.value and continuity["issued"] is True
     resolution = _trace(t2)["action_resolutions"][-1]
-    assert (resolution["action_id"], resolution["status"], resolution["command_authority"]) == (ST_RU_ID, "resolved", "authorized")
+    assert correlations((resolution["action_id"], resolution["status"], resolution["command_authority"])) == correlations((ST_RU_ID, "resolved", "authorized"))
     assert _authorized(t2, "st ru")
     (step2,) = t2["progression"].steps
     assert step2.step_id == step.step_id and step2.procedure_action_id == ST_RU_ID and step2.command == "st ru"

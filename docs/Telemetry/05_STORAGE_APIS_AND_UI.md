@@ -200,3 +200,20 @@ Persist on:
 Do not write every span event to the active-run table.
 
 Terminal rows are retained for a short support TTL, then removed/archived according to policy.
+
+## Exceptional archive storage and read boundary
+
+The Operational Trace Store (Google Cloud Trace) retains supported full traces for
+30 days. ExceptionalTraceArchive is a distinct sanitized full-trace object archive
+with a 90-day primary horizon; summaries, timelines, logs and SLO aggregates are
+not substitutes. See `16_PRODUCTION_TELEMETRY_BACKEND.md` for the OTLP envelope,
+local sink, GCS bridge, completeness and retrieval contract.
+
+Archive retrieval requires verified `technical_diagnostics` capability and explicit
+server-enforced environment scope; canonical role ceilings remain unchanged. Do not
+grant User, FinOps, Admin or Auditor archive access by implication. Queries/reconstruction
+are bounded and read-only. No arbitrary object path, signed public URL, bulk export,
+manual modification, deletion or reclassification endpoint/UI. Existing Diagnostics
+may show independently confirmed Cloud Trace and archive states, or unavailable;
+absence of retained trace is not execution failure. No large archive browser is required.
+Archive expiry never deletes operational or financial derived records.

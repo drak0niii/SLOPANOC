@@ -2,13 +2,13 @@
 
 ## Program Status
 
-Current milestone: **M11 — IMPLEMENTED AND LOCALLY VALIDATED; production pending**
+Current milestone: **M15 — IMPLEMENTED AND LOCALLY VALIDATED; production pending**
 
-Last completed milestone: **M11 (all31 blocking local gates PASS; production validation pending)**
+Last completed milestone: **M15 (all38 user blocking local criteria and approved C01–C35 local evaluations PASS; production validation pending)**
 
-Next permitted action: **STOP after M11. Ready for Next Milestone: YES (local gate only under user section103). M12 NOT STARTED; separate instruction required. No deployment or cloud operation authorized.**
+Next permitted action: **STOP. M15 local gate passed; M16 NOT IMPLEMENTED BY DESIGN. A separate instruction is required to start M16. No deployment or cloud operation authorized.**
 
-Overall status: **M0 VALIDATED COMPLETE; M1–M11 IMPLEMENTED AND LOCALLY VALIDATED; CLOUD NOT EXECUTED**
+Overall status: **M0 VALIDATED COMPLETE; M1–M15 IMPLEMENTED AND LOCALLY VALIDATED; CLOUD NOT EXECUTED**
 
 Authoritative architecture:
 
@@ -32,11 +32,11 @@ Authoritative architecture:
 | M9 | SRE Metrics + SLOs | IMPLEMENTED AND LOCALLY VALIDATED; production activation pending | YES (local only) |
 | M10 | Accounting-Grade FinOps Runtime Ledger | IMPLEMENTED AND LOCALLY VALIDATED; production validation pending | YES (local only; M11 planning authorized) |
 | M11 | Cloud Billing Integration + Pricing Data | IMPLEMENTED AND LOCALLY VALIDATED;31blocking local gates PASS; production pending | YES (local only) |
-| M12 | Reconciliation + Allocation | NOT STARTED — requires separate user instruction | NO (implementation not authorized) |
-| M13 | Unit Economics | BLOCKED BY M12 | NO |
-| M14 | Budgets / Forecasting / Anomalies | BLOCKED BY M13 | NO |
-| M15 | Security / Retention / Sampling Hardening | BLOCKED BY M14 | NO |
-| M16 | Validation + Failure Injection | BLOCKED BY M15 | NO |
+| M12 | Reconciliation + Allocation | IMPLEMENTED AND LOCALLY VALIDATED; all blocking local gates PASS; production pending | YES (local only; stop before M13) |
+| M13 | Unit Economics | IMPLEMENTED AND LOCALLY VALIDATED; all local gates PASS; production pending | YES (local only; STOP before M14) |
+| M14 | Budgets / Forecasting / Anomalies | IMPLEMENTED AND LOCALLY VALIDATED; all35 blocking local gates PASS; production pending | YES (local only; STOP before M15) |
+| M15 | Security / Retention / Sampling Hardening | IMPLEMENTED AND LOCALLY VALIDATED; all38 user local gates PASS; B01 RESOLVED; production pending | YES (local only; STOP before M16) |
+| M16 | Validation + Failure Injection | NOT STARTED; M15 local gate passed; no instruction to implement M16 | NO |
 | M17 | Production Operationalization | BLOCKED BY M16 | NO |
 | M18 | Release / CI / IaC Hardening | BLOCKED BY M17 | NO |
 | M19 | Quality / Outcome + Continuous Profiling | BLOCKED BY M18 | NO |
@@ -4202,6 +4202,7 @@ feature warnings; one non-failing pooled-connection cleanup warning appears duri
 an unrelated warmup test. Controlled M5 pool/fault/cancellation fixtures pass cleanly.
 No runtime cloud-dependent M5 exit criterion exists; no M5 cloud operation required.
 Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED.
+
 Exact pending M5 cloud operations = NONE. Inherited M1 rollout remains separately
 pending; this request neither executes nor authorizes it.
 
@@ -9904,3 +9905,4161 @@ Cloud deployment status: NOT EXECUTED — USER APPROVAL REQUIRED.
 Production source validation: NOT LIVE-VALIDATED.
 Ready for Next Milestone: YES (local gate only).
 Next permitted action: STOP. M12 has NOT started and requires a separate instruction.
+
+## M12 — Billing Reconciliation + Cost Allocation: planning only — 2026-10-08
+
+**M12 — PLANNED — NOT IMPLEMENTED.** Authorization: local audit and planning only.
+This section supersedes historical M12 NOT STARTED wording, not predecessor evidence.
+Only this execution record changes. No M12 code, migration, SQL, Terraform or UI is
+implemented. M13 unit economics and M14 budgets/forecasting/anomalies remain blocked.
+
+### Objective, specifications and predecessor gate
+
+Join M10 observed runtime usage and M11 actual financial source truth through a
+separate immutable derived reconciliation/allocation layer. Explain compatible
+quantities, direct/shared/unallocated amounts, coverage, variance and incompleteness.
+Actual billing remains financial authority; catalog pricing remains reference-only.
+
+Read AGENTS.md and .agent/PLANS.md; execution record program matrix, M10 scope,
+implementation/acceptance and M11 scope, implementation/acceptance. Read the requested
+files under docs/Telemetry/: README.md, 00_MASTER_BUILD_CONTRACT.md,
+01_TARGET_ARCHITECTURE.md, 05_STORAGE_APIS_AND_UI.md, 07_FINOPS_ARCHITECTURE.md,
+08_FINOPS_DATA_MODEL_AND_UNIT_ECONOMICS.md, 09_SECURITY_PRIVACY_RETENTION_SAMPLING.md,
+11_SLOPANOC_INTEGRATION_MAP.md, 12_IMPLEMENTATION_ROADMAP.md,
+13_TEST_VALIDATION_ACCEPTANCE.md, 14_CODEX_EXECUTION_GUIDE.md,
+15_DEFINITION_OF_DONE.md, 20_FINOPS_ACCOUNTING_DURABILITY.md,
+22_RELEASE_CONFIG_CORRELATION_CI.md, 23_TERRAFORM_AND_OBSERVABILITY_AS_CODE.md.
+
+Entry gate: PASS under the existing explicitly authorized LOCAL progression model.
+M0 VALIDATED COMPLETE; M1–M11 IMPLEMENTED AND LOCALLY VALIDATED, local advancement
+YES. M11 all31 local gates PASS; historical full backend5424PASS/12SKIP,
+focused1095PASS, frontend938PASS/buildPASS. These full results are recorded evidence,
+not rerun in planning. Production completion is NOT claimed. The current request
+continues that local model; it does not authorize a live validation or deployment.
+
+Fresh predecessor verification used the existing inspected credential-stripping,
+in-memory SQLite/non-loopback-network-blocking wrapper:
+`.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests/test_finops_runtime_ledger.py backend/tests/test_finops_runtime_recovery.py backend/tests/test_finops_runtime_api.py backend/tests/test_finops_billing_normalization.py backend/tests/test_finops_billing_ingestion.py backend/tests/test_finops_billing_api.py backend/tests/test_finops_billing_migrations.py`
+Result: **114 PASS,10.99s,exit0**. No cloud connection, shared DB or live billing job.
+No M12 validation exists yet. No predecessor failure identified.
+
+### Actual inputs, architecture inspected and components to reuse
+
+| Existing source | Facts and M12 reuse |
+|---|---|
+| finops/contracts.py, models.py, repository.py, usage_ledger.py, recovery.py | Pre-dispatch durable attempt identity; immutable nullable integer BASE quantities; idempotent signed ADJUSTMENT rows referencing BASE; durable inbox/debt/conflict tracking. No price/cost/currency fields. M12 only reads; never calls adjust() to make financial sources agree. |
+| finops/service.py, slo_source.py | Minute usage buckets, separate quantity coverage, AccountingSource/M9 ledger completeness and durable health. Public usage API groups one dimension at a time and lacks a reproducible joint snapshot; it is not an M12 input adapter. |
+| billing_contracts.py, billing_normalization.py, billing_models.py, billing_repository.py | Detailed actual charge authority; daily source manifests/fingerprints/control totals; signed credits, adjustments, tax and rounding; multiplicity preserved. Durable cache groups invoice/currency/category, not service/SKU/unit quantities. Earlier manifests immutable; source rows remain in warehouse. |
+| billing_sources.py, bigquery_source.py, billing_ingestion.py | Explicit injected fixture/SDK sources, daily complete extraction, scoped bounded query and CAS-fenced atomic publication. Default no implicit client or job. Reuse the exact successful extraction for an independently owned M12 input projection. |
+| pricing.py, sku_mapping.py | Observed daily catalog/tier history and no interpolation/fallback. Mapping currently only service/SKU→category, not model or charge component. New M12 registry is separate; do not reinterpret M11 mapping versions. |
+| billing_service.py, billing_api_models.py | Safe cache-only read DTOs, native currencies, unavailable EUR conversion, independent source freshness. Reuse financial facade conventions, not its lossy summaries for model matching. |
+| observability/authorization.py, service.py; api/observability_routes.py | Verified principal + explicit FINANCIAL_DATA; environment scope, read timeout/semaphore/rate guard and signed scope-bound cursors. No RBAC expansion; Admin has no automatic financial bypass. |
+| api/app.py; observability/config.py; alembic/env.py | Existing injected Database/session/lifespan and registered application-owned metadata. New worker defaults disabled; no credential discovery, migrations or live jobs on startup. Migration head d11b4a8c9e32 follows c10a8f6e2d41. |
+| src/api/finops.ts, finops.test-support.ts; FinOpsPanel.tsx, FinancialSourcePanel.tsx, ReadState.tsx, useObservabilityQuery.ts | Existing Settings shell, exact decimal-string display, query/cancellation/error/revocation handling. M12 Reconciliation/Allocation cards currently unavailable; M13/M14 cards remain so. |
+| finops/metrics.py, billing_metrics.py; observability/runtime.py, metrics.py; both Collector YAMLs | Existing finite instruments, validation, units, exemplar removal and Collector allowlists. Extend all boundaries together. |
+| infra/observability/bigquery/*.sql, terraform/billing/*; relevant backend/frontend tests | Normalized fixed SELECT/query contracts, source scope and provider-free IaC validation; reuse synthetic fixtures and local migration conventions. |
+
+Source scan finds no implemented reconciliation/allocation engine, schema or API;
+UI still labels source amounts unreconciled. M13 unit economics is unavailable.
+M10's approved quantity-only scope overrides old roadmap estimator wording. M12
+will compute a separate catalog reference where possible, never invent a stored
+M10 estimate or retrofit its ledger. Missing historical estimates remain unavailable.
+
+### Reconciliation grain and scoped input acquisition
+
+Primary work unit: one UTC usage day [start,end), one approved environment/source
+scope; presentation may combine at most31days. Reconcile model/provider direct usage,
+then roll up service/day, approved project scope/day and period as doc08 prescribes.
+Invoice month is an independent billing dimension, not runtime time. Invoice views
+roll up already reconciled usage buckets by their invoice attribution; never join
+runtime separately to each invoice month and count it repeatedly. Partial retained
+invoice populations must be labeled, never claimed account-wide or final invoices.
+
+Strongest compatible matching key: environment + approved internal project/account
+scope + provider + stable service/SKU token + canonical model/charge component +
+unit + region + usage interval + consumption mode where supported. Workload and
+operation type participate only if BOTH sources have authoritative attribution;
+otherwise runtime aggregates across those fields. Agent/turn labels cannot be
+inferred from billing. No attempt↔billing-line one-to-one assumption.
+
+M10 adapter reads BASE rows by original dispatch/observed_at and referenced
+ADJUSTMENTs regardless of their later observed_at, under one repeatable snapshot;
+nullable quantity knowledge and eligible/uncaptured attempt debt join in that
+snapshot. Preserve original period, per-component known/unknown counts, schema
+versions, correction contributions, event/adjustment counts and a canonical ordered
+input digest. A timestamp/max UUID alone is NOT a ledger watermark: late inserts
+and corrections can precede it. Capture read cutoff + sorted identity/payload digest
++ period and quality fingerprint, persist bounded aggregates for deterministic
+replay. PostgreSQL REPEATABLE READ; isolated SQLite snapshot fixture equivalent;
+never change M10 writers or use mutable minute buckets as historical snapshots.
+Region comes from BASE metadata; absent region/scope proof cannot become wildcard
+exact matching. M10 lacks project identity: server-owned effective-dated deployment
+scope attestation must prove the environment/provider population belongs to the
+selected billing project set. Without it matching is ambiguous/unallocated.
+
+M11 summaries have NO durable model matching quantities or detailed SKU keys.
+Plan a separate M12 billing-input materializer from the same complete extraction
+successfully published by M11. It recomputes the unchanged M11 multiset fingerprint
+and all per-currency/type controls, binds the exact M11 manifest, and stores ONLY
+bounded keyed quantities/charge components and internal hashed mapping/ownership
+keys. No raw rows, labels, resource names or duplicate whole dataset. Optional
+post-publication integration must not make M11 publication contingent on M12;
+M12 projection failure produces visible debt and leaves M11 truth intact. A stale
+extraction cannot attach to another generation. Publication rechecks source pointers.
+
+Retained old M11 manifests without matching M12 input detail cannot be reconstructed
+from category totals. They expose INPUT_DETAIL_UNAVAILABLE, not fabricated joins.
+Future separately approved re-extraction can materialize its matching manifest or
+produce a new M11 generation; no live query in this milestone's local work. Persisted
+M12 input aggregates make future history reproducible without warehouse time-travel
+assumptions. Fixture adapters exercise this path locally.
+
+Billing interval end, invoice month, cost_type and unknown quantity counters are
+preserved. Cross-day usage intervals or granularity incompatibility remain partial
+unless provider semantics justify the grouping; no arbitrary temporal proration.
+
+### Deterministic hierarchy and effective-dated mappings
+
+1. Exact verified compatible ownership/component/time/unit identifiers, if available:
+EXACT match confidence. Current aggregated Google inputs cannot establish attempt
+identity, so equality alone never yields EXACT.
+2. Proven dedicated workload/resource ownership with compatible source evidence:
+HIGH attribution confidence; absence of runtime metering remains explicit.
+3. Compatible model/SKU/component daily buckets: AGGREGATED match confidence; aggregate
+runtime first with dictionary/SQL grouping, not pairwise row comparison.
+4. Incompatible/unknown unit, missing scope, multiple mapping candidates or missing
+source: PARTIAL, UNMATCHED, AMBIGUOUS or SOURCE_UNAVAILABLE as appropriate. Estimated
+attribution is not enabled; catalog comparisons cannot upgrade confidence.
+
+New mapping registry: immutable version/content hash, provider, service/SKU internal
+identifiers, canonical model, operation_type, charge component, region/mode selectors,
+unit semantics/conversion version, effective_from inclusive/effective_to exclusive,
+ownership target and evidence reference. Validate overlap, missing fields and duplicate
+ambiguity before activation; no name substring/description inference. A source SKU
+covering indistinguishable models maps a supported aggregate population or remains
+AMBIGUOUS. Unknown is UNMAPPED. Historical buckets crossing mapping change boundaries
+split only where actual source time detail supports it; otherwise partial/ambiguous.
+Mappings/rules live in versioned server configuration and persisted immutable registry
+versions; no React rules or mutation endpoint. Default empty registry invents nothing.
+
+Units require exact semantic compatibility, including token component/modality/cache
+semantics. Never sum overlapping total/input/output/candidate/thought counts. Select
+one documented billable component path; missing cache/input partition semantics remain
+unknown. Unit scaling such as per-million tokens needs explicit authoritative factor,
+effective dates and version; absent evidence yields UNIT_MISMATCH. No arbitrary
+characters↔tokens or seconds↔requests conversion. Unknown quantities are null, not0.
+
+### Quantity and monetary reconciliation
+
+For each compatible component bucket keep runtime_observed, runtime_unknown_count,
+billing_observed, billing_unknown_count, match/confidence and source references.
+quantity_variance = billing_observed − runtime_observed, only when both known;
+percentage = variance/runtime_observed, denominator basis explicit. Zero denominator:
+0/0→0 only when both independently known zero; nonzero/0→NULL + bounded reason.
+Do not sum quantities across units/components. Known partial subtotals stay labeled
+partial. Unknown-runtime billing retained; missing-billing runtime retained without
+invented money. Monetary assignment cannot substitute for quantity coverage.
+
+Amounts: regular gross, signed source credits (types preserved), adjustments, tax,
+rounding, pre_credit, actual_net; separate catalog_reference and attributable amount.
+actual_net = gross + adjustments + tax + rounding + credits. Catalog expected amount
+uses only compatible observed pricing coverage, proven tier/aggregation/mode semantics,
+known runtime quantities and same native currency. Preserve list vs account reference
+basis separately. Unsupported account-month tiers, gaps, ambiguity or missing prices
+return unavailable; no naive per-row tier calculation or historical price fallback.
+monetary_variance = actual comparable charge amount − catalog_reference; store exact
+comparison basis and percentage denominator. Full invoice net cannot be compared to
+model usage estimate as if populations were identical. Nonusage components remain
+separate. M10 stored estimate is unavailable, and DTO/UI say so explicitly.
+
+### Direct/shared/unallocated classification and credits policy
+
+Deterministic order per disjoint source component: DIRECT, then SHARED, otherwise
+UNALLOCATED. Each monetary component assigned once; no duplicated credits/rows or
+cost-multiplying credit-array joins. Unknown mapping/ownership never disappears.
+
+DIRECT: compatible model/API billing bucket with proven scoped workload ownership
+and acceptable match confidence, or dedicated owned infrastructure with explicit
+versioned resource evidence. Quantity mismatch under proven dedicated ownership may
+retain direct financial classification while quantity status is VARIANCE_REVIEW;
+without ownership proof mismatch does not justify direct attribution. A quantity
+ratio never apportions unknown monetary differences into invented exact usage.
+
+SHARED: explicit versioned supporting-infrastructure pool ownership, e.g. Cloud SQL,
+Cloud Run baseline, monitoring/logging, shared storage/network. Category alone is
+insufficient evidence of ownership. Store source pool, environment/service target,
+method=OWNERSHIP_POOL, driver=VERIFIED_POOL_MEMBERSHIP, driver value/evidence,
+allocation version/confidence and period. This is reproducible M12 pool classification
+and satisfies roadmap method/driver requirements. No per-turn/token-share allocation
+or per-ticket economics. When ownership key is absent, retain UNALLOCATED rather
+than trigger an unsafe fallback. M13 may later consume shared pools, not rewrite them.
+
+UNALLOCATED: unmapped SKU, ambiguous scope/ownership, missing detail/mapping, unknown
+charge semantics and otherwise indefensible attribution. Valid financial result;
+amounts and bounded reasons visible, including meaningful negative/credit amounts.
+
+Credits attached to a source charge follow its independently justified classification;
+preserve original signed amount/type/credit identity internally. A detached/account-wide
+credit remains UNALLOCATED absent explicit authoritative linkage. No proportional
+credit spreading. Adjustment source rows use their own proven component/ownership
+or linked authoritative correction context, otherwise UNALLOCATED. Tax and rounding
+are UNALLOCATED nonusage components in policyv1; never model calls. Their source
+semantics stay separately visible. No manual adjustments/overrides in M12.
+
+### Currency, Decimal controls and coverage
+
+Native-currency groups remain independent; source USD→native conversion metadata is
+not an authoritative USD→EUR reporting rate. M11 currently supports native EUR only;
+other EUR values remain NULL/EUR_REPORTING_UNAVAILABLE. Any future conversion must
+carry source, effective date/rate and version, with independent converted controls.
+No external FX lookup and no implicit mixed-currency total.
+
+Reuse M11 decimal validation: no float/bool/nonfinite, bounded38integer/38fractional
+source precision, local100digit calculation context. Persist quantities/money as exact
+decimal strings in JSON or validated fixed precision, avoiding SQLite float affinity.
+No cent-rounding of accounting controls. Display-only quantization is explicit;
+ratio outputs quantize to12decimal places with declared ROUND_HALF_EVEN. Monetary
+controls require exact equality: NO tolerance. Quantity equality requires exactness
+for compatible proven units; any nonzero mismatch is review. No approved numeric
+tolerance exists; optional future tolerance is PROVISIONAL/server-owned/versioned,
+disabled by default and cannot waive financial imbalance.
+
+Per currency, usage window AND independent invoice/control dimensions:
+source_actual_net = direct_net + shared_net + unallocated_net + explicitly_excluded_net.
+Policyv1 has no in-scope exclusions (excluded=0); unrelated scope is rejected before
+reconciliation, with safe mismatch status rather than disappearing funds. Validate
+all gross/credit/adjustment/tax/rounding subcontrols as well as net. Any imbalance,
+overlap or lost multiplicity FAILS generation publication. Signed cancellation cannot
+hide missing allocation: preserve row/component counts and absolute amount controls.
+
+Separate coverage numerators/denominators and explicit0-population policy:
+- runtime representation: included eligible attempts/eligible attempts; quantity-known
+  coverage and successfully matched known component populations separately;
+- ledger completeness: captured/eligible, debt, pending, conflicts and coverage_start;
+- billing classification: classified source components/all source components;
+- monetary accounting coverage: balanced classified absolute-component amount/source
+  absolute-component amount; unallocated counts as accounted, not successfully allocated;
+- defensible allocation coverage: (direct+shared absolute-component amount)/source
+  absolute-component amount; separate unallocated exposure;
+- mapping coverage: mapped row/component count AND mapped absolute spend/total;
+- price reference coverage: compatible priced runtime components/applicable components.
+Never combine quantities with different units. Empty denominators return NULL with
+NO_DATA, not100%. Pool percentages use absolute component exposure to avoid negative
+net/cancellation ratios; show exact signed amounts and state that percentage basis.
+
+### Correction windows, quality, statuses and reason codes
+
+Recent overlapping daily work + least-recently-checked retained day sweep follows M11
+bounded retained scheduling; provisional lookback7days/retention731days, bounded passes.
+New billing/pricing generation, runtime/correction snapshot digest, mapping/rule or
+algorithm version creates a new result. Never sum all M11 generations as charges:
+use one pinned current snapshot per day; inside that snapshot retain +10−10+5=5 and
+identical10+10=20. Keep historical manifest/input/result linkage. No permanent
+settlement assumption, automatic invoice close or manual silent correction.
+
+Canonical doc20 reconciliation_status ONLY: UNRECONCILED, PARTIALLY_RECONCILED,
+RECONCILED, VARIANCE_REVIEW, CORRECTED. Separate match_confidence bounded EXACT,
+HIGH, AGGREGATED, PARTIAL, UNMATCHED, AMBIGUOUS, SOURCE_UNAVAILABLE (new M12 enum).
+Separate job_state OPEN/RECONCILING/PUBLISHED/FAILED, source availability/freshness
+reusing M11 FRESH/DELAYED/STALE/UNAVAILABLE/NOT_CONFIGURED. CORRECTED records an
+explicit supersession of a changed source basis, not automatic successful settlement;
+new generation also carries its evaluated underlying coverage/control status.
+
+RECONCILED requires all exact monetary controls PASS, all required period inputs,
+100% eligible runtime capture with no relevant debt/conflicts, known compatible
+quantities/mappings and accepted matches with no unexplained variance, complete
+requested source coverage and nonstale source evidence. Missing pricing blocks only
+reference comparisons; it does not block actual financial conservation. Unallocated
+spend stays visible; unexplained in-scope spend prevents fully reconciled status.
+Even RECONCILED means this scoped observed generation, NOT provider invoice finality.
+Stale/unavailable live evidence overrides optimistic UI presentation of retained results.
+
+Policy precedence: unavailable required input→UNRECONCILED; financial control failure
+→FAILED unpublished; ambiguity/incompatible units/unexplained variance→VARIANCE_REVIEW;
+incomplete quantities/coverage/debt/late billing→PARTIALLY_RECONCILED; all gates→RECONCILED.
+Reason enum: LATE_BILLING, PRICE_COVERAGE_MISSING, SKU_UNMAPPED, UNIT_MISMATCH,
+RUNTIME_USAGE_UNKNOWN, BILLING_QUANTITY_UNKNOWN, CREDIT_ADJUSTMENT,
+SHARED_INFRASTRUCTURE, SOURCE_STALE, AMBIGUOUS_MATCH, INPUT_DETAIL_UNAVAILABLE,
+SCOPE_UNPROVEN, FINANCIAL_IMBALANCE, RUNTIME_ACCOUNTING_DEBT, NO_DATA,
+SOURCE_UNAVAILABLE, TEMPORAL_GRAIN_MISMATCH. No free exception text or catchall strings.
+M10 period debt plus conservative global/source debt flags prevent green completeness;
+process-local admission counts must not be reported as fleet completeness proof.
+Source snapshots include evaluated-at/reference time. API separately reevaluates
+current freshness so historical payloads remain immutable and truthful.
+
+### Derived storage, generation publication and recovery
+
+Application-owned Cloud SQL tables proposed:
+- finops_reconciliation_registry: immutable mappings/ownership rules/policy versions,
+  canonical content hash and effective dates; bounded safe internal configuration;
+- finops_reconciliation_input: immutable aggregate input snapshot, source-kind,
+  scope/period, M10 digest or M11 manifest reference, quantity/component aggregates,
+  controls/quality and projection version; no raw billing/ledger copy;
+- finops_reconciliation_generation: immutable input IDs, exact billing/pricing
+  generation vector, mapping/rules/policy/algorithm/schema/release/config versions,
+  bounded result buckets, allocation summaries, controls/coverage/reasons and digest;
+- finops_reconciliation_state: scoped period key, monotonically fenced revision,
+  current published generation, attempts/success/error and scheduling metadata.
+
+Additive local-only Alembic revision e12c6d8a4b50 after actual head d11b4a8c9e32
+(recheck head before authoring). New dedicated metadata only; unique generation/input
+hashes and scoped-period pointer, immutable result checks, FKs/indexes on scope/period.
+No ALTER/update of M10/M11 truth; no DB-trigger or ADK/session changes. No destructive
+retention job now; target24months with effective policy read-only. Downgrade affects
+only new derived tables; shared downgrade/migration needs its own exact approval.
+BigQuery remains analytical source; Cloud SQL holds application-owned bounded results,
+not an alternative copy of full warehouse billing history.
+
+Composition: runtime/billing/pricing/mapping providers → keyed reconciliation engine
+→ allocation classifier → generation publisher. Pure policy modules do not query
+providers. HTTP reads only published DB summaries; no BigQuery or model call.
+
+Hash canonical normalized ordered inputs + mapping/rule/policy/algorithm versions;
+same inputs yield same input/result/generation identity. Exclude volatile worker times
+from result digest; as-of evaluation time is an explicit reproducibility input. Persist
+all consumed aggregates, not merely maximum event timestamp. No full per-attempt IDs
+in public DTOs; internal event digest/count proves snapshot linkage.
+
+Reserve fence, capture pinned inputs, compute/validate off-transaction, atomically
+insert immutable generation and CAS-update current pointer in one short transaction.
+At publication recheck current M11 manifest vector and period-input revision; obsolete
+workers return SUPERSEDED. Capture later M10 changes as a new snapshot on bounded
+rescans; current result exposes its as-of cutoff, not a nonexistent global atomic
+snapshot across source stores. Unique identities converge concurrent identical runs.
+No source I/O during publication transaction. Failure/crash leaves old current pointer;
+partial/staging data never leaks. Job failure/source staleness shown separately even
+when prior known-good financial data remains readable.
+
+Provisional local limits: one day/job; max100000source rows, max10000derived buckets,
+max32partitions/cycle, max31days/read, max100items/page,2s API and60s job budget;
+max128MiB serialized input/result, measured process memory before promotion. Abort
+oversized work without truncation or partial publication; revising caps requires
+policy version. Keyed aggregation expected O(N + B log B) including canonical sort;
+no O(N²) joins. Actual performance/production thresholds remain unvalidated.
+
+### Metrics and safe financial API contracts
+
+Proposed finite instrument family slopanoc.finops.reconciliation.*: runs, publications,
+failures, identical_generations, financial_imbalances, unresolved_periods, source_stale,
+lag_seconds, duration_seconds, runtime_coverage, billing_classification_coverage,
+mapping_coverage, monetary_accounting_coverage, allocation_coverage,
+direct_ratio/shared_ratio/unallocated_ratio. Dimensionless coverage/count units1;
+lag/duration seconds. Quantity variance metrics only for separately registered bounded
+component/unit families; no cross-unit gauge. Signed monetary/quantity ratios are
+approximate telemetry only; exact financial controls remain durable Decimal.
+Never emit identifiers, period strings, billing account/project/resource/run IDs as
+labels/exemplars. Reuse existing finite environment/operation/status/window registry
+and centralized validation/Collector projection; don't create arbitrary SKU/model
+labels. Missing data emits no fake0 or healthy ratio. Keep M10 quantity/completeness,
+M11 billing/pricing freshness/coverage and M12 reconciliation quality separate.
+
+GET /api/observability/finops/reconciliation: bounded day/range summary list;
+GET /api/observability/finops/reconciliation/{period}: validated YYYY-MM-DD day detail;
+GET /api/observability/finops/allocation: scoped period/currency category totals.
+All require existing financial dependency, verified principal, explicit capability,
+environment scope and rate/concurrency/timeout guard. No writes, manual overrides or
+frontend authority. Cursors bind period/currency/environment/published generation.
+DTO: safe period/basis, currency, opaque generation/source references, quantity
+component/unit/known/unknown counts, exact-string amounts/control/variance fields,
+coverage numerators/denominators, bounded confidence/status/reasons, source ages/as-of,
+input-detail and price-reference availability, mapping/rule/algorithm versions.
+No account/project/resource/SKU IDs, raw source payload/SQL, commands, prompt/content
+or unrestricted ledger attempt identities. Opaque generation hashes confer no access.
+Invoice summaries explicitly label partial coverage. Denial/revocation invalidates
+cached financial views through existing behavior.
+
+### M8 UI impact evaluation
+
+1. M12 creates required Settings financial reconciliation and allocation information.
+2. The three protected safe server DTOs support that information and independent
+   source quality; no client-side reconciliation, allocation or FX formulas.
+3. Current milestone activates Reconciliation/Allocation within existing FinOpsPanel,
+   using a ReconciliationPanel, existing query/ReadState/cards/typography/navigation.
+   Runtime quantities and unreconciled M11 source panels remain distinct. Show source
+   periods, actual gross/credits/adjustment/tax/net, catalog unavailable/reference,
+   quantity variance and coverage. Unit economics stays M13; budgets/forecasts/anomaliesM14.
+4. Existing server FINANCIAL_DATA applies; client visibility is only presentation.
+   Test denial, revocation, request cancellation and no restricted raw identifiers.
+5. Mapping/rule/source/config versions and tolerances are effective READ-ONLY; no
+   edits, policy overrides or IaC bypass, including for Admin.
+
+Display Reconciled only from backend gates and current source quality; otherwise
+Partial/Unresolved/Stale/Source unavailable. CORRECTED history does not imply green.
+Keep unallocated amount prominent alongside percentages with declared denominator,
+including negative/zero-net examples. No per-turn/per-ticket cost, budgets or anomaly
+alerts. Fixture mode and unavailable estimates/EUR conversion explicitly labeled.
+
+### Exact planned paths (implementation only; none changed now)
+
+New backend modules under backend/observability/finops/:
+- reconciliation_contracts.py — canonical states/reasons, bounded policy/DTO inputs;
+- reconciliation_mapping.py — effective-dated model/component/ownership registry;
+- reconciliation_inputs.py — read-only M10 snapshot and generation-linked M11 aggregates;
+- reconciliation.py — pure keyed quantity/reference comparison engine;
+- allocation.py — disjoint versioned direct/shared/unallocated classification;
+- reconciliation_models.py — derived metadata and four tables;
+- reconciliation_repository.py — immutable inputs/generations, fenced publication;
+- reconciliation_worker.py — bounded rescan/recovery and source-vector orchestration;
+- reconciliation_api_models.py — safe exact-string read contracts;
+- reconciliation_service.py — protected cached summaries;
+- reconciliation_metrics.py — finite instruments and safe points.
+
+Existing paths expected to change, only for integration:
+- backend/observability/finops/billing_ingestion.py — optional successful-extraction
+  consumer seam; M11 source normalization/publication semantics unchanged;
+- backend/api/app.py — injected disabled-by-default lifecycle;
+- backend/api/observability_routes.py — three GET routes;
+- backend/observability/config.py — effective validated read-only M12 policy;
+- backend/observability/runtime.py and backend/observability/metrics.py — instruments;
+- backend/observability/README.md — ownership/runtime/source-limitation documentation;
+- alembic/env.py — application-only derived metadata registration;
+- infra/observability/collector/config.yaml and config.local.yaml — metrics allowlist;
+- src/api/finops.ts and finops.test-support.ts — safe DTO decoding and fixtures;
+- src/components/shell/settings/observability/FinOpsPanel.tsx — activate two cards;
+- src/components/shell/settings/observability/FinOpsPanel.test.tsx and Panels.test.tsx;
+- backend/tests/test_api_security_contract.py — financial route inventory;
+- backend/tests/test_observability_migrations.py and test_observability_collector.py;
+- .agent/OBSERVABILITY_EXECUTION.md — progress/evidence and individually evaluated gates.
+
+New migration: alembic/versions/e12c6d8a4b50_finops_reconciliation.py.
+New frontend: src/components/shell/settings/observability/ReconciliationPanel.tsx,
+ReconciliationPanel.test.tsx and src/api/reconciliation.test.ts.
+New tests under backend/tests/: _m12_reconciliation.py,
+test_finops_reconciliation_contracts.py, test_finops_reconciliation_inputs.py,
+test_finops_reconciliation_mapping.py, test_finops_reconciliation_engine.py,
+test_finops_reconciliation_allocation.py, test_finops_reconciliation_publication.py,
+test_finops_reconciliation_api.py, test_finops_reconciliation_metrics.py,
+test_finops_reconciliation_migrations.py, test_finops_reconciliation_performance.py.
+No Terraform/BigQuery SQL changes expected for this local design; if source projections
+require them, add exact paths/validation to this record BEFORE changes. No M13/M14 files.
+
+### Implementation sequence and validation plan (NOT executed for M12)
+
+1. Contracts, effective-dated registry and pure control/classification functions.
+2. Derived metadata/local migration, stable read-only M10 snapshot and attested
+   successful M11 extraction materialization; prove source bytes/rows unchanged.
+3. Engine/catalog comparison, bounded worker, atomic replay/concurrent publication.
+4. Protected cache reads, metric/Collector integration and existing M8 UI activation.
+5. Failure injection, local synthetic measurements, regressions and gate review.
+
+Focused synthetic fixtures must prove:
+- runtime1000/billing1000/netEUR10 yields direct10/shared0/unallocated0/variance0 under
+  proven ownership; AGGREGATED confidence stays aggregated even if RECONCILED;
+- runtime1000/billing1100 exposes100 variance, preserves money and no false exactness;
+- missing runtime/quantity/billing, unknown SKU/unit/component/mapping/scope, cross-day
+  interval, absent old-generation detail and zero denominators remain visible;
+- late billing/new mapping/pricing and M10 correction create new immutable generations;
+- source10−10+5=5, identical10+10=20; source history/manifest linkage retained;
+- direct60/shared30/unallocated10 exactly conserves100; overlap/duplication fails;
+- direct/shared/detached credits, adjustment/tax/rounding policy and fractional Decimal
+  net/component/absolute controls, cancellations and negative values remain exact;
+- separate EUR/USD, unsupported conversion and no mixed-unit/currency totals;
+- effective-date boundaries, older mapping/prices and incomplete tier coverage;
+- stale billing, missing pricing, ledger debt/conflict/backlog, incomplete scope/coverage
+  prevent false completeness; pricing outage still permits actual controls/reporting;
+- deterministic input permutations, rerun identity, crash/rollback, restart and concurrent
+  identical/different publications, stale fence and source-pointer movement;
+- snapshot stability when late inserts/corrections occur during read, adjustments join
+  original period, no duplicated runtime across invoice periods/components;
+- unauthorized/unverified/no-financial/financial principal; all six roles, environment,
+  cursor/rate/concurrency guards; fake secrets/IDs absent from APIs/UI/logs/metrics;
+- no source/model jobs on HTTP, no implicit client/startup, no command/governance changes;
+- UI truthfulness, absolute amounts with percentages, revocation and M13/M14 unavailable.
+
+Use the inspected local network/credential guard, or recreate it equivalently if absent.
+Commands planned (shell globs resolve the actual test files at implementation time):
+- `.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests/test_finops_reconciliation_*.py`
+- `.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests/test_observability_*.py backend/tests/test_finops_*.py`
+- `.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests`
+- `npm test -- --run` and `npm run build` (includes TypeScript);
+- isolated local migration upgrade/downgrade + PostgreSQL offline DDL in migration tests;
+- native Collector local validation via existing tests; loopback permission if needed;
+- `git diff --check`; inspect status/diff/untracked paths, no exported data/secrets.
+If Terraform/SQL modified: terraform fmt/validate only in verified local provider-free
+modules and static/fake-query SQL validation. No plan/state operation or live SQL job.
+All test harnesses must inject isolated local DBs/test sources, never configured cloud
+URLs; no broad app boot outside fixtures. Real PostgreSQL locks require an isolated
+local server or remain explicitly unvalidated, never claimed from SQLite.
+
+Synthetic performance at1k/10k/100k input rows and realistic multi-component buckets:
+measure runtime snapshot/aggregation, billing materialization, mapping, daily engine,
+classification, publication, API read and UI render independently; repeated samples,
+median/p95/RSS/serialized bytes/row and bucket caps. Warm-cache vs cold measurements
+labeled. Assert exact controls; test overflow abort and timeout recovery. No production
+throughput/Cloud SQL concurrency/BigQuery query cost claim from these local tests.
+
+### Objective M12 exit criteria (all pending; no implementation PASS yet)
+
+| Gate | Required measurable evidence |
+|---|---|
+| C01 | M10/M11 authority unchanged; before/after source persistence and regression proof |
+| C02 | Derived input/result tables only; no raw/full source dataset duplication |
+| C03 | Explicit time/scope/component/unit grain; aggregate hierarchy deterministic |
+| C04 | Stable effective-dated model/SKU/unit/ownership registry; overlap/unknown tested |
+| C05 | M10 snapshot includes referenced corrections/debt and reproducible input digest |
+| C06 | M11 input linked to exact manifest/fingerprint/controls; old missing detail explicit |
+| C07 | Quantity null/known/variance separated from amounts; no incompatible conversion |
+| C08 | Actual gross/credits/adjustment/tax/net preserved; catalog/estimate distinct |
+| C09 | Native currencies separate; unavailable EUR/price/reference paths truthful |
+| C10 | Direct/shared/unallocated justified and versioned; shared driver reproducible |
+| C11 | Unknown SKUs/ambiguous spend retained; no forced allocation or manual override |
+| C12 | Exact per-currency net and component/count/absolute controls; overlap fails |
+| C13 | Credits/tax/rounding/corrections follow declared policy and remain distinguishable |
+| C14 | Decimal fractional equality; rounding/zero denominator policy machine-tested |
+| C15 | Immutable generations; deterministic replay/idempotency/input version linkage |
+| C16 | Atomic publication, fencing/restart/concurrency and obsolete-vector tests PASS |
+| C17 | Late correction/retained overlapping scheduling safe; no invented settlement |
+| C18 | Independent runtime/mapping/billing/monetary/price coverage explicitly measured |
+| C19 | Debt/freshness/gaps propagate; no false RECONCILED or optimistic UI |
+| C20 | Three protected cache-only financial reads; verified identity/capability/scope enforced |
+| C21 | Redaction/cardinality/API/log/UI/metric adversarial tests PASS |
+| C22 | M8 truthful reconciliation/amount/variance/coverage/allocation/freshness integration |
+| C23 | M13 unit economics and M14 budgets/forecast/anomalies remain unavailable |
+| C24 | Application-only additive migration isolated up/down + offline DDL PASS |
+| C25 | Bounded job/read/cycle/memory policy, scalable aggregation and performance evidence |
+| C26 | M0–M12 focused/full backend, frontend/TypeScript/build/Collector regressions PASS |
+| C27 | Source-controlled local configuration/static IaC/SQL checks if changed; diff audit PASS |
+| C28 | No cloud/shared/external mutation; live acceptance explicitly pending |
+
+Local implementation completion requires C01–C28 individually PASS, no blocking
+architecture item omitted. Roadmap exits map to C10/C11/C12/C18/C22 (visible unallocated,
+variance, reproducible shared allocation). Production DoD remains unfulfilled until
+separately approved live source/Cloud SQL/deployment acceptance. No locally passing
+fixture substitutes for an unexecuted live gate. Ready for Next Milestone stays NO
+now; reevaluate local vs live advancement explicitly at implementation completion.
+
+### Cloud status, risks and planning outcome
+
+Cloud deployment status = **NOT EXECUTED — USER APPROVAL REQUIRED**.
+No live BigQuery queries, export activation/binding, IAM, shared migration, deployment,
+Terraform apply/import/state or external-service operation. Local M12 implementation
+can use isolated fixtures/databases without any remote mutation. Future operations,
+not executable proposals: shared e12c6d8a4b50 migration; approved backend/worker/frontend
+rollout/configuration; any required binding/view/IAM change and exact live validation
+query. Actual project/account/environment/resource targets are not selected. Present
+all ten AGENTS.md approval fields and migration risks for EACH exact action before
+execution; planning/readiness never grants approval. No permission question needed now.
+
+Risks/limitations: M10 no project identity or estimates; M11 no retained detailed
+quantity/SKU matching cache; real source model/component mappings and dedicated/shared
+ownership keys not supplied; historical pricing is observational only; invoice scope
+partial; billing lag/corrections indefinite; provider float precision already lost at
+source; real PostgreSQL concurrency and live BigQuery behavior unvalidated. These
+are handled by explicit scope attestations/versioned configuration, separate derived
+aggregate materialization and partial/unavailable/unallocated results, not guesses.
+Live financial reconciliation remains blocked until those actual inputs and approvals
+exist. None requires source rewrite or later-milestone implementation.
+
+Planning performed: source/spec/predecessor audit and this complete local design.
+Actual files changed: **.agent/OBSERVABILITY_EXECUTION.md only**.
+Validation performed: fresh114 predecessor tests PASS; git diff --check PASS;
+git status/diff/stat review confirms only this record changed, no untracked files.
+Failures encountered: none in fresh predecessor tests; no M12 tests claimed.
+Repairs performed: none; source gaps addressed in planned interfaces only.
+M12 implementation status: NOT IMPLEMENTED. M12 validation status: NOT RUN.
+Exit criteria C01–C28: PENDING implementation and validation.
+**Ready To Implement M12: YES (local only, requires separate implementation instruction).**
+**Ready for Next Milestone: NO. M13 BLOCKED. STOP after planning.**
+
+## M12 implementation start — 2026-10-08
+
+User authorizes M12 local implementation and isolated validation only, with section110
+local exit gate and explicit component/signed/absolute/count financial conservation.
+Approved plan above applies; actual scope remains M12 only. Implementation IN PROGRESS;
+validation NOT RUN; M13 blocked; Ready for Next Milestone NO. No cloud action authorized.
+Financial components are aggregated by bounded grain, kind and sign with counts and
+absolute sums; classified once before net rollup. Zero-net cancellation cannot hide
+lost/duplicated components. Zero/unknown variance denominators now always return NULL
+per the implementation instruction (supersedes planning 0/0→0). Source authority,
+privacy, exact Decimal, atomic publication and existing architecture invariants apply.
+
+
+## M12 — implementation evidence — 2026-10-09
+
+Authorization: user's approved M12-only implementation request, financial-conservation
+requirements and continuation. Local development/fixtures only. No cloud/shared
+resource operation authorized or performed. M13/M14 remain unimplemented.
+
+### Implemented source boundary, inputs and matching
+
+M10 schemas, BASE events, corrections, accounting provider paths and quantity semantics
+were preserved. M11 adds only an optional post-success extraction consumer; failed
+M12 projection cannot alter M11 publication/error. Tests compare original M10 and
+M11 persistence before/after new derived generations. Source quantities and pricing
+observations remain authoritative and immutable; derived snapshots use independent
+metadata and tables.
+
+Successful M11 extraction is re-normalized against its exact manifest fingerprint,
+row count and controls. Hashed service/SKU/project, region, actual UTC usage interval,
+unit, native currency, consumption mode, invoice month and cost type form bounded
+aggregate buckets. Components are separate by kind, sign and credit type with exact
+amount/absolute/count. No unrestricted raw source lines are persisted. M11 summaries
+alone cannot reconstruct missing detail: INPUT_DETAIL_UNAVAILABLE is explicit and a
+normal complete source refresh is needed. M12 never executes source queries.
+
+M10 provider reads immutable BASE and referenced ADJUSTMENT rows in one repeatable
+snapshot, including corrections posted later than the BASE period. Attempt states,
+coverage start, source freshness, global debt and pending inbox share the snapshot.
+Uncaptured attempts have NULL quantities and unknown region, never a borrowed region.
+Digest incorporates immutable event witnesses, attempt states and quality. SQLite
+concurrent correction read test proves snapshot stability; offline PostgreSQL
+isolation is authored but real PostgreSQL behavior is not live-validated.
+
+Grain is environment + UTC usage day + compatible provider/model/SKU/selected
+component/unit/region. Invoice month is retained separately. Billing buckets aggregate
+before matching runtime; multiple currencies/units claiming the same runtime field
+are ambiguous. No artificial attempt-to-row lineage. Exact source ownership is HIGH,
+compatible quantity matching AGGREGATED, missing/unsupported/ambiguous evidence yields
+bounded PARTIAL/UNMATCHED/AMBIGUOUS state/reasons. EXACT is reserved and never inferred
+from quantity equality.
+
+Immutable deployment-owned registry includes effective dates, exact hashed identities,
+canonical model, quantity field, unit, region, operation type, consumption selector,
+ownership category/evidence and version. Empty/UNKNOWN identity hashes are rejected.
+Load, repository and engine boundaries all revalidate; overlapping source identity,
+reused runtime fields, totals alongside their components, input/cache/tool-input and
+output/candidate/thought overlaps fail. No description matching or implicit unit
+conversion. Trusted scope attestation is required because M10 has no project ID.
+Historical registries and inputs are retained for exact deterministic replay.
+
+### Quantity, monetary policy and conservation
+
+Runtime/billing observed quantities, unknown counts, difference, server percentage,
+confidence and reason remain separate. Missing quantities are NULL; no zeros are
+invented. Signed actual gross, credits, adjustments, tax, rounding and net come only
+from M11 Detailed Billing. Runtime estimate is explicitly unavailable. Catalog pricing
+never fills actual amounts; comparisons require proven account scope, DEFAULT mode,
+one compatible flat tariff and complete unique daily price coverage. Tiered monthly
+populations, missing history/mode/scope return unavailable.
+
+Each sign-preserving component receives exactly one DIRECT/SHARED/UNALLOCATED class.
+Dedicated ownership may support DIRECT even when quantities differ; quantity variance
+remains visible. SHARED means verified supporting-pool ownership, with OWNERSHIP_POOL
+method and VERIFIED_POOL_MEMBERSHIP driver, confidence and immutable ownership version.
+No per-turn/user apportionment. Unknown/detached components remain UNALLOCATED.
+Attached credits follow independently proven charge ownership, retaining signed
+amount/type/count; detached credits are not spread. Tax and rounding, including any
+associated credits, remain UNALLOCATED. Exclusions are zero in policy-v1.
+
+Controls compare per-currency/kind signed amounts, absolute amounts, component identity
+and multiplicity/count. Signed net is derived only after component validation. Any
+missing/doubled/tampered component or summary fails publication; positive/negative
+cancellation cannot conceal loss. Fixtures prove +100/-100 requires absolute200/count2,
++10/-10/+5=5, identical10+10=20 and direct60/shared30/unallocated10=100.
+
+All financial calculations use Decimal at100digit local precision and exact string
+storage. Native currencies remain separate; only native EUR is available for EUR
+reporting. Controls use exact equality without cent-rounding/tolerance. Ratios and
+percentages use12fractional digits/HALF_EVEN; all zero denominators return NULL.
+Reference-only arithmetic rounds at38fractional digits/HALF_EVEN, explicitly recorded.
+This final zero-denominator convention replaces the plan's conditional0/0 display
+suggestion; it does not waive or loosen any financial control.
+
+### Generation, quality, APIs and bounded execution
+
+Four application-owned tables: immutable registry, frozen input, immutable generation,
+mutable scoped-period current publication. Inputs link exact billing/pricing source
+IDs, M10 digest/quality, mapping/ownership/policy/algorithm/schema versions. Engine
+uses frozen bodies. Publisher recomputes result at its trust boundary, validates the
+complete billing/pricing vector and locks source pointers before atomic generation
+insert + CAS current-pointer update. Older workers are SUPERSEDED; no partial result
+becomes current. Identical inputs converge; mapping/source/price corrections create
+new history. Crash during pointer update rolls back insertion. Timeout/failure keeps
+the prior pointer and exposes a bounded job error; restart retains durable history.
+
+Retention revisit is731days, recent overlap7days, default2daily partitions/cycle,
+max32cycle partitions, max100000source rows/max10000buckets or components,
+128MiB serialized payload cap and60second job deadline. Oversized work fails without
+truncating accounting inputs. No invoice settlement/automatic deletion is implemented.
+Matching uses keyed runtime aggregation and a precomputed ambiguity population count,
+not a runtime-by-billing row join.
+
+Coverage separately records runtime representation/completeness, known runtime and
+billing quantity-group populations, compatible quantity groups, price-reference groups,
+mapping rows/absolute amount, classified monetary components/accounting coverage and
+defensible allocation. These include explicit numerators/denominators. Group-count
+ratios count evaluated reconciliation groups, never sum incompatible units. Historical
+status remains immutable; fresh API overlays M11 source movement/staleness and live
+M10 debt/pending/conflicts/freshness. No stale or incomplete source is presented green.
+Pricing unavailability blocks only reference comparisons.
+
+Three GETs reuse verified FINANCIAL_DATA/environment/rate/concurrency policy:
+/api/observability/finops/reconciliation, /reconciliation/{period}, /allocation.
+Admin does not implicitly receive financial permission. Reads consume published
+application data only, bounded31days/31items/2seconds, signed generation/scope cursor.
+Quantity rows cap100 with quantity_count and BOUNDED_SUMMARY when needed; stored
+financial controls are not truncated. Strict DTOs omit raw source identities, SQL,
+credentials, content and hidden reasoning. No financial mutation API exists.
+
+Metrics: fixed reconciliation run/publication/failure/control/idempotency/superseded
+counters; mapping/runtime/allocation/native-EUR ratios, unresolved/stale/debt/lag gauges;
+duration histogram. Only environment/operation/status/window labels, no identities
+or exemplars. Both Collector configs preserve their finite allowlists and seconds
+units. Adversarial generation-ID metric input is rejected in SDK/exporter and actual
+local Collector validation.
+
+### UI impact evaluation — all five required questions
+
+1. Information required by Settings: reconciliation quantities/state/variance, actual
+   components and direct/shared/unallocated amounts, coverage, freshness and versions.
+2. API contracts: strict protected aggregate DTOs, exact strings and backend percentages;
+   read-only configuration and explicit estimate/reference/currency availability.
+3. UI belongs to M12: existing M8 FinOps panel activated with existing layout/query/
+   ReadState patterns, date selector and refresh. Amounts first, prominent unallocated,
+   percentages secondary, backend status and current freshness/debt shown. No React
+   financial formulas. M13/M14 unavailable cards retained.
+4. RBAC: server FINANCIAL_DATA + verified principal/environment, all roles tested;
+   revocation removes prior rendered financial values.
+5. Configuration: deployment-owned policy/mapping/enablement is effective read-only;
+   default disabled, no UI/backend write bypass of IaC.
+
+### Migration and cloud status
+
+Actual graph verified: e12c6d8a4b50 follows d11b4a8c9e32 as the single head. Frozen
+migration creates only the four derived tables, indexes/FKs/unique/check constraints;
+no M10/M11 schema alteration. Isolated fileSQLite upgrade/downgrade checks metadata
+parity and preserves an unrelated sentinel row/table. Offline PostgreSQL DDL compiles.
+Local PostgreSQL binaries are unavailable; no shared/cloud database was used instead.
+
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED. Pending operations,
+not authorized here: shared database upgrade to e12c6d8a4b50, deployment/config activation,
+real source bindings/mapping/ownership attestation, live billing/pricing/reconciliation
+and production identity/locking/throughput validation. No live BigQuery query, IAM,
+Terraform, Cloud SQL, GCP, Graph or external mutation occurred. Before proposing any
+of these, supply the exact operation/environment/resource/impact/rollback gate in
+AGENTS.md. No production financial readiness claim from fixtures.
+
+### Failures and repairs during local validation
+
+Initial fixture construction duplicated a usage keyword; fixed the synthetic builder.
+One test omitted Decimal import; fixed test import. Added coverage tests initially
+compared fixed-scale strings to integers; changed them to Decimal equality. Live-debt
+fixture incorrectly recorded newest activity11hours before its fixed read clock,
+correctly triggering stale presentation; its event timestamp was corrected and debt
+now shows Partial. No production freshness threshold was weakened.
+
+Initial sandbox full run:5485PASS/11FAIL/12SKIP; ten failures were loopback bind/connect
+permissions in existing Collector/exporter tests, one short-timer persistence test
+failed under concurrent load. Approved credential-stripped loopback-only rerun:
+15PASS. Final full regression is rerun without heavy simultaneous performance jobs.
+No socket/network guard was weakened and no unrelated production code was changed.
+
+Final validation totals, performance and individual exit gate decisions follow below
+once the final regression runs have finished. Until then Ready for Next Milestone:NO.
+
+### Actual files changed — scoped working-tree audit
+
+- `.agent/OBSERVABILITY_EXECUTION.md`
+- `alembic/env.py`
+- `alembic/versions/e12c6d8a4b50_finops_reconciliation.py`
+- `backend/api/app.py`
+- `backend/api/observability_routes.py`
+- `backend/observability/README.md`
+- `backend/observability/config.py`
+- `backend/observability/finops/allocation.py`
+- `backend/observability/finops/billing_ingestion.py`
+- `backend/observability/finops/reconciliation.py`
+- `backend/observability/finops/reconciliation_api_models.py`
+- `backend/observability/finops/reconciliation_contracts.py`
+- `backend/observability/finops/reconciliation_inputs.py`
+- `backend/observability/finops/reconciliation_mapping.py`
+- `backend/observability/finops/reconciliation_metrics.py`
+- `backend/observability/finops/reconciliation_models.py`
+- `backend/observability/finops/reconciliation_repository.py`
+- `backend/observability/finops/reconciliation_service.py`
+- `backend/observability/finops/reconciliation_worker.py`
+- `backend/observability/metrics.py`
+- `backend/observability/runtime.py`
+- `backend/tests/_m12_reconciliation.py`
+- `backend/tests/test_api_security_contract.py`
+- `backend/tests/test_finops_reconciliation_api.py`
+- `backend/tests/test_finops_reconciliation_engine.py`
+- `backend/tests/test_finops_reconciliation_inputs.py`
+- `backend/tests/test_finops_reconciliation_mapping.py`
+- `backend/tests/test_finops_reconciliation_metrics.py`
+- `backend/tests/test_finops_reconciliation_migrations.py`
+- `backend/tests/test_finops_reconciliation_performance.py`
+- `backend/tests/test_finops_reconciliation_publication.py`
+- `backend/tests/test_observability_collector.py`
+- `backend/tests/test_observability_migrations.py`
+- `infra/observability/collector/config.local.yaml`
+- `infra/observability/collector/config.yaml`
+- `src/api/finops.test-support.ts`
+- `src/api/reconciliation.test.ts`
+- `src/api/reconciliation.ts`
+- `src/components/shell/settings/observability/FinOpsPanel.test.tsx`
+- `src/components/shell/settings/observability/FinOpsPanel.tsx`
+- `src/components/shell/settings/observability/ReconciliationPanel.test.tsx`
+- `src/components/shell/settings/observability/ReconciliationPanel.tsx`
+
+Inspected tracked diffs and new files. The pre-existing approved M12 planning work is
+preserved. No unrelated work was reset/reverted/discarded; no generated credentials,
+exports, database contents, payloads or build artifacts are tracked. No M13/M14 code
+or shared-resource operation exists in this change. No SQL/Terraform source changes
+were required; only the two source-controlled Collector configurations changed.
+
+Known operational limits: default enablement remains off; deployment-owned real
+mapping/ownership/source configuration is pending. API quantity detail is bounded
+with explicit summary indication. Gauges describe the last processed scoped period,
+not a cross-instance fleet census. Legacy M11 summaries cannot restore absent SKU
+quantity detail. Real PostgreSQL locking/throughput, live late corrections and real
+financial authorization are not proven by local SQLite fixtures. No automatic FX,
+monthly tier reconstruction, settlement, manual attribution or deletion is active.
+
+
+### Final validation results — PASS
+
+All commands use existing installed dependencies; no installs or live source jobs.
+Python tests run through /private/tmp/slopanoc-m7-test-guard/run_tests.py which strips
+cloud credentials/configuration, injects isolated SQLite/test doubles and rejects
+non-loopback sockets. Sandbox escalation was approved only to permit Collector and
+SDK local loopback fixtures, not external network or resource mutation.
+
+| Validation | Final result |
+|---|---|
+| M0–M12 focused: backend/tests/test_observability_*.py backend/tests/test_finops_*.py |1171PASS,8warnings,151.82s |
+| Full backend: backend/tests |5500PASS,12existingSKIP,683warnings,227.57s |
+| Final M12 functional: test_finops_reconciliation_*.py -k 'not performance' |78PASS,1performance deselected,6.84s |
+| Final standalone M12 performance: test_finops_reconciliation_performance.py -s |1PASS,16.96s |
+| Additional API/engine states, after adding3 API cases and exact60/30/10 assertion |48PASS,4.21s (also in final78functional) |
+| Full frontend: npm test -- --reporter=dot |59files,945PASS,10.62s |
+| TypeScript + production bundle: npm run build |PASS,2056modules; Vite1.76s |
+| Native Collector local + production config and actual loopback/poison metric regression |PASS within focused/full; independent loopback rerun15PASS |
+| Real Alembic graph, isolated additive upgrade/downgrade, source sentinel, offline PG DDL |PASS within focused/M12/full |
+| git status, tracked diffs, untracked implementation audit, git diff --check |PASS;42scoped changed paths |
+
+The full/focused runs include final production code. Three additional API fixture
+cases were added after those runs collected tests; all3 and the strengthened engine
+assertion subsequently pass in final78functional tests. Reported suite counts are
+actual commands, not a summed count claiming another full run. Performance-only
+instrumentation additions were independently revalidated by the final standalone test.
+Existing12skips:11 unavailable real knowledge-corpus fixtures; one intentional pending
+None entry case. No M12 tests skip. Warnings are pre-existing deprecations/SQLAlchemy
+fixture connection cleanup warnings, not suppressed or waived failed assertions.
+The short-timer persistence regression that failed in the first overloaded run passes
+in both full reruns and the final focused run; production timing was not modified.
+
+### Final measured local performance
+
+Single-process synthetic CPU/materialization, isolated fileSQLite, no BigQuery/Cloud
+SQL or production-scale claim. Billing sizes1k/10k/100k rows aggregate to100buckets
+with one mapped model group and99 unmapped groups. 100k runtime rows aggregate to
+one group. 28day measure performs28separate frozen-day engine calculations; it is
+not production scheduling/IO throughput. Five-sample p95 below is the max sample,
+not a statistically stable population tail. Mapping load uses30samples.
+
+| Measurement | Result |
+|---|---|
+| M11 source normalization,1k/10k/100k |48.53/480.12/4755.00ms |
+| M12 billing input materialization,1k/10k/100k |81.78/803.59/8052.08ms |
+| Serialized billing input bytes,1k/10k/100k |86900/87403/87906bytes |
+| One-day full engine,1k/10k/100k |3.09/3.00/3.08ms |
+| Runtime SQLite snapshot |4.41ms (one durable attempt) |
+| Runtime100k-row CPU aggregation |533.11ms |
+| Mapping registry validation/load median/max |0.0134/0.0980ms |
+| Quantity matching + engine median/max |2.90/2.925ms |
+| Monetary classification median/max |0.603/0.610ms |
+| Exact controls median/max |0.574/0.577ms |
+|28day engine calculations |109.42ms |
+| Persisted M11 input loading |0.764ms |
+| Publication transaction, including deterministic revalidation |6.331ms |
+| Input load + compute + publication |17.857ms |
+| Idempotent rerun median/max |11.18/11.42ms |
+| API median/max |2.36/4.48ms |
+| UI fixture render including protected fetch, jsdom5samples median/max |15.15/27.24ms |
+| Combined synthetic peak RSS growth on macOS |146030592bytes |
+
+Tenfold row increases show approximately linear materialization; grouped-engine time
+remains stable at100buckets. This demonstrates grouped behavior only at these fixture
+sizes, not a measured maximum-bucket or fleet capacity claim. RSS includes raw billing
+and100k runtime Python fixture objects:128MiB is a serialized-payload cap, not a claim
+of128MiB process RSS. No numerical production latency/memory threshold was waived.
+
+### Approved plan gates C01–C28 — individually evaluated
+
+| Gate | Result | Evidence |
+|---|---|---|
+| C01 source authority |PASS | Real M10/M11 before/after rows and immutable source regression |
+| C02 derived persistence only |PASS | Four application-owned tables; bounded aggregates, no raw warehouse copy |
+| C03 grain/hierarchy |PASS | UTC day, independent invoice, scope/component/unit keys and deterministic engine |
+| C04 mapping |PASS | Effective dates, immutable content versions, missing/overlap registry tests |
+| C05 M10 snapshot |PASS | Original-period adjustments, debt, stable concurrent read and digest |
+| C06 M11 manifest |PASS | Exact fingerprint/multiplicity/controls; missing detail explicit |
+| C07 quantities |PASS | NULL/zero, incompatible units, unknown counts and preserved variance |
+| C08 monetary authority |PASS | Actual components vs independent reference/estimate |
+| C09 currencies |PASS | Native EUR/USD separate; unsupported EUR unavailable |
+| C10 classifications |PASS | Dedicated and shared ownership, method/driver/version, exact60/30/10 |
+| C11 unallocated |PASS | Unknown/detached/scope ambiguity retained; no forced allocation |
+| C12 controls |PASS | Net/kind/absolute/count, overlap/missing/double/cancellation refusal |
+| C13 nonusage/corrections |PASS | Linked/detached credits, adjustments, tax/rounding policy |
+| C14 Decimal |PASS | Exact fractional sums, explicit rounding, NULL denominators |
+| C15 deterministic generation |PASS | Frozen replay/permutation/idempotency/version changes |
+| C16 atomic/fencing |PASS | Ten workers, stale fence/vector, reopen and inside-transaction crash rollback |
+| C17 late arrival/scheduling |PASS | Correction history and bounded recent/retained revisit |
+| C18 independent coverage |PASS | Runtime quantity/billing/price/mapping/financial/allocation counts and ratios |
+| C19 source quality |PASS | Runtime debt/unknown/stale + M11 stale/moved vector and live API overlays |
+| C20 protected APIs |PASS | Three cache-only routes, all roles/capabilities/environments, cursor bounds |
+| C21 privacy/cardinality |PASS | Source/API/metric poison sentinels excluded; Collector controls |
+| C22 M8 truthful UI |PASS | Exact amounts, unallocated, backend state/freshness, revocation tests |
+| C23 M13/M14 boundary |PASS | Later cards unavailable, no unit economics/budgets/forecasts/anomalies |
+| C24 migration |PASS | Actual head, isolated additive up/down constraints/indexes, offline PG DDL |
+| C25 bounded performance |PASS | Row/bucket/byte/deadline limits, timeout recovery, measured grouped scaling |
+| C26 regressions |PASS | Focused/full Python, final M12, frontend/TS/build/Collector tests |
+| C27 repository/config hygiene |PASS | Scoped42paths; static Collector definitions; diff/check reviewed |
+| C28 safety/live distinction |PASS | No external mutations; exact pending approvals and live limits recorded |
+
+### User section110 blocking local criteria — individually evaluated
+
+| Blocking criterion | Local result |
+|---|---|
+| M10/M11 source truth remains immutable |PASS |
+| separate generation-linked inputs exist |PASS |
+| reconciliation grain is explicit |PASS |
+| matching hierarchy deterministic |PASS |
+| aggregate match is not misrepresented as attempt-level exactness |PASS |
+| mappings are versioned/effective-dated |PASS |
+| overlapping mappings rejected |PASS |
+| units must be compatible |PASS |
+| overlapping token categories cannot double count |PASS |
+| runtime and billing quantities stay separate |PASS |
+| actual billing remains monetary authority |PASS |
+| catalog remains reference only |PASS |
+| financial reconciliation occurs at component level |PASS |
+| signed-net control passes |PASS |
+| component controls pass |PASS |
+| absolute-amount controls pass |PASS |
+| count controls pass |PASS |
+| positive/negative cancellation cannot hide loss/duplication |PASS |
+| direct/shared/unallocated classifications are mutually exclusive |PASS |
+| unallocated spend remains visible |PASS |
+| policy-v1 tax/rounding treatment is correct |PASS |
+| credits follow explicit linkage policy |PASS |
+| currencies remain separate |PASS |
+| Decimal semantics used |PASS |
+| correction/late-arrival creates new generation |PASS |
+| source generations/versioning are frozen and reproducible |PASS |
+| publication is atomic/fenced |PASS |
+| failed controls cannot publish |PASS |
+| M10 debt/freshness propagated |PASS |
+| M11 freshness propagated |PASS |
+| protected APIs implemented |PASS |
+| M8 Reconciliation/Allocation truthful |PASS |
+| no M13 unit economics exists |PASS |
+| no M14 budget/forecast/anomaly exists |PASS |
+| migrations/tests/regressions pass |PASS |
+| no cloud/shared-resource mutation occurred. |PASS |
+
+All36user blocking local criteria and approved C01–C28 gates PASS. The roadmap's
+visible unallocated amounts, declared allocation method/driver and tested monetary
+coverage are satisfied in the local API/UI; no live deployment is claimed. The user's
+explicit local/production separation permits local sequencing readiness.
+
+- Shared Cloud SQL migration: NOT EXECUTED
+- Production model/SKU mapping: NOT LIVE-VALIDATED
+- Production ownership evidence: NOT LIVE-VALIDATED
+- Production reconciliation: NOT LIVE-VALIDATED
+- M13 unit economics: NOT IMPLEMENTED BY DESIGN
+- M14 budgeting/forecasting/anomalies: NOT IMPLEMENTED BY DESIGN
+
+M12 local implementation status = IMPLEMENTED AND LOCALLY VALIDATED.
+Local validation status = PASS.
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED.
+Ready for Next Milestone = YES (local sequencing only).
+STOP. M13 NOT STARTED; this completion does not authorize M13 implementation or any
+cloud/shared migration/deployment/live financial-source operation.
+
+## M13 — Unit Economics: planning only — 2026-10-09
+
+**M13 — PLANNED — NOT IMPLEMENTED.** User authorization covers audit and this plan
+only. This section supersedes historical M13 NOT STARTED wording, without changing
+M12 acceptance evidence. M14 remains BLOCKED. Ready for Next Milestone: **NO**.
+No implementation, migration authoring, deployment or external mutation in this pass.
+
+### Objective, authoritative inputs and predecessor gate
+
+Derive reproducible operational unit economics from M12 financial generations and
+server-owned operational populations. Preserve the separate authority chain:
+M10 usage; M11 billing/pricing; M12 reconciled DIRECT/SHARED/UNALLOCATED; M13 derived
+analytical results. No repricing, accounting corrections, financial reclassification,
+governance changes, M14 functionality or M19 outcome capture.
+
+Read AGENTS.md; .agent/PLANS.md; this execution record; docs/Telemetry/README.md;
+00_MASTER_BUILD_CONTRACT.md; 01_TARGET_ARCHITECTURE.md; 05_STORAGE_APIS_AND_UI.md;
+07_FINOPS_ARCHITECTURE.md; 08_FINOPS_DATA_MODEL_AND_UNIT_ECONOMICS.md;
+09_SECURITY_PRIVACY_RETENTION_SAMPLING.md; 11_SLOPANOC_INTEGRATION_MAP.md;
+12_IMPLEMENTATION_ROADMAP.md; 13_TEST_VALIDATION_ACCEPTANCE.md;
+14_CODEX_EXECUTION_GUIDE.md; 15_DEFINITION_OF_DONE.md; 19_AI_QUALITY_OUTCOMES.md;
+20_FINOPS_ACCOUNTING_DURABILITY.md; 22_RELEASE_CONFIG_CORRELATION_CI.md.
+Also read 21_SLO_FORMULAS_AND_INITIAL_TARGETS.md for canonical denominator semantics.
+The user's explicit M10 quantity-only/M13 derived-only scope controls over historical
+estimator wording; M13 does not backfill estimated costs from catalog prices.
+
+Entry gate **PASS for local planning**:
+- M0 VALIDATED COMPLETE; M1–M12 IMPLEMENTED AND LOCALLY VALIDATED, the established
+  local COMPLETE meaning; production completion is not claimed.
+- M12 final local validation PASS, all36 blocking criteria and C01–C28 PASS;
+  Ready for Next Milestone YES for local sequencing only.
+- Actual allocation.py/reconciliation.py classify each source component once and
+  preserve independent signed/absolute/count controls; DIRECT/SHARED/UNALLOCATED exist.
+- Actual reconciliation_repository.py preserves frozen inputs/registries/generations
+  and CAS publication; reconciliation remains derived and versioned.
+- No M13 engine/persistence/routes/client exists. FinOpsPanel retains unavailable
+  Unit economics M13 and Budgets/Forecasts/Anomalies M14 cards.
+- Fresh isolated predecessor checks:150PASS,1existing Starlette deprecation warning,
+  11.34s. No predecessor defect found. Exact command recorded below.
+
+### Actual architecture inspected, inputs and reuse
+
+| Existing paths | Source facts and planned reuse |
+|---|---|
+| finops/contracts.py, models.py, repository.py, usage_ledger.py | Durable pre-dispatch physical attempt and logical-call identities; BASE/ADJUSTMENT rows, safe provider/model/agent/workload/operation/type metadata and nullable quantities. Read only. Retries count as distinct provider attempts, not distinct logical operations. Neither tokens nor ledger corrections create M13 money. |
+| finops/billing_contracts.py, billing_models.py, billing_repository.py, billing_ingestion.py, billing_service.py, pricing.py | M11 manifests, native currency, complete-extraction controls and freshness; reuse health projections without creating BigQuery jobs. Pricing is not an M13 actual-cost source. |
+| finops/reconciliation_inputs.py | M12 RUNTIME snapshot groups provider/model/region/operation_type and drops agent/workload/run/request class. BASE period uses observed_at; admitted attempts use started_at. Digest includes ledger witnesses and attempt states; later corrections retain the BASE period. Do not assume these clocks identify the same cohort. |
+| finops/reconciliation.py, allocation.py, reconciliation_mapping.py | Daily classified components retain ID/bucket/kind/sign/credit/category/evidence. Join internal bucket to immutable registry for proven provider/model/type, not description matching. Dedicated workload ownership does not prove USER_TURN-only, agent or request-class attribution. SHARED pool membership is not per-unit distribution. |
+| finops/reconciliation_models.py, reconciliation_repository.py, reconciliation_worker.py | Four independent derived tables, full internal generations and input links, source-vector fences and replay. Read internal immutable records, not capped public quantity DTOs. Reuse publication patterns, never write M12 tables/pointers. |
+| slo_contract.py, slo_rollups.py, slo_sources.py | M9 receipts have accepted/deadline/terminal/outcome/cancellation/class/version; deterministic class precedence. Unsampled but best-effort writer exposes capture gaps. Settled receipts prune after2days, aggregates after35days. Availability/terminal bucket times use acceptance; latency class buckets use terminal time. They cannot be interchanged. |
+| models.py, repository.py, turn_trace.py | M2/M7 safe summaries are terminal-only and shorter retention; not a complete accepted population or business-outcome registry. Keep execution ownership, SSE/cancellation/rewind unchanged. |
+| agent_instrumentation.py, tool_instrumentation.py, execution_metrics.py, slo_sources.py | Agent/tool invocations and whole knowledge operations are observable, but no durable independently replayable invocation denominator generation exists. M10 agent-owned model attempts do not count agent invocations. Exported metrics/traces are not accounting-grade denominator truth. |
+| cases/models.py, schemas.py, service.py, troubleshooting_progression.py, progression_store.py | Cases have creation/status; authorized status updates can set resolved/closed. Versioned fault progression includes ResolutionState and audit events. These are real workflow signals, not absent, but do not supply an ITSM incident population, durable cross-period incident-resolution event semantics, complete historical case-cost ownership or an M13 outcome adapter. Current session links have no historical links. |
+| operations/execution.py; agents/automated_operations_engineer/agent.py | Signed diagnostic-read execution statuses exist; no default executor or remediation deploy path. AOE produces briefing text and model-reported incident counts, not authoritative created/validated/deployed automation artifacts. Neither proves successful remediation or resolution. |
+| authorization.py, api/observability_routes.py, service.py | Verified principal + explicit FINANCIAL_DATA + environment/rate/concurrency controls; Admin does not inherit financial capability. Default production identity remains unavailable. Reuse all controls. |
+| src/api/reconciliation.ts; FinOpsPanel.tsx, ReconciliationPanel.tsx, ReadState.tsx, useObservabilityQuery.ts, format.ts | Existing Settings styles, decimal strings, bounded date queries, abort/refresh/revocation behavior and safe read states. Extend existing FinOps section, no separate application or browser finance. |
+
+All backend finops paths above are under backend/observability/finops/; observability
+paths under backend/observability/ unless otherwise specified. Local existing M12
+tracked/untracked work is preserved. No assumption about remote GitHub state.
+
+### Measurable inventory and authoritative denominator evidence matrix
+
+Here AVAILABLE SOURCE means the source facts exist, not that a financial unit price
+exists. M13 must independently prove numerator mapping and coverage before AVAILABLE.
+
+| Unit / planned stable ID | Denominator source and exact population | Authoritative today? | Planned M13 disposition |
+|---|---|---|---|
+| Accepted turn / ACCEPTED_TURN | Distinct M9 receipt run IDs accepted in [start,end); schema/auth passed and canonical execution entered. Include user cancellations after acceptance; exclude pre-execution rejects and proven synthetic requests. | YES within retained receipts and complete capture; synthetic exclusion needs scope evidence | Freeze daily aggregate before receipt expiry; older aggregate backfill only when complete matching eligibility is provable. Price conditional on workload ownership. |
+| Available turn / AVAILABLE_TURN | Canonical M9 availability good: COMPLETED + valid_outcome; confirmed user/client cancellations excluded from eligible population. Clarification/source gap/approval/safe rejection remain good. | YES within M9 evidence/coverage | Yield-adjusted eligible-workload cost divided by good outcomes, explicitly labeled; not incident resolution. |
+| Timely terminal turn / TIMELY_TERMINAL_TURN | M9 terminal_completion good: exactly one COMPLETED/FAILED/TIMEOUT/CANCELLED at/before deadline, acceptance-period population; includes user cancellations. | YES within M9 evidence/coverage | Distinct from available outcome and from eventual/late terminalization. No new terminal success rule. |
+| General / GENERAL_TURN | Retained receipt accepted population whose settled server class is GENERAL. | YES short-lived; no durable accepted/class daily aggregate today | M13 derived daily class snapshot; UNKNOWN retained. Financial class mapping unavailable by default. |
+| Teams lookup / TEAMS_LOOKUP_TURN | Same acceptance population with M9 TEAMS_LOOKUP. | YES short-lived | Counts classified turns, not Graph calls/tool invocations; price conditional. |
+| Governed troubleshooting / GOVERNED_TROUBLESHOOTING_TURN | Same population with M9 GOVERNED_TROUBLESHOOTING. | YES short-lived | Request-class economics only; not governed-answer quality. |
+| Complex multi-agent / COMPLEX_MULTI_AGENT_TURN | Same population with M9 COMPLEX_MULTI_AGENT. | YES short-lived | Canonical precedence, not sum of specialist calls; price conditional. |
+| Provider attempt / PROVIDER_ATTEMPT | Distinct durable STARTED physical attempt IDs for the frozen eligible usage population; NOT_STARTED excluded; debt/unknown outcomes retained as coverage. | YES M10 | Initial calculable view by proven provider/model/type/region and compatible usage period; retries distinct. |
+| Model operation / MODEL_OPERATION | Distinct logical_call_id over that same frozen provider population; one logical operation may have multiple billable attempts. | YES M10 identities | Initial calculable provider/model view; whole-operation period split flagged, no false complete operation charge. |
+| Agent invocation / AGENT_INVOCATION | Semantic M4 agent execution, not model calls attributed to that agent. | NO durable replayable population | NOT_AVAILABLE; agent-owned provider activity may be counted separately with that exact label. |
+| Tool invocation / TOOL_INVOCATION | Executed M4 tool scopes, including explicit failures; no-op distinction preserved. | NO durable replayable population | NOT_AVAILABLE; do not substitute metrics or sampled traces. |
+| Knowledge retrieval / KNOWLEDGE_RETRIEVAL | Whole M5/M9 retrieval, not stages/chunks/vector calls. | Limited durable dependency good/bad aggregates, no matching cost ownership | NOT_AVAILABLE financial unit; aggregate reliability context only. |
+| Authorized diagnostic operation / AUTHORIZED_DIAGNOSTIC_OPERATION | Genuine ExecutionResult under signed Command Authority path. | Workflow statuses exist; no complete finance population/join | NOT_AVAILABLE; do not broaden execution/governance. |
+| Automation/remediation operation | Trusted executed successful action with idempotent outcome/event. | NO general successful-remediation population | DEFINED — DATA SOURCE AVAILABLE IN M19, subject to trusted downstream capture. |
+| Ticket / TICKET | Authoritative ticket identity and handling/completion events, complete population and cost scope. | NO ITSM source; CaseRecord is not a ticket | NOT_AVAILABLE — REQUIRES AUTHORITATIVE ITSM SOURCE; M19 adapter boundary, not guaranteed source existence. |
+| Troubleshooting case / TROUBLESHOOTING_CASE | Case creation and lifecycle cohort with immutable membership/cost lineage. | Creation exists; financial lifecycle lineage incomplete | NOT_AVAILABLE — OUTCOME/COST JOIN REQUIRES M19; no current-link reconstruction. |
+| Resolved incident / RESOLVED_INCIDENT | Authoritative incident-resolution events with reopening/duplicate/period rules. | Fault/case resolution signals exist; incident cohort/cost join does not | DEFINED — DATA SOURCE AVAILABLE IN M19, conditional on actual source. |
+| Generated automation artifact / AUTOMATION_ARTIFACT | Trusted artifact identity and creation/validation/acceptance events. | NO; AOE briefing/draft text is not proof | DEFINED — DATA SOURCE AVAILABLE IN M19, conditional. |
+| Governed answer / GOVERNED_ANSWER | Server-owned final answer/provenance quality status, not request class. | No canonical durable M19 outcome population | DEFINED — DATA SOURCE AVAILABLE IN M19. |
+| Accepted recommendation / ACCEPTED_RECOMMENDATION; FTC / FIRST_TIME_CORRECT | Explicit operator acceptance; defined objective success without authoritative correction/failure evidence. | NO canonical complete population | DEFINED — DATA SOURCE AVAILABLE IN M19; no inference from silence. |
+
+Business synthetic exclusion cannot be inferred from subject names, prompts or absence
+of a synthetic tag. M9 Receipt and M10 workload enums do not carry a general synthetic
+flag. Existing synthetic runner is separately tagged and disabled by default; require
+deployment-owned separation/attestation before claiming business-only coverage. If
+not provable, expose UNKNOWN_ELIGIBILITY/partial coverage or leave the unit unavailable.
+No new intent classifier or M19 outcome schema in M13.
+
+### Denominator providers, definitions, clocks and windows
+
+One bounded unit registry: stable ID/name, version, effective [from,to), denominator
+provider/version, eligibility, allowed dimensions/numerators, compatible shared drivers,
+source requirements and AVAILABLE-source/NOT_AVAILABLE/deferred status. Definition
+status is separate from result quality. No endpoint-specific or React formulas.
+
+Plan a read-only M9 provider that snapshots receipts/source health in one transaction
+after day settlement (configured maximum turn deadline + canonical120s settlement
+grace). Class counts use acceptance time and final known class, including UNKNOWN,
+not M9 latency buckets timestamped at completion. Save counts, applicable good/bad/
+excluded/unknown populations, min/max receipt versions digest, watermark, capture-start
+and completeness. Poll daily within the2day retained receipt window; no new acceptance
+executor or source writes. Missed capture/backfill outside the trustworthy horizon
+stays unavailable. M9 mutable receipt/bucket updates create new denominator versions,
+never overwrite a published M13 snapshot. Do not reset M9 coverage or weaken its loss
+reporting. Persistence does not turn best-effort capture into guaranteed completeness.
+
+M10 provider uses a repeatable-read snapshot; reconstruct the exact M12 runtime
+ledger digest and bucket controls from read-only sources before freezing safe joint
+counts/provider/model/type/region/workload/agent/operation and distinct logical calls.
+Include later adjustments for the original BASE period without multiplying counts.
+If current M10 no longer reproduces that M12 digest, return SOURCE_VERSION_MISMATCH;
+wait for a normal new M12 generation rather than mix current denominator with old cost.
+Historical joint populations not retained cannot be recovered from M12 aggregate
+counts or current M10 state alone. Freeze restricted ID digests only where required
+for replay, retain aggregate counts and source versions; no raw conversation data.
+
+Core financial grain is UTC usage day, half-open [start,end), environment and verified
+financial scope; invoice_month is explanatory metadata, never denominator month.
+Default published day and bounded7/28day/month summaries (maximum31days per request).
+Aggregate exact totals and counts before division; never average daily unit prices.
+Month summary requires all usage days or explicitly PARTIAL coverage. No forecasts.
+
+M12 BASE observed_at versus attempt started_at and actual billing usage intervals
+must be checked explicitly. Cross-midnight/delayed-capture/partial-operation cases
+cannot be silently reassigned. Incompatible cost/denominator windows produce
+WINDOW_ALIGNMENT_UNPROVEN and unavailable/partial result. For turn units require
+proven accepted-population workload ownership in the same usage window; otherwise
+do not present a per-turn total. Never claim aggregate €/turn is an individual turn's
+invoiced cost. No uniform direct-cost split by count/token share into classes/agents.
+
+### Direct, fully loaded and monetary visibility
+
+Direct cost/unit = sum of M12 DIRECT net components proven to belong to the unit's
+same period/scope population / eligible unit count. Do not use all-environment cost
+over a user-turn denominator when warmup/ingestion/background also incurred cost.
+M12 mapping can prove provider/model/type ownership; it cannot prove per-agent or
+request-class ownership. Those price fields remain NULL/NOT_AVAILABLE absent exact
+dedicated source evidence. No estimated price/token calculation or hidden new DIRECT
+apportionment. Direct average is not necessarily marginal cost; no marginal estimate
+until actual incremental-cost evidence exists.
+
+Fully loaded average cost/unit = (direct attributable net + distributed approved
+SHARED net for this analytical view) / the same eligible count. No UNALLOCATED,
+detached credit, unowned direct component or missing-driver pool forced into numerator.
+Zero count => INSUFFICIENT_DATA and both prices NULL, never0/infinity. Unknown count
+also NULL. Proven complete zero cost with positive count may legitimately show0.
+For available-turn economics use total eligible workload cost (including unsuccessful
+work) / availability-good count: label this yield-adjusted semantics explicitly.
+Timely-terminal economics analogously uses accepted-workload cost / timely terminals;
+neither is cost incurred only by successful/terminal members. These registry views
+must expose numerator-population versus denominator-population metadata.
+
+Keep direct, distributed shared, undistributed shared, M12 unallocated, direct amounts
+not attributable to this view, actual net and component kind totals separately visible.
+Scope-level unallocated exposure repeats as contextual data, not a per-unit allocation.
+M12 credits follow their original classification/sign and verified attached ownership;
+no spreading detached credits. Tax/rounding and related credits remain unallocated
+under M12 policy-v1. Signed negative net/price is legal; component absolute and count
+controls prevent +100/-100 cancellation concealing omissions.
+
+### Shared-driver registry and compatibility
+
+Separate immutable deployment-owned registry: pool selector (M12 category + verified
+ownership/component source), analytical view, driver/provider version, eligibility,
+effective dates, explicit approval/policy provenance, denominator source, source-quality
+requirements, rounding/residual policy and fallback. No React policy or UI write API.
+The user permits designing drivers, not inventing a live approved resource policy.
+Default registry has no inferred pool approvals; fixtures explicitly inject policy.
+
+| Pool | Defensible candidate / required evidence | v1 fallback |
+|---|---|---|
+| CLOUD_RUN baseline | Recorded compute/runtime seconds for exact eligible workload; turn volume only under explicit supporting-pool policy and complete population | SHARED_UNALLOCATED_TO_UNIT absent evidence/policy |
+| CLOUD_SQL | Measured query load/DB-active duration; accepted-turn count only with explicit baseline ownership/volume-driver policy | Same; M9 aggregate availability does not measure SQL query load |
+| MODEL_AI platform overhead | Provider operations or causal token quantity matching pool scope; complete compatible operation population | Same; no direct charge reclassification |
+| GCS | Storage byte-days with proven ownership | Same; not retrieval/tool count |
+| BIGQUERY | Proven query bytes/slots/ownership; MONITORING_LOGGING measured ingestion volume; NETWORK causal bytes | Same; no universal turn-count fallback |
+| OTHER/unknown | No justified default | Entire pool undistributed |
+
+Support ACCEPTED_TURNS and PROVIDER_ATTEMPTS as bounded driver implementations
+where their sources/policy actually qualify. Additional durations/bytes/query-load
+providers remain registered unavailable until independently proven, not fabricated.
+Within each view/generation/pool/component/currency distribute exactly once.
+Different €/turn and €/model-operation views may analyze the same source pool; these
+are alternative non-additive views and must carry analytical_view_id and explicit
+API/UI disclosure. Incompatible/overlapping policies fail validation rather than
+choose a favorable result. A missing driver keeps fully loaded NULL/DRIVER_UNAVAILABLE
+if none usable; known partial distribution shows computed partial price marked PARTIAL.
+
+### Currency, Decimal, conservation and residuals
+
+Native currencies remain separate. EUR available only for native EUR or an actual
+versioned M11/M12 conversion; currently no authoritative FX source. No mixed USD/EUR
+unit result; no M13 conversion. Reuse decimal/money helpers, Decimal local100digit
+precision, serialized canonical decimal strings, no financial floats. Inputs exceeding
+safe supported precision fail explicitly; do not round source truth to cents.
+
+Allocation quantum is effective-versioned: use at least38fractional digits, increasing
+to preserve the finest source component scale; impose validated precision bounds.
+Compute quotas per signed component and bounded population weight. Floor absolute
+quotas to quantum, assign residual quanta by largest fractional remainder then stable
+unit/dimension key ordering, restore source sign. No DB/dict/random iteration order.
+Partial valid-driver coverage distributes only the policy-proven fraction; uncertainty
+is undistributed, not renormalized across the few captured units. Individual turns
+need not be materialized: bounded cohort buckets receive shares and exact totals.
+
+Per pool/component/currency/view: source SHARED signed amount = distributed +
+undistributed exactly. Independently retain absolute/sign/kind/source multiplicity
+controls. DIRECT view total equals its proven assigned components; fully_loaded_total
+= direct + distributed shared. Preserve direct remainder + M12 unallocated + shared
+remainder so whole source net is explainable. No financial tolerance permitted.
+Unit-price division uses38fractional digits HALF_EVEN; store rounding/scale metadata,
+retain exact numerator/count as mathematical source, never reconstruct controls from
+rounded price×count. Coverage percentages12digits HALF_EVEN, no float arithmetic.
+UI formats server-provided strings/display values; display rounding is separate.
+
+### Immutable generation, storage, publication and recovery
+
+Plan application-owned UnitEconomicsBase with five table families:
+1. finops_unit_definition_version: immutable bounded registry/version/effective body.
+2. finops_unit_driver_version: immutable pool/driver policy with effective dates.
+3. finops_unit_denominator_snapshot: immutable period/scope/provider generation,
+   watermark, digest, counts, coverage/freshness and safe bounded joint buckets.
+4. finops_unit_economics_generation: immutable results, M12 generation vector,
+   denominator links, definition/driver/algorithm/schema versions and source controls.
+5. finops_unit_economics_publication: scoped period/view current pointer, revision,
+   last attempt/success/error; mutable only for atomic publication/job status.
+
+Results embedded as bounded buckets rather than one row per run/attempt. References
+reuse M12 component identity/input/registry links; do not duplicate billing lines or
+entire M12 component bodies. Restrict persisted digests; APIs omit project/resource/
+billing-account IDs and source selectors. Plan731day analytical retention consistent
+with M10–M12; source snapshots necessary for replay survive operational pruning.
+No new automatic destructive retention job in this milestone; effective policy read-only.
+
+Deterministic generation ID hashes exact source vector + denominator snapshots +
+effective unit/driver registry identities + algorithm/schema + period/scope/view.
+Captured quality belongs to that snapshot; changing read-time age does not alter it.
+Same frozen inputs replay identically. Corrections/policy/denominator changes create
+new auditable generations; no history mutation or retroactive effective-version change.
+Period crossing policy dates partitions at effective boundaries before summation.
+
+Bounded worker builds complete results, validates source/scope/windows/currencies,
+denominators, direct membership, pool/component conservation and DTO shape, then
+atomically inserts generation and CAS-updates current pointer. Lock and recheck the
+full M12 publication vector and M13 denominator-current/version fences in stable order.
+Recompute at publisher trust boundary. Source movement/stale worker => SUPERSEDED;
+failed/timeout/control failure preserves previous known-good result and bounded error.
+No mutation to source tables beyond ordinary read locks. Local concurrency tests must
+cover two workers, identical generation replay, source correction during publish,
+failure between insert/pointer, restart and stale denominator completion.
+
+### Coverage, quality and freshness
+
+Independent named measures, each with numerator/denominator/basis where measurable:
+M12 monetary accounting/reconciliation/mapping/ledger coverage; denominator capture,
+eligibility and class-known coverage; direct-to-population mapping coverage; shared
+driver coverage by absolute source amount; currency/reporting availability. Unallocated
+percentage uses absolute component exposure / all absolute components, alongside
+signed amount; never divide signed net after credits cancellation. Unknown expected
+denominator cannot produce a fabricated percent: NULL + capture flag/window/reason.
+No blended confidence score. A large unallocated amount cannot produce AVAILABLE
+fully trustworthy financial presentation.
+
+Plan independent direct_state/fully_loaded_state and reason list, plus bounded overall
+AVAILABLE, PARTIAL, INSUFFICIENT_DATA, SOURCE_STALE, RECONCILIATION_INCOMPLETE,
+DRIVER_UNAVAILABLE, CURRENCY_UNAVAILABLE and NOT_AVAILABLE for absent definition source.
+Precedence: missing required source/currency or zero/unknown count prevents price;
+retained valid result with moved/stale source is SOURCE_STALE; remaining incomplete
+finance/denominator/driver coverage is PARTIAL (with reconciliation/driver reasons).
+AVAILABLE requires every applicable coverage gate and proven scope/window.
+Freshness combines M12 current source movement/billing/runtime debt and denominator
+watermark/capture health, using inherited M11 and M9 thresholds. A fixed historical
+snapshot may remain auditable after source pruning; distinguish snapshot-only history
+from current validated freshness. Source ageing never silently republishes money.
+
+### API, bounded dimensions, metrics and M8 UI impact
+
+Plan GET /api/observability/finops/unit-economics and
+GET /api/observability/finops/unit-economics/{unit_id}, bounded to central registry.
+Parameters: authorized environment, UTC start/end(max31days), native currency,
+one allowed bounded group(provider/model/type/workload/agent/request_class),
+limit(max100), signed generation/scope-bound cursor; absent mappings remain unavailable.
+No unrestricted pivot, raw IDs or generation/distribution on GET. Read published
+generations only under existing2s/read-slot/throttle controls. Retained stale generation
+is viewable with current quality overlay; no fake success from empty cache.
+
+DTO: unit ID/name/definition availability, analytical view/non-additivity metadata,
+period/basis/currency/count/eligibility, exact direct and distributed shared totals,
+nullable direct/fully loaded prices, undistributed shared/unallocated/actual net and
+unattributed direct context, component kinds, independent coverage/freshness/state/
+reasons, immutable generation/denominator/definition/driver/algorithm versions and
+published/source timestamps. No raw billing rows, account/project/resource ID, source
+selectors, prompts, Teams bodies, commands, SQL, credentials or hidden reasoning.
+Every route requires valid verified principal + FINANCIAL_DATA + authorized environment;
+Admin still subject to real capabilities. No mutation/configuration endpoint.
+
+Metrics: fixed slopanoc.finops.unit_economics generation/publication/failure/control/
+idempotency/superseded/residual-event counters, generation duration/lag seconds, bounded
+unavailable/stale counts and denominator/shared-driver/mapping coverage gauges. Reuse
+finite environment/operation/status/window policy; no unit/run/session/user/case/
+generation/source/resource/pool-ID labels or exemplars, no unit prices/monetary ledger
+values as metrics. Decimal ratios converted only after calculation for approximate
+operational gauges; durable DTOs/controls remain Decimal. Collector allowlists and
+contract tests updated only if these planned instruments are implemented.
+
+Required UI impact evaluation:
+1. Creates information needed by Settings → Observability & FinOps → FinOps → Unit
+   Economics: count, explicit direct/fully loaded price, coverage, freshness, exposure.
+2. Backend DTO owns formula/denominator/allocation/state/percentage truth; typed client
+   validates strings/nullable availability and uses existing safe query patterns.
+3. Activating only Unit Economics belongs to M13. Keep M14 Budgets/Forecasts/Anomalies
+   unavailable; reuse layout/typography/spacing/components, no new design system.
+4. Server financial authorization applies; revocation clears values and aborts pending
+   responses, FinOps obtains no content access.
+5. Definition/driver/production policy is effective read-only; UI cannot bypass IaC.
+
+Show denominator definition and average/yield-adjusted semantics, direct versus fully
+loaded, count, period/currency, independent coverage, source age, prominent undistributed
+shared and unallocated. Incomplete driver => clearly PARTIAL/null; source absent =>
+NOT_AVAILABLE, no0 placeholder. Model/agent/class comparisons only where supported,
+with adjacent existing latency/SLO context at compatible grain; M19 quality/FTC remains
+unavailable. Analytical views must not be added. Optional previous equal-length period
+is historical comparison only. No recommendations, anomaly/trend/forecast engine.
+
+### Exact anticipated implementation paths (NOT changed in this planning pass)
+
+Add:
+- backend/observability/finops/unit_economics_contracts.py — bounded unit/state/policy DTO core.
+- backend/observability/finops/unit_registry.py — canonical versioned definitions/deferred units.
+- backend/observability/finops/unit_denominators.py — read-only M9/M10 snapshots and window controls.
+- backend/observability/finops/unit_drivers.py — versioned compatible SHARED policy/eligibility.
+- backend/observability/finops/unit_economics.py — grouped deterministic Decimal engine.
+- backend/observability/finops/unit_economics_models.py — application-owned derived metadata.
+- backend/observability/finops/unit_economics_repository.py — replay/history/CAS publication.
+- backend/observability/finops/unit_economics_worker.py — bounded background generation.
+- backend/observability/finops/unit_economics_api_models.py — strict safe public DTOs.
+- backend/observability/finops/unit_economics_service.py — protected cached read projections.
+- backend/observability/finops/unit_economics_metrics.py — bounded operational instruments.
+- alembic/versions/f13a7c9d2e61_finops_unit_economics.py — proposed additive revision only;
+  reverify uniqueness/head immediately before authoring. Actual inspected M12 head
+  e12c6d8a4b50 follows d11b4a8c9e32; future down_revision must follow actual then-current head.
+- backend/tests/_m13_unit_economics.py — isolated fixture sources/policies.
+- backend/tests/test_finops_unit_registry.py
+- backend/tests/test_finops_unit_denominators.py
+- backend/tests/test_finops_unit_drivers.py
+- backend/tests/test_finops_unit_economics_engine.py
+- backend/tests/test_finops_unit_economics_publication.py
+- backend/tests/test_finops_unit_economics_api.py
+- backend/tests/test_finops_unit_economics_metrics.py
+- backend/tests/test_finops_unit_economics_migrations.py
+- backend/tests/test_finops_unit_economics_performance.py
+- src/api/unitEconomics.ts; src/api/unitEconomics.test.ts
+- src/components/shell/settings/observability/UnitEconomicsPanel.tsx
+- src/components/shell/settings/observability/UnitEconomicsPanel.test.tsx
+
+Modify only necessary wiring:
+- backend/api/observability_routes.py; backend/api/app.py
+- backend/observability/config.py; backend/observability/runtime.py; backend/observability/metrics.py
+- alembic/env.py
+- backend/tests/test_api_security_contract.py; backend/tests/test_observability_migrations.py
+- backend/tests/test_observability_collector.py
+- infra/observability/collector/config.yaml; infra/observability/collector/config.local.yaml
+- src/api/finops.test-support.ts
+- src/components/shell/settings/observability/FinOpsPanel.tsx; FinOpsPanel.test.tsx
+- backend/observability/README.md; .agent/OBSERVABILITY_EXECUTION.md
+
+No planned modification of M10 ledger, M11 billing/pricing or M12 calculation,
+classification/generation/storage. No case/governance/Teams/command authority changes.
+If another path becomes essential, audit and update this manifest before implementation.
+Planned enablement defaults disabled; policy read-only, small lifecycle wiring only.
+
+Implementation manifest amendment (2026-10-09): update the existing
+ReconciliationPanel.test.tsx M13 placeholder expectation to assert the newly mounted
+Unit Economics section and unchanged M14 placeholders. No M12 behavior is changed.
+Persist safe M9 cohort latency/operational availability context in M13 snapshots to
+support the roadmap quality-latency-cost comparison only where a compatible turn
+cohort exists; model/outcome quality context remains unavailable.
+
+### Ordered future implementation and validation plan
+
+1. Recheck entry gate/current tree/head; update implementation-start record first.
+2. Implement canonical units and safe unavailable boundaries; denominators/read-only
+   financial input adapter with exact-version/scope/window proof.
+3. Implement explicit shared-driver registry and grouped Decimal conservation/residual
+   engine, then immutable persistence/migration/publication fences.
+4. Wire bounded worker/cache reads/RBAC/metrics; activate existing M8 Unit Economics.
+5. Run focused gates, repair defects, then full regressions/build/migrations/Collector
+   and individual acceptance review. Stop before M14 regardless of partial progress.
+
+Future test requirements (NOT executed for M13):
+- direct60/shared30/count10 => direct6/fullyloaded9; unallocated10 separate.
+- zero/unknown count NULL+INSUFFICIENT_DATA; proven zero source with positive count.
+- shared30 distributed20+undistributed10 => PARTIAL, not forced9 or full coverage.
+- per-pool/component/currency signed/absolute conservation; +100/-100 controls;
+  duplicate source identity/distribution, credits, tax/rounding remain M12-classified.
+- 1/3 at precise quantum deterministic residual/order, negative credit equivalent,
+  equal remainders, randomized row order, precision overflow and large grouped inputs.
+- exact versions replay; corrected M12/new denominator/policy create new generation,
+  prior history retained; atomic crash/CAS/source movement/two-worker/restart cases.
+- accepted versus availability-good versus timely terminal semantics, failed/timeouts/
+  cancellations/clarification/source-gap/approval; all four M9 classes + UNKNOWN;
+  receipt expiry/capture loss, unsupported synthetic exclusion, stale cost/denominator,
+  mixed observed/start clocks, cross-midnight/incomplete operation, missing days.
+- no monetary mapping => NOT_AVAILABLE, not all DIRECT / arbitrary class/agent count;
+  old M12 digest versus newer M10 state cannot produce exact price.
+- missing/incompatible driver remains SHARED_UNALLOCATED_TO_UNIT; multiple analytical
+  views non-additive and no component assigned twice within one view.
+- EUR/USD separate; conversion unavailable, net credits may reduce prices; source
+  snapshots byte-for-byte unchanged through successful/failed M13 generation.
+- incident/ticket/FTC/automation/governed-answer unavailable, no substitutes; descriptive
+  reliability joins use compatible periods, never fabricated quality/financial policy.
+- anonymous/unverified/no FINANCIAL_DATA/verified financial allowed, role/environment
+  isolation, Admin capability limits, cursor tampering and bounded query/time/rate tests.
+- poison fields/fake secrets absent from APIs/UI/DB safe snapshots/logs/metrics;
+  read GET never triggers provider/source/reconciliation/distribution work.
+- UI direct/fullyloaded/count/coverage/freshness/undistributed/unallocated all rendered;
+  partial/stale/empty/unavailable/error/revoked states; M14 cards unavailable;
+  tests prove no browser allocation/denominator/financial formula.
+
+Use existing credential-stripping/no-remote-socket guard only after reinspection;
+isolated disposable DB/test doubles, warmup disabled. Planned commands:
+```
+.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests/test_finops_unit_*.py
+.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests/test_observability_*.py backend/tests/test_finops_*.py
+.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests
+npm test -- --reporter=dot
+./node_modules/.bin/tsc -b
+npm run build
+git diff --check
+```
+Migration fixture must inspect real Alembic ScriptDirectory, additive isolated upgrade/
+downgrade, constraints/indexes/FKs/metadata parity, untouched M10/M11/M12 and unrelated
+sentinels, offline PostgreSQL DDL. Never boot real app against configured services or
+run alembic upgrade on shared DB. If genuine local PostgreSQL can be safely isolated,
+run transaction/locking/concurrent publication tests there. Currently postgres/initdb/
+pg_ctl/psql are absent from PATH: PostgreSQL concurrency NOT PRODUCTION-VALIDATED;
+SQLite/offline DDL do not satisfy a live PostgreSQL claim. Do not connect to shared DB.
+
+Collector/config/cardinality/exemplar tests required if metrics change. No package
+install/live job for validation. Full regressions include M9 classification/SLO,
+M10 ledger, M11 source, M12 controls/replay, financial privacy/RBAC/frontend.
+
+Performance fixtures:1k/10k/100k attempts/components grouped into bounded populations;
+measure denominator grouping, driver allocation, sorting/residual handling, one-unit/
+full registry/day/28day generation, isolated publication, API and UI render separately.
+Use fixed seed, wall-clock/peak memory, dataset and bucket counts, repeats/p50/p95,
+machine context and adjacent M12 baseline. Complexity O(rows + bounded buckets log
+buckets + fixed registry×bucket aggregates), no units×financial-row nested loops.
+Planned caps inherit max100k inputs/10k buckets/128MiB/60s job; oversize fails visibly
+without truncation. API2s deadline; target cached local API<250ms and bounded UI<100ms
+render under fixtures, provisional local gates. Record measured results and repair
+unmet bounded-job/API controls; no production throughput claim from synthetic data.
+
+### Individually planned M13 exit criteria
+
+All implementation/validation criteria below are **PENDING**, none marked PASS by plan.
+
+| Gate | Objective acceptance evidence |
+|---|---|
+| C01 | M10/M11/M12 source rows/classifications/generations unchanged, including failure paths. |
+| C02 | Canonical bounded measurable/deferred unit inventory and explicit source requirements. |
+| C03 | Server-owned versioned denominator snapshots; missing/capture-gap/history/synthetic evidence never guessed. |
+| C04 | Matching scope/usage windows, explicit clocks/cross-midnight behavior and population semantics. |
+| C05 | Direct6/fullyloaded9 fixture, exact proven DIRECT membership; direct average not mislabeled marginal. |
+| C06 | UNALLOCATED/tax/rounding/detached credits outside unit numerator and prominently visible. |
+| C07 | Effective-versioned compatible approved driver registry; unsupported pools undistributed. |
+| C08 | Exact signed/absolute/component shared conservation with deterministic residuals/no double distribution. |
+| C09 | Zero/unknown denominator NULL+INSUFFICIENT_DATA; unavailable units never zero. |
+| C10 | Independent finance/denominator/mapping/driver/currency coverage and source freshness. |
+| C11 | M9 classification/availability/terminal/cancellation semantics reused; UNKNOWN remains visible. |
+| C12 | No fabricated business quality/incident/FTC/automation; M19/ITSM boundaries truthful. |
+| C13 | Native per-currency Decimal/precision controls and no invented FX/repricing. |
+| C14 | Immutable effective-version generations, corrected sources create history, deterministic replay. |
+| C15 | Atomic validation/publication/CAS/source fences and crash/restart/two-worker tests. |
+| C16 | Protected bounded cached GETs, explicit FINANCIAL_DATA/environment, no read-triggered finance job. |
+| C17 | Strict safe DTO/log/metric/DB projections; no content/credentials/raw finance identifiers. |
+| C18 | Existing M8 Unit Economics labels/counts/prices/coverage/freshness/exposure/revocation truthful. |
+| C19 | Analytical views explicitly non-additive; missing direct/shared mapping not presented complete. |
+| C20 | No M14 budgets/forecast/anomaly/recommendation or M19 outcome implementation. |
+| C21 | Additive migration follows actual M12 head; isolated migration/offline PG tests PASS. |
+| C22 | Grouped bounded performance demonstrated; deadlines/caps honored, local PG limits disclosed. |
+| C23 | Focused M0–M13/full backend/frontend/TS/build/Collector(if changed) regressions PASS. |
+| C24 | Current git status/diff/untracked inspection and diff check; only approved milestone files changed. |
+| C25 | No cloud/external/shared DB mutation; effective policy read-only; cloud status explicit. |
+| C26 | Cost/reliability comparison available at proven provider/model/period grain, richer quality shown unavailable until M19; roadmap exit evaluated against actual data, no optimization engine. |
+
+Ready for Next Milestone remains NO until all applicable gates individually pass.
+If source limitations prevent an applicable formal gate, record FAIL/BLOCKED; do not
+waive it by rendering an unavailable card or reinterpret planning readiness as completion.
+
+### Planning validation, failures, risks and cloud disposition
+
+Performed source/spec/execution/working-tree/head audit and fresh isolated predecessor
+tests. Exact fresh command:
+```
+.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests/test_finops_reconciliation_engine.py backend/tests/test_finops_reconciliation_inputs.py backend/tests/test_finops_reconciliation_mapping.py backend/tests/test_finops_reconciliation_publication.py backend/tests/test_finops_reconciliation_api.py backend/tests/test_finops_reconciliation_migrations.py backend/tests/test_finops_reconciliation_metrics.py backend/tests/test_finops_runtime_ledger.py backend/tests/test_observability_slo_rollups.py backend/tests/test_observability_slo_sources.py
+```
+Result150PASS/1existing deprecation warning/11.34s; exit0. This is predecessor
+verification, not M13 validation. M12 full-suite historical counts remain historical,
+not claimed rerun here. Baseline and final git diff --check PASS. Final git status,
+tracked diff statistics and untracked paths inspected: pre-existing M12 paths remain;
+only this record changed during planning. No failure/repair this pass.
+
+Main constraints: insufficient direct attribution for turns/classes/agents, no default
+approved shared drivers,2day receipt capture horizon, source-clock/scope mismatch,
+synthetic eligibility gaps, no historical incident/ticket/artifact cost joins, absent
+local PostgreSQL and default-denied production identity. These block individual prices
+or production acceptance, not local implementation of truthful derived/unavailable
+contracts. Real provider/model mappings and ownership attestations remain deployment
+inputs; empty registry must not produce finance claims.
+
+Actual files changed in this pass: **.agent/OBSERVABILITY_EXECUTION.md only**.
+M13 implementation status: NOT IMPLEMENTED. M13 tests/build/migration validation:
+NOT RUN (planning only). No migration file created, no metrics/UI/API code changed.
+
+Cloud deployment status = **NOT EXECUTED — USER APPROVAL REQUIRED**.
+Cloud/infrastructure changes required for this local planning/implementation: **NONE**.
+Future pending operations: exact approved shared additive database migration after
+M12, application deployment/M13 configuration activation, approved production source/
+driver ownership bindings and identity integration, live PostgreSQL/source/runtime
+acceptance. No live BigQuery/Billing/Pricing/IAM/Terraform/GCP/Graph or external-service
+action performed. Exact target/revision/command/resources/impact/cost/security/risk/
+rollback/environment must be supplied under AGENTS.md before any future mutation;
+this plan grants no operation approval and cannot establish those unknown targets.
+
+**Ready To Implement M13: YES (local only, after separate user implementation instruction).**
+**Ready for Next Milestone: NO. M14 BLOCKED. STOP after planning.**
+
+## M13 implementation start — 2026-10-09
+
+User authorizes M13 local implementation, additive migration authoring and isolated
+validation only. Approved plan above applies with the explicit numerator-scope and
+durable-denominator requirements in the implementation request. M9/M10/M11/M12
+sources remain read-only; denominator authority alone never enables a unit price.
+Source/spec/retention/head/current-tree reinspection completed before implementation.
+Current actual head e12c6d8a4b50; no M13 revision exists yet. Reuse canonical M9
+contributions(), M10 identities, M12 frozen financial components and publication patterns.
+Expected paths, architecture invariants, tests and pending criteria are listed above.
+Unit source captures run independently of billing availability, every60s for recent
+closed UTC days, before M9 receipt expiry. M10 start time defines usage cohort;
+M12 observation-day mismatch explicitly prevents incompatible financial pricing.
+Defaults disabled; no synthetic exclusion or workload ownership inferred from counts.
+Local implementation IN PROGRESS; validation NOT RUN; M14 BLOCKED.
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED.
+
+M13 implementation manifest amendment: M13 migration validation requires updating the repository-head assertion in
+backend/tests/test_finops_reconciliation_migrations.py as well as the planned M7
+migration test; this is test graph maintenance only, not M12 financial source change.
+
+## M13 implementation and local validation evidence — 2026-10-09
+
+Implementation performed: canonical units-v1 registry (20 units), explicit financial
+ownership attestations, immutable denominator/driver/definition/result versions,
+Decimal direct and fully loaded averages, approved shared drivers, deterministic
+residual controls, atomic source-fenced publication, independent off-path denominator
+capture, protected cache APIs, bounded metrics, additive migration and the existing M8
+Unit Economics panel. No M14 or M19 functionality implemented.
+
+Actual new files:
+- backend/observability/finops/unit_economics_contracts.py
+- backend/observability/finops/unit_registry.py
+- backend/observability/finops/unit_drivers.py
+- backend/observability/finops/unit_denominators.py
+- backend/observability/finops/unit_economics.py
+- backend/observability/finops/unit_economics_models.py
+- backend/observability/finops/unit_economics_repository.py
+- backend/observability/finops/unit_economics_worker.py
+- backend/observability/finops/unit_economics_api_models.py
+- backend/observability/finops/unit_economics_service.py
+- backend/observability/finops/unit_economics_metrics.py
+- alembic/versions/f13a7c9d2e61_finops_unit_economics.py
+- backend/tests/_m13_unit_economics.py
+- backend/tests/test_finops_unit_registry.py
+- backend/tests/test_finops_unit_denominators.py
+- backend/tests/test_finops_unit_economics_engine.py (driver tests included here)
+- backend/tests/test_finops_unit_economics_publication.py
+- backend/tests/test_finops_unit_economics_api.py
+- backend/tests/test_finops_unit_economics_metrics.py
+- backend/tests/test_finops_unit_economics_migrations.py
+- backend/tests/test_finops_unit_economics_performance.py
+- src/api/unitEconomics.ts; src/api/unitEconomics.test.ts
+- src/components/shell/settings/observability/UnitEconomicsPanel.tsx
+- src/components/shell/settings/observability/UnitEconomicsPanel.test.tsx
+
+Actual necessary modifications: backend/api/app.py; observability_routes.py;
+backend/observability/config.py; runtime.py; metrics.py; README.md; alembic/env.py;
+backend/tests/test_api_security_contract.py; test_observability_migrations.py;
+test_finops_reconciliation_migrations.py (head assertion only);
+test_observability_collector.py; both infra/observability/collector/config*.yaml;
+src/api/finops.test-support.ts; existing FinOpsPanel.tsx/FinOpsPanel.test.tsx and
+ReconciliationPanel.test.tsx (M13 mounted, M14 remains unavailable); this record.
+All existing M12 source/fixture files were preserved. SHA-256 comparison against
+preimplementation observability source baseline finds only the approved config,
+runtime and metrics wiring plus two migration-head assertions changed. Success and
+failure publication tests compare all real isolated M10/M11/M12 table rows byte for
+byte; M9 pruning test confirms durable saved history can still price a compatible
+late financial period without reconstructing deleted receipts.
+
+Unit registry/scope evidence: nine conditional operational units and eleven deferred
+units. Empty default ownership/driver policies and false default business-population
+proof prevent implicit turn prices. M12 dedicated-workload provider mapping plus exact
+runtime digest/window/population permits aggregate provider/model averages only.
+Explicit hashed service/SKU/project/region ownership, full effective UTC day and
+financial account scope are required for turn/class pricing. UNKNOWN classification,
+cross-midnight unproven cost windows, system/background/ingestion and missing source
+proof never become accepted user-turn cost. No arbitrary agent or knowledge count.
+
+Direct/fully loaded evidence: 60 DIRECT / 10 turns = 6 direct; 30 approved SHARED =>
+9 fully loaded; 10 UNALLOCATED remains separate. With 20 approved and 10 unapproved
+shared pool amounts, fully loaded is 8, PARTIAL, with 10 undistributed visible.
+Missing driver distributes nothing. Exact signed and absolute M12 controls and unique
+component identity validation remain intact. Largest remainder at quantum 1e-38 with
+stable key ties preserves signed sums for positive, negative, zero and tiny amounts.
+Multiple views are alternatives and must not be summed. Separate native EUR/USD;
+requested unsupported currency returns CURRENCY_UNAVAILABLE, no guessed FX.
+
+Denominator evidence: M9 canonical availability and timely-terminal logic reused,
+acceptance owns the day, UNKNOWN classes remain visible. Capture yesterday before
+today every60s independently of billing; expired missing history has null counts.
+Saved snapshots persist after M9 receipt expiry. M10 distinct physical attempts and
+logical calls remain distinct, usage start owns day, observed-day mismatch blocks
+prices. Safe acceptance-cohort latency and operational availability context is retained
+in M13; model-grain context and M19 business quality explicitly unavailable.
+
+Publication evidence: revalidation at persistence boundary, M12/M11/snapshot-head
+source fences, revision CAS, atomic insert/current-pointer transaction, duplicate
+replay/restart/concurrency, crash rollback, tampered result rejection and correction
+history retention. Failed jobs retain previous generations. No source extraction on
+GET, strict aggregate DTOs, capability/environment enforcement and cursor controls.
+
+UI impact (all five required evaluations): creates M8 unit count/price/coverage/freshness
+information; versioned safe API DTOs support existing Settings; this M13 UI work is in
+scope; server FINANCIAL_DATA RBAC applies and revocation removes cached money;
+definitions/ownership/driver policies are read-only. No production IaC bypass or edit
+API. M14 cards remain unavailable. Browser performs no monetary allocation formula.
+
+Validation and repairs: focused gate initially exposed unregistered enablement name,
+then that registry was repaired. Temporary attempt to project the flag into an existing
+finite configuration schema was removed after regression failure. M12 UI placeholder
+assertion was updated for M13 mounting. Decimal assertion failures used string equality
+instead of numeric Decimal equality; corrected assertions preserve exact backend
+precision. First full sandbox run failed ten loopback binds; guarded local-only
+escalation was used for the complete rerun, without external network access. No
+acceptance criterion was waived. Existing deprecation/experimental warnings retained.
+
+Commands/results so far:
+- Guarded test_finops_unit*.py: 67 PASS; later bounds tests and repaired engine,
+  denominator/publication group: 48 PASS. Dedicated updated performance: 1 PASS.
+- Full frontend: 61 files / 958 tests PASS.
+- npm run build (includes tsc -b): PASS.
+- git diff --check: PASS.
+- Full backend including native Collector validation and actual loopback delivery:
+  RUNNING; final status must be recorded below before declaring local completion.
+- SQLite isolated additive upgrade/downgrade, metadata/index/FK/check parity and
+  untouched M9/M10/M11/M12/unrelated sentinels: PASS. Offline PostgreSQL DDL: PASS.
+  Actual migration graph head f13a7c9d2e61 follows e12c6d8a4b50.
+
+Performance (macOS26.6.2 arm64, Python3.11; local synthetic source objects/test doubles,
+not production capacity; three grouping samples and five calculation/API samples,
+p95 reported as max for this small sample):
+| Measurement | Median ms | Max/p95 ms |
+|---|---:|---:|
+| 1k / 10k / 100k attempt grouping | 0.673 / 7.075 / 81.598 | 0.793 / 7.304 / 83.240 |
+| 1k / 10k / 100k turn grouping + cohort context | 44.428 / 435.506 / 4368.902 | 44.967 / 438.843 / 4415.436 |
+| 1000 grouped residual weights | 3.409 | 3.544 |
+| Full registry, one day | 1.787 | 2.133 |
+| Cached API | 3.888 | 6.765 |
+
+28 distinct synthetic daily generations:51.535ms; M12 immutable input read:2.087ms;
+publication transaction:9.638ms; source load/compute/publish:29.315ms;
+UI fixture render+response:65.459ms (full suite); retained adjacent M12 UI median8.041ms.
+Peak RSS growth for combined 100k synthetic fixture objects and measurements:
+313802752bytes; includes source-object construction, not solely worker resident state.
+Serialized payload ceiling128MiB is distinct from RSS. No financial-component ×
+individual-turn nested loop: linear population scans feed bounded grouped calculations.
+Actual 100k database IO/production load/concurrency still require production validation.
+
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED.
+Pending operations (not proposed for execution here): apply f13a7c9d2e61 to a specifically
+approved target database; activate the worker in an approved deployment/environment;
+bind approved source/financial account, workload ownership and shared driver policies;
+verify production denominator captures, financial auth, PostgreSQL concurrency and
+throughput. Target project/database/service is not approved or selected by this task.
+No GCP, IAM, billing, BigQuery, Graph, Terraform, cloud or shared-database mutation.
+Production denominator capture, financial attribution scope, approved shared drivers,
+PostgreSQL concurrency, live M10–M12 integrations, unit-economics throughput and
+financial authorization = NOT PRODUCTION-VALIDATED.
+
+
+### Final M13 local acceptance — 2026-10-09
+
+Full guarded backend rerun with permitted loopback binds: **5570 PASS, 12 SKIP,
+688 warnings, 249.35s**. Existing unrelated ADK/Pydantic/Starlette experimental and
+deprecation warnings and legacy aiosqlite cleanup thread warnings remain; no M13
+focused thread/cleanup warning or new test failure. Full frontend **958 PASS /61files**.
+Build/TypeScript **PASS**. Focused M13 67 PASS plus two subsequent bounds tests PASS;
+updated engine/denominator/publication repair subset48 PASS and distinct28-day
+performance1 PASS. Native Collector0.160.0 validates both configs and actual
+SDK→local Collector→loopback sink delivers all signals with M13 counters and rejects
+poison IDs. No external exporter or production Collector is run. Diff/status/untracked
+inspection and git diff --check PASS; M12 baseline source hashes unchanged.
+
+All planned local criteria individually evaluated against implementation and tests:
+| Gate | Result | Evidence |
+|---|---|---|
+| C01 | PASS | Source table equality on success/failure; unchanged M9–M12 implementation hashes. |
+| C02 | PASS | 20 immutable machine-readable unit definitions, conditional/deferred boundaries. |
+| C03 | PASS | Independent M9 capture; expiry, missing capture, immutable snapshots and late compatible price tests. |
+| C04 | PASS | Start/observation digest alignment, acceptance day, cross-midnight and exact scope controls. |
+| C05 | PASS | Direct6/fullyloaded9 genuine M12 component fixture, explicit scope and average labels. |
+| C06 | PASS | UNALLOCATED10, tax and incompatible system DIRECT excluded; exposure visible. |
+| C07 | PASS | Effective versioned approved exact-ownership drivers; absent policies undistributed. |
+| C08 | PASS | Signed/absolute component validation; conflicts rejected; deterministic tiny/negative residuals. |
+| C09 | PASS | Zero/unknown counts produce null prices and explicit insufficient/unavailable states. |
+| C10 | PASS | Independent numerator/reconciliation/denominator/shared/currency/mapping coverage and freshness. |
+| C11 | PASS | Canonical M9 outcomes reused; cancellation/failed vs timely terminal, UNKNOWN handling. |
+| C12 | PASS | M19/ITSM/unsupported units explicitly deferred, no fabricated outcomes. |
+| C13 | PASS | Native Decimal currencies, credits, exact precision; no FX or repricing. |
+| C14 | PASS | Immutable definitions/drivers/snapshots/generations; replay/restart/correction tests. |
+| C15 | PASS | CAS, source movement, two workers, result tamper and atomic crash rollback tests. |
+| C16 | PASS | Verified financial capability/environment, bounded cached GET/cursors; no source job. |
+| C17 | PASS | Strict safe projections; privacy poison and finite metric/Collector controls. |
+| C18 | PASS | Existing M8 UI counts/prices/exposure/context/coverage/freshness/revocation tests. |
+| C19 | PASS | Non-additive alternatives, incomplete driver remains PARTIAL, no count-based all-cost proration. |
+| C20 | PASS | No M14 or M19 implementation. |
+| C21 | PASS | Actual head linkage, isolated SQLite additive upgrade/downgrade and offline PG DDL. |
+| C22 | PASS | Grouped scaling100k, bounded caps/deadlines, API/build/UI measurements; production limits explicit. |
+| C23 | PASS | Full backend/frontend, focused M9–M13, TypeScript/build/native Collector/migrations. |
+| C24 | PASS | Final status/diff/untracked inspection; local pre-existing M12 work preserved; diff check clean. |
+| C25 | PASS | No cloud/external/shared mutation; policy read-only; exact pending categories disclosed. |
+| C26 | PASS | Model/provider averages and compatible M9 turn/class latency-operational reliability context; M19 quality unavailable. |
+
+User section101 blocking local gates (each evaluated independently):
+| Gate | Result |
+|---|---|
+| M12 financial truth immutable | PASS |
+| Canonical unit registry exists | PASS |
+| Authoritative denominator alone never enables price | PASS |
+| Explicit financial-scope compatibility | PASS |
+| Provider/model averages do not imply individual billed lineage | PASS |
+| Turn economics exclude incompatible system workloads | PASS |
+| Class economics require class-compatible attribution | PASS |
+| Unsupported units unavailable | PASS |
+| M19 units unavailable | PASS |
+| Direct and fully loaded semantics distinct | PASS |
+| M12 UNALLOCATED excluded from prices | PASS |
+| Shared drivers versioned | PASS |
+| Missing drivers leave shared pools undistributed | PASS |
+| Exact shared conservation | PASS |
+| Conflicting drivers fail | PASS |
+| Deterministic residual policy | PASS |
+| Durable denominator snapshots | PASS |
+| Already captured history survives short M9 retention | PASS |
+| Missing historical snapshots never guessed | PASS |
+| Financial/denominator windows aligned | PASS |
+| Zero/unknown denominator has no price | PASS |
+| Independent freshness/coverage | PASS |
+| Native per-currency Decimal semantics | PASS |
+| Immutable reproducible generations | PASS |
+| Protected APIs | PASS |
+| Truthful M8 Unit Economics UI | PASS |
+| M14 unimplemented | PASS |
+| Migrations/regressions pass | PASS |
+| No cloud/shared-resource mutation | PASS |
+
+Production prerequisites remain **NOT PRODUCTION-VALIDATED** individually:
+production denominator capture; production financial attribution scope; approved
+production shared drivers; production PostgreSQL concurrency; live M10–M12 source
+integrations; production unit-economics throughput; production financial authorization.
+Cloud deployment = **NOT EXECUTED — USER APPROVAL REQUIRED**. Production readiness
+is not claimed. No source policy approval or deployment inferred from local tests.
+No snapshot deletion job implemented (retention hardening belongs to M15); the worker
+revisit window is bounded731days, while immutable published histories remain durable.
+
+Local implementation = IMPLEMENTED.
+Local validation = VALIDATED COMPLETE.
+All blocking local criteria = PASS.
+Known limitations = explicit production prerequisites above; sources without proven
+scope remain unavailable; unavailable M19/ITSM/agent/tool/retrieval units stay deferred;
+SQLite/offline PostgreSQL DDL do not establish PostgreSQL runtime locking correctness.
+Ready for Next Milestone = **YES (local gate only)**.
+**STOP — M14 NOT STARTED.**
+
+Final review amendment: approved SHARED drivers now also require the component's
+entire usage interval to fit the denominator UTC day, matching the direct window gate.
+A cross-day SHARED pool stays fully undistributed/PARTIAL. The final affected
+engine/publication/API suite passed **57 tests** after this change. The preceding
+complete M13 focused suite passed **69 tests**; the newly added cross-day case also
+passed in the final57. Earlier full-backend regression evidence remains above.
+Final npm run build (tsc -b + Vite) PASS; final git diff --check PASS. No pending
+blocking local defect, no changed production prerequisite, Ready for Next Milestone
+YES (local); STOP at M13.
+
+## M14 — PLANNED — NOT IMPLEMENTED (2026-10-09)
+
+Authorization: M14 PLANNING ONLY, user attachment ac2ab761-aa96-4d5c-84b9-5340a96e395b.
+This pass changes only this execution record. No M14 source, configuration, migration,
+alert rule or UI is authored/activated now. M15 remains BLOCKED BY M14.
+Ready To Implement M14: YES — local implementation plan prepared, not implementation
+or deployment authorization. Ready for Next Milestone: NO — M14 implementation and
+validation have not occurred. STOP after this planning pass.
+
+### Predecessor gate and existing architecture audit
+
+M0 VALIDATED COMPLETE; M1–M13 IMPLEMENTED AND LOCALLY VALIDATED (local program
+completion, not deployed production completion). All applicable recorded predecessor
+local gates PASS; M13 Ready for Next Milestone YES. M13 final evidence: full backend
+5570PASS/12SKIP, frontend958PASS, build/Collector/migrations PASS; final affected57PASS.
+Planning recheck of M13 registry, engine, publication, financial API and migration:
+60PASS/4.09s using the re-inspected credential-stripping/local-socket-only guard.
+The checked source remains derived from M12 components, with 11 deferred definitions,
+no guessed prices and explicit M19/ITSM gaps. No predecessor failure found.
+
+Current source findings, not assumptions about remote resources:
+- M10 immutable BASE/ADJUSTMENT ledger with created_at and observed_at, physical attempt
+  and logical operation identity, durable inbox/debt, safe usage aggregates. Existing
+  usage bucket and mutable AttemptRow are NOT an as-of historical database.
+- M11 immutable source manifests include published_at/extracted_at/export_time and
+  correction/late/unmapped counts, exact controls, cache, current ingest state; adapters
+  have explicit environment/account scope. Detailed Billing is primary, FOCUS supplemental.
+- M12 immutable daily input/generation, classified component IDs and per-currency net,
+  gross/credit/adjustment/tax/rounding, DIRECT/SHARED/UNALLOCATED, category, quality,
+  coverage and source vector. Quantity mismatches can yield VARIANCE_REVIEW; unallocated
+  can yield PARTIALLY_RECONCILED even when signed monetary controls pass. These dimensions
+  must remain distinct, not collapsed into one healthy Boolean.
+- M13 immutable denominator and unit generations; nine conditional and eleven deferred
+  units. Provider/model scope is possible with proof; default business-population proof
+  is false and driver registry empty. Class/workload scope is not generically available.
+- Existing M12/M13 current() methods are bounded31/32days for HTTP. Do not widen them:
+  M14 needs its own indexed bounded history adapter over immutable M12/M13 generations.
+- verified principal + FINANCIAL_DATA + environment scoping/admission/semaphore/signed
+  cursors already exist. Admin has no implicit financial capability. Production identity
+  provider currently defaults denied; do not replace it with development headers.
+- Existing FinOpsPanel mounts FinancialSourcePanel/ReconciliationPanel/UnitEconomicsPanel
+  and three M14 placeholders. ReadState/useObservabilityQuery/styles are reusable.
+- No finops budget definition/table/API/registry, financial forecast or cost anomaly
+  engine is found in backend/src/infra. SRE error budgets, execution deadline budgets,
+  technical-authority forecast_gap and text mentioning anomalies are unrelated.
+- No repository Cloud Billing Budget resource, external budget import/binding, authoritative
+  amounts or approved financial thresholds. No assertion about remote budgets is made.
+- Source-controlled M9 alert manifest, Terraform monitoring resources (disabled), private
+  operational APIs and bounded metric sanitation/Collector patterns exist for reuse.
+- Local files contain fixtures and schemas, not an audited production financial history.
+  24-month retention capacity does not establish that complete production history exists.
+- Actual Alembic head from M13 migration test: f13a7c9d2e61. Proposed M14 revision
+  a14d2e6f8c70 is absent; recheck graph/uniqueness before future authoring.
+
+### Objective, authoritative specification files, reuse and invariants
+
+M14 adds versioned financial budgets, actual utilization/spend-rate, interpretable
+period-end forecasts, uncertainty/backtest quality, cost/usage/quality anomalies,
+explanations, immutable evaluations, protected cache APIs, existing M8 UI, bounded
+pipeline metrics and source-controlled disabled alert/runbook definitions.
+
+Read authoritative files: README; 00_MASTER_BUILD_CONTRACT; 01_TARGET_ARCHITECTURE;
+05_STORAGE_APIS_AND_UI; 07_FINOPS_ARCHITECTURE; 08_FINOPS_DATA_MODEL_AND_UNIT_ECONOMICS;
+09_SECURITY_PRIVACY_RETENTION_SAMPLING; 10_DASHBOARDS_RUNBOOKS_OPERATING_MODEL;
+11_SLOPANOC_INTEGRATION_MAP; 12_IMPLEMENTATION_ROADMAP; 13_TEST_VALIDATION_ACCEPTANCE;
+14_CODEX_EXECUTION_GUIDE; 15_DEFINITION_OF_DONE; 20_FINOPS_ACCOUNTING_DURABILITY;
+22_RELEASE_CONFIG_CORRELATION_CI; 23_TERRAFORM_AND_OBSERVABILITY_AS_CODE.
+Docs mandate transparent run-rate/month-end then seasonality, explicit available scopes,
+observability-cost budget, actual/estimate separation and daily financial review; they
+DO NOT fix numeric budget thresholds, detector cutoffs, history minimums or statistical
+coverage guarantees. Every numerical policy below is PROVISIONAL, versioned, reviewed
+before production, and disabled by default. User planning constraints refine the docs.
+
+Reuse decimal/money/digest/controls, M12 frozen inputs/classifications/mapping registries,
+M13 definitions/drivers/denominator/result proof, M11 freshness/source manifests,
+M10 immutable safe quantities, repository insert_for/CAS/fencing patterns (not source
+write methods), authorization/read controls, read-only Settings components, metric
+allow-list/exporter and existing source-controlled monitoring/runbook conventions.
+
+Hard invariants: M11 actual source → M12 financial truth → M13 unit economics → M14
+interpretation. M14 never writes or reclassifies these predecessor sources. ACTUAL,
+BUDGET, FORECAST and their variances have separate exact fields. No estimated runtime
+price or catalog price substitutes for actual money. Never multiply M13 unit prices by
+counts to recreate total bills. No cross-currency sum/comparison without authoritative
+versioned FX (absent now). No LLM forecasting/explanations, business-value fabrication,
+raw content, new conversational/command authority, automatic routing/quotas/scaling/
+model disablement/turn blocking or infrastructure remediation. No M15 deletion/retention/
+sampling implementation, autonomous spend enforcement or purchase commitments.
+
+### Budget source, definition, scopes, currency and periods
+
+Application-owned immutable budget schema, loaded from reviewed source-controlled
+infra/observability/finops/budgets.json, default empty. Persist validated definitions as
+M14 versions; config digest/provenance records ingestion. This is not a Cloud Billing
+Budget mirror and not an external import. No POST/PATCH/DELETE budget API or React
+amount constants. Exact money remains Decimal strings; reject floats/nonfinite/negative
+budget amounts and unbounded/free-form selectors.
+
+Definition: bounded opaque budget_id, version, scope_type/registered scope_key,
+environment, financial account/population binding hash, category, currency, amount,
+CALENDAR_MONTH, UTC usage basis, effective_from/to, recorded_at, enabled/status,
+warning/critical/notification thresholds, policy version, non-sensitive owner route,
+source=REVIEWED_APPLICATION_CONFIG, provenance digest, optional supersedes version.
+Definition history persists. Revisions cover entire calendar periods, including an
+explicitly superseding current-period revision where reviewed; no implicit mid-month
+proration. Independent conflicting active revisions fail. As-of selection considers
+recorded_at as well as effective dates, preserving what was known in October/November.
+
+| Scope | Planned eligibility |
+|---|---|
+| SLOPANOC_TOTAL | Single explicit approved SLOPANOC financial population/binding, not all billing-account cost by assumption. Includes all DIRECT+SHARED+UNALLOCATED, credits/adjustments/tax/rounding once. |
+| ENVIRONMENT | Exact approved environment binding; no cross-environment aggregation without exhaustive disjoint manifest. |
+| SERVICE_CATEGORY | Exact M12 category mapping and full selected population; unknown mapping exposed separately. |
+| COST_CLASS | DIRECT or SHARED components once; UNALLOCATED supported as quality exposure, never redistributed. |
+| PROVIDER_MODEL_DIRECT | Exact M12 model/provider ownership/registry, native currency and complete compatible population; label DIRECT-only. No sampled telemetry-derived scope. |
+| OBSERVABILITY | Explicit approved component membership for logging/trace/metrics/Collector/BigQuery monitoring usage; MONITORING_LOGGING alone is only a subset unless full membership is proven. Default unavailable until proof/configuration. |
+| REQUEST_CLASS / WORKLOAD | Conditional exact ownership/population proof from frozen M13 driver/scope registries plus M12 components; no count-based proration or price×count. |
+| TEAM/SDU / AGENT / USE_CASE / CASE / OUTCOME | DEFINED_NOT_AVAILABLE with absent authoritative financial attribution; M19 outcome units remain unavailable. |
+
+All budgets are independent constraints/views. Do not sum overlapping overall,
+environment/category/model budgets as company spend. Any hierarchy is descriptive;
+parent actuals come from disjoint source components, not adding child budget totals.
+Financial source scope hashes stay private; APIs use bounded opaque scope IDs/names.
+
+One currency per definition (EUR primary, native currencies separate). EUR/USD mismatch
+without FX: CURRENCY_UNAVAILABLE, null utilization/variance/risk, preserve observed native
+actual separately. No synthetic zero for missing EUR. Budget absolute anomaly policies
+also require a policy configured for that currency; default EUR floors do not become USD.
+
+Initial supported period: calendar MONTH, [first day00:00UTC,next month00:00UTC), usage
+basis, matching M12 daily partitions. Quarter/year and invoice-time budgets explicitly
+unsupported in v1; not rolling28-day SLOs. Leap years/month lengths/year boundary tested.
+
+### Actual eligibility, utilization, thresholds, state and forecast risk
+
+Observed MTD spend sums one selected M12 generation per complete/present usage day and
+currency, with exact component uniqueness and scope proof. Actual net includes credits,
+tax/rounding and UNALLOCATED for total scope; narrower views use only supported component
+membership. Keep actual_observed, eligible_closed_actual, actual_through, missing/open
+intervals, billing lag, reconciliation/mapping/runtime coverage and freshness separate.
+Missing days are UNKNOWN, not zero. Verified empty source is zero but does not magically
+prove runtime/financial completeness if M12 marks the empty period unresolved.
+
+Utilization=actual eligible net/budget; variance=actual-budget; exceedance uncapped.
+100EUR/50EUR=>0.5/50%; 100/120=>1.2/EXCEEDED. budget0=>ZERO_BUDGET, utilization null,
+positive actual has no-spend breach flag; budget absent=>NOT_CONFIGURED. Negative actual
+credits remain signed, with CREDIT_BALANCE context, not a claimed saving or clamped0.
+Partial/unmatched/unreconciled/variance-review/stale source may expose observed numbers
+with limitation state but cannot produce authoritative HEALTHY/ON_TRACK or alert.
+No budget utilization from estimated or incomplete silent populations.
+
+PROVISIONAL centrally versioned budget thresholds: INFO crossing50%, WATCH>=80%,
+AT_RISK>=90%, AT_LIMIT=100%, EXCEEDED>100%; HEALTHY below80% only with valid fresh complete
+inputs. Threshold arrays ordered/bounded; no percentages embedded in React/endpoints.
+SOURCE_STALE, INSUFFICIENT_DATA, SCOPE_UNAVAILABLE, CURRENCY_UNAVAILABLE and
+RECONCILIATION_INCOMPLETE take precedence over positive financial interpretations.
+Zero budget and negative budget validation have distinct states. No production approval
+is implied by this proposal.
+
+Forecast risk is separate: ON_TRACK only a quality-qualified forecast with upper bound
+at/below budget; WATCH if bounds span budget or only low-confidence point exists;
+PROJECTED_OVER when qualified lower bound>budget (point-only overrun is potential/WATCH);
+ALREADY_EXCEEDED only eligible actual>budget. Other unavailable/source states propagate.
+An actual breach cannot be erased by a lower predicted amount. Overlapping budgets do
+not cause duplicate company spend or independent pages for one source-quality failure.
+
+### Financial inputs, historical knowledge and no future leakage
+
+M14 history adapter reads published M12 daily generations plus bounded referenced
+component/category/quantity aggregates, not raw BigQuery or every ledger event per job.
+Read M11 manifest/vector quality and M13 unit snapshots only for compatible context.
+Do not invoke ingestion/reconciliation/unit calculation from GET or M14 evaluation.
+
+Two independent clocks: financial usage day and knowledge/publication time. At issue T,
+select latest eligible M12 generation published_at<=T per scope/day; require every linked
+M11 manifest published_at/extracted_at<=T. Effective-dated mappings/pricing alone do not
+prove data was available then. M13 context must have its owning unit GENERATION published
+by T, not merely a denominator captured_at. Budget/policy recorded_at must be<=T.
+Live/current pointers must never be used as historical truth for walk-forward tests.
+
+M12 frozen runtime input already supports model/provider safe quantity context. Any
+necessary new workload/retry aggregate is a separate M14 off-path bounded snapshot of
+M10 immutable BASE/ADJUSTMENT rows (created_at AND observed_at<=T), retaining digest and
+coverage, not raw rows; mutable historical attempt state/buckets are not reconstructed
+as known at T. Unproven historical start/capture alignment gives unavailable explanation.
+If the bounded source query cannot prove historical knowledge/coverage, disable that
+feature/backtest window. Do not add M10–M13 schema/business features to overcome it.
+
+PROVISIONAL maturity policy: exclude current/open day and last48h from forecast training
+and statistical spend detection. Maturity means usable under this policy, not invoice
+finality. Forecast training requires complete contiguous eligible prefix of target month
+and complete baseline windows. API still reports later observed partial actual separately.
+Late re-publication creates new derived evaluations; no interval is permanently settled.
+Historical rows retain quality_at_capture; latest applicable M11/M12 pipeline health and
+source-vector movement provide current freshness overlay. Old settled-history age alone
+is not treated as a missing day, and captured FRESH alone does not imply today's pipeline
+is healthy. Exact freshness/maturity decisions are stored with every evaluation.
+
+### Forecast algorithm hierarchy, history, quality and uncertainty
+
+Central forecast registry: ID/version, status, supported scope/currency/basis,
+required history, configuration/version/digest, horizon/extrapolation cap, quality gates.
+No algorithm embedded in endpoint or free-form executable algorithm configuration.
+
+| Tier | Planned algorithm and gate |
+|---|---|
+| 0 | No compatible/fresh complete history, negative-rate unsupported regime or failed quality gate => null estimate + explicit unavailable reason. |
+| 1 | run_rate_v1: at least7 consecutive eligible target-month days from month start. A=eligible prefix net, k=prefix days, D=calendar month days; point=A+(A/k)*(D-k). Excluded lag/open days are part of remaining estimate, not added twice. Transparent provisional run-rate with LOW confidence until backtest qualification. |
+| 2 | weekday_median_v1: at least56 prior complete contiguous days (8weeks, >=8 values/weekday), >=7 eligible current-month prefix days, stable comparable scope. Point=A+sum(training median for each remaining calendar weekday). Selection requires walk-forward improvement and quality qualification; otherwise qualified Tier1 or explicit low-confidence Tier1. |
+| 3 | trend+seasonality registry entry DEFINED_NOT_AVAILABLE in initial M14; no opaque ML/LLM or unvalidated trend extrapolation. |
+
+History maxima731days/24months, daily cadence. Algorithms forecast expected total NET
+spend for the SAME usage month/currency/scope. No traffic growth/model-migration/business
+value assumption. Same versions/vector/issue cutoff produce deterministic point/state.
+Credits and negative actuals retained. If a chosen rate/point is negative, v1 exposes
+UNSUPPORTED_NET_CREDIT_REGIME with null forecast; no blind clamp. A later algorithm for
+predictable negative-credit regimes needs explicit version/semantics, not silent change.
+
+Initially no unjustified95% interval. Tier1 without adequate calibration: lower/upper
+null, LOW confidence, interval_method=NONE, clearly labeled provisional run-rate estimate.
+A supported deterministic scenario envelope (weekday quantile low/high for remaining
+calendar dates) may be shown as SCENARIO_RANGE, not a probabilistic confidence interval.
+For a qualified empirical residual band require >=12 walk-forward residuals across
+>=6 distinct closed financial months at comparable remaining-day horizons; use absolute
+horizon-conditioned error quantile with nearest-rank interpolation policy/version,
+interval_method=EMPIRICAL_RESIDUAL_BAND, nominal coverage explicitly labeled empirical,
+observed calibration/sample count exposed. Never call it guaranteed95%. Inadequate
+calibration=>no band/low confidence; negative interval boundaries may describe net credits
+and must not be silently clamped. Quality and range do not grant forecasting authority.
+
+Minimum backtest qualification (PROVISIONAL): >=6 origins from >=2 distinct closed months,
+WAPE<=25%, abs signed bias/absolute actual total<=15%, finite results, at least10%
+WAPE improvement for Tier2 over Tier1 on SAME folds. Seasonal fixture must improve over
+naive adjacent-day behavior. Absent calibration may publish an explicitly LOW-confidence
+Tier1 scenario estimate, never a qualified ON_TRACK/high-confidence alert. Adequate
+history but failed quality gate=>FORECAST_QUALITY_FAILED, no qualified forecast; do not
+publish a misleading complex model just because it imports. No unbounded extrapolation:
+remaining target month <=31calendar days. Zero denominator error ratios remain null.
+
+### Forecast walk-forward backtesting
+
+For fixed origin issue T, historical as-of selection and maturity gate are identical to
+live evaluation. Train ONLY data available by T, predict remaining target month, then
+score against separately versioned later complete actuals as of explicit truth_cutoff.
+Store origin/horizon/scope/currency, prediction generation, truth generation vector,
+issue/scoring cutoffs, model/config, excluded/gapped windows, sample count and metrics.
+Later corrected truth creates a NEW backtest generation, not rewritten old scores.
+
+MAE=sum(abs(error))/n; WAPE=sum(abs(error))/sum(abs(actual)); signed normalized bias
+=sum(prediction-actual)/sum(abs(actual)); MAPE only nonzero compatible actuals with count
+of exclusions. Report signed and absolute error plus scopes and credit regime. Interval
+coverage only when a true method/band is supported; scenario envelopes are not confidence
+coverage. Independent financial periods vs multiple correlated origins explicitly counted.
+Synthetic fixtures validate mathematics and no leakage, not production calibration.
+
+### Anomaly classes, baselines, seasonality, significance and persistence
+
+Separate versioned detector registry with fixed IDs/classes/supported grain/source,
+required history, scope compatibility, absolute/relative floors, severity/persistence,
+quality rules, status/provenance. Initial monetary grain is DAILY: M12 has daily financial
+partitions, not authoritative hourly bills. Hourly budget refresh doesn't invent hourly
+cost detection. Requested unsupported subdaily scope explicitly unavailable.
+
+| Class | Authoritative inputs and boundary |
+|---|---|
+| TOTAL_SPEND / PROVIDER_MODEL_SPEND | M12 native net and exact qualified component scope; no token-estimated dollars. |
+| SHARED_INFRASTRUCTURE / OBSERVABILITY_SPEND | M12 SHARED/proven observability pools; never assigned to an individual turn. |
+| UNIT_COST | Selected M13 unit/direct or fully loaded field, strictly AVAILABLE, complete compatible denominator/numerator/shared coverage, sufficient units, fresh source; PARTIAL/unavailable units excluded. |
+| USAGE_VOLUME | M10/M12 safe known token/physical-call counts; label usage, not money. Retry/calls per turn only if durable matching denominator/capture clock is proven. |
+| BILLING_CORRECTION | M11 corrected/late manifests and M12 signed credit/adjustment/generation deltas; financial bookkeeping observation, not inferred operational event. |
+| UNALLOCATED / RECONCILIATION_QUALITY | M12 unallocated absolute/net/ratio and coverage/control/variance/source state. Can evaluate accounting-quality exposure even when classification is partial due to unallocated; do not claim high-confidence workload cost. |
+
+Request-class cost and mix detectors conditional on authoritative compatible M13 class
+scope; unavailable otherwise. Agent/failed-turn/retry-driven COST per business unit is
+unavailable without exact financial lineage; usage observations remain possible without
+inventing billed cost. M19 outcomes do not feed M14.
+
+Baseline v1: previous28 complete eligible days (exclude evaluated day and all future days),
+rolling median and MAD. Effective scale=max(1.4826*MAD,registered noise floor); MAD0 never
+divides by0. With >=56days use same-weekday median/MAD across8weeks. With insufficient
+seasonal history, expose NONSEASONAL/LOW confidence; never compare Monday solely to
+Sunday as high-confidence evidence. Trend fixture monitored: no critical page for gradual
+trend alone; sustained shift detector compares recent3 eligible days to frozen preceding
+baseline and records baseline/reset versions. Training cannot include evaluated/future
+intervals, even if later rows are already in today's DB.
+
+PROVISIONAL EUR significance thresholds: WATCH abs deviation>=25EUR AND relative>=25%
+AND robust score>=3.5; HIGH>=50EUR AND relative>=50% AND score>=6 with persistence;
+CRITICAL>=500EUR AND relative>=100% AND score>=8, >=3eligible consecutive days, qualified
+budget impact. INFO records notable but nonactionable observation only. Percentage at
+baseline0 is null; a separate configured absolute-impact zero-baseline rule applies.
+Default noise floor max(1EUR,1% absolute baseline). Other currencies require explicit
+native policy, not EUR thresholds renamed USD. Usage floors are separate (provisional
+1000tokens or10calls); unit-cost detector requires >=100eligible units/day plus explicit
+native per-unit minimum and total financial impact proof, no price×count reconstruction.
+
+One outlier=>observation/WATCH; >=2of3 consecutive eligible days=>sustained/HIGH only
+when HIGH magnitude/quality gates pass. Missing/stale intervals do not count as healthy
+or consecutive; break confidence/persistence chain. Repeat publication of same day/input
+is not a new occurrence. Critical requires stronger configured gates, never every outlier.
+Magnitude, absolute impact, persistence, coverage/confidence and budget risk are all
+recorded. A sparse .01→.03 shift never becomes CRITICAL. No alert is sent in local work.
+
+### Corrections, price/usage/mix explanations and source-quality precedence
+
+Finite deterministic reasons include BILLING_CORRECTION, LATE_BILLING,
+USAGE_VOLUME_INCREASE, PRICE_CHANGE, MODEL_MIX_SHIFT, WORKLOAD_MIX_SHIFT,
+SHARED_INFRASTRUCTURE_INCREASE, UNALLOCATED_INCREASE, RELEASE_CORRELATION,
+SOURCE_STALE, COVERAGE_DEGRADATION, RECONCILIATION_VARIANCE, INSUFFICIENT_HISTORY,
+SCOPE_UNAVAILABLE, UNEXPLAINED. Multiple compatible reasons may coexist; unknown is
+not assigned a confident driver. Version/input lineage deltas remain internally auditable.
+
+BILLING_CORRECTION requires source correction/adjustment evidence and later publication
+of the same usage period. A negative amount alone is not proof of corrective activity.
+PRICE_CHANGE requires changed effective authoritative pricing/billing rate evidence for
+same SKU/unit/scope, stable compatible quantities and complete pricing coverage; catalog
+reference change alone does not prove billed price increase. USAGE_VOLUME_INCREASE
+requires matching physical quantities at same grain/currency and stable rate evidence.
+MODEL_MIX_SHIFT requires complete per-model attributed components/quantities; request
+class mix requires actual class ownership/denominators. No inference from prompts.
+Release/config enrichment uses available resource/turn metadata/approved markers at
+compatible time only. No durable deployment event history is assumed; missing markers
+mean unavailable. Never assert that a release CAUSED the anomaly.
+
+Where joint quantity/rate dimensions are proven, use symmetric two-factor identity
+Delta(q*p)=(q1-q0)*(p1+p0)/2+(p1-p0)*(q1+q0)/2; Decimal component totals with explicit
+rounding residual. Extend only disjoint complete model groups; show shared/credit/tax/
+unallocated changes and unexplained remainder separately. If scopes/tariffs/mixes cannot
+support this identity, provide bounded contributors, not an exact causal explanation.
+
+UNALLOCATED detector monitors absolute/net exposure and absolute-share ratio with
+absolute monetary floor even when net credits cancel. Coverage drop, missing source,
+new mapping ambiguity or unresolved reconciliation takes priority over apparent financial
+savings. Missing direct cost/unit denominator never becomes cost improvement. If M12
+reclassification changes category/model ownership, reset comparable baseline/mark
+MAPPING_CHANGE, not an operational spend spike. Keep all classes/context non-additive.
+
+### Immutable generations, publication, current/history and scheduling
+
+Create M14-owned immutable input VECTORS and compact DAILY scalar features referencing
+M11/M12/M13 generations, not copies of billing datasets. Store knowledge cutoff and exact
+period/scope/currency/compatibility/coverage/freshness policy. Each issued budget/forecast/
+anomaly generation references definition/policy/algorithm/version and inputs. Issue time
+is an explicit deterministic UTC evaluation cutoff; identical issued cutoffs and inputs
+are idempotent. Corrections/new issue cutoffs produce new generations, preserving history.
+
+Use dedicated M14 publication heads/revision CAS, per-scope/period/job reservation,
+consistent read snapshot, deterministic recomputation/control validation and one atomic
+insert+current-pointer transaction. Fence relevant M11 source state/M12 and M13 heads
+under stable locking order; reject changed source vectors/old workers. Failure or crash
+preserves previous good current pointer and immutable issued forecasts. Generation IDs
+are opaque internal/API references, never metric labels.
+
+Anomaly identity=bounded class/scope/currency/target usage day/algorithm family; immutable
+evaluations append ACTIVE, RESOLVED or RECLASSIFIED transitions. Preserve first detected,
+last observed, input versions and predecessor evaluation. Resolve only after valid
+re-evaluation or configured fresh recovery intervals; missing latest data is unknown,
+not resolution. A billing correction can reinterpret earlier evaluation without deleting
+it. Manual CONFIRMED/FALSE_POSITIVE/INVESTIGATING disposition APIs are OUT OF SCOPE:
+authoritative docs do not define them. No operator mutation model is invented.
+
+Intended local scheduling policy, all PROVISIONAL/disabled: budgets refresh hourly when
+M12 vector changes; forecasts daily at06:00UTC; monetary anomalies daily after usable
+financial refresh; stale-pipeline check hourly. Changed retained periods revisited with
+bounded fair scheduling (2scope/period jobs per cycle), correction-aware as-of records.
+M11 current defaults billing ingestion1h/pricing1day, so do not run1minute monetary
+prediction regardless of changed data. No Cloud Scheduler, scheduled BigQuery or live
+Monitoring jobs. FinOps worker/task independent of user turns and no remote source jobs.
+
+### Source-controlled alerts, runbooks, metrics and safety
+
+Planned disabled rules: budget threshold/no-spend breach; projected qualified overrun;
+sustained high-confidence monetary/unit-cost anomaly; unallocated surge; stale FinOps
+source. Health failures suppress/relabel financial symptoms. Dedup/grouping uses bounded
+environment/scope category/currency/class and routing family; detailed budget/anomaly
+IDs live in protected DB/API. Overlapping views are not distinct spend incidents.
+
+Reuse M9 generator/manifest validation pattern through separate finops_iac module and
+finops_alert_policies.json; Terraform monitoring/finops.tf authors disabled policies,
+notification channels default empty. Never create channels or call apply/import/deploy.
+Runbooks: budget-exceeded, projected-overrun, cost-anomaly, unit-cost-anomaly,
+unallocated-cost, stale-source. Each checks exact source freshness/corrections,
+reconciliation and M13 coverage, known releases/config, numeric contributors and safe
+read-only diagnostics; any proposed operational change goes to existing governance and
+exact approval process. No execution hooks/provider/cloud clients exist in M14 engine.
+
+Local roadmap exit demonstration planned end-to-end: mature synthetic history→M12/M13
+published truth→M14 projected-over-budget/sustained anomaly→protected API→M8 UI→disabled
+alert policy dry-run matcher with runbook, BEFORE actual budget exhaustion. No network
+notifications. Live production alert demonstration is NOT EXECUTED; formal exit must
+be reviewed at implementation completion, never silently marked live-validated.
+
+Metrics only pipeline/control state counts, lag/duration/backtest-quality categories,
+anomaly class/severity, projected-over-budget counts. Registered finite scope/state/
+category labels; no budget/anomaly IDs, arbitrary SKU/model IDs, amounts, raw IDs or
+exemplars. Exact forecast/financial values stay DB/API. Update SDK/encoder/Collector
+allow-lists and native Collector/cardinality tests together if future metrics added.
+
+### Protected API and existing M8 UI design (five UI-impact checks)
+
+Plan GET /api/observability/finops/budgets plus /budgets/{budget_id}; /forecasts plus
+/forecasts/{generation_id}; /anomalies plus /anomalies/{anomaly_id}. Detail IDs opaque,
+validated and environment-authorized. Query bounded environment, registered scope,
+native currency, calendar month, class/severity/state, history page and signed cursor.
+Reuse FINANCIAL_DATA/verified principal/environment/admission/read semaphore; no broader
+roles/capabilities, no automatic Admin/SRE access. Detail/history permission same as
+financial read; no raw billing identifiers/source lines/SQL/content/commands/credentials.
+GET reads published projections and freshness overlay only, NEVER computes/extracts.
+
+Budget DTO: definition ID/version/source/read-only owner, scope/basis/month/currency,
+budget amount, observed actual, eligible actual, utilization%, variance, threshold,
+forecast/risk reference, coverage, freshness, status/reasons. Forecast DTO: actual prefix,
+point/range/range_type, remaining estimate, through/issue/target dates, model/version,
+backtest quality, history coverage, confidence, freshness, immutable generation.
+Anomaly DTO: class, day, observed/expected, signed/absolute deviation, relative nullable,
+severity, status, persistence, baseline sample/history, confidence, reason codes,
+source-quality/correction context, algorithm version and opaque lineage references.
+All monetary values exact Decimal strings; quantities separate; date/calendar metadata
+bounded, schema_version explicit. No raw/private source binding hash exported.
+
+M8 FinOpsPanel replaces only M14 placeholders with BudgetPanel/ForecastPanel/AnomaliesPanel;
+reuse layout/typography/card/button/ReadState/query patterns. Server returns every formula,
+state/range/reason; browser only formats. Show actual≠forecast≠budget, uncertainty visible,
+source freshness and non-additive scope warning, bounded recent history/list/details.
+No budget→'No budget configured', not0. Insufficient forecast→'Forecast unavailable —
+insufficient history'; unevaluated detector→unavailable, not'No anomalies'. A successful
+empty evaluation alone may say'No anomaly detected for evaluated periods'. Stale,
+partial, failed job, empty history, denied/revoked access have truthful states.
+No new app/BI/pivot editor, notification dispatch or budget mutation from React.
+
+UI-impact evaluation: (1) M14 creates required budget/forecast/anomaly information;
+(2) safe cached contracts above support it; (3) replacing these M8 placeholders belongs
+in M14 implementation, not this planning pass; (4) explicit server financial RBAC and
+revocation apply; (5) all effective definitions/algorithm/alert policies view-only,
+source-controlled; no Settings bypass of IaC. M15 UI/retention settings remain untouched.
+
+### Storage/migration and exact planned file manifest (none authored now)
+
+Six M14 table families: finops_budget_definition_version; finops_control_input
+(compact feature vectors and referenced generation links); finops_control_generation
+(immutable BUDGET/FORECAST/ANOMALY typed payload); finops_forecast_backtest_generation;
+finops_control_publication (CAS head/job/error/last-success); finops_anomaly_transition
+(append-only lifecycle). Reuse separate declarative metadata convention. Enforce scope/
+environment/currency/month/kind/version/lineage uniqueness and FKs within M14, indexed
+as-of history (scope/day/issue/kind), current pointers and finite statuses. Preserve
+M10–M13 source schema/rows. Backtest evaluations never overwrite previous predictions.
+
+Proposed additive migration file a14d2e6f8c70_finops_controls.py, down_revision actual
+M13 f13a7c9d2e61; reverify graph/uniqueness before writing. Author frozen schema, indexes,
+constraints and reversible M14-only downgrade; isolated upgrade/downgrade/offline PG DDL.
+No live migration. Retain financial analytical metadata under24-month policy; no deletion
+or sampling jobs (M15). No raw billing cache duplication or production data committed.
+
+Exact files to ADD during future authorized implementation:
+- backend/observability/finops/control_contracts.py
+- backend/observability/finops/budgets.py
+- backend/observability/finops/budget_registry.py
+- backend/observability/finops/control_inputs.py
+- backend/observability/finops/forecast_registry.py
+- backend/observability/finops/forecasting.py
+- backend/observability/finops/forecast_backtesting.py
+- backend/observability/finops/anomaly_registry.py
+- backend/observability/finops/anomalies.py
+- backend/observability/finops/cost_drivers.py
+- backend/observability/finops/control_models.py
+- backend/observability/finops/control_repository.py
+- backend/observability/finops/control_worker.py
+- backend/observability/finops/control_api_models.py
+- backend/observability/finops/control_service.py
+- backend/observability/finops/control_metrics.py
+- backend/observability/finops/finops_iac.py
+- alembic/versions/a14d2e6f8c70_finops_controls.py
+- backend/tests/_m14_controls.py
+- backend/tests/test_finops_budget_registry.py
+- backend/tests/test_finops_budgets.py
+- backend/tests/test_finops_control_inputs.py
+- backend/tests/test_finops_forecasting.py
+- backend/tests/test_finops_forecast_backtesting.py
+- backend/tests/test_finops_anomalies.py
+- backend/tests/test_finops_cost_drivers.py
+- backend/tests/test_finops_control_publication.py
+- backend/tests/test_finops_control_api.py
+- backend/tests/test_finops_control_metrics.py
+- backend/tests/test_finops_control_migrations.py
+- backend/tests/test_finops_control_performance.py
+- backend/tests/test_finops_iac.py
+- src/api/financialControls.ts
+- src/api/financialControls.test.ts
+- src/components/shell/settings/observability/BudgetPanel.tsx
+- src/components/shell/settings/observability/BudgetPanel.test.tsx
+- src/components/shell/settings/observability/ForecastPanel.tsx
+- src/components/shell/settings/observability/ForecastPanel.test.tsx
+- src/components/shell/settings/observability/AnomaliesPanel.tsx
+- src/components/shell/settings/observability/AnomaliesPanel.test.tsx
+- infra/observability/finops/budgets.json
+- infra/observability/finops/control_policy.json
+- infra/observability/monitoring/finops_alert_policies.json
+- infra/observability/terraform/monitoring/finops.tf
+- docs/runbooks/finops-budget-exceeded.md
+- docs/runbooks/finops-projected-overrun.md
+- docs/runbooks/finops-cost-anomaly.md
+- docs/runbooks/finops-unit-cost-anomaly.md
+- docs/runbooks/finops-unallocated-cost.md
+- docs/runbooks/finops-stale-source.md
+
+Exact files to MODIFY only necessary wiring/validation:
+- .agent/OBSERVABILITY_EXECUTION.md
+- backend/observability/README.md
+- backend/api/app.py
+- backend/api/observability_routes.py
+- backend/observability/config.py
+- backend/observability/runtime.py
+- backend/observability/metrics.py
+- alembic/env.py
+- backend/tests/test_api_security_contract.py
+- backend/tests/test_observability_migrations.py
+- backend/tests/test_finops_reconciliation_migrations.py (head assertion only)
+- backend/tests/test_finops_unit_economics_migrations.py (head assertion only)
+- backend/tests/test_observability_collector.py
+- infra/observability/collector/config.yaml
+- infra/observability/collector/config.local.yaml
+- infra/observability/terraform/monitoring/variables.tf
+- src/api/finops.test-support.ts
+- src/components/shell/settings/observability/FinOpsPanel.tsx
+- src/components/shell/settings/observability/FinOpsPanel.test.tsx
+- src/components/shell/settings/observability/ReconciliationPanel.test.tsx (M14 mounted assertions)
+- src/components/shell/settings/observability/UnitEconomicsPanel.test.tsx (only if shell expectations require it)
+
+No planned M10/M11/M12/M13 business-calculation, source-persistence, governance,
+chat/session/SSE/command/Teams or M15 code change. Inspect actual referenced files
+before implementation; manifest amendment required before essential extra-path edits.
+
+### Ordered future implementation and validation plan
+
+1. Reconfirm predecessor/current tree/head and authorized local scope; append M14
+   implementation-start record before coding. Source/policy review, not remote bootstrap.
+2. Implement closed contracts/budget registry, immutable as-of history adapter, exact
+   budget calculator and source-quality gates. Test component uniqueness/currency/basis.
+3. Implement transparent registry forecasts and walk-forward quality/backtesting with
+   explicit historical knowledge; mathematical/leakage tests before higher tiers.
+4. Implement independent robust anomaly families and compatible driver decomposition,
+   correction/source-quality/persistence/lifecycle tests. No operational callbacks.
+5. Add frozen persistence/migration and atomic source-fenced publication; crash/restart/
+   corrections/duplicate/two-worker/source movement tests before scheduling.
+6. Wire disabled bounded worker, capability-protected cached read projections, finite
+   metrics/Collector allow-list, existing M8 panels and immutable history details.
+7. Author disabled alert definitions/Terraform/runbooks; local dry-run end-to-end proof.
+8. Run scoped, predecessor/full regressions, migration/Collector/IaC static checks,
+   performance, individual exit/hygiene review. STOP before M15 if any gate fails.
+
+Required synthetic/unit/integration scenarios (user102–128 plus roadmap): exact50%,
+120% not capped, zero/negative/missing budget, EUR/USD mismatch, independent overlapping
+budgets, calendar/leap/basis selection, signed credits/net history, partial/variance
+review/stale/gapped runtime/billing and no HEALTHY savings inference; future data/corrected
+old data not known at issue; immutable definition/forecast/backtest/correction history;
+Tier1 exact formula, Tier2 weekly pattern and fallback, low confidence/no calibration,
+failed quality gates, walk-forward metrics including0/negative actuals, no train/score
+leakage; stable100/day,300spike, .01→.03tiny noise, gradual trend, sustained160step,
+seasonal weekends; correct vs late billing, price change, volume change, exact model and
+conditional class mix, absent scope UNEXPLAINED, shared rise, unallocated absolute/net
+surge/coverage, source loss mistaken for savings (blocking), unavailable/partial M13
+excluded, repeat generation not persistence, missing input not anomaly resolution;
+exact decomposition residual and no causality claim; fail/crash/CAS/replay/restart/
+concurrent workers/source corrections; denied principals/capabilities/environments,
+cursor/ID tamper/rate/bounds/timeouts, privacy fake secrets in DB/API/UI/log/metric;
+GET forbidden recompute/extraction; UI no-budget/insufficient/unevaluated vs successful
+empty/stale/range/reasons/revocation; no provider/routing/scaling/quota/command/external
+notification callback on synthetic breach (blocking); source rows unchanged byte-for-byte
+on successful AND failed M14 evaluation; additive migration/source sentinels/head;
+alert dry-run dedup/quality suppression/proactive-budget proof; finite metrics/Collector.
+
+Planned guarded commands (not M14 validation executed this planning pass):
+```
+.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests/test_finops_budget*.py backend/tests/test_finops_control*.py backend/tests/test_finops_forecast*.py backend/tests/test_finops_anomalies.py backend/tests/test_finops_cost_drivers.py backend/tests/test_finops_iac.py
+.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests/test_finops_*.py backend/tests/test_observability_*.py
+.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests
+npm test -- --reporter=dot
+./node_modules/.bin/tsc -b
+npm run build
+git diff --check
+```
+Reinspect credential-stripping/socket guard before use; isolated disposable SQLite/test
+doubles only. Loopback Collector fixtures may need sandbox escalation; no remote access.
+Alembic isolated Operations/metadata/sentinel upgrades+downgrades and offline PG SQL;
+real local PostgreSQL only if demonstrably isolated (not presently provisioned; no shared
+connection). Terraform fmt -check/validate only when binary/provider cache available,
+with backend=false and no external backend init/remote locks; plan/apply/import/state
+operations never inferred. Static JSON/PromQL/Terraform/runbook checks remain local;
+provider-required validation failures must be disclosed, not passed from text alone.
+
+Performance plan: 24-calendar-month/<=731day synthetic daily history, multiple bounded
+scopes/currencies/versions with corrections; hourly issue revisions without inventing
+hourly monetary observations, separate M10 hourly-usage fixtures where proof available.
+Measure history selection/feature aggregation, budgets, one-unit/full forecast registry,
+walk-forward backtests, detectors, decomposition/residuals, sorting/lifecycle, publication,
+API and UI separately. Use reproducible fixtures, 5repetitions p50/max-small-sample-p95,
+peak RSS/serialized bytes, rows/buckets/scopes/algorithm count, machine context and
+M12/M13 baseline. Grouped O(days×bounded scopes/detectors + bounded origin windows),
+no each-budget×every raw billing row. PROVISIONAL caps:100budget definitions,
+100scopes/job,731days/history,100000selected aggregate features,10000features/output,
+128MiB serialization,60s/job,2jobs/cycle; bounded backtests max64origins/job; oversize
+fails visibly without truncation. API2s hard deadline, target cached<250ms; UI<=100rows
+and target<100ms local fixtures. No production throughput claim or forced threshold waiver.
+
+### Planned objective M14 exit gates — all PENDING (not PASS from this plan)
+
+| Gate | Required implementation/validation evidence |
+|---|---|
+| C01 | M11–M13 financial truth/schema/rows/generations unchanged through success and failure. |
+| C02 | Application-owned immutable effective/recorded-dated budget provenance/versions; no assumed external budget. |
+| C03 | Exact supported scope inventory/bindings; unavailable team/agent/class/workload/observability boundaries truthful. |
+| C04 | Native currency explicit; no cross-currency comparison/FX invention. |
+| C05 | Monthly UTC usage basis/calendar boundaries; no invoice/SLO-period mixing. |
+| C06 | 50% exact,120% uncapped, zero/missing/negative budgets safe, signed credit actuals retained. |
+| C07 | Central ordered threshold/persistence policy, provisional vs approved provenance explicit. |
+| C08 | Partial/stale/gapped financial actuals expose limits and cannot claim HEALTHY/ON_TRACK. |
+| C09 | Forecast registry/tier/min-history/horizon eligibility and deterministic exact formulas. |
+| C10 | Forecast issue-time knowledge and effective-date constraints exclude future/late-known source data. |
+| C11 | Immutable issued predictions/correction/input/definition lineage preserved. |
+| C12 | Walk-forward train/score isolation, actual/truth cutoff, versioned MAE/WAPE/bias/zero safety. |
+| C13 | Forecast quality gate/fallback, uncertainty/range type/calibration and risk truthfulness tested. |
+| C14 | Separate actual-money, unit-cost, usage, shared/correction and quality detector registries. |
+| C15 | Deterministic median/MAD0 handling, sufficient baseline, weekday seasonality and trend behavior. |
+| C16 | Absolute+relative minimum impact, currency-specific floors, unit counts and severity controls. |
+| C17 | Persistence/duplicate/gap/current-vs-history lifecycle, no false resolution from missing data. |
+| C18 | Correction/late billing/price/usage/model and conditional class mix evidence, no invented causality. |
+| C19 | Exact compatible contributor decomposition/residuals or explicitly UNEXPLAINED remainder. |
+| C20 | UNALLOCATED absolute/ratio anomaly and mapping/reconciliation degradation separate from money. |
+| C21 | Source/denominator loss NEVER savings; PARTIAL/unavailable M13 excluded from confident alerts. |
+| C22 | Budget breach/anomaly cannot invoke business/command/provider/routing/scaling/cloud control. |
+| C23 | Atomic CAS/source fences/crash/restart/replay/two-worker/correction tests preserve current/history. |
+| C24 | Verified FINANCIAL_DATA/environment bounded cache APIs/cursors/deadlines; no GET-triggered jobs. |
+| C25 | Safe DTO/content/secret privacy; finite metrics/IDs/exemplars protected through Collector. |
+| C26 | Existing M8 budget/actual/utilization/forecast/uncertainty/risk/anomaly/freshness/revocation UI truthful; no React financial formulas. |
+| C27 | Source-controlled disabled alert/Terraform/runbooks, grouping/dedup and NO live channels/notifications/deployment. |
+| C28 | Proactive projected-risk/anomaly demonstrated local end-to-end with dry-run alert policy and runbook BEFORE spend limit. |
+| C29 | Actual-head additive migration isolated upgrade/downgrade/constraints/indexes/source sentinels/offline PG SQL pass. |
+| C30 | Bounded grouped 24-month performance, publication/API/UI/cap/deadline evidence; live PG limits explicit. |
+| C31 | All focused M0–M14/predecessor/full backend/frontend/TS/build/Collector/alert-IaC static checks pass. |
+| C32 | Hygiene/manifest/execution record updated; no M15, remote mutation or financial-source modification. |
+
+Formal roadmap exit 'proactive anomaly/budget alert demonstrated end-to-end' is planned
+with isolated fixtures/dry-run rules, not claimed satisfied now. If applicable completion
+requires a live cloud criterion, do not mark Ready for Next Milestone YES from fixtures
+or silently waive it; record pending exact operation and wait for specific authorization.
+Ready for Next Milestone remains NO through M14 planning/untested implementation.
+
+### Planning validation, risks/blockers and cloud disposition
+
+Planning predecessor smoke60PASS; source/route/registry/migration/UI/IaC inspection;
+no authoritative budget source found; all requested planning topics and numerical
+provisional boundaries addressed. Source-code/infra/docs hash baseline and git diff
+check will verify ONLY this record changed during this pass. No M14 tests/code/build,
+actual alert dry-run, migration or financial source job executed; planned gates PENDING.
+
+No blocking local planning architecture defect found. Production blockers/risks:
+no approved real budget amounts/scopes/ownership/notification route, actual production
+history/correction completeness/financial auth not established, calibration may be
+insufficient for seasonal/confident forecasts, M13 scopes often unavailable, no
+hourly financial truth, release-event historical store not guaranteed, 24-month
+corrections/as-of generation history may be sparse, PostgreSQL runtime locking/load
+unvalidated. Default unavailable/LOW confidence avoids fabricated precision. Conservative
+maturity/freshness policies may delay results; all tuning requires versioned review.
+
+Cloud / Infrastructure Changes Required for PLANNING and local implementation: NONE.
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED.
+Potential future individually approved operations: apply the proposed M14 migration to
+an exact chosen DB; deploy/enable the worker in an exact Cloud Run environment; apply
+reviewed disabled/active Monitoring policies with existing approved channel IDs; any
+Cloud Billing Budget mirror/import, new channel, Scheduler/IAM/BigQuery change separately
+scoped (none is required or included in initial local plan). Project/account/database/
+service/tenant targets not selected/approved. No gcloud/Terraform/provider/database
+remote command is proposed or executed here. Before any such action present all10
+AGENTS.md impact/rollback/environment details and obtain exact-operation approval.
+
+Ready To Implement M14 = YES (local plan ready, not permission to implement now).
+M14 = PLANNED — NOT IMPLEMENTED.
+Ready for Next Milestone = NO.
+M15 = BLOCKED.
+STOP — do not implement M14 or start M15 in this pass.
+
+### Planning review clarification — historical replay versus retrospective model testing
+
+Replay of a genuinely issued forecast uses its frozen as-of budget/policy/model/input
+versions, all known by that issue cutoff. A new M14 algorithm evaluated against older
+history is explicitly RETROSPECTIVE_WALK_FORWARD, not falsely described as an originally
+issued prediction. Its fixed candidate configuration is registered before the experiment;
+all financial features still come only from generations known at each simulated origin.
+Budget risk may be unavailable when no budget version was known then; monetary forecast
+error can still be scored. Model tuning/selection/calibration must use training folds
+ending before the held-out origin; future scoring results cannot influence tier choice,
+confidence, band width or publication quality at that origin. Preserve training/scoring
+fold identities and test this second-order leakage separately from feature leakage.
+Latest current backtest quality is never joined onto an old issued forecast as if it was
+known then. Original prediction, hypothetical experiment and corrected scoring history
+are distinct immutable records/DTO kinds. If timestamped source history is insufficient,
+mark that fold unavailable, not reconstrued from today's corrected current pointers.
+
+Planning validation completed: predecessor recheck60PASS; inspected real Alembic head; no existing financial budget/forecast/anomaly implementation; hash baseline confirms all source/UI/infra/migration/spec files unchanged and none added; git diff --check PASS. This pass changed only .agent/OBSERVABILITY_EXECUTION.md. Ready To Implement M14 YES; Ready for Next Milestone NO; STOP.
+
+## M14 implementation authorized — 2026-10-09
+
+User attachment ee8c50b8 approves local implementation only. Re-read AGENTS, PLANS,
+approved M14 plan, master/readme/roadmap/execution/definition and FinOps/privacy/IaC
+specifications; inspected actual M11 manifests, M12 immutable input/generation links,
+M13 publication/source fencing, financial authorization, migration and UI. Predecessor
+local gate remains PASS. Approved manifest/plan above applies. Latest user requirements
+supersede contiguous-prefix planning: eligible completed financial days alone enter
+Tier1 denominator, missing days are explicit uncertainty, never zero. Threshold
+50% is INFORMATIONAL. No cloud or external mutations authorized or planned.
+Source baseline stored locally in /private/tmp/slopanoc-m14-implementation-baseline.json.
+Validation commands/exit criteria remain as above plus user's 35 blocking criteria.
+UI five-impact checks: required financial information; cache DTOs; M14 panels in
+existing FinOps page; explicit server financial capability/environment; definitions
+read-only. All production deployment remains NOT EXECUTED — USER APPROVAL REQUIRED.
+Ready for Next Milestone NO until implementation and all local validation pass.
+
+
+## M14 — Actual implementation and local acceptance — 2026-10-09
+
+Status: IMPLEMENTED AND LOCALLY VALIDATED. All35 user blocking local criteria PASS.
+Approved plan C01–C32 PASS for the local scope explicitly authorized by the latest
+user attachment. Production readiness is NOT claimed. STOP before M15.
+
+### Implementation performed and financial invariants
+
+Implemented additive read-only financial controls over frozen M11/M12/M13 history:
+strict decimal contracts, application-owned budget registry, exact utilization,
+as-of input adapter, forecast registry/calculator, retrospective walk-forward scoring,
+nine detector classes, deterministic evidence-backed contributors, six-table immutable
+control store, atomic fenced publication, retained append-only anomaly lifecycle,
+bounded opt-in worker, protected cached financial APIs, existing M8 FinOps panels,
+finite sanitized metrics, six disabled alert definitions and six local runbooks.
+
+Baseline SHA256 comparison confirms EVERY pre-existing FinOps business source file
+unchanged from start of this implementation, including billing_ingestion.py which
+already contained unrelated local changes. No M10–M13 financial amount, allocation,
+ledger source or business calculator was changed. All docs/Telemetry files unchanged;
+no baseline file deleted. Existing M12/M13 local work retained. Their migration tests
+changed only to acknowledge the new additive Alembic head. No financial source
+extraction, provider call, runtime business invocation or remote operation executed.
+
+Budget definitions are frozen, recorded/effective-dated, reviewed source configuration;
+stable budget/version IDs, environment, binding, registered scope, native currency,
+UTC monthly usage basis, amount, policy version and supersession are explicit.
+Production budgets.json is intentionally empty: NOT CONFIGURED is truthful, no
+invented amount. Scope matching requires compatible immutable financial binding;
+conditional M13 scopes require available covered denominators. Full observability
+requires explicit complete ownership attestation, not MONITORING_LOGGING alone.
+Native currencies are separate; there is no FX or invoice/SLO-period substitution.
+
+Utilization classifies by exact decimal cross multiplication, including the smallest
+supported 1e-38 threshold boundary. 50% is INFORMATIONAL, 80% WATCH, 90% AT_RISK,
+100% AT_LIMIT, >100% EXCEEDED. 120% stays 120%; very small positive budgets retain
+uncapped ratios. Zero budget never divides; positive actual records an explicit
+zero-budget breach. Signed actual credits retained. Partial/missing scope/current
+staleness cannot claim HEALTHY. All threshold and maturity policy is centralized,
+versioned and PROVISIONAL; the reviewed source policy has its real authoring timestamp.
+
+Forecast hierarchy: Tier0 unavailable; Tier1 eligible-run-rate with >=7 eligible
+completed current-month days; Tier2 weekday median after >=56 prior eligible days
+and >=8 observations per weekday plus known-by-issue backtest quality; Tier3 is
+NOT IMPLEMENTED. Formula A + (D-k)*A/k counts only k eligible financial days, not raw
+calendar elapsed days, and never forecasts actual-to-date twice. A=700,k=7,D=31
+produces remainder2400 and forecast3100. Missing/open/recent days remain explicit
+unknown/excluded observations, never zero actuals. Old partial/stale sources and
+mapping breaks limit results. Negative-net-credit projection regimes are unavailable.
+
+Inputs admit only M11 manifest extraction/publication, M12 generation and M13 own
+publication timestamps known by UTC issue cutoff. Definitions, policies and scoring
+quality must also be known then. Historical issued outputs/input/definition vectors
+are immutable. RETROSPECTIVE_WALK_FORWARD scores are identified separately from
+originally issued predictions, retain simulated origin, candidate prediction, policy
+JSON/digest, financial/unit lineage, later truth cutoff/vector and scoring version.
+Later corrections append revised scoring/current generations, never rewrite earlier
+forecasts. Model selection reads only quality known by that origin. Tier2 requires
+>=6 same-fold origins spanning >=2 months, WAPE<=.25, abs bias<=.15 and >=10% improvement
+over Tier1. MAE/WAPE/bias use guarded denominators. The end-to-end fixture derives
+six folds from real immutable synthetic history and demonstrates QUALIFIED Tier2
+PROJECTED_OVER risk before actual budget exhaustion, through publication and the
+local alert matcher/runbook. This is local evidence, not live alert delivery.
+
+LOW Tier1 and QUALIFIED Tier2 expose a versioned +/-25%-of-remaining SCENARIO_RANGE;
+these are not calibrated confidence intervals. Unqualified outputs cannot claim
+confident ON_TRACK or projected-overrun paging. Production calibration is pending.
+
+Detector registry separates TOTAL_COST, PROVIDER_MODEL_COST, SHARED_COST,
+OBSERVABILITY_COST, UNIT_COST, USAGE_VOLUME, BILLING_CORRECTION,
+UNALLOCATED_EXPOSURE and RECONCILIATION_QUALITY. Rolling median/MAD with sufficient
+history, weekday seasonality, exact MAD0 noise fallback, currency-specific absolute
+and relative floors and population gates precede severity. Persistence counts distinct
+consecutive eligible intervals; duplicate jobs do not create evidence and gaps break
+confidence. All mature target-month intervals are correction-re-evaluated. Retained
+ACTIVE outliers survive later partial data; only an eligible normal reevaluation can
+append RESOLVED, including after an intervening partial generation.
+
+Correction/late financial changes remain separate from operational explanations.
+Price/volume decomposition uses compatible actual gross charge and billed quantity,
+not list/catalog prices. Conditional class-mix decomposition requires full available
+M13 population proof; Shapley contributions plus explicit residual conserve delta.
+Unsupported contributors stay UNEXPLAINED. No LLM causal narration. Unit-cost
+significance uses explicitly labelled FIXED_POPULATION_UNIT_EXPOSURE (delta unit
+cost times a fixed eligible population), an analytical estimate that never replaces
+or recreates M12 actual billed money. No durable historical release marker store
+exists; release/change causality is not fabricated.
+
+UA has independent absolute and ratio quality signals, including material partial
+source exposure. Source/reconciliation degradation takes precedence over apparent
+savings. M13 count/coverage loss or disappearing units becomes a quality root,
+never improved economics or confidently cheaper usage.
+
+Six additive tables separate budget definitions, frozen inputs, control generations,
+retrospective backtest generations, publication heads and lifecycle transitions.
+CAS/revision guards and ordered M13->M12->M11 source locks fence publication;
+transaction rollback, replay/idempotency, two-worker contention, source movement,
+crash and restart tests preserve prior heads and financial source sentinels.
+Worker defaults disabled, off business path, with <=2 fair partitions/cycle, hourly
+cadence, daily forecast/backtest after06UTC, financial/source/unit head fingerprints,
+prior published correction months, and maturity/date invalidation. Accounting debt
+and source freshness overlay current health without rewriting captured history.
+
+Six GET list/detail APIs use verified FINANCIAL_DATA capability and environment
+isolation; bounded filters, signed cursors, <=100 rows/page, <=2 concurrent reads,
+2s read deadline and whitelisted exact-decimal DTOs. GET never launches financial
+jobs. No mutation endpoints. FinOps receives no conversation/Teams/knowledge content,
+secrets, financial binding, raw source vector or unrestricted diagnostic payloads.
+Current anomaly results include retained active records; never evaluated != no anomaly.
+
+Budget/Forecast/Anomalies panels replace the corresponding existing M8 placeholders
+inside Settings -> Observability & FinOps -> FinOps, using existing layout/styles and
+read-state/error/revocation patterns. React displays server calculations; no duplicate
+financial formulas. Budget absence, stale/incomplete sources, LOW uncertainty,
+projected risks, quality roots and unexplained contributors are visible. Configuration
+is read-only; no UI cloud/IaC bypass. UI impact five checks PASS: M14 creates required
+information; safe API contracts implemented; these three panels belong to M14;
+financial authorization applies; source-managed definitions remain view-only.
+
+Six source-controlled alert policies (budget breach, projected overrun, monetary
+outlier, unit-cost outlier, unallocated surge, stale source) are disabled with empty
+channels. The local dry-run matcher deduplicates signals and prioritizes source
+quality; policy metadata/runbooks define financial-source grouping and suppression.
+PromQL templates count finite events over24h; production grouping, suppression and
+notification behavior still require explicit reviewed live validation. No transport,
+notifications, automatic remediation, budget enforcement, command, model routing,
+scaling, provider action or external execution client exists in the controls path.
+Metrics use only the established finite environment/operation/status/window labels;
+Collector and SDK tests reject poisoned identifiers and exemplars.
+
+### Actual files changed (relative to implementation baseline)
+
+Modified (19, including this record):
+
+- `.agent/OBSERVABILITY_EXECUTION.md`
+- `alembic/env.py`
+- `backend/api/app.py`
+- `backend/api/observability_routes.py`
+- `backend/observability/README.md`
+- `backend/observability/config.py`
+- `backend/observability/metrics.py`
+- `backend/observability/runtime.py`
+- `backend/tests/test_api_security_contract.py`
+- `backend/tests/test_finops_reconciliation_migrations.py`
+- `backend/tests/test_finops_unit_economics_migrations.py`
+- `backend/tests/test_observability_collector.py`
+- `backend/tests/test_observability_migrations.py`
+- `infra/observability/collector/config.local.yaml`
+- `infra/observability/collector/config.yaml`
+- `src/api/finops.test-support.ts`
+- `src/components/shell/settings/observability/FinOpsPanel.test.tsx`
+- `src/components/shell/settings/observability/FinOpsPanel.tsx`
+- `src/components/shell/settings/observability/ReconciliationPanel.test.tsx`
+
+Added (50):
+
+- `alembic/versions/a14d2e6f8c70_finops_controls.py`
+- `backend/observability/finops/anomalies.py`
+- `backend/observability/finops/anomaly_registry.py`
+- `backend/observability/finops/budget_registry.py`
+- `backend/observability/finops/budgets.py`
+- `backend/observability/finops/control_api_models.py`
+- `backend/observability/finops/control_contracts.py`
+- `backend/observability/finops/control_inputs.py`
+- `backend/observability/finops/control_metrics.py`
+- `backend/observability/finops/control_models.py`
+- `backend/observability/finops/control_repository.py`
+- `backend/observability/finops/control_service.py`
+- `backend/observability/finops/control_worker.py`
+- `backend/observability/finops/cost_drivers.py`
+- `backend/observability/finops/finops_iac.py`
+- `backend/observability/finops/forecast_backtesting.py`
+- `backend/observability/finops/forecast_registry.py`
+- `backend/observability/finops/forecasting.py`
+- `backend/tests/_m14_controls.py`
+- `backend/tests/test_finops_anomalies.py`
+- `backend/tests/test_finops_budget_registry.py`
+- `backend/tests/test_finops_budgets.py`
+- `backend/tests/test_finops_control_api.py`
+- `backend/tests/test_finops_control_inputs.py`
+- `backend/tests/test_finops_control_metrics.py`
+- `backend/tests/test_finops_control_migrations.py`
+- `backend/tests/test_finops_control_performance.py`
+- `backend/tests/test_finops_control_publication.py`
+- `backend/tests/test_finops_cost_drivers.py`
+- `backend/tests/test_finops_forecast_backtesting.py`
+- `backend/tests/test_finops_forecasting.py`
+- `backend/tests/test_finops_iac.py`
+- `docs/runbooks/finops-budget-exceeded.md`
+- `docs/runbooks/finops-cost-anomaly.md`
+- `docs/runbooks/finops-projected-overrun.md`
+- `docs/runbooks/finops-stale-source.md`
+- `docs/runbooks/finops-unallocated-cost.md`
+- `docs/runbooks/finops-unit-cost-anomaly.md`
+- `infra/observability/finops/budgets.json`
+- `infra/observability/finops/control_policy.json`
+- `infra/observability/monitoring/finops_alert_policies.json`
+- `infra/observability/terraform/monitoring/finops.tf`
+- `src/api/financialControls.test.ts`
+- `src/api/financialControls.ts`
+- `src/components/shell/settings/observability/AnomaliesPanel.test.tsx`
+- `src/components/shell/settings/observability/AnomaliesPanel.tsx`
+- `src/components/shell/settings/observability/BudgetPanel.test.tsx`
+- `src/components/shell/settings/observability/BudgetPanel.tsx`
+- `src/components/shell/settings/observability/ForecastPanel.test.tsx`
+- `src/components/shell/settings/observability/ForecastPanel.tsx`
+
+### Validation performed, results and repairs
+
+All backend tests use the inspected local test guard which strips cloud/service env
+variables, forces isolated SQLite/test adapters, disables Vertex/warmup and blocks
+non-loopback sockets. The full suite was sandbox-escalated only for local loopback
+Collector/test servers; no external network/service mutation authorized or used.
+
+- Final full backend: `.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests`:
+  **5658 PASS,12 SKIP,679 warnings,257.03s**. Includes predecessor/runtime/governance,
+  migration, actual local Collector/exporter, new controls and performance tests.
+  Warnings are existing SDK/deprecation/fixture connection-cleanup warnings; no failure.
+- Final focused M14 suite: the13 new `test_finops_{budget_registry,budgets,control_api,
+  control_inputs,control_metrics,control_migrations,control_performance,
+  control_publication,cost_drivers,forecast_backtesting,forecasting,anomalies,iac}.py`:
+  **85 PASS** (85 independently collected; guarded run exit0), including performance.
+- Final frontend `npm test -- --reporter=dot`: **973 PASS /65 files,9.84s**.
+- Final `npm run build`: TypeScript `tsc -b` PASS and Vite PASS,2062 modules,1.92s.
+- Native Collector0.160.0 production/local validation and real SDK->loopback Collector
+  ->loopback sink integration PASS, including M14 finite families and private-ID poison.
+- Static alert JSON equals generator, six disabled Terraform resources/read-only
+  runbooks and local proactive matcher PASS. Terraform CLI absent: native
+  `terraform fmt`/`terraform validate` NOT EXECUTED; no plan/apply/import/state commands.
+- Alembic additive head `a14d2e6f8c70`, down_revision `f13a7c9d2e61`: isolated SQLite
+  upgrade/downgrade, metadata/index/FK/constraint parity, sentinel preservation,
+  offline PostgreSQL DDL and actual-head regression tests PASS. No shared migration.
+- `git diff --check` PASS; git status/diff/untracked manifest inspected. SHA256 baseline
+  preservation PASS, no authoritative spec changes or deleted baseline files. No commit.
+
+Failures encountered and repaired during implementation: sandbox loopback denial in
+10 broad tests (rerun under approved loopback-only guard); incorrect assumed Collector
+replacement count (45 actual expressions retained); current-head predecessor test
+expectations; coverage string versus decimal equality; insufficient weekday test
+history; retained anomaly resolution after partial generations; partition fairness and
+maturity refresh; test fixture wiring; exact tiny-threshold decimal classification;
+policy minimum bounds inherited from an overriding alias validator; unit-cost impact
+floor/explicit estimate and decimal context. Each received a scoped repair/regression
+and all final checks above pass. No blocking defect remains.
+
+### Performance measured (isolated local fixtures only)
+
+Final 731-day grouped math: budget0.714ms; Tier1 1.284ms; Tier2 1.668ms;
+anomalies107.273ms; contributor decomposition0.095ms; whole calculation113.103ms;
+tracemalloc peak67400bytes. Final 731-day SQLite immutable-history read392.553ms,
+publication826.760ms, protected ASGI API22.465ms. Small fixture as-of8.584ms,
+publication29.929ms, walk-forward/backtest93.496ms, cached read1.235ms.
+100-row existing-panel jsdom render86.409ms. These are measured fixture timings,
+not production p95/concurrency claims. Caps:731 input days,100000 grouped features,
+10000 outputs,128MiB payload budget,60s jobs,2 cycle partitions,100-page items;
+pre-query count/JSON-byte checks prevent unbounded materialization. Live PostgreSQL
+locking/load and real 24-month financial history remain pending production validation.
+
+### Individual M14 exit criteria
+
+| # | Criterion | Result |
+|---|---|---|
+| 1 | M11–M13 financial truth unchanged | PASS |
+| 2 | Budget definitions versioned | PASS |
+| 3 | Scopes require compatible financial binding | PASS |
+| 4 | Currencies compatible and separate | PASS |
+| 5 | Utilization correct and uncapped | PASS |
+| 6 | Zero budget safe | PASS |
+| 7 | Provisional thresholds centralized | PASS |
+| 8 | Forecast hierarchy Tier0/1/2; Tier3 unimplemented | PASS |
+| 9 | Missing/open days never zero actuals | PASS |
+| 10 | Tier1 denominator is eligible days | PASS |
+| 11 | No double-counting actual-to-date | PASS |
+| 12 | Sufficient-history checks enforced | PASS |
+| 13 | Tier2 quality qualification enforced | PASS |
+| 14 | Walk-forward backtesting implemented | PASS |
+| 15 | Historical outputs cannot use future information | PASS |
+| 16 | Later corrections never rewrite issued forecasts | PASS |
+| 17 | Truthful confidence/scenario-range semantics | PASS |
+| 18 | Anomaly classes separated | PASS |
+| 19 | MAD0 safely handled | PASS |
+| 20 | Absolute and relative significance enforced | PASS |
+| 21 | Persistence counts distinct eligible intervals | PASS |
+| 22 | Correction/price/usage/mix explanations require evidence | PASS |
+| 23 | Unallocated absolute/ratio anomaly supported | PASS |
+| 24 | Source quality overrides apparent savings | PASS |
+| 25 | M13 degradation cannot appear as cost improvement | PASS |
+| 26 | Immutable/versioned outputs | PASS |
+| 27 | Atomic fenced publication | PASS |
+| 28 | Protected financial APIs | PASS |
+| 29 | Truthful M8 FinOps panels | PASS |
+| 30 | Alerts disabled/source-controlled | PASS |
+| 31 | Six runbooks exist | PASS |
+| 32 | No automatic remediation | PASS |
+| 33 | Migration and applicable regressions pass | PASS |
+| 34 | M15 unimplemented | PASS |
+| 35 | No cloud/shared mutation | PASS |
+
+Approved plan C01–C32: individually evaluated against implementation/tests described
+above, all PASS for local implementation. C28 is explicitly synthetic immutable-history
+end-to-end/dry-run evidence; C30 local measured fixtures; C31 IaC static validation only,
+Terraform binary unavailable. No live cloud criterion is claimed passed. Latest user
+explicitly separates local completion from production deployment/calibration.
+
+### Known limitations and cloud disposition
+
+Production budgets: NOT CONFIGURED / NOT LIVE-VALIDATED
+Production forecast calibration: NOT LIVE-VALIDATED
+Production anomaly thresholds: NOT LIVE-VALIDATED
+Cloud Monitoring alert deployment: NOT EXECUTED
+Notification channels: NOT EXECUTED
+Cloud Scheduler: NOT EXECUTED
+Shared Cloud SQL migration: NOT EXECUTED
+M15 security/retention/sampling: NOT IMPLEMENTED BY DESIGN
+
+Real budget amounts, supported owner memberships, explicit full-observability
+attestation, actual production source cadence/completeness, calibration and financial
+role/environment authorization are not established here. Reviewed policy recorded_at
+prevents pretending it was known before its creation; older retrospective origins
+without an as-of policy remain unavailable, so startup may stay Tier1/LOW until enough
+qualified folds exist. M13 denominators/scopes may legitimately be unavailable. No
+continuous-confidence calibration, causal release history, hourly billing truth,
+Tier3/ML forecasting or live PostgreSQL concurrency is claimed. Native Terraform
+format/validation unavailable; disabled templates still need production notification,
+grouping/suppression, threshold and operational-window review before activation.
+
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED.
+Exact pending operation families, with targets not yet selected/approved: apply revision
+`a14d2e6f8c70` to an explicitly named shared database (six M14 tables only); deploy/enable
+opt-in controls worker and reviewed source definitions in an explicitly named Cloud Run
+service/environment; create/update the six reviewed Monitoring policies only after
+exact approval; channels/Scheduler/IAM/billing budgets/BigQuery remain separate actions,
+none required or executed for local acceptance. No GCP project/account/database target
+has been implicitly authorized. Each action requires the AGENTS.md ten-part exact
+command/resource/impact/rollback approval gate, and database-specific migration gate.
+
+Ready for Next Milestone: YES (local gate only, per latest user acceptance distinction).
+M14 IMPLEMENTED AND LOCALLY VALIDATED; production validation pending.
+STOP. M15 is NOT IMPLEMENTED BY DESIGN and requires a new user instruction.
+
+## M15 — PLANNED — NOT IMPLEMENTED
+
+Planning date: 2026-10-09 (Europe/Bucharest). Authorization: attached M15 request,
+PLANNING ONLY. Initial plan changed only this execution record. The 2026-10-09
+user-authorized B01 repair changes this record and narrowly related authoritative
+Telemetry documents (including their generated copies). No application, frontend,
+test, migration, Collector or Terraform implementation is authorized.
+M16 remains BLOCKED; production activation remains pending.
+
+### Predecessor gate and evidence boundary
+
+PASS for entry to planning: the milestone matrix and individual completion records
+mark M0 validated complete and M1–M14 implemented and locally validated, with M14
+Ready for Next Milestone YES under the accepted local/production distinction.
+M14 recorded local results: backend 5658 PASS/12 SKIP; focused M14 85 PASS;
+frontend 973 PASS; TypeScript/Vite PASS; isolated migrations and Collector PASS.
+These are predecessor-record evidence, NOT tests rerun in this planning pass.
+Current source contains the M14 control implementation and additive migration head
+`a14d2e6f8c70` after `f13a7c9d2e61`. No dedicated M15 classification/retention worker/
+sampling registry, or M16 failure/load program was found. Existing M0 redaction,
+M7 retention tests and M9/M14 performance tests are predecessors, not early M15/M16.
+
+M14 native Terraform fmt/validate: NOT EXECUTED — CLI unavailable. A read-only
+`which terraform` check confirms it is still unavailable. Static IaC validation
+is distinct; native validation remains an infrastructure-validation limitation.
+No predecessor cloud criterion is upgraded to PASS. Existing uncommitted M12–M14
+work is preserved; no remote comparison, reset, checkout, revert or commit.
+
+### Objective, specifications and invariants
+
+Enforce classification, privacy, allowlists, server capabilities, environment scope,
+retention/dependency safety, sampling and safe export across actual M0–M14 surfaces.
+OBSERVABILITY ONLY — NEVER EVIDENCE: no telemetry input to routing, source selection,
+TurnPlan, Context Broker, command authority, approval, provenance or financial math.
+Preserve session ownership/persistence, Teams continuity, primary/supporting ownership,
+SSE, rewind, troubleshooting and all existing governance boundaries.
+
+Read AGENTS.md, .agent/PLANS.md and current execution record; authoritative
+`docs/Telemetry/README.md`, `00_MASTER_BUILD_CONTRACT.md`,
+`01_TARGET_ARCHITECTURE.md`, `02_TELEMETRY_DATA_CONTRACT.md`,
+`03_INSTRUMENTATION_AND_RUNTIME.md`, `04_RELIABILITY_TIMEOUTS_ERRORS.md`,
+`05_STORAGE_APIS_AND_UI.md`, `06_SRE_SLOS_METRICS_ALERTS.md`,
+`07_FINOPS_ARCHITECTURE.md`, `08_FINOPS_DATA_MODEL_AND_UNIT_ECONOMICS.md`,
+`09_SECURITY_PRIVACY_RETENTION_SAMPLING.md`,
+`10_DASHBOARDS_RUNBOOKS_OPERATING_MODEL.md`, `11_SLOPANOC_INTEGRATION_MAP.md`,
+`12_IMPLEMENTATION_ROADMAP.md`, `13_TEST_VALIDATION_ACCEPTANCE.md`,
+`14_CODEX_EXECUTION_GUIDE.md`, `15_DEFINITION_OF_DONE.md`,
+`16_PRODUCTION_TELEMETRY_BACKEND.md`, `18_STRUCTURED_LOGGING_STANDARD.md`,
+`20_FINOPS_ACCOUNTING_DURABILITY.md`, `21_SLO_FORMULAS_AND_INITIAL_TARGETS.md`,
+`22_RELEASE_CONFIG_CORRELATION_CI.md`, `23_TERRAFORM_AND_OBSERVABILITY_AS_CODE.md`.
+
+### Actual current-state audit / reuse map
+
+| Actual owner | Existing behavior / M15 gap and reuse |
+|---|---|
+| redaction.py, schemas.py, attributes.py | Canonical SAFE/RESTRICTED/PROHIBITED terminology; arbitrary metadata count-only; typed model/execution/dependency/reliability projections; unknown fields denied. No unified versioned field-to-surface registry yet. Extend these owners rather than replacing them with six incompatible classes. |
+| tracing.py, runtime.py, exporters/ | Safe scope/span/event projection before queue; links/raw exceptions/status descriptions denied; SDK ALWAYS_ON. Export queue bounded. Config rejects any trace_sample_rate other than 1.0; no functional healthy sampling reduction exists. |
+| turn_trace.py, model_instrumentation.py, agent_instrumentation.py, tool_instrumentation.py | Existing root/callback ownership, finite vocabularies, usage counts, no body capture. Keep physical provider accounting path and callback order unchanged. |
+| dependency_contract.py, dependency_database.py, dependency_http.py, dependency_storage.py, knowledge_instrumentation.py | Structural DB operations, finite gateway routes/classes, bytes/counts and retrieval stages; no SQL/binds/DSN/full URLs/buckets/object names/secret names/values accepted. Secret values are cached in settings for business use; secret_read observes operation only. Test miss/hit/error without real Secret Manager. |
+| logging.py | JSON formatter never calls getMessage or serializes args/exc_info/stack_info/extras. OTel records revalidated. Existing handlers formatted on production startup; handlers installed later remain a coverage risk requiring regression. Local text handlers and legacy diagnostic persistence require separate audit; production formatter does not sanitize those stores. |
+| authorization.py, service.py, api_models.py | Verified Principal validated against role capability ceilings and environment grants; default provider returns None (protected access default denied). TechnicalView only when technical_diagnostics present. Environment scope applied server-side. Keep denial and safe error projection. |
+| repository.py, retention.py, models.py | M7 terminal active state 24h, summary/events 30d/90d. cleanup bounded 500/default, 1000/max but lacks explicit environment argument/dry-run/checkpoint. detach_session exists and tests prove detachment; no general session deletion hook was found. |
+| slo_sources.py, slo_rollups.py, slo_service.py | SRE receipts store SHA256(subject), not email/profile; principal subject also used in in-memory rate map. Unkeyed subject hash is pseudonymous, not anonymous. Receipt TTL 2d and bucket TTL 35d are hardcoded; deletion is unbounded and not environment-scoped. These require M15 repair. Unsampled applicability/completeness is already separate from export. |
+| finops models/repositories/services M10–M14 | Durable attempts/inbox/ledger; immutable correction lineage; M11 manifests/cache; M12 inputs/generations; M13 denominator snapshots/generations; M14 definition/input/control/backtest/transition history. Dependencies include JSON vectors and string hashes without FKs. No destructive financial retention worker exists. Preserve exact money/currency, as-of semantics and source fences. |
+| Settings observability panels, src/api clients | Protected whitelisted server DTOs, per-section in-memory requests, no global cache; failure clears data and lastData, abort/generation guards reject stale completions. No localStorage/sessionStorage/IndexedDB or clipboard/download APIs found in inspected observability/FinOps clients/panels. Data & Retention reports M7 settings and explicitly says backend sampling/retention unavailable; Access infers only individual successful request outcomes, not roles. |
+| Collector production/local YAML | memory_limiter -> filter/safe_scope -> transform/redact -> resource/environment -> production resourcedetection/gcp -> batch. error_mode propagate; allowlist/resource projection exists; no tail_sampling. SDK/Collector have exemplar controls requiring actual-output regressions. Collector pin 0.160.0, production Google distribution; local contrib success does not prove production binary components. |
+| Terraform root/billing/monitoring | Root Collector provider-free sidecar wiring (256MiB), billing provider-free SQL bindings, monitoring actual disabled policies/empty channels. No retention resources present. No native Terraform validation available. |
+
+The searched telemetry producers do not store email/display name/Teams profile.
+Raw billing account/project/resource identities are read internally by BigQuery
+adapter/normalization; normalized account/project hashes and financial source bindings
+remain restricted business-sensitive metadata, not ordinary UI/log/metric fields.
+Do not generalize this audit to all business session tables: existing knowledge
+diagnostic snapshots can contain query/command/title/objective text and arbitrary
+operational dictionaries. M15 must audit those persistence paths and project counts/
+codes at their diagnostic boundary, without deleting governed business evidence.
+No existing legal-hold system or mandatory protected-access audit-record schema was
+found. Roadmap says access audit "if required"; do not invent legal holds or grant
+Auditor extra access. Safe bounded denial/health counters are in scope; a durable
+access-audit subsystem remains conditional on an explicit security policy requirement.
+
+### Telemetry data-classification registry and prohibited inventory
+
+Extend `redaction.py` as the canonical versioned field registry, retaining SAFE,
+RESTRICTED, PROHIBITED. Each entry declares canonical field/path, data family,
+value validator, producer provenance, allowed surfaces, required capability,
+environment behavior and policy version. SAFE subdivides operational counts/enums/
+timing; RESTRICTED distinguishes correlation, pseudonymous identity and financial
+business metadata without changing the existing enum contract unnecessarily.
+Registry default deny applies to unknown names AND values; valid syntax alone never
+proves a server-owned identifier is safe. Reuse finite values in existing registries.
+Generate/verify Collector and API representations against the same source to prevent
+policy drift. Do not accept arbitrary nested JSON, repr, exception message strings
+or caller-selected field names. Classified prohibited values must also be rejected
+when placed in an otherwise allowed string field.
+
+Always prohibit prompts/responses, Teams bodies, tool arguments/results except typed
+allowlisted counts/categories, command text, SQL/binds/DSN, sensitive full URLs/path/
+queries, auth headers/cookies/tokens/API keys/passwords/Secret Manager values,
+document/attachment bodies, embeddings/vectors, hidden thought/reasoning/scratchpad.
+Hidden reasoning has zero tolerance across spans/events/logs/metrics/diagnostics/
+ledger/financial history/API/UI/Collector/error handling. thought_tokens is a numeric
+provider usage count, not reasoning content, and stays available for accounting.
+
+| Producer boundary | Safe allowlist planned (existing typed validators reused) |
+|---|---|
+| Root turn | trusted run/turn correlation, registered stage/status, duration, release/config/schema version, bounded cancellation/cleanup/delivery facts |
+| Model | registered provider/model/operation/agent/workload, physical attempt correlation, streaming/status/finish enum, token counts/TTFT availability/duration |
+| Agent | registered agent, execution role/purpose/status, duration, safe correlation |
+| Tool | canonical tool/category, owning agent, attempts/outcome/execution disposition, result category/count; never raw args/results |
+| Dependency/gateway | dependency class, registered operation/route/method, safe HTTP status class, retries/pages/duration/error code; no raw endpoint |
+| DB/storage/Secret Manager | db system/structural operation/transaction outcome/acquire boundary, storage operation/bytes, secret operation/category; no SQL/resource names/values |
+| Knowledge/Context Broker | registered retrieval stage/domain/policy, candidates/selected/excluded/result/token counts; no query/title/body/embedding |
+| Reliability | bounded timeout/stall/cancel origin/retry decision/category/deadline/duration/error codes |
+| M7 diagnostics | safe run state/dependency/timeline facts; technical correlation/versions require technical_diagnostics |
+| M9 SLO | unsampled counts/timings/class/applicability/completeness; receipt owner digest internal only |
+| M10–M14 FinOps | exact usage/amount/currency/coverage/version/freshness/bounded dimension and financial generation references under FINANCIAL_DATA; raw bindings/source vectors internal only |
+
+### Identifier / surface policy
+
+| Field family | Trace | Log | Metric | Durable DB | API | UI |
+|---|---|---|---|---|---|---|
+| Server-owned run/turn/trace/span/attempt | restricted validated correlation | trace/span/run, conditional turn only under doc18 | NEVER labels/exemplars | needed typed correlation only | run operational; trace/turn technical; attempt/event only if justified financial DTO | received allowed DTO only |
+| session/thread/case/fault/approval/execution | conditional approved trace correlation | not automatically admitted | NEVER | needed restricted joins, no content | minimum existing TechnicalView/session query contract | technical capability only; no hidden payload |
+| user email/name/Teams identity | deny | deny | deny | deny raw identity in telemetry | deny | deny |
+| owner subject digest | deny default | deny | deny | short-lived M9 owner check only | deny | deny |
+| accounting event/original-event ID | no new export by default | deny | deny | retain idempotency/correction references | only explicitly justified accounting drilldown; current aggregate DTOs omit | omitted by default |
+| generation/definition/policy version | explicit safe trace version if needed | explicit version only | no unbounded version labels | lineage required | current financial DTO generation hashes allowed | safe generation/version only where useful |
+| billing account/resource/project/source binding | deny default | deny | deny | restricted financial processing only | deny raw identifiers/vectors | deny |
+
+### Exact RBAC / capability / endpoint matrix
+
+All paths below have prefix `/api/observability`. GET unless method specified.
+For operational listing, environment must be in Principal.environments; omission
+uses authorized environment tuple. Run lookup scopes DB access to that tuple;
+not-found must conceal unauthorized run existence. Health/config require configured
+environment grant. SLO and all financial endpoints default to configured environment
+and allow only explicit authorized canonical environment. Technical nested fields
+require additional technical_diagnostics. Backend grants are authoritative, never
+role headers/frontend filtering. Pagination/count/errors must be scoped as well.
+
+| Endpoint | Required capability | Environment / sensitive fields | Settings section |
+|---|---|---|---|
+| /runs | operational_metadata | authorized scope; run IDs; TechnicalView gated | Tracing, Diagnostics, Overview |
+| /active | operational_metadata | authorized scope; run/current dependency metadata; technical gated | Overview, Tracing |
+| /runs/{run_id} | operational_metadata | scoped lookup; technical_diagnostics for trace/span/turn/instance/release details | Diagnostics |
+| /runs/{run_id}/timeline | operational_metadata | authorize run before timeline; finite events/error codes | Diagnostics, Tracing |
+| /sessions/{session_id}/runs | operational_metadata | scoped DB query; restricted session selector, no session body | Diagnostics |
+| /health | operational_metadata | configured env authorized; safe health/counters only | Overview, Integrations, Access |
+| /config | effective_configuration | configured env authorized; safe read-only projection, no endpoint/secrets | Reliability, Data & Retention, Access |
+| /slos | operational_metadata | single authorized env; counts/results/coverage only | SLOs |
+| /slos/{slo_id} | operational_metadata | single authorized env; registered SLO only | SLOs |
+| POST /sse-receipts | own_progress + verified identity | run environment and stored subject digest, emission/time window; no protected response body | normal chat transport, no Settings panel |
+| /finops/runtime-usage | financial_data | single authorized env; bounded usage dimensions/counts only | FinOps |
+| /finops/ledger-health | financial_data | single authorized env; debt/coverage/retention status | FinOps |
+| /finops/ledger-completeness | financial_data | single authorized env; SLI truth only | FinOps |
+| /finops/billing-health | financial_data | single authorized env; source freshness/version/coverage; no raw selector | FinOps |
+| /finops/pricing-status | financial_data | single authorized env; effective dates/catalog status | FinOps |
+| /finops/billing-summary | financial_data | single authorized env; exact monetary totals/native currency | FinOps |
+| /finops/reconciliation | financial_data | single authorized env; financial amounts/coverage/generation; no raw vectors | FinOps |
+| /finops/reconciliation/{period} | financial_data | same; bounded validated period | FinOps |
+| /finops/allocation | financial_data | same reconciliation facade; allocated/shared/unallocated totals | FinOps |
+| /finops/unit-economics | financial_data | single authorized env; safe unit/generation/denominator aggregates | FinOps |
+| /finops/unit-economics/{unit_id} | financial_data | same; registered unit only | FinOps |
+| /finops/budgets | financial_data | single authorized env; exact totals/scopes/budget status | FinOps / Budgets |
+| /finops/budgets/{budget_id} | financial_data | same; permitted definition/history; no binding/source vector | FinOps / Budgets |
+| /finops/forecasts | financial_data | single authorized env; issued result/scenario/quality/generation | FinOps / Forecast |
+| /finops/forecasts/{generation_id} | financial_data | same; scoped generation lookup/history | FinOps / Forecast |
+| /finops/anomalies | financial_data | single authorized env; safe detector/severity/contributors | FinOps / Anomalies |
+| /finops/anomalies/{anomaly_id} | financial_data | same; scoped anomaly/history | FinOps / Anomalies |
+
+Capability ceilings unchanged: User own_progress; Operator own_progress +
+operational_metadata; Developer/SRE operational_metadata + technical_diagnostics;
+FinOps financial_data only; Admin effective_configuration + operational_metadata;
+Auditor governed_summaries only. Current observability endpoints provide no Auditor
+summary route. Admin gets neither finance nor technical diagnostics implicitly.
+
+### Production identity and environment isolation design
+
+Protected verified_principal_provider currently returns None: no production identity
+integration exists, and denial is truthful. Tests may inject controlled dependency
+doubles; do not introduce role headers/production debug overrides. Legacy session
+resolve_user_context accepts X-SLOPANOC-DEV-USER irrespective of environment: M15 must
+gate this seam to local/development/test and reject in staging/production absent a
+verified server identity. Preserve UserContext ownership and existing dependencies;
+do not implement a new identity vendor/invent credentials. Live IdP setup is a
+separate security approval, not required to prove default denial locally.
+
+Use existing canonical local/development/staging/production ("dev" maps to
+"development" only at trusted configuration input; never silently merge stored
+populations). Validate configured environment even when financial features disabled;
+validate principal grants, resource attributes, repository queries, cursor scope,
+worker scope and financial/SLO source environment agreement. Collector must reject
+incoming environment mismatches before overwriting/enriching environment, so an
+accidental mixed stream cannot be relabeled production. Post-GCP detection resource
+projection must also remove unapproved discovered identifiers.
+
+Cross-environment tests include same identifiers in two populations, list/detail/
+timeline/SLO/financial routes, cursor reuse, health/config, receipts, retention and
+publication fences. Production UI defaults to production data; multi-environment
+access is explicit, visibly scoped and requires corresponding backend grants.
+
+### Redaction, exceptions, configuration and export design
+
+One producer projection registry and one exception sanitizer in redaction.py;
+exception output contains only registered error class/code, subsystem, operation,
+allowlisted numeric status class. Never str(exc), repr(exc), request bodies/provider
+payloads/SQL/headers/URLs. Ignore free-form class names unless registered; use other.
+URL observation uses dependency category/registered route, not host/path/query.
+SQL structural statement category only. Secret hit/miss/error metadata omits name
+and value. Projection occurs before queue/DB/API as well as Collector export.
+
+Schema validation errors must hide inputs and produce existing safe public errors.
+Prohibited fields are dropped/rejected, counted safely without retaining their
+value or field name. Export failure remains fail-open for business execution;
+privacy projection failure is fail-closed for that telemetry record. No raw local
+payload fallback. Accounting reliability is separate: preserve durable inbox/retry/
+debt reporting; never treat a sampled span as an accounting event or silently drop
+financial truth. Known-safe usage scalar capture survives rejection of unsafe extras.
+Config DTOs expose safe effective booleans/numbers/versions/status, not secret
+values/OTLP URLs/billing selectors; test poisoned env, nested values and validation
+exceptions. Production logging must cover late-created handlers and ensure one
+owning exception boundary; local logging/legacy diagnostic stores must meet the same
+prohibited-content tests for observability paths.
+
+### Canonical retention policy registry — table-complete design
+
+Extend retention.py with a versioned registry; config supplies validated centrally
+owned overrides. Defaults come from doc00/09/18 and current M7/M9 operational
+contracts. Environment is mandatory for every evaluation; same initial horizon per
+environment, no implicit shared population. TTL is not trace sampling. Calendar
+months use UTC month arithmetic, not blindly 731 days. Existing financial bounded
+731-day reads remain a separate query cap, not a new retention definition.
+
+| Dataset / actual table | Planned policy / anchor / dependency rule |
+|---|---|
+| observability_run_status | terminal_at +24h; active records not age-deleted while execution/settlement active; stale expired runs use deadline/heartbeat plus existing exceptional protection |
+| observability_turn | terminal_at +30d ordinary COMPLETED; +90d failure/timeout/cancel/stalled/governed; existing ever_stalled and retention_class preserved |
+| observability_run_event | parent run/summary horizon; remove only when both parents expired/absent and no required snapshot dependency |
+| observability_sre_receipt | settled due_at +2d operational dedupe; unsettled/acknowledgement/correction dependencies block |
+| observability_sre_bucket | current exact minute working set35d; minimum13month analytical access supplied by supported provider metrics at disclosed resolution; no claim of13month exact-minute working set |
+| observability_sre_source | current environment coverage/health metadata; retain while population/source exists, not global TTL |
+| finops_runtime_attempt | >=24months from admitted_at and dependent ledger/inbox horizon; unresolved/recovery debt blocks |
+| finops_usage_inbox | >=24months from created_at, delivered and no recovery/correction need; never delete pending/exhausted debt merely by age |
+| ai_usage_ledger | >=24months from observed_at AND created_at; retain correction/base closure and unresolved reconciliation links; original follows latest retained adjustment |
+| finops_usage_bucket | >=24months by UTC bucket period; live reconciliation/snapshot references block |
+| finops_accounting_source | current coverage/debt state; retain while source exists; never erase debt to appear healthy |
+| finops_billing_ingest_state | current source head/debt; expired partition removable only after references/corrections settle |
+| finops_billing_publication | >=24months by window_end AND publication time; heads/reconciliation/control/pricing dependencies block |
+| finops_billing_projection_cache | same manifest retention; typed totals/tariffs retained for replay; cannot independently purge referenced history |
+| finops_reconciliation_registry | retain while any generation references policy; shared version rows never deleted by one environment's job |
+| finops_reconciliation_input | >=24months by period end/capture evidence; generation/source-vector dependencies block |
+| finops_reconciliation_generation | >=24months by period end AND published_at; M13/M14/current head references block |
+| finops_reconciliation_state | current/partition head; preserve live generation and unresolved error; expired partition retirement fenced |
+| finops_unit_definition_version | version retained while any environment's generation references it |
+| finops_unit_driver_version | >=24months and until no retained economics generation needs it |
+| finops_unit_denominator_snapshot | >=24months by period end AND captured_at; economics/control/backtest references block |
+| finops_unit_economics_generation | >=24months by financial period and published_at; M14 references/current head block |
+| finops_unit_economics_publication | current/partition head and snapshot reference; retired only with safe dependent closure |
+| finops_budget_definition_version | recorded/effective-dated version retained while control history references it; shared global definition requires all-environment reference check |
+| finops_control_input | >=24months by month end AND cutoff; control/backtest source vectors block |
+| finops_control_generation | >=24months by month end AND issue/published_at; head/backtest/anomaly history dependencies block |
+| finops_forecast_backtest_generation | >=24months from known_at AND covered month; preserve forecast/truth/scoring vectors until eligible together |
+| finops_control_publication | current head/status, fenced retirement only after old partition/history eligible; never remove active anomaly head |
+| finops_anomaly_transition | >=24months from at; active/unresolved lifecycle and retained previous links block |
+| Operational Trace Store: Google Cloud Trace full traces | healthy sampled and exceptional supported traces: fixed30d provider retention |
+| ExceptionalTraceArchive full safe OTLP traces | exceptional-only90d primary horizon from durable complete commit; eligibility after horizon, asynchronous lifecycle/soft delete separate; no summary substitute |
+| Structured application logs | 30d; security/audit extension only under explicit enterprise policy |
+| Aggregate metric backend | minimum13months analytical access; longer supported provider retention satisfies horizon; actual type/resolution separate, no artificial13month deletion |
+| Legacy domain diagnostic snapshots | bounded existing last20 turns is NOT time-based retention; remove prohibited diagnostic content at producer, preserve only safe summary and existing session deletion/rewind behavior |
+
+No legal-hold system exists. Record "NOT IMPLEMENTED / policy not specified" rather
+than inventing legal compliance. Ordinary dependency/recovery blocks above are
+technical retention safety, not a legal-hold product. Enterprise longer retention
+remains an explicit governed policy override.
+
+### Retention dependency graph and deletion ordering
+
+Edges mean retained dependent -> required source (include JSON/string edges):
+M14 head/transitions/backtests -> M14 generations/input/definitions -> M13 economics/
+denominator snapshots + M12 financial generations + M11 source vector;
+M13 publication/economics -> M13 snapshots/definitions/drivers + M12 generation;
+M12 state/generation -> M12 registry/runtime/billing/pricing inputs -> M11 manifests/
+tariff cache + M10 ledger/buckets/attempts;
+M10 adjustment -> original ledger -> attempt; inbox -> attempt;
+M7 events -> run/summary; M13 captured denominators preserve M9 facts before short
+M9 working-set deletion. Definition rows may be shared across environments.
+ExceptionalTraceArchive has NO retention-dependency edge to M10–M14 financial
+chains. Archive manifests may depend on their own safe trace chunks only. Trace
+archive expiry never deletes operational/financial derived records.
+
+Eligibility is max(own horizon, latest required dependent horizon), with pending
+recovery/unresolved/active/current heads blocked. Missing/unknown reference means
+BLOCKED, not safe to delete. Definitions and historically effective pricing needed
+by retained periods survive even if authored earlier than 24months. No content
+rewrite/rounding/correction to save space; immutable histories delete only at approved
+end with dependency closure. Maintain current 24-month report/backtest reproducibility.
+
+Process oldest fully eligible closed partitions: retire obsolete nonactive heads
+under CAS/source fencing; eligible scoring/transitions before control generations;
+control generations before inputs/definitions; unit generations before snapshots;
+financial generations before inputs; cache before manifest; adjustments before base;
+delivered inbox/ledger before attempts. Shared sources stay blocked by any remaining
+dependent in any environment. Never parse entire financial history into memory.
+Introduce normalized environment-aware dependency edges for non-FK lineage and a
+bounded local backfill; unknown/unindexed legacy edges block deletion until covered.
+Publication records edges atomically, and worker checks references under compatible
+locks/fences so concurrent publication cannot acquire a just-deleted source. Preserve
+source lock order used by financial publishers. No cross-environment job deletes a
+shared definition on the strength of only its own scope.
+
+### Bounded retention worker / dry-run / failure design
+
+Opt-in disabled by default, off business path, no Scheduler/cloud Cron. Proposed
+limits: <=500 candidates/batch, configurable hard max1000; <=2 batches/cycle,
+<=2s statement deadline and <=5s transaction deadline; keyset ordering by cutoff/key,
+immutable run cutoff+policy version+environment checkpoint. Limits are provisional
+local settings, not measured production claims. Each batch transaction rechecks
+expiry/dependencies/head revisions and commits checkpoint with deletion. Rollback
+leaves checkpoint at last successful commit; failure stops that dataset/cycle,
+reports safe bounded error and retries from committed checkpoint. Concurrent workers
+use DB lease/CAS plus short row locks, never long table locks or global DELETE.
+Skipped blocked records must be revisited on later cycles, not lost behind watermark.
+Indexes must cover environment+cutoff+key and reverse dependency lookup.
+
+Dry-run is a read-only report of dataset/environment/cutoff/policy version/candidate
+count/eligible count/blocked-by-dependency count; no deletion and no checkpoint/lease
+write. Large exact counts use bounded paginated scans with progress/cursor and
+explicit incomplete status until all pages counted. Local acceptance uses isolated
+SQLite and disposable local PostgreSQL only if available. No remote/shared URI.
+Metrics candidates/deleted/blocked/errors/duration/oldest age/backlog have only bounded
+environment/dataset/outcome labels; no IDs/SQL/cutoffs/policy versions as labels.
+
+Session deletion/anonymization: no shadow copy of removed content. Reuse sticky
+M7 detach_session; wire only to a real confirmed session deletion seam if present,
+never temporary model-retry disposable-session deletion. Restricted session link
+removed while safe operational/accounting facts retain approved horizons. Financial
+correlation needed for audit remains restricted, not conversation restoration.
+Explicitly document no general end-user session deletion endpoint currently found.
+
+### Sampling registry, precedence, completeness and independence
+
+Canonical versioned registry proposed in sampling.py; classify by server-owned
+bounded environment/status/request class/governance class/safety flag/error class/
+latency bucket, never content. Precedence: SAFETY > GOVERNED (ProcedureAction,
+approval/command-authority workflow/confirmed governed route) > FAILED > TIMEOUT >
+EVER_STALLED > operationally relevant CANCELLED > accounting/export/persistence
+failure or linked severe cost anomaly > healthy general probability. Logical OR
+always-keep rules cannot be overridden by probabilistic healthy sampling. Unknown
+class/missing terminal/invalid runtime policy conservatively keeps safe telemetry
+and surfaces degradation. Never keep prohibited data to achieve a sampling target.
+
+SDK remains ALWAYS_ON including untrusted incoming sampled-bit=0. Tail sampling is
+required to use outcomes learned later; no SDK head reduction. Initial locally/dev
+and proposed approved production stabilization:100%. Healthy reduction10–20% stays
+provisional and disabled until real volume/cost/debugging coverage and exceptional
+retention proven. Use pinned Collector probabilistic trace-ID hashing for healthy
+GENERAL only, no application random decisions; deterministic exact fixture decisions
+plus statistical binomial tolerance tests, not a promise every small batch is10%.
+
+Tail decision wait must cover maximum turn deadline180s + export/late-child margin,
+not stock30s. Configurable longer turn limits must be checked for compatibility;
+unsupported windows keep100% rather than silently truncating exceptional traces.
+Trace affinity across child producers/instances, decision cache, late spans, memory
+and capacity must be verified. Existing256MiB sidecar budget may be insufficient;
+unknown capacity/distribution support prevents reduction. Deployment topology remains
+approved Collector -> Google backend plus explicitly approved exceptional-only
+stable OTLP -> archive bridge -> dedicated GCS adaptation. No unrelated gateway. Native
+production Google Collector0.160.0 tail processor availability is a required local
+validation gate; contrib binary alone cannot satisfy it. Crashes/overflow can lose
+spans: distinguish intended100% policy from guaranteed lossless delivery. Overflow/
+restart safety and required safety-record durability must be demonstrated locally;
+production reduction remains blocked if exceptional retention cannot be assured.
+
+Governed/stalled/safety flags must reach terminal root even after success. Late
+financial anomalies cannot retroactively recover a trace sampled weeks earlier:
+retain their accounting pipeline trace when linked; otherwise show linkage unavailable.
+Sampling metadata, if operationally available, exposes only yes/no/policy class/
+version; no seed/input payload. M7 summaries are unsampled; Collector cannot currently
+report actual per-run sampling decision back to application, so UI must say unavailable
+rather than infer from probability or missing Cloud Trace data.
+
+M9 instrumentation_complete records creation/closure/applicability before export;
+retained/exported/delivery-policy state separate. Intentional healthy drop must not
+be counted as accidental export failure. Metrics, SLI receipts/buckets, safety
+observations and M10–M14 accounting/billing/reconciliation/unit/budget/forecast/anomaly
+jobs never depend on sampled flag/span export/retention. Blocking paired replay100%
+vs10% compares exact counters, SSE receipts, TTFT population, ledger IDs/quantities/
+coverage and exact financial outputs. Existing formulas remain unchanged.
+
+### Collector processor ordering and transport security
+
+Plan traces: application allowlist -> memory_limiter -> safe scope/environment
+mismatch filter -> typed redaction/resource projection -> trusted environment
+enrichment/GCP detection -> final resource allowlist -> tail sampling/classification
+(100% default, reduction only after gates) -> sanitized fan-out: independent batch/
+queue -> existing Cloud Trace exporter; approved exceptional classes only -> stable
+OTLP exporter -> archive bridge -> dedicated GCS (local sink in M15 acceptance).
+Neither export acknowledgement gates the other branch. Metrics/logs same sanitized
+ordering with NO tail sampler. No unredacted archive branch.
+Reapply resource allowlist after GCP detection; don't allow detected resource names
+as metric dimensions. Sampling decision attributes themselves must pass classification.
+Redaction/filter policy errors propagate/drop telemetry, never bypass exporter gate;
+pipeline rejection bounded health only, business execution unaffected. Tests inspect
+producer/pre-Collector and actual post-Collector OTLP output, not just YAML matching.
+
+Production OTLP HTTPS or explicit loopback sidecar remains enforced. DB TLS/IAM and
+gateway HTTPS paths unchanged; offline configuration audit only. Platform at-rest
+encryption assumptions (Cloud SQL/GCS/Google telemetry) documented, no custom/CMEK
+implementation or live encryption compliance claimed. No certificate/IAM/secret changes.
+
+### UI impact / browser handling / API minimization
+
+Five required UI checks: (1) M15 creates effective privacy/retention/sampling policy
+information; (2) safe versioned DTO extensions required; (3) Data & Retention, Access,
+Diagnostics updates belong to M15; no new application or later milestone UI;
+(4) backend capabilities apply, finance never implies diagnostics; (5) centrally
+owned production policy is READ_ONLY, no retention delete/sampling edit/access grant.
+
+Extend /config with safe policy versions/effective target/status and distinguish
+configured/local-proven/deployed/live-validated/unsupported; financial effective
+retention may remain under existing financial health DTO to avoid capability leaks.
+No new bulk export endpoint. Access retains safe request capability outcomes unless
+a minimal verified capability profile is deliberately provided; no IAM policy,
+principal ID or token. Diagnostics sampling status unavailable until actual decision
+can be proven; Cloud Trace and exceptional archive status are independent verified
+read-only indications (retained/not retained by policy/pending/failed/unknown/
+unavailable), never inferred from config/probability. No large archive browser.
+Missing trace never becomes failed execution. Minimize internal
+DTO fields by operational purpose, retain currently useful permitted generation
+references but never expose binding/raw vectors/tariff secrets merely because stored.
+
+Per-section React memory only; denial/error clears cached values, nested timeline,
+financial panels and generation-racing responses. No durable browser persistence or
+copy/export UI presently found in inspected surfaces. Add tests spying storage and
+clipboard/download; do not add those features. Audit app-level persistence so protected
+DTOs cannot migrate indirectly into session/browser state. Revocation only becomes
+known on server response/identity invalidation; do not claim instantaneous detection
+for static panels without a refresh or established identity invalidation event.
+
+### Migration, IaC and platform retention blocker
+
+Plan additive M15 migration after actual head a14d2e6f8c70 for retention checkpoint/
+lease and normalized dependency-reference rows, indexed by environment/dataset/key/
+cutoff. Safe policy-version columns only where required to interpret retained data;
+nullable legacy value means unknown, not fabricated policy. Update publication edges
+atomically and bounded offline backfill; no rewrite of financial contents. Existing
+M14 source/definitions/outputs remain immutable. No access-audit table or per-trace
+sampling table without demonstrated requirement. Migration revision chosen only at
+implementation after rechecking head; upgrade/downgrade/metadata/offline PostgreSQL
+DDL/sentinel preservation tests on disposable local DB. No shared migration.
+
+Author source-driven Collector config/retention manifest and locally supported
+Logging bucket retention Terraform; no existing remote bucket adopted by assumption.
+Billing datasets/tables/exports have their own ownership and dependency policy;
+do not add automatic BigQuery TTL to raw sources or views without reference review.
+No native Cloud Trace90-day setting may be fabricated.
+
+B01: **RESOLVED BY ARCHITECTURE ADAPTATION**, not waived. The user's 2026-10-09
+repair instruction preserves90day full exceptional traces in ExceptionalTraceArchive.
+Operational Trace Store=Cloud Trace, fixed30d for normal sampled and exceptional
+traces; days0–30 both stores, days31–90 archive only. M7 summaries/logs/metrics/SLO
+aggregates are NOT substitutes. The authoritative full contract is now doc16,
+with aligned doc00/01/05/09/12/15/23. No Cloud Trace90day setting is invented.
+
+Monitoring minimum13months is analytical access, not a deletion TTL. Provider custom,
+external, agent and workload metrics retain24months, original frequency6weeks then
+10minute resolution; OTLP/Prometheus retain24months, original frequency1week then
+1minute for5weeks, then10minute resolution. Other types may retain6weeks; evaluate
+required coverage separately. Longer retention satisfies minimum13months at disclosed
+resolution. Do not add artificial13month purge or claim13month exact M9 minute data.
+Reference https://docs.cloud.google.com/monitoring/quotas checked2026-10-09.
+Logging30d application default and provider400d required audit bucket remain separate.
+GCS lifecycle is asynchronous; default supported-bucket soft delete7days is separate
+and final configuration must be explicit. No physical-erasure-at-exactly90day claim.
+References https://docs.cloud.google.com/storage/docs/lifecycle and
+https://docs.cloud.google.com/storage/docs/soft-delete checked2026-10-09.
+No actual cloud settings were inspected or mutated, public documentation only.
+
+### ExceptionalTraceArchive — approved planning contract
+
+Component is observability-only, never evidence/authority/business persistence or a
+second application event store. Eligible minimum classes SAFETY/GOVERNED/FAILED/
+TIMEOUT/EVER_STALLED; approved command/approval flows are GOVERNED; linked threshold
+cost anomalies already approved by doc16 policy. No healthy ordinary archiving.
+Optional cancellations/pipeline failures require approved exceptional equivalence,
+not blanket always-keep archive admission. Eligibility comes from bounded server
+terminal/governance/safety metadata; prompt/response/free text cannot select class.
+
+Envelope: versioned sanitized OTLP ExportTraceServiceRequest ResourceSpans plus safe
+manifest metadata. Preserve trace/span/parent IDs; explicitly allowed safe links
+where applicable (currently links denied, so absent); registered span name/kind;
+UTC start/end/duration; canonical OTel/SLOPANOC status/error; allowlisted resource,
+scope/version/schema URL, span attributes/events; environment/retention class,
+telemetry/redaction/sampling/archive policy versions. Preserve hierarchy and timing.
+No arbitrary attributes/exceptions/descriptions/tracestate/baggage or prohibited
+content, raw billing source identifiers or arbitrary identity. Numeric thought_tokens
+remains safe accounting count, never model reasoning content.
+
+Deterministic versioned OTLP-compatible serialization sorts unordered attributes/
+resource/scope/span groups, preserves safe event order, validates values and hashes
+logical content separately from compression/transport acknowledgements. Compression
+may be deterministic gzip; final production choice remains deployment configuration.
+Idempotent conditional-create identity=environment+traceID+schema/policy+logical digest.
+Repeated identical commit acknowledges existing object without refreshed TTL;
+conflict is explicit. Late valid extra spans append superseding complete versions,
+never ambiguous overwrite. OTLP batch acknowledgement is durable chunk acceptance,
+NOT full-trace commitment; root-only or timeout-only cannot prove completeness.
+
+Bridge must assemble bounded durable sanitized chunks and a manifest containing the
+trusted expected registered span population/closure. Require all expected spans,
+valid parent hierarchy/timing/events; absent population proof or partial chunks mean
+PARTIAL/UNKNOWN, never full-success. Provisional limits: decoded request4MiB,
+trace64MiB/10000spans/256events per span,256pending traces, bounded spool bytes/TTL,
+window compatible with turn180s+export/late-child margin. Enforce tighter existing
+caps. Never truncate then claim full trace. Stage/privacy before durable writes;
+commit manifest atomically after dependencies. Preserve accepted chunks on restart
+and stop/count exhaustion safely; local tests define behavior, M16 stresses capacity.
+
+Transport-independent ExceptionalTraceArchiveExporter -> stable pinned supported
+Collector OTLP -> Exceptional Trace Archive Bridge -> dedicated durable GCS object
+archive. Application and Collector sanitize/environment-check/classify BEFORE both
+Cloud Trace and archive branches; bridge revalidates. Cloud Trace independent queue
+survives archive failure. No experimental storage exporter dependency: contrib
+v0.160.0 google_cloud_storage exporter metadata marks traces DEVELOPMENT/logs ALPHA,
+contrib distribution (official metadata reviewed); Pub/Sub/community alternatives
+need pinning, compatibility/failure/security review and explicit architecture approval.
+Source https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.160.0/exporter/googlecloudstorageexporter/metadata.yaml .
+
+Production GCS contract: dedicated bucket per canonical environment, no public access,
+uniform bucket-level access, separate least-privilege writer/reader service identities,
+authenticated TLS/platform at-rest encryption, no custom/CMEK claim. Proposed Standard
+storage; bucket name/project/region/identity not selected or authorized. Bounded path
+`environment/UTC-commit-date/trace-id/schema-version/logical-digest/` with fixed suffixes;
+no business/user data. Trace IDs restricted lookup only, never metric labels.
+90day primary eligibility measured from first durable complete commit per version,
+conservatively covering terminal capture+90days; retry does not refresh anchor.
+Lifecycle age90 for finalized envelope or manifest-aware/aligned-time chunks; no
+staged chunk expires before its retained manifest. Incomplete spool TTL separate.
+Asynchronous deletion/soft delete/versioning/holds must be disclosed separately;
+no byte-erasure-exactly90day guarantee, no invented legal hold or locked retention.
+
+Local M15 sink=isolated filesystem spool/object sink with identical eligibility,
+schema/serialization/privacy/commit/idempotency/retention metadata/protected retrieval
+contract. Collector -> loopback OTLP bridge -> local sink tests require no GCS,
+credentials or remote mutation. Local atomics emulate conditional creation; production
+transport/GCS/IAM/lifecycle are NOT LIVE-VALIDATED by these tests.
+
+Completeness denominator=unique trusted unsampled eligible exceptional traces before
+archive export, including failed/lost/unconfirmed sends; numerator=durable COMPLETE
+manifest proving expected safe span population. Distinguish M9 instrumentation
+completeness, Cloud Trace export/retention and exceptional archive completeness.
+PENDING/FAILED/UNKNOWN/UNAVAILABLE/PARTIAL explicit; missing denominator/confirmation
+never100% by absence. Bounded metrics environment/result/class/failure category only,
+no trace/run/session/user/object labels. Failure degrades90day coverage/health,
+never user turn/governance/provider-tool replay/raw fallback; bounded retry/backlog
+and independently continuing Cloud Trace export. No accounting population changes.
+
+Read/reconstruct contract=verified technical_diagnostics plus authorized environment,
+validated traceID/version/bounded page. If using existing run facade, also require
+its operational_metadata capability; no role expansion. User/FinOps/Admin/Auditor
+receive no implicit archive access. Resolve safe scoped manifests, no arbitrary
+object paths/signed public URLs/bulk export/manual edit/delete/reclassify. Return
+only sanitized OTLP, hierarchy/timing/events, policy/completeness/retention metadata.
+Unauthorized lookups reveal no other environment's existence. UI at most safe
+independent archive/Cloud Trace indication in existing Diagnostics; no large browser.
+
+### M16 and M17 archive validation handoffs — not started
+
+M16 acceptance targets: burst throughput, backpressure, outage, partial trace/chunk
+loss, retry/idempotency, tail memory, queue saturation, Collector restart, bridge
+restart, malformed OTLP, GCS latency/error simulation, reconstruction performance.
+Isolated failure/load tests later; live checks only after exact operation approval.
+
+M17 activation checklist: exact approved archive bridge deployment, dedicated GCS
+bucket, lifecycle/soft-delete policy, writer/reader IAM, service identity/environment
+separation, monitoring/alerting, authorized retrieval/runbook and live archive writes/
+throughput/outage/retry/reconstruction validation. None executed in M15. M15 local
+acceptance is expressly separate; full production definition of done still requires
+approved live evidence. No deployment by design-readiness implication.
+
+### Exact expected implementation paths (not changed in this pass)
+
+New planned:
+- backend/observability/sampling.py
+- backend/observability/retention_models.py
+- backend/observability/retention_worker.py
+- backend/observability/retention_dependencies.py
+- backend/tests/test_observability_security_policy.py
+- backend/tests/test_observability_sampling.py
+- backend/tests/test_observability_retention_worker.py
+- backend/tests/test_observability_retention_dependencies.py
+- backend/tests/test_observability_privacy_surfaces.py
+- backend/tests/test_observability_sampling_independence.py
+- backend/tests/test_observability_retention_migrations.py
+- backend/tests/test_observability_security_performance.py
+- infra/observability/retention_policy.json
+- infra/observability/terraform/retention.tf (supported source-controlled definitions only)
+- infra/observability/terraform/archive.tf (bucket/lifecycle/IAM contract only; no apply)
+- infra/observability/archive/bridge_contract.json (future source-owned safe configuration)
+- backend/observability/archive_contracts.py
+- backend/observability/archive_serialization.py
+- backend/observability/archive_bridge.py
+- backend/observability/archive_health.py
+- backend/observability/archive_service.py
+- backend/observability/exporters/archive.py
+- backend/observability/exporters/archive_local.py
+- backend/tests/test_observability_archive_contract.py
+- backend/tests/test_observability_archive_reconstruction.py
+- backend/tests/test_observability_archive_privacy.py
+- backend/tests/test_observability_archive_delivery.py
+- backend/tests/test_observability_archive_authorization.py
+- backend/tests/test_observability_archive_retention.py
+- src/components/shell/settings/observability/PolicyPanels.test.tsx
+- docs/runbooks/telemetry-privacy-retention.md
+- alembic/versions/<new_m15_revision>_observability_retention.py (identity assigned later)
+
+Modify planned, reusing existing owners:
+- .agent/OBSERVABILITY_EXECUTION.md
+- backend/observability/{redaction,schemas,attributes,config,logging,tracing,runtime,retention,repository,slo_rollups,slo_sources,service,api_models,metrics,persistence}.py; backend/observability/README.md
+- backend/observability/finops/{repository,billing_repository,reconciliation_repository,unit_economics_repository,control_repository}.py (dependency edges only; no financial formulas)
+- backend/api/{identity,observability_routes}.py
+- backend/config/settings.py (safe config access only if needed)
+- backend/tools/knowledge/diagnostic_trace.py (safe diagnostic producer/persistence projection)
+- alembic/env.py
+- infra/observability/collector/{config.yaml,config.local.yaml,README.md}
+- infra/observability/terraform/{README.md,variables.tf}
+- src/api/{observabilityTypes.ts,observability.ts}
+- src/components/shell/settings/observability/{contract.ts,DataRetentionPanel.tsx,AccessPanel.tsx,RunDetail.tsx,DiagnosticsPanel.tsx,useObservabilityQuery.ts}
+- backend/tests/{test_observability_retention,test_observability_collector,test_observability_migrations,test_api_security_contract,test_settings_secret_caching}.py
+- existing corresponding Settings/client tests where DTO changes require them.
+
+No M16 program, M18 CI redesign or M19 profiling. These archive paths are future
+M15 implementation destinations, not files authored in this planning repair.
+
+### Sequential implementation plan (future authorization required)
+
+1. Recheck approved B01 split-storage contract, current head and baseline; preserve90day requirement.
+2. Register classification/surface/value provenance and policy versions; safe exceptions.
+3. Close identified legacy diagnostic/log/config/identity/env gaps; preserve capabilities.
+4. Centralize retention tiers including M9 operational/analytical distinction; normalize
+   non-FK dependencies with atomic publication edges and bounded backfill coverage.
+5. Implement bounded worker, pure dry-run, checkpoints/leases/fences and policy metadata.
+6. Implement server-owned sampling markers and pinned Collector tail policy with100%
+   defaults, validate production distribution/decision window/capacity; no reduction live.
+7. Implement approved safe OTLP envelope/eligible-only pluggable bridge/local sink,
+   atomic idempotent commit/reconstruction and independent archive health; local-only
+   validation and IaC authoring, production binding/live validation deferred. Extend
+   safe existing API/UI effective read-only policy/status; no destructive UI.
+8. Run local privacy/sampling/retention, financial/SLO independence, migration,
+   Collector, regression/build/performance/hygiene validation; evaluate all gates.
+9. Update results/actual paths/limitations/cloud disposition; STOP before M16.
+
+### Validation commands / acceptance evidence / performance plan
+
+All implementation validation NOT RUN in planning. Before pytest, inspect/rebuild
+local test guard `/private/tmp/slopanoc-m7-test-guard/run_tests.py` if present;
+strip external/cloud URLs/credentials, inject disposable SQLite/fakes, disable
+Vertex/warmup and block non-loopback sockets. Do not import/start app against live env.
+Use `.venv/bin/python`, not unavailable generic python (planning read script corrected).
+
+Future commands:
+- guarded `.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests/test_observability_security_policy.py backend/tests/test_observability_privacy_surfaces.py backend/tests/test_observability_sampling.py backend/tests/test_observability_sampling_independence.py backend/tests/test_observability_retention_worker.py backend/tests/test_observability_retention_dependencies.py backend/tests/test_observability_retention_migrations.py backend/tests/test_observability_security_performance.py`
+- guarded full `.../run_tests.py backend/tests` including M0–M14/API/RBAC/FinOps/SLO regressions.
+- `npm test -- --reporter=dot`; `npm run build` (TypeScript+production Vite).
+- existing Collector pytest real loopback binary harness for input/output adversarial
+  OTLP and native local/production config validation; verify production distribution.
+- local migration tests: isolated SQLite up/down, actual head, FK/index parity,
+  source sentinels, PostgreSQL offline SQL; local PostgreSQL contention if available.
+- `terraform fmt -check -recursive infra/observability/terraform` if CLI installed;
+  native validate only after provider/backend-safe local setup, no unsafe init/plan.
+  Static tests meanwhile; absent CLI = NOT EXECUTED, not PASS.
+- `git diff --check`; git status/diff/untracked and baseline hashes.
+
+Synthetic sentinel families: fake prompt/response/hidden-thought, Teams message,
+command, SQL/bind/DSN, credential/bearer/password/API key/secret, email/profile,
+sensitive URL/query, billing resource/account. Inject at every producer, nested
+metadata, allowed-string slots, validation/error/exception path. Assert absence in
+spans/events/logs/metrics, pre/post Collector, M7 DB, M9 receipts, M10 ledger/inbox,
+M11 metadata, M12 reconciliation, M13 snapshots/economics, M14 inputs/results,
+API JSON/config and frontend DOM/state. Only explicit internal financial identifier
+fields may contain their approved technical value; never ordinary logs/UI/metrics.
+Never use or save real private model reasoning.
+
+Boundary clocks: before/equal/after cutoff, month/leap-year, ordinary30d vs90d
+exceptional/governed, terminal24h, active/unsettled exclusions; all actual tables,
+financial source references without FK, shared cross-environment definitions,
+corrections/pricing dependencies/current head/active anomaly, dry-run zero writes,
+rollback after partial successful batch, resume/idempotency/concurrent publication,
+missing dependency index blocks, bounded memory/queries. Test session detach never
+reattaches and does not alter financial history.
+
+Sampling: exact precedence, late terminal>30s, stalled then success, governed marker
+from server, incoming sampled=0, deterministic probabilities, invalid config keeps
+safe exceptional data, production binary unsupported fails reduction gate, resource
+mismatch, redaction before sampling, exporter outage no raw fallback, exemplar poisons.
+Paired replay100%/10% proves all M9 and M10–M14 truths bit/exact-decimal identical,
+including ledger completeness, SSE and trace instrumentation completeness.
+
+RBAC: each matrix route with absent/invalid verified principal, each role ceiling,
+Admin no finance/technical, Auditor no invented access, FinOps no operational data,
+environment A/B and unauthorized detail404, scoped pagination/cursor, cache revocation
+and late response race, synthetic secret config, no browser persistence/destructive UI.
+
+Performance: realistic synthetic100k operational candidates plus multi-period24month
+financial graph without loading all rows. Report p50/p95 local sanitizer/policy/healthy
+sampling decision, candidate query/report/deletion batch, API impact, peak memory,
+query count and lock/transaction duration. Compare synchronous instrumentation with
+existing <10ms target and typical CPU<3% target where measurable; do not infer full
+production CPU from microbenchmarks. Test batch limits fixed independent of population;
+record actual timings only after execution. Collector memory/window capacities and
+statistical behavior must be measured locally; no M16 production load claim.
+
+### Added archive acceptance tests A–N (planned only)
+
+| Test | Required local evidence |
+|---|---|
+| A Cloud Trace limitation | Documentation/effective config never claims provider full-span retention>30days; archive90day requirement separate |
+| B Eligibility | FAILED/TIMEOUT/EVER_STALLED/GOVERNED/SAFETY eligible from bounded server metadata; healthy ordinary excluded |
+| C Full reconstruction | Complete sanitized OTLP root/parent-child graph, kinds/timestamps/durations/statuses/events/resource/scope/policy versions round-trip exactly |
+| D Privacy | All existing prohibited sentinel families absent in archive envelope/chunks/manifest/spool/retrieval/errors/health; synthetic hidden-thought zero tolerance |
+| E Pre-archive redaction | Actual loopback Collector output received by archive sink has already removed unsafe fields; no raw branch |
+| F Failure | Sink/bridge unavailable leaves business terminal/governance and provider/tool invocation counts unchanged; Cloud Trace branch continues;90day coverage degrades |
+| G Idempotency | Repeated complete commit gives one unambiguous logical version, no TTL refresh; conflicts explicit, late chunks/versioning and incomplete confirmation tested |
+| H Environment | Development/production object/manifest/chunk lookup, commit, retention and cursor scopes cannot cross |
+| I Authorization | Only verified technical_diagnostics plus authorized environment retrieves; role ceilings deny User/FinOps/Admin/Auditor; façade operational requirement retained |
+| J Sampling | Healthy10percent probability does not suppress approved ALWAYS_KEEP exceptional archive; eligible metadata survives sanitization |
+| K SLO | Archive/sampling/failure replay produces identical M9 counters/results/instrumentation completeness; separate archive completeness denominator/confirmation |
+| L FinOps | Same replay preserves M10–M14 ledger/quantities/billing/reconciliation/economics/budget/forecast/anomaly outputs |
+| M90day evaluator | Inject clock before/equal/after durable-complete-commit+90days; before retained, at/past horizon policy deletion-eligible; retry no reset; lifecycle/soft delete distinct |
+| N Ordinary boundary | Healthy trace never enters exceptional90day archive even if Cloud Trace retention expires; unknown class does not pretend eligibility/commit |
+
+Add the six planned test_observability_archive_{contract,reconstruction,privacy,
+delivery,authorization,retention}.py files to the existing guarded focused command.
+Use isolated filesystem+loopback OTLP only, no real GCS client/credentials. Denominator
+eligible receipt/commit status persistence is safe environment-scoped operational
+metadata in future M15 retention/health storage, independent of M9 and financial
+records; pending/failed/unknown records cannot vanish merely because a bridge missed
+an export. Privacy and expected-span closure metadata must be allowlisted before
+producer persistence/export, not created retrospectively from unsafe payloads.
+All these tests remain NOT RUN/NOT IMPLEMENTED in this documentation repair.
+
+### Objective M15 exit criteria (individual future evaluation required)
+
+Every implementation criterion below is NOT VALIDATED in this planning pass.
+B01 is resolved architecturally; repaired planning readiness is YES. Neither
+implementation nor local/live runtime validation is claimed PASS by a plan.
+
+| ID | Required local evidence / gate |
+|---|---|
+| C01 | Governance/authority/source/approval/provenance and financial/SLO formulas unchanged; no observability evidence input |
+| C02 | Canonical classified field registry versioned, unknown/prohibited fields+values rejected, producer allowlists complete |
+| C03 | Synthetic hidden-thought zero leakage across every inspected surface |
+| C04 | Synthetic secrets/prompt/response/Teams/command/SQL/URL/document/vector zero leakage |
+| C05 | Exact route capability matrix tested; Admin/FinOps/Auditor ceilings unchanged |
+| C06 | Production verified-server-only identity and local override isolation; no client role grant |
+| C07 | Cross-environment routes/resources/sources/retention/cursors denied server-side |
+| C08 | One centrally versioned retention registry with every actual table and provider reality distinguished |
+| C09 | Financial24month replay/correction/scoring/pricing dependencies preserved, no orphan JSON/string lineage |
+| C10 | Bounded resumable environment-scoped workers, transaction/query/memory caps and publication race fencing proven |
+| C11 | Dry-run zero writes with truthful count/completion/blocked report |
+| C12 | Retention failure rollback/checkpoint/resume/idempotency and blocked-record revisit proven |
+| C13 | Success/exceptional/governed/active/SRE retention boundaries and safe deletion/detach interaction proven |
+| C14 | Cloud Trace30d and approved90d exceptional full safe OTLP archive policy/reconstruction/local retention evaluator proven; production GCS/transport validation explicitly pending |
+| C15 | Canonical sampling version/precedence and safe conservative invalid-policy fallback |
+| C16 | Safety/governed/failure/timeout/stall always-keep locally demonstrated; healthy deterministic policy provisional |
+| C17 | Tail decision timing/affinity/late spans/capacity and production pinned processor availability proven;100% defaults retained |
+| C18 | M9 availability/completion/latency/TTFT/SSE/ledger counters and results invariant100%->10% |
+| C19 | M10–M14 quantities/IDs/billing/reconciliation/unit/budget/forecast/anomaly outputs invariant100%->10% |
+| C20 | Instrumentation completeness, Cloud Trace retention/export and archive completeness separate; unsampled archive eligibility denominator and durable full-trace confirmation, unknowns explicit |
+| C21 | Producer+actual Collector+archive defense; redaction precedes export/sampling/archival branch; environment mismatch rejected; no raw bypass |
+| C22 | Structured logs/exception ownership/late handlers/config effective projections leak no restricted content |
+| C23 | API allowlisted least-data DTOs; UI/backend capabilities, denial clearing, browser persistence and no destructive controls proven |
+| C24 | Read-only effective retention/sampling/privacy version and unavailable/deployment/provider status truthful in existing Settings |
+| C25 | Bounded metrics/resource dimensions, no IDs/content/version/cutoff labels or trace exemplars |
+| C26 | Platform transport/encryption boundaries documented accurately; no invented legal hold/custom encryption/audit access |
+| C27 | Additive local migration/head/parity/rollback/source preservation and dependencies pass |
+| C28 | Focused/full backend/frontend/TypeScript/build/Collector applicable regressions pass; local performance measured |
+| C29 | Terraform static vs native status truthful; unavailable native fmt/validate remains pending limitation |
+| C30 | No cloud/shared mutation, no M16/M18/M19 implementation; scoped hygiene and actual validation record complete |
+| C31 | Eligible-only archive admits minimum SAFETY/GOVERNED/FAILED/TIMEOUT/STALLED; healthy ordinary excluded; full safe hierarchy/timing/status/events/versions reconstruct |
+| C32 | Archive retry/idempotency/conflict/partial assembly and fail-open business/no-replay/independent Cloud Trace/health degradation demonstrated locally |
+| C33 | Archive technical capability/environment isolation/read-only bounded retrieval; no Admin/User/FinOps privilege broadening |
+| C34 | Local sink same production contract; pluggable stable OTLP transport; experimental storage exporters not mandatory;90day eligibility vs asynchronous/soft-delete semantics accurate |
+| C35 | Monitoring minimum13month analytical requirement/provider retention-resolution distinct; no artificial13month purge; M16/M17 live validation handoffs explicit |
+
+### Cloud disposition, planning validation and readiness
+
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED.
+No remote operation is needed for this plan or ordinary local M15 implementation.
+Future pending families: exact named shared migration; Cloud Run application/Collector
+policy deployment; Logging bucket retention; any approved exceptional archive/storage
+and IAM; retention Scheduler; supported Terraform resources. No project/account/
+tenant/environment has been selected or authorized. Before ANY mutation, show exact
+command/targets/resources/current-milestone need/operational+security+cost impacts/
+loss or interruption risk/rollback and DEV-STAGING-PRODUCTION classification, then
+wait for exact approval. Database revision/tables/indexes/locks/rollback additional
+gate applies. No apply/import/state/BigQuery TTL/billing/IAM/secret action implied.
+
+Planning validation: source/spec/API/ORM/YAML/Terraform/browser searches and current
+Git diff/status inspected; no runtime tests or native Terraform run. Public official
+Google docs checked for platform retention reality only. Generic python read script
+initially unavailable, corrected to .venv/bin/python; no source repair needed.
+Final planning review: git diff --check PASS; 387 inspected source/spec/infrastructure/
+UI/migration baseline files SHA256 unchanged; status/diff/untracked paths inspected.
+Actual changed file this pass: .agent/OBSERVABILITY_EXECUTION.md.
+Initial planning pass: no authoritative spec edited and no implementation authored.
+This repair: only the explicitly authorized related Telemetry documents and this
+record are updated; no implementation authored.
+
+Risks: B01 RESOLVED BY ARCHITECTURE ADAPTATION; future archive assembly/commit/
+acknowledgement coverage and producer expected-span manifest require local proof;
+production tail processor/256MiB sidecar timing/capacity is unproven; non-FK financial
+lineage needs bounded indexed dependency coverage; legacy diagnostics can retain
+sensitive free text; M9 existing purge is unbounded; unkeyed owner hash is reversible
+for guessable subjects and must remain restricted; production IdP absent/default
+deny, generic dev identity currently ungated; enterprise legal/audit retention policy
+not specified; native Terraform unavailable. Repairable gaps are planned in M15,
+not hidden predecessor failures, and no production compliance is claimed.
+
+Ready To Implement M15: YES — approved split-storage architecture and explicit
+safe full-trace/pluggable transport/local sink/health/retrieval/retention/handoff
+contracts satisfy the design gate; implementation requires a separate instruction.
+M15 — PLANNED — NOT IMPLEMENTED.
+Ready for Next Milestone: NO.
+M16 remains BLOCKED. STOP; no implementation or deployment authorized by this plan.
+
+### B01 repair audit and readiness checklist — 2026-10-09
+
+User instruction: repair planning documentation only, including narrowly implicated
+authoritative Telemetry documents. No M15 implementation, M16 start or cloud mutation.
+Actual repair documents: .agent/OBSERVABILITY_EXECUTION.md;
+docs/Telemetry/00_MASTER_BUILD_CONTRACT.md;
+docs/Telemetry/01_TARGET_ARCHITECTURE.md;
+docs/Telemetry/05_STORAGE_APIS_AND_UI.md;
+docs/Telemetry/09_SECURITY_PRIVACY_RETENTION_SAMPLING.md;
+docs/Telemetry/12_IMPLEMENTATION_ROADMAP.md;
+docs/Telemetry/15_DEFINITION_OF_DONE.md;
+docs/Telemetry/16_PRODUCTION_TELEMETRY_BACKEND.md;
+docs/Telemetry/23_TERRAFORM_AND_OBSERVABILITY_AS_CODE.md;
+docs/Telemetry/ALL_IN_ONE.md (changed embedded sections synchronized; unrelated
+source/aggregate sections not regenerated). Earlier untouched historical completion
+records remain history; the repaired M15 section and program header are current.
+
+| Planning readiness requirement | Disposition |
+|---|---|
+| Cloud Trace fixed30day limit acknowledged | YES, ordinary and exceptional interactive traces |
+| Exceptional full-trace90day requirement preserved | YES, primary archive horizon, not summary substitution |
+| Explicit ExceptionalTraceArchive component | YES, observability-only dedicated object archive |
+| Safe full-trace schema defined | YES, versioned sanitized OTLP plus manifest, hierarchy/timing/events/versions |
+| Archive eligibility explicit | YES, five minimum exceptional classes and existing explicitly approved classes |
+| Redaction before archival export | YES, producer/environment/Collector before exceptional-only branch |
+| Transport pluggable | YES, stable OTLP -> bridge -> GCS, no experimental exporter dependency |
+| Local sink satisfies M15 local validation contract | YES as plan, identical isolated sink; implementation/tests still pending |
+| Production GCS binding deferred | YES, bucket/bridge/IAM/lifecycle/deployment not executed or validated |
+| Archive completeness/health defined | YES, unsampled eligibility denominator + complete durable confirmation; unknowns explicit |
+| M16/M17 production validation handoff explicit | YES, future targets only, neither milestone started |
+| No cloud mutation required for local M15 implementation | YES, loopback transport/filesystem/test doubles |
+
+B01: RESOLVED BY ARCHITECTURE ADAPTATION — NOT WAIVED.
+Ready To Implement M15: YES (planning/design gate only).
+M15 — PLANNED — NOT IMPLEMENTED.
+Ready for Next Milestone: NO. M16 BLOCKED.
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED.
+Native Terraform validation = NOT EXECUTED — CLI unavailable; no PASS claim.
+STOP; separate instruction required to implement M15.
+
+Repair verification: git diff --check PASS; eight changed authoritative-source sections
+match their ALL_IN_ONE embedded copies; obsolete B01 blocker/readiness-NO wording
+removed from current M15 plan;12 planning readiness requirements individually YES.
+SHA256 baseline review: exactly10 approved documentation files changed,1077 other
+tracked/untracked baseline files unchanged, zero new paths. Runtime/Collector/archive/
+migration tests NOT RUN (documentation-only). Native Terraform NOT EXECUTED (CLI
+unavailable). No production transport validation or cloud mutation. STOP.
+
+
+## M15 implementation authorization and preflight — 2026-10-09
+
+The attached implementation request explicitly authorizes local M15 code, tests,
+migration and IaC. Earlier planning-only restrictions are historical. Gate verified:
+M0–M14 locally complete; B01 RESOLVED BY ARCHITECTURE ADAPTATION; M15 was
+PLANNED — NOT IMPLEMENTED; M16 blocked; Cloud Trace 30 days; exceptional archive
+90-day primary horizon; native Terraform NOT EXECUTED — CLI unavailable.
+
+Reuse the approved objective, specification inventory, architecture inspection,
+files, implementation sequence, validations and exit criteria above. Mandatory
+refinement: common environment validation and redaction must fan out BEFORE
+independent Cloud Trace and eligible-only archive decisions, never one sampler with
+both exporters. Production healthy reduction remains disabled; SDK ALWAYS_ON.
+Full trace payloads belong only in the local archive sink, never Cloud SQL.
+
+Implementation baseline (tracked and untracked) copied and SHA256 recorded at
+/private/tmp/slopanoc-m15-implementation-baseline. Existing M12–M14 work is preserved.
+UI impact: extend existing read-only M8 Data & Retention/Access/Diagnostics; verified
+capability enforcement remains server-side. No policy editor or archive browser.
+Validation uses isolated SQLite and loopback-only socket guard, actual local
+Collector, focused then full backend/frontend/build/migration tests, performance
+fixtures and diff checks. No cloud mutation or shared migration.
+
+Status: IMPLEMENTATION IN PROGRESS; validation NOT YET RUN; all M15 exit criteria
+PENDING; Ready for Next Milestone: NO.
+
+### M15 implementation checkpoint (in progress; not completion)
+
+Added policy registries, canonical exception projection, environment/dev identity
+gates, independent redacted Collector branches, local OTLP bridge/filesystem
+archive, trusted span-population closure, additive b15e3f7a9c81 policy migration,
+bounded retention/checkpoints/dependency adapters, policy/access/archive read APIs
+and M8 read-only policy/access surfaces. Legacy diagnostic content is now projected
+before persistence/logging; governance business state remains untouched.
+
+Focused evidence so far: archive 14 PASS; runtime/API combined 100 PASS; actual
+Collector existing regression 9 PASS; new actual branch/redaction plus retention
+4 PASS; policy API/SLO rollups/migrations 55 PASS. Local build PASS. These preceded
+some subsequent edits and will be rerun for final evidence. Initial full frontend
+972 PASS/1 FAIL (extra Access denial fixture; fixture repaired). Initial full backend
+regression running; diagnostic assertions expecting formerly persisted prohibited
+content require investigation, without weakening governed business checks.
+
+Repairs: unsupported OTTL Concat replaced by validated bounded hex population
+string; bridge transport compression explicitly none; dry-run fixture flushed
+before checking coverage. Sandbox denied local bind; rerun approved automatically
+with existing loopback-only socket guard and isolated databases (no cloud).
+
+Outstanding: finish archive storage bounds/health/retrieval validation, remaining
+producer audit, dependency adapter coverage, policy UI tests/revocation, sampling
+independence, metrics/performance, full regressions and working-tree review.
+Native Terraform NOT EXECUTED — CLI unavailable. Cloud resources/deployment/IAM/
+lifecycle/scheduler/shared migrations NOT EXECUTED. M16 NOT IMPLEMENTED BY DESIGN.
+M15 NOT LOCALLY VALIDATED; Ready for Next Milestone: NO.
+
+
+## M15 — Security, Privacy, Retention and Sampling: local completion — 2026-10-09
+
+Status: IMPLEMENTED AND LOCALLY VALIDATED. B01 remains RESOLVED BY ARCHITECTURE
+ADAPTATION, not waived. The previous implementation checkpoints are historical.
+All 38 user blocking local criteria and the approved C01–C35 local evaluation pass.
+Production deployment/identity/storage/capacity qualification is not claimed.
+Ready for Next Milestone: YES (local gate only). STOP. M16 NOT IMPLEMENTED BY DESIGN;
+no instruction to start it, deploy infrastructure or mutate shared resources is inferred.
+
+### Implementation and architecture evidence
+
+- `privacy-v1`: 300 explicit attribute/resource/legacy field policy entries plus
+  761 actual strict DTO fields inventoried, qualified by producer, surface, validator,
+  environment and capability. Unknown fields/producers/environments deny by default.
+  Resource version/region/release/revision shapes and fixed scope/schema URLs close
+  free-string metadata channels. Existing strict M0–M14 financial DTOs remain authoritative.
+- Producer projection and canonical SDK/Collector/archive boundaries deny prompt,
+  response, Teams/tool/command/SQL, credential/secret/sensitive URL/document/vector
+  content and synthetic reasoning markers. No real hidden reasoning was collected.
+  Existing diagnostic trace storage/snapshots/log formatting now retain finite codes,
+  booleans/counts and pseudonymous technical correlations, never source prose,
+  command templates, applicability values, raw queries or target parameters.
+- Every technical identifier is surface constrained; no user/Teams identifiers are
+  promoted to log/metric labels. IDs remain in authorized typed traces/durable records;
+  legacy source/action identifiers are SHA256 pseudonyms. Financial capability does
+  not imply technical capability. Admin ceilings remain unchanged.
+- Production/staging dev-header/default identity is disabled. Verified principals,
+  capability ceilings and canonical environment scope are checked server-side.
+  Four new GET-only routes preserve the prior 27-route matrix (31 total): policies
+  require effective configuration; access requires verified identity; archive requires
+  technical diagnostics; run retention requires operational metadata. All deny
+  unknown/unverified identity and inappropriate environments; no policy mutation API.
+- Structured exceptions inspect no args, string/repr, traceback, SQL, URL or headers.
+  Production logging sanitizes before custom or later handlers and supports shared
+  leases/out-of-order release; disabled SDK lifespan also releases the logging lease.
+- `retention-v1` inventories all 31 actual durable tables, including 23 financial
+  tables. Central horizons: terminal active cache 24h, ordinary summary/logs/Cloud
+  Trace 30d, exceptional summary/archive 90d, minimum provider analytical access
+  13 calendar months, financial minimum 24 calendar months (configured 24–120),
+  SRE settled receipts 2d and working buckets 35d. Archive/checkpoint/source metadata
+  is conservatively retained when no qualified deletion adapter exists.
+- Financial dependency checking covers all durable M10–M14 string/JSON lineage,
+  corrections/original events, source generations, pricing, reconciliation,
+  denominator snapshots, forecast inputs, backtests/truth and anomaly transitions.
+  Scan limit/depth/coverage gaps return UNKNOWN and retain records. Envless/version
+  tables have no guessed destructive adapter. Shared PostgreSQL financial deletion
+  also remains UNKNOWN until a publication/deletion protocol is qualified; checkpoint
+  CAS is explicitly not represented as fencing publishers that prepared JSON lineage
+  outside a transaction. Local isolated SQLite deletion exercises clear/blocked cases.
+- Retention runs default dry-run, batch<=1000, transaction deadline<=10s, deterministic
+  composite-PK cursors and original-generation CAS. A lost fence, dependency failure
+  or timeout rolls back the entire batch/checkpoint. Dry-run writes nothing; repeated
+  and completed sweeps are idempotent and revisit retained rows. M7 stale/active owner
+  expiry and detach behavior remain in the bounded existing cleanup path, now scoped
+  to the configured environment. M9 settled/bucket pruning reuses the worker.
+- SDK ALWAYS_ON remains 100%. `sampling-v1` uses server facts with precedence
+  SAFETY > GOVERNED > FAILED > TIMEOUT > EVER_STALLED > healthy completed > UNKNOWN.
+  Safety/governed/stall facts are sticky. Production healthy rate is fixed100%;
+  10% is isolated experimental evidence, provisional and disabled. Invalid input
+  resolves to conservative100%, DEGRADED_SAFE_FALLBACK, with no exceptional loss.
+- Common Collector environment/scope validation, typed resource/span/event/log/metric
+  redaction and schema normalization happen BEFORE fanout. Independent bounded
+  Cloud Trace and exceptional-only archive tail samplers never share a decision.
+  Cloud Trace keeps exceptions/UNKNOWN; archive admits only the five exceptional
+  classes. Stable OTLP HTTP/protobuf, no experimental GCS exporter; compression none.
+- `ExceptionalTraceArchive` protocol, explicit local loopback bridge and trusted-root
+  filesystem implementation preserve safe span IDs, W3C external parent boundary,
+  hierarchy, kind, timing, terminal status, finite events/metadata and policy versions.
+  Bounds: ingest4MiB, assembled64MiB, 10,000spans, 256events/span, 256pending traces,
+  staging256MiB, stagingTTL360s (max600), <=8immutable versions; no SQL full-trace blobs.
+  Parent validation is linear. Safe chunks/atomic payload+manifest commits use fsync,
+  conditional create and a sink fence. Excess/invalid/corrupt/conflicting/partial
+  populations are explicit, never falsely complete. Retry/sub-batch retry/read never
+  refreshes the original complete-commit+90d eligibility; late versions append.
+- Server-owned SDK closure declares the expected owned population after cleanup;
+  a terminal root alone cannot confirm completeness. Unsampled terminal eligibility
+  receipts contain count/digest/class/closure only. Independent local reconciliation
+  reads the immutable manifest and full payload checksum/population before confirming;
+  exporter ACK is not confirmation. Missing/non-covered populations remain UNKNOWN;
+  health fraction is absent unless coverage is explicitly server-confirmed.
+- Protected reconstruction requires verified technical capability AND matching
+  environment/exact hex identity/digest. Concurrency4/read deadlines2s, pages<=100,
+  offsets<=10,000 and response<=4MiB. No arbitrary path, signed/public URL, download,
+  storage credential, mutation or general archive browser. SQL stores metadata only.
+- Actual 100%/10% paired M9 availability/completion/duration/TTFT/SSE/instrumentation
+  contributions and M10 admission/inbox/ledger quantities/identities agree. M11 billing,
+  M12 reconciliation, M13 unit economics and M14 budgets/forecasts/anomalies agree.
+  Trace retention/export/archive completeness never changes their truth.
+- Existing M8 Data & Retention, Access and RunDetail receive read-only truthful policy,
+  verified capability/environment and separate instrumentation/Cloud/archive states.
+  No editor/export/browser. Unknown fields are stripped; 401/403/unmount invalidates
+  late protected responses; no local/session storage, IndexedDB, cache or URL persistence.
+- M15 counters have a finite name registry and exactly four bounded dimensions
+  (environment/operation/status/window), unit1, monotonic nonnegative values and no
+  IDs/content/exemplars. Actual native export preserves a valid point and rejects
+  private-label/exemplar siblings. No telemetry becomes business evidence/authority.
+
+### Validation performed and results
+
+All backend invocations used the loopback-only test guard with cloud configuration
+removed, explicit disposable SQLite/test doubles and the pinned local Collector.
+No remote database, service, credentials or cloud session was used for mutation.
+
+| Validation | Result |
+|---|---|
+| Full backend: `.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests -s` | PASS — 5,835passed /12skipped /692warnings,304.02s |
+| Focused final registry/identity/archive/SLO/FinOps evidence | PASS —144tests,4.09s |
+| Final actual Collector metrics + 100%/10%/outage/invalid routing fixture | PASS —4tests,24.07s |
+| Native production/local Collector validation + existing seven SDK pipeline scenarios + four routing scenarios | PASS —13checks; final full suite includes all13; independent final metrics fixture supersedes four routing checks |
+| Production-disabled logging lease, P2 correlation/perf, persistence/runtime, retention/performance focused repair | PASS —205tests,13.40s |
+| Financial dependency categories, lost fence, local API/archive performance | PASS —15tests,7.70s |
+| Full frontend: `npm test -- --run` | PASS —979tests /67files,10.86s |
+| TypeScript + production build: `npm run build` | PASS —tsc and Vite; build2.22s |
+| Actual isolated upgrade/head/downgrade/upgrade + offline PostgreSQL chain, M7/M10/M11/M12/M13/M14 migration regressions | PASS —included in full backend; head b15e3f7a9c81 |
+| `git diff --check` and baseline SHA256 scope audit | PASS; final audit described below |
+| Terraform local source/static inspection | PASS for reviewed explicit environment/bucket/identity/lifecycle contract; not native fmt/validate |
+| Native `terraform fmt` / `terraform validate` | NOT EXECUTED — CLI unavailable |
+
+Failures and repairs: initial backend208FAIL/5468PASS and frontend1FAIL/972PASS exposed
+legacy diagnostic assertions that expected prohibited fields. Diagnostic expectations
+were updated to pseudonymous IDs/finite codes; exact command/target checks stay in
+trusted business catalog/state assertions. These tests did not substitute telemetry
+for authority. Subsequent full backend26FAIL/5804PASS exposed a disabled-SDK production
+logging lease leak, an unsupported revision-2 fixture shape and an unauthorized API
+benchmark role; fixed lifecycle/semantic shape/fixtures. Lost-fence injection then
+caught ORM synchronization moving the checkpoint comparison; fixed original-generation
+CAS and verified full rollback. UI delayed-response fixture metadata, local schema
+registration and complete inventory registration were repaired. Actual metric poison
+fixture originally had no valid four-label sibling; added the valid point and separately
+verified rejection of private-label/exemplar siblings without weakening native filters.
+An attempted focused command used a nonexistent projection test filename and ran no
+tests; corrected to actual persistence/API tests. Native OTTL/transport/closure issues
+from the earlier checkpoint were repaired and revalidated. No blocking defects remain.
+12 full-backend skips are existing cases: unavailable real-corpus fixtures and the
+None-is-not-a-distinguishable-pending-entry case; no M15 case skipped.
+Warnings are dependency deprecations/test teardown warnings, not claimed cloud evidence.
+
+### Reproducible local performance (no production capacity claim)
+
+Fixtures exercise safe production code, not timing-only replicas. Producer1000calls,
+exception1000calls, sampling10,000calls; safe archives2/100/1000spans; 10exceptional
+100-span traces; 1001summary rows with batch100; protected APIs10requests each.
+Native Collector fixture25traces/50spans,42,995input bytes, includes1s test tail wait
+and batching/HTTP, so its latency is pipeline evidence, not isolated OTTL CPU cost.
+
+| Measurement | Local result |
+|---|---|
+| producer_projection | mean0.0380ms, p950.0388ms |
+| structured_exception | mean0.0031ms, p950.0032ms |
+| sampling_decision | mean0.0020ms, p950.0020ms |
+| sanitize_2_spans | mean0.2794ms, p950.3469ms |
+| sanitize_100_spans | mean9.4411ms, p959.5322ms |
+| sanitize_1000_spans | mean94.1806ms, p9595.0028ms |
+| reconstruct_2_spans | mean0.4652ms, p950.5753ms |
+| reconstruct_100_spans | mean11.3135ms, p9511.4600ms |
+| reconstruct_1000_spans | mean111.9576ms, p95114.3418ms |
+| commit2spans | 4.54ms; 1498input bytes |
+| commit100spans | 79.91ms; 60989input bytes |
+| commit1000spans | 845.98ms; 607293input bytes |
+| retention candidate_query | 1.03ms; {'candidates': 100} |
+| retention delete_batch | 60.96ms; {'deleted': 100, 'scanned': 100} |
+| retention dry_run | 1.98ms; {'deleted': 0, 'scanned': 100} |
+| batch_exceptional | {"elapsed_ms": 838.908415986225, "input_bytes": 609890, "spans": 1000, "traces": 10} |
+| policy | {"iterations": 10, "max_ms": 1.609666971489787, "mean_ms": 0.6146539933979511, "response_bytes": 1815} |
+| reconstruction | {"iterations": 10, "max_ms": 14.155708020552993, "mean_ms": 13.202457968145609, "response_bytes": 38137} |
+| run_retention | {"iterations": 10, "max_ms": 4.479499999433756, "mean_ms": 2.011729124933481, "response_bytes": 184} |
+| Native Collector redaction/branch delivery | ingress mean5.33–6.36ms; batch delivery2552.9–3565.7ms including tail/batch wait |
+
+### Individual user blocking exit criteria
+
+PASS means the M15 local contract only. Deployment and production sizing are
+separately NOT EXECUTED; their absence is explicitly allowed by the authoritative
+roadmap and the current implementation request's production-validation distinction.
+
+| Gate | Criterion | Local result |
+|---|---|---|
+| U01 | observability remains never evidence | PASS |
+| U02 | SAFE/RESTRICTED/PROHIBITED policy implemented | PASS |
+| U03 | unknown telemetry denied | PASS |
+| U04 | prohibited sentinels leak nowhere | PASS |
+| U05 | hidden reasoning zero-tolerance passes | PASS |
+| U06 | secrets/credentials zero-leak passes | PASS |
+| U07 | safe exception projection passes | PASS |
+| U08 | route/capability matrix preserved | PASS |
+| U09 | production identity default-deny preserved | PASS |
+| U10 | environment isolation passes | PASS |
+| U11 | centralized retention implemented | PASS |
+| U12 | financial retention dependencies protected | PASS |
+| U13 | dry-run and bounded retention work | PASS |
+| U14 | retention resumability/idempotency pass | PASS |
+| U15 | SDK capture remains 100% | PASS |
+| U16 | sampling registry implemented | PASS |
+| U17 | redaction occurs before branch fanout | PASS |
+| U18 | Cloud Trace and archive branches are separate | PASS |
+| U19 | healthy sampled traces do not enter archive | PASS |
+| U20 | SAFETY/GOVERNED/FAILED/TIMEOUT/EVER_STALLED archive correctly | PASS |
+| U21 | archive reconstructs safe full trace | PASS |
+| U22 | archive commits idempotently | PASS |
+| U23 | archive failure does not affect business execution | PASS |
+| U24 | archive completeness is separate from instrumentation completeness | PASS |
+| U25 | archive retrieval requires technical diagnostic capability | PASS |
+| U26 | archive environment isolation passes | PASS |
+| U27 | SLO outputs invariant under 100%→10% healthy trace sampling | PASS |
+| U28 | M10–M14 outputs invariant under sampling | PASS |
+| U29 | intentional sampling does not reduce instrumentation completeness | PASS |
+| U30 | M8 policy/access/diagnostic views remain read-only and truthful | PASS |
+| U31 | browser protected-data rules pass | PASS |
+| U32 | metric/exemplar cardinality/privacy rules pass | PASS |
+| U33 | actual local Collector tests pass | PASS |
+| U34 | migration/regressions pass | PASS |
+| U35 | native Terraform validation status reported truthfully | PASS |
+| U36 | production GCS binding remains unexecuted | PASS |
+| U37 | M16 remains unimplemented | PASS |
+| U38 | no cloud/shared-resource mutation occurred | PASS |
+
+### Approved execution-plan C01–C35 local evaluation
+
+| Gate | Result / evidence qualification |
+|---|---|
+| C01 | PASS — implementation and applicable local tests above |
+| C02 | PASS — implementation and applicable local tests above |
+| C03 | PASS — implementation and applicable local tests above |
+| C04 | PASS — implementation and applicable local tests above |
+| C05 | PASS — implementation and applicable local tests above |
+| C06 | PASS — implementation and applicable local tests above |
+| C07 | PASS — implementation and applicable local tests above |
+| C08 | PASS — implementation and applicable local tests above |
+| C09 | PASS — implementation and applicable local tests above |
+| C10 | PASS — original-generation checkpoint CAS/rollback and scoped bounded local transactions; unknown shared publication coverage retains financial rows; no live publication-fence qualification claimed |
+| C11 | PASS — implementation and applicable local tests above |
+| C12 | PASS — implementation and applicable local tests above |
+| C13 | PASS — implementation and applicable local tests above |
+| C14 | PASS — implementation and applicable local tests above |
+| C15 | PASS — implementation and applicable local tests above |
+| C16 | PASS — implementation and applicable local tests above |
+| C17 | PASS — pinned native processor/config availability and bounded independent source pipelines/local late/partial handling; production affinity/memory/capacity NOT LIVE VALIDATED |
+| C18 | PASS — implementation and applicable local tests above |
+| C19 | PASS — implementation and applicable local tests above |
+| C20 | PASS — implementation and applicable local tests above |
+| C21 | PASS — implementation and applicable local tests above |
+| C22 | PASS — implementation and applicable local tests above |
+| C23 | PASS — implementation and applicable local tests above |
+| C24 | PASS — implementation and applicable local tests above |
+| C25 | PASS — implementation and applicable local tests above |
+| C26 | PASS — implementation and applicable local tests above |
+| C27 | PASS — implementation and applicable local tests above |
+| C28 | PASS — implementation and applicable local tests above |
+| C29 | PASS — static/native status truthful; native fmt/validate NOT EXECUTED, CLI unavailable |
+| C30 | PASS — implementation and applicable local tests above |
+| C31 | PASS — implementation and applicable local tests above |
+| C32 | PASS — implementation and applicable local tests above |
+| C33 | PASS — implementation and applicable local tests above |
+| C34 | PASS — safe OTLP/closure/immutable commit/retention semantics shared by pluggable interface; local filesystem is an isolated stand-in, production GCS binding NOT DEPLOYED |
+| C35 | PASS — implementation and applicable local tests above |
+
+### Known limitations, production status and exact pending operation families
+
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED. No project/account,
+service/bucket identity or shared database was selected or authorized. Future exact
+commands/resources/impact/rollback need a separate approval gate before execution.
+
+| Production operation / qualification | Status |
+|---|---|
+| GCS environment archive bucket, immutable object binding and Custom-Time metadata protocol | NOT DEPLOYED / NOT EXECUTED |
+| Archive bridge Cloud Run deployment + TLS/server authentication/durable production staging | NOT EXECUTED |
+| Writer/reader IAM + service identities + production diagnostic identity activation | NOT EXECUTED |
+| Lifecycle/soft-delete behavior, retention scheduling and archive reconciliation scheduling | NOT EXECUTED |
+| Cloud Trace live behavior / production Collector tail memory/affinity/late-span capacity/archive throughput | NOT LIVE VALIDATED |
+| Shared Cloud SQL migration b15e3f7a9c81 (two metadata tables, archive receipt index, run/summary retention indexes) | NOT EXECUTED |
+| Cloud Logging retention, monitoring/alerts, production retrieval activation | NOT EXECUTED |
+| Native Terraform fmt/validate | NOT EXECUTED — CLI unavailable |
+| M16 implementation | NOT IMPLEMENTED BY DESIGN |
+
+Local FilesystemArchive is explicit trusted-root, private local storage and a loopback
+bridge. It is not a deployed GCS sink; no claim of production TLS, custom encryption,
+legal holds or exact physical erasure. Production object keys must include environment,
+UTC complete-commit date, trace identity, schema and digest. Future GCS first complete
+commit must set the same immutable Custom-Time on payload/manifest; days_since_custom_time
+90 is asynchronous eligibility, separate from7day soft-delete retention. Missing
+Custom-Time retains objects. The create-only writer's exact commit/metadata protocol
+needs narrowly scoped qualification/approval; no successful production write implied.
+Reference: [Cloud Storage lifecycle](https://docs.cloud.google.com/storage/docs/lifecycle).
+
+Unknown/incomplete archive coverage remains unknown. Reconciliation is explicit local
+bounded work, not automatically scheduled or production-bound. Non-turn/disabled/failed
+projection coverage cannot be asserted complete. Conservative financial/version/source/
+archive-receipt retention can exceed the minimum when no safe deletion adapter exists;
+shared PostgreSQL financial deletion stays UNKNOWN until publication fencing is qualified.
+These are fail-closed safety decisions, not deletion/production readiness claims.
+
+M16 handoff recorded only: Collector bursts/tail memory, archive queue saturation/outage,
+bridge/Collector restart, malformed OTLP, partial/chunk loss, retries/idempotency, local
+GCS latency simulation and reconstruction under load. M17 handoff recorded only: approved
+bridge/bucket/lifecycle/IAM/service identity deployment, monitoring/alerts/retrieval,
+shared migration, retention scheduling and live validation. Neither milestone started.
+
+### Actual M15 file changes and repository hygiene
+
+Relative to the implementation-start SHA256 baseline: 68existing files changed, 29new files, zero removed; 1019baseline files unchanged. Existing unrelated M12–M14 work preserved. No prior migration or docs/Telemetry source changed; B01's repaired architecture is preserved. No spool, payload, secret, export, local DB or generated build artifact added to source control. Git status/diff/untracked paths and scoped baseline diff reviewed.
+
+Changed existing files:
+
+- `.agent/OBSERVABILITY_EXECUTION.md`
+- `alembic/env.py`
+- `backend/agents/technical_authority_engineer/agent_tool.py`
+- `backend/agents/technical_authority_engineer/structured_output.py`
+- `backend/agents/technical_authority_engineer/validation.py`
+- `backend/api/chat_service.py`
+- `backend/api/command_egress.py`
+- `backend/api/identity.py`
+- `backend/api/observability_routes.py`
+- `backend/observability/api_models.py`
+- `backend/observability/authorization.py`
+- `backend/observability/config.py`
+- `backend/observability/logging.py`
+- `backend/observability/metrics.py`
+- `backend/observability/projection.py`
+- `backend/observability/redaction.py`
+- `backend/observability/repository.py`
+- `backend/observability/runtime.py`
+- `backend/observability/schemas.py`
+- `backend/observability/service.py`
+- `backend/observability/slo_alerts.py`
+- `backend/observability/slo_rollups.py`
+- `backend/observability/slo_sources.py`
+- `backend/observability/tracing.py`
+- `backend/tests/knowledge/test_hybrid_governed_retrieval.py`
+- `backend/tests/test_acquisition_continuity.py`
+- `backend/tests/test_acquisition_gap_continuation.py`
+- `backend/tests/test_action_id_recovery.py`
+- `backend/tests/test_api_security_contract.py`
+- `backend/tests/test_applicability_blocked_governed_action.py`
+- `backend/tests/test_applicability_clarification_outcome_independence.py`
+- `backend/tests/test_case_progression_persistence.py`
+- `backend/tests/test_clarification_retrieval_resumption.py`
+- `backend/tests/test_command_egress_boundary.py`
+- `backend/tests/test_deterministic_continuation.py`
+- `backend/tests/test_evidence_acquisition_architecture.py`
+- `backend/tests/test_finops_control_migrations.py`
+- `backend/tests/test_finops_reconciliation_migrations.py`
+- `backend/tests/test_finops_unit_economics_migrations.py`
+- `backend/tests/test_gap_recovery_and_continuation.py`
+- `backend/tests/test_governed_continuity_runtime_blockers.py`
+- `backend/tests/test_governed_recovery_action_extraction.py`
+- `backend/tests/test_live_sequence_baseband_then_rru_reset.py`
+- `backend/tests/test_observability_collector.py`
+- `backend/tests/test_observability_migrations.py`
+- `backend/tests/test_operational_continuation_routing.py`
+- `backend/tests/test_operational_control_plane_e2e.py`
+- `backend/tests/test_operator_intent_vs_observation.py`
+- `backend/tests/test_pending_result_consumption.py`
+- `backend/tests/test_procedure_action_grounding_provenance.py`
+- `backend/tests/test_procedure_action_tae_e2e.py`
+- `backend/tests/test_procedure_semantics_and_scope.py`
+- `backend/tests/test_progression_architecture_e2e.py`
+- `backend/tests/test_progression_controller.py`
+- `backend/tests/test_recovery_path_end_to_end.py`
+- `backend/tests/test_requirement_gap_continuity.py`
+- `backend/tests/test_state_change_target_authority.py`
+- `backend/tests/test_tae_provenance_integrity.py`
+- `backend/tests/test_tae_structured_output_recovery.py`
+- `backend/tests/test_troubleshooting_retrieval_trace_e2e.py`
+- `backend/tools/knowledge/diagnostic_trace.py`
+- `infra/observability/collector/README.md`
+- `infra/observability/collector/config.local.yaml`
+- `infra/observability/collector/config.yaml`
+- `src/components/shell/settings/observability/AccessPanel.tsx`
+- `src/components/shell/settings/observability/DataRetentionPanel.tsx`
+- `src/components/shell/settings/observability/RunDetail.tsx`
+- `src/components/shell/settings/observability/fixtures.test-support.ts`
+
+New files:
+
+- `alembic/versions/b15e3f7a9c81_observability_policy.py`
+- `backend/observability/archive.py`
+- `backend/observability/archive_bridge.py`
+- `backend/observability/archive_metadata.py`
+- `backend/observability/diagnostic_privacy.py`
+- `backend/observability/diagnostic_privacy_registry.py`
+- `backend/observability/policy_metrics.py`
+- `backend/observability/policy_models.py`
+- `backend/observability/policy_views.py`
+- `backend/observability/privacy_policy.py`
+- `backend/observability/resource_policy.py`
+- `backend/observability/retention_registry.py`
+- `backend/observability/retention_worker.py`
+- `backend/observability/sampling_policy.py`
+- `backend/tests/_m15_privacy_assertions.py`
+- `backend/tests/test_m15_archive.py`
+- `backend/tests/test_m15_collector.py`
+- `backend/tests/test_m15_evidence.py`
+- `backend/tests/test_m15_performance.py`
+- `backend/tests/test_m15_policy_api.py`
+- `backend/tests/test_m15_retention.py`
+- `backend/tests/test_m15_sampling_independence.py`
+- `infra/observability/terraform/archive/README.md`
+- `infra/observability/terraform/archive/main.tf`
+- `infra/observability/terraform/archive/versions.tf`
+- `src/api/observabilityPolicy.test-support.ts`
+- `src/api/observabilityPolicy.test.ts`
+- `src/api/observabilityPolicy.ts`
+- `src/components/shell/settings/observability/PolicyPanels.test.tsx`
+
+M15 IMPLEMENTED AND LOCALLY VALIDATED. Ready for Next Milestone: YES (local only). STOP; M16 NOT IMPLEMENTED BY DESIGN.

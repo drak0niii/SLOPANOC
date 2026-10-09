@@ -6,6 +6,7 @@ from pydantic import AwareDatetime, Field, field_validator, model_validator
 from sqlalchemy import String, BigInteger, Boolean, JSON, Index, select, update, delete, case, func
 from sqlalchemy.orm import Mapped, mapped_column
 from .models import Base, UTCDateTime
+from .policy_models import RetentionCheckpoint
 from .schemas import Contract, Count, Duration
 from .slo_contract import RequestClass, CancelOrigin, LATENCY_IDS, DEFINITIONS, RECEIPT_GRACE_SECONDS, BURN_WINDOWS, WINDOW_SECONDS
 from .slo_evaluator import Counts, Bucket, Snapshot, minute
@@ -195,8 +196,8 @@ class Rollups:
             row.payload=receipt.model_dump(mode='json');row.contribution=new
             return True
 
-    async def prune(self,now):
-        # Operational correlation shorter than aggregate history; never touches M7 or ADK.
-        async with self.sessions() as session,session.begin():
-            await session.execute(delete(SREReceiptRow).where(SREReceiptRow.settled==True,SREReceiptRow.due_at<now-timedelta(days=2)))
-            await session.execute(delete(SREBucketRow).where(SREBucketRow.at<now-timedelta(days=35)))
+    async def prune(self,now,environment='development',batch=256):
+        from .retention_worker import RetentionWorker
+        worker=RetentionWorker(self.sessions,environment,batch=batch)
+        return tuple([await worker.run(dataset,now,dry_run=False)
+            for dataset in ('slo_receipts','slo_working_buckets')])

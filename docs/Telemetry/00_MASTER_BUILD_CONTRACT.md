@@ -84,8 +84,9 @@ These decisions are approved and must not be re-opened by the coding agent:
 - Production logs are structured JSON.
 - Infrastructure telemetry covers Cloud Run, Cloud SQL, Gemini/Vertex, Graph, BigQuery, GCS, knowledge, network dependencies and the Collector.
 - Initial SLO targets are defined in `21_SLO_FORMULAS_AND_INITIAL_TARGETS.md` and later recalibrated from baseline evidence.
-- Trace retention: normal successful traces 30 days; errors/timeouts/stalled/governed operational traces 90 days.
-- Aggregate metrics retention target: 13 months.
+- Operational Trace Store: Google Cloud Trace, full interactive traces/spans with fixed 30-day provider retention for ordinary and exceptional traces.
+- ExceptionalTraceArchive: separate sanitized full exceptional OTel traces with a 90-day primary archive retention requirement in dedicated environment-isolated GCS storage. Days 0–30 use Cloud Trace plus archive; days 31–90 use archive only. Summaries/logs/metrics do not substitute. Archive deletion becomes policy-eligible after its horizon; lifecycle deletion is asynchronous and soft delete is separate. See doc 16 for the safe schema, pluggable OTLP bridge and local validation boundary.
+- Aggregate metrics: minimum 13-month analytical access requirement, not an artificial deletion TTL. Longer provider retention satisfies the horizon at documented resolution; no promise of original-resolution data for 13 months.
 - FinOps ledger/billing analytical retention target: 24 months, subject to enterprise policy.
 - Sampling starts at 100%; later healthy general-chat traces may be reduced to 10–20%, while failed/timeout/stalled/safety/governed turns remain 100%.
 - FinOps ledger is immutable/idempotent/accounting-grade with durable recovery.

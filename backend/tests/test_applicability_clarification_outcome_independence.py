@@ -20,6 +20,8 @@ Invariants under test:
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation, approved
+
 import json
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -136,7 +138,7 @@ def _continuation(turn: dict[str, Any]) -> dict[str, Any]:
 
 
 def _authorized(turn: dict[str, Any], command: str) -> bool:
-    return any(c["decision"] == "authorized" and c["command"] == command for c in _trace(turn).get("command_authority", []))
+    return bool(approved(turn,command))
 
 
 async def _turn1(conv: _Conversation, shape: str) -> dict[str, Any]:
@@ -179,7 +181,7 @@ async def test_turn1_both_shapes_persist_a_resumable_applicability_clarification
     assert question is not None and question.status is ClarificationStatus.OPEN
     assert question.requested_fields == ["technology", "vendor"]
     assert question.source_identities == [EvidenceIdentity(knowledge_id=DOC.kid, version_label=DOC.ver, section_id=DOC.section)]
-    assert question.created_run_id == t1["records"][-1]["run_id"]
+    assert correlation(question.created_run_id) == correlation(t1["records"][-1]["run_id"])
     if shape == "recommended_blocked":
         assert fault.phase is ProgressionPhase.BLOCKED_MISSING_INFORMATION
         (step,) = progression.steps
@@ -198,7 +200,7 @@ async def test_turn1_both_shapes_persist_a_resumable_applicability_clarification
         requirement = progression.requirement(question.requirement_id)
         assert requirement.blocking_reason is GapReason.APPLICABILITY_UNRESOLVED
     (recorded,) = [e for e in _events(t1, "applicability_clarification") if e["event"] == "recorded"]
-    assert recorded["clarification_id"] == question.question_id and recorded["missing_dimensions"] == ["technology", "vendor"]
+    assert correlation(recorded["clarification_id"]) == correlation(question.question_id) and recorded["missing_dimensions"] == ["technology", "vendor"]
 
 
 @pytest.mark.asyncio
@@ -229,20 +231,20 @@ async def test_turn2_converges_to_the_same_deterministic_governed_progression(co
     assert _progression_control(t2)["decision"] == ("new_step" if shape == "insufficient_evidence" else "pending_step_resolved")
     if shape == "recommended_unexecutable":
         assert any(e["event"] == "unexecutable_step_continued_after_clarification" for e in _progression_control(t2)["events"])
-    assert continuation["open_applicability_clarification"]["clarification_id"] == question_id
+    assert correlation(continuation["open_applicability_clarification"]["clarification_id"]) == correlation(question_id)
     # Fresh discovery under the confirmed context, explicit current-run selection, MATCH.
     (resumption,) = _events(t2, "retrieval_resumption")
-    assert resumption["clarification_id"] == question_id and resumption["status"] == "searched"
+    assert correlation(resumption["clarification_id"]) == correlation(question_id) and resumption["status"] == "searched"
     (search,) = trace["searches"]
-    assert {k: [v.casefold() for v in vals] for k, vals in search["applicability_context"].items()} == {"vendor": ["ericsson"], "technology": ["4g"]}
-    assert trace["selected"] == [{"knowledge_id": DOC.kid, "version_label": DOC.ver, "section_id": DOC.section}]
+    assert "applicability_context" not in search  # M15: raw applicability values stay in governed business state.
+    assert trace["selected"] == [{"knowledge_id": correlation(DOC.kid), "version_label": correlation(DOC.ver), "section_id": correlation(DOC.section)}]
     # Fresh ProcedureAction derivation + Command Authority + egress in THIS run.
-    assert trace["action_resolutions"][-1]["action_id"] == ALT_ID
+    assert correlation(trace["action_resolutions"][-1]["action_id"]) == correlation(ALT_ID)
     assert trace["action_resolutions"][-1]["command_authority"] == "authorized"
     assert _authorized(t2, "alt")
     record = t2["records"][-1]
     assert record["diagnostic_step"]["command"] == "alt" and record["diagnostic_step"]["command_source"] == DOC.canonical
-    assert any(c.get("decision") == "kept" and c.get("candidate") == "alt" for c in (trace.get("command_egress") or {}).get("candidates", []))
+    assert any(c.get("decision") == "kept" and "candidate" not in c for c in (trace.get("command_egress") or {}).get("candidates", []))
     # Operator sees the governed step -- never the vacuous synthesis.
     assert "`alt`" in t2["final"] and t2["final"] != VACUOUS
     assert record[RESPONSE_COMPLETENESS_KEY]["satisfied"] is True and "next_step" in record[RESPONSE_COMPLETENESS_KEY]["elements"]
@@ -254,17 +256,17 @@ async def test_turn2_converges_to_the_same_deterministic_governed_progression(co
     assert fault.phase is ProgressionPhase.AWAITING_OBSERVATION
     question = progression.latest_clarification(fault.fault_id, ClarificationReason.APPLICABILITY)
     assert question.question_id == question_id and question.status is ClarificationStatus.RESOLVED
-    assert question.resulting_applicability == "match" and question.resolved_run_id == record["run_id"]
+    assert question.resulting_applicability == "match" and correlation(question.resolved_run_id) == correlation(record["run_id"])
     # G: no contradictory blocker survives a MATCH.
     assert stale_applicability_blockers(progression, fault.fault_id) == []
     assert all(r.blocking_reason is not GapReason.APPLICABILITY_UNRESOLVED for r in progression.open_requirements(fault.fault_id))
     if shape == "insufficient_evidence" and turn2_model == "omits_step":
         (choice,) = _events(t2, "resume_completeness")
-        assert ALT_ID in choice["offered"] and choice["chosen"] == ALT_ID
+        assert correlation(ALT_ID) in choice["offered"] and choice["chosen"] == correlation(ALT_ID)
     if shape == "insufficient_evidence" and turn2_model == "legacy_command":
         # The model's own command text is re-expressed as this run's ProcedureAction; the resolver renders it.
         (converted,) = _events(t2, "resume_procedure_action")
-        assert converted["procedure_action_id"] == ALT_ID
+        assert correlation(converted["procedure_action_id"]) == correlation(ALT_ID)
         assert trace["action_resolutions"][-1].get("model_command_ignored") in (None, "")
 
 
@@ -357,9 +359,9 @@ async def test_h_mismatch_issues_no_action_and_does_not_continue_the_procedure(c
                          tae_args={"problem_statement": "ESS Service Unavailable", "known_applicability_facts": {"vendor": ["ericsson"], "technology": ["3g"]}})
     assert _continuation(t2)["rule"] == ContinuationRule.APPLICABILITY_CLARIFICATION_RESOLVED.value
     (resumption,) = _events(t2, "retrieval_resumption")
-    assert all(a["applicability_outcome"] != "match" for a in resumption["available"] if a["section_id"] == DOC.section)
+    assert all(a["applicability_outcome"] != "match" for a in resumption["available"] if correlation(a["section_id"]) == correlation(DOC.section))
     trace = _trace(t2)
-    assert all(a["action_id"] != ALT_ID for c in trace.get("action_catalogs", []) for a in c.get("actions", []))
+    assert all(correlation(a["action_id"]) != correlation(ALT_ID) for c in trace.get("action_catalogs", []) for a in c.get("actions", []))
     assert not _authorized(t2, "alt") and "`alt`" not in t2["final"]
     assert not _events(t2, "resume_completeness") or _events(t2, "resume_completeness")[0]["offered"] == []
     assert not [s for s in t2["progression"].steps if s.command]
@@ -400,11 +402,11 @@ async def test_j_action_id_from_an_earlier_turn_is_reissued_only_from_current_se
     t2 = await conv.turn(TURN2, [ALT_CHOSEN, ALT_CHOSEN, ALT_CHOSEN], VACUOUS, tae_args=TM_TURN2_ARGS)
     assert not _authorized(t2, "alt") and "`alt`" not in t2["final"]
     assert all(r.get("command_authority") != "authorized" for r in _trace(t2).get("action_resolutions", []))
-    assert t1["records"][-1]["run_id"] != t2["records"][-1]["run_id"]
+    assert correlation(t1["records"][-1]["run_id"]) != correlation(t2["records"][-1]["run_id"])
     # Selected in THIS run: the same deterministic id is re-derived, re-issued and re-authorized now.
     t3 = await conv.turn("ok, which command then?", [SEARCH, DOC.select(), CATALOG, ALT_CHOSEN], VACUOUS)
     resolution = _trace(t3)["action_resolutions"][-1]
-    assert resolution["action_id"] == ALT_ID and resolution["command_authority"] == "authorized"
+    assert correlation(resolution["action_id"]) == correlation(ALT_ID) and resolution["command_authority"] == "authorized"
     assert "`alt`" in t3["final"]
 
 
@@ -425,15 +427,15 @@ async def test_k_vacuous_answer_never_terminates_an_actionable_continued_investi
     completeness = record[RESPONSE_COMPLETENESS_KEY]
     assert completeness["required"] is True and completeness["satisfied"] is False and ALT_ID in completeness["valid_actions"]
     (choice,) = _events(t2, "resume_completeness")
-    assert ALT_ID in choice["offered"] and choice["chosen"] is None
+    assert correlation(ALT_ID) in choice["offered"] and choice["chosen"] is None
     assert t2["final"] == RESPONSE_INCOMPLETE_TEXT and t2["final"] != VACUOUS
     assert not _authorized(t2, "alt") and "`alt`" not in t2["final"]  # nothing generated by the server
     # G (live shape): the requirement the model left untouched loses its stale applicability blocker.
     progression = t2["progression"]
     assert progression.requirement(requirement_id).blocking_reason is not GapReason.APPLICABILITY_UNRESOLVED
     assert stale_applicability_blockers(progression, progression.active_fault_id) == []
-    (settled,) = [e for e in _events(t2, "applicability_clarification") if e["event"] == "settled"]
-    assert settled["resulting_applicability"] == "match" and requirement_id in settled["released_requirements"]
+    (settled,) = [e for e in _events(t2, "applicability_clarification") if e.get("event") == "settled"]
+    assert settled["resulting_applicability"] == "match" and correlation(requirement_id) in settled["released_requirements"]
 
 
 def _record(**overrides: Any) -> dict[str, Any]:

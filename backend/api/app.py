@@ -380,6 +380,69 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             billing_worker = BillingIngestion(billing_repository,config.otel_environment,adapters,billing_policy,runtime=telemetry.runtime)
             financial_sources = FinancialSources(billing_repository,adapters,billing_policy,billing_worker)
             billing_worker.start()
+    # M12 consumes successful M11 extractions only; never creates a source job.
+    from backend.observability.finops.reconciliation_repository import Repository as ReconciliationRepository
+    from backend.observability.finops.reconciliation_inputs import RuntimeProvider as ReconciliationRuntime
+    from backend.observability.finops.reconciliation_worker import Worker as ReconciliationWorker
+    from backend.observability.finops.reconciliation_mapping import Registry as ReconciliationRegistry
+    from backend.observability.finops.reconciliation_contracts import Policy as ReconciliationPolicy
+    from backend.observability.finops.reconciliation_metrics import Metrics as ReconciliationMetrics
+    reconciliation_worker = None
+    app.state.observability_service.reconciliation_repository = None
+    if config.finops_reconciliation_enabled and billing_database is not None:
+        reconciliation_policy = getattr(app.state, 'finops_reconciliation_policy', ReconciliationPolicy())
+        reconciliation_registry = getattr(app.state, 'finops_reconciliation_registry',
+            ReconciliationRegistry(environment=config.otel_environment))
+        reconciliation_registry = ReconciliationRegistry.model_validate(reconciliation_registry.model_dump())
+        if reconciliation_registry.environment != config.otel_environment:
+            raise ValueError('Reconciliation registry environment mismatch')
+        reconciliation_repository = ReconciliationRepository(billing_database.sessions,reconciliation_policy)
+        reconciliation_worker = ReconciliationWorker(reconciliation_repository,
+            ReconciliationRuntime(accounting_database.sessions,reconciliation_policy) if accounting_database else None,
+            financial_sources,reconciliation_registry,reconciliation_policy,ReconciliationMetrics(telemetry.runtime))
+        billing_worker.reconciliation_consumer = reconciliation_worker.offer
+        app.state.observability_service.reconciliation_repository = reconciliation_repository
+        reconciliation_worker.start()
+    # M13 capture is independent of M11/M12 availability and never alters sources.
+    from backend.observability.finops.unit_economics_repository import Repository as UnitRepository
+    from backend.observability.finops.unit_economics_worker import Worker as UnitWorker
+    from backend.observability.finops.unit_denominators import TurnProvider, ModelProvider
+    from backend.observability.finops.unit_economics_contracts import Policy as UnitPolicy
+    from backend.observability.finops.unit_economics_metrics import Metrics as UnitMetrics
+    unit_database = unit_worker = None
+    app.state.observability_service.unit_economics_repository = None
+    if config.finops_unit_economics_enabled:
+        unit_database = Database(get_settings().resolve_database_url())
+        unit_policy = getattr(app.state, 'finops_unit_policy', UnitPolicy())
+        unit_repository = UnitRepository(unit_database.sessions, unit_policy)
+        adapter = financial_sources.adapters.get('DETAILED_BILLING')
+        unit_worker = UnitWorker(unit_repository,
+            TurnProvider(unit_database.sessions,config.otel_environment,config.turn_timeout_seconds,unit_policy),
+            ModelProvider(unit_database.sessions,config.otel_environment,unit_policy),
+            config.otel_environment,adapter.scope if adapter else None,
+            getattr(app.state,'finops_unit_drivers',None),unit_policy,UnitMetrics(telemetry.runtime))
+        app.state.observability_service.unit_economics_repository = unit_repository
+        unit_worker.start()
+    # M14 opt-in analytical worker; table creation/migration never occurs at startup.
+    from backend.observability.finops.control_repository import Repository as ControlRepository
+    from backend.observability.finops.control_worker import Worker as ControlWorker
+    from backend.observability.finops.control_contracts import Policy as ControlPolicy
+    from backend.observability.finops.budget_registry import load as load_budgets
+    from backend.observability.finops.control_metrics import Metrics as ControlMetrics
+    control_database = control_worker = None
+    app.state.observability_service.control_repository = None
+    app.state.observability_service.control_budget_registry = None
+    if config.finops_controls_enabled:
+        from pathlib import Path
+        control_root = Path(__file__).resolve().parents[2] / 'infra/observability/finops'
+        control_policy = getattr(app.state,'finops_control_policy',ControlPolicy.model_validate_json((control_root/'control_policy.json').read_text()))
+        control_registry = getattr(app.state,'finops_budgets',load_budgets(control_root/'budgets.json'))
+        control_database = Database(get_settings().resolve_database_url())
+        control_repository = ControlRepository(control_database.sessions)
+        control_worker = ControlWorker(control_repository,financial_sources,control_registry,control_policy,ControlMetrics(telemetry.runtime),config.otel_environment,accounting_ledger)
+        app.state.observability_service.control_repository = control_repository
+        app.state.observability_service.control_budget_registry = control_registry
+        control_worker.start()
     app.state.observability_service.financial_sources = financial_sources
     app.state.observability_service.accounting = accounting_ledger
     app.state.observability_service.slo_provider = CompositeSource(
@@ -397,8 +460,22 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # close() has its own total deadline and daemon cleanup for exporters
         # lacking a timeout; no telemetry network wait on the event loop.
         import time
+        if control_worker is not None:
+            await control_worker.close()
+        if control_database is not None:
+            try:
+                async with asyncio.timeout(3): await control_database.close()
+            except Exception: pass
+        if unit_worker is not None:
+            await unit_worker.close()
+        if unit_database is not None:
+            try:
+                async with asyncio.timeout(3): await unit_database.close()
+            except Exception: pass
         if billing_worker is not None:
             await billing_worker.close()
+        if reconciliation_worker is not None:
+            await reconciliation_worker.close()
         if billing_database is not None:
             try:
                 async with asyncio.timeout(3): await billing_database.close()

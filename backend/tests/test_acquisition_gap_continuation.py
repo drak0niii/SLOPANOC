@@ -17,6 +17,8 @@ Invariants under test:
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlations, correlation, approved
+
 import json
 import re
 from datetime import datetime, timezone
@@ -150,7 +152,7 @@ def _continuation_requests(turn_requests: list[LlmRequest]) -> list[LlmRequest]:
 
 
 def _authorized(turn: dict[str, Any]) -> list[str]:
-    return [c["command"] for c in _trace(turn).get("command_authority", []) if c["decision"] == "authorized"]
+    return [c["command"] for c in approved(turn)]
 
 
 def _events(turn: dict[str, Any], stage: str) -> list[dict[str, Any]]:
@@ -205,7 +207,7 @@ async def test_2_to_7_9_gap_is_recorded_stated_and_the_investigation_continues_t
 
     # 2. The ungrounded command is never shown, never authorized.
     assert "st rru" not in t2["final"] and "st rru" not in _authorized(t2)
-    rejected = [c for c in _trace(t2)["command_authority"] if c["command"] == "st rru"]
+    rejected = [c for c in _trace(t2)["command_authority"] if c["decision"] == "rejected"]
     assert rejected and rejected[0]["decision"] == "rejected" and rejected[0]["stage"] == "grounding"
     # 3. The need is recorded as a governed acquisition gap (requirement kept, never hidden).
     rru = _rru_requirement(t2)
@@ -226,11 +228,10 @@ async def test_2_to_7_9_gap_is_recorded_stated_and_the_investigation_continues_t
                      "Do not imply that an ungrounded method is governed", "Do not repeat the same unavailable acquisition requirement"):
         assert required in instruction
     assert continuation.tools_dict, "the continuation keeps the governed tools"
-    searches = [s["query_text"] for s in _trace(t2)["searches"]]
-    assert searches[-1] == "clock reference verification"
+    assert all("query_text" not in s for s in _trace(t2)["searches"])
     # 6. A different next evidence requirement, proposed by the specialist.
     record = t2["records"][-1]
-    assert record["evidence_acquisition"]["requirement"]["requirement_id"] != rru.requirement_id
+    assert correlation(record["evidence_acquisition"]["requirement"]["requirement_id"]) != correlation(rru.requirement_id)
     assert record["evidence_acquisition"]["requirement"]["description"] == "Clock reference state"
     # 7. Its governed method is resolved and presented normally.
     assert record["diagnostic_step"]["command"] == "st clockref" and "st clockref" in _authorized(t2)
@@ -243,10 +244,11 @@ async def test_2_to_7_9_gap_is_recorded_stated_and_the_investigation_continues_t
     assert "the command of the next diagnostic step comes from an approved governed procedure" in t2["final"]
     # Observability.
     (event,) = _events(t2, "gap_continuation")
-    assert event["continued"] is True and event["gaps"][0]["requirement_id"] == rru.requirement_id
+    assert event["continued"] is True and correlation(event["gaps"][0]["requirement_id"]) == correlation(rru.requirement_id)
     assert event["governed_command_presented"] is True
     rendered = format_diagnostic_trace(_trace(t2))
-    assert f"GAP CONTINUATION continued=True gaps=[('{rru.requirement_id}', '{gap.gap_id}', 'no_approved_acquisition_action')]" in rendered
+    assert '"stage":"gap_continuation"' in rendered and '"continued":true' in rendered
+    assert rru.requirement_id not in rendered and gap.gap_id not in rendered
 
 
 # =============================================================================================
@@ -262,7 +264,7 @@ async def test_governed_alternative_is_offered_before_continuation_and_needs_no_
     # Selected evidence offers an unperformed governed read: the current catalog is offered first.
     t2 = await _alarm_turn(conv, [RADIO.select(), _governed_ru()], RADIO)
     (choice,) = _events(t2, "action_choice")
-    assert choice["offered"] == [RADIO.action_id("st ru")] and choice["chosen"] == RADIO.action_id("st ru")
+    assert correlations(choice["offered"]) == correlations([RADIO.action_id("st ru")]) and choice["chosen"] == correlation(RADIO.action_id("st ru"))
     assert not _continuation_requests(t2["tae_requests"])
     assert "st ru" in _authorized(t2) and "st rru" not in t2["final"]
     assert t2["progression"].acquisition_gaps == [], "a governed method was found for the need: no gap"

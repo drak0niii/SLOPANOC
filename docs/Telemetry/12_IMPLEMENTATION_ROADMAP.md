@@ -251,11 +251,15 @@ Build sequentially. Do not jump to dashboards before telemetry contracts are sta
 - retention jobs;
 - sampling;
 - access audit if required;
-- deletion/anonymization interaction.
+- deletion/anonymization interaction;
+- ExceptionalTraceArchive policy, safe full OTLP envelope, pluggable bridge/local sink, protected reconstruction and independent archive health/completeness (doc 16).
 
 ### Exit
-- fake secrets cannot escape telemetry;
-- retention and sampling behavior proven.
+- fake secrets cannot escape telemetry, including exceptional archive;
+- retention and sampling behavior proven;
+- safe exceptional full-trace reconstruction, eligibility, idempotency, environment/capability denial and 90-day local retention evaluator proven; ordinary traces excluded;
+- Cloud Trace fixed 30-day retention and independent 90-day archive requirement truthful; M9 instrumentation completeness, Cloud Trace export and archive completeness separate;
+- M15 may be IMPLEMENTED AND LOCALLY VALIDATED using an isolated archive sink; live bridge/GCS/IAM/lifecycle/throughput/outage/retrieval validation is deferred to explicitly approved M16–M17 production-validation steps. No M15 local cloud mutation or production validation claim.
 
 ---
 
@@ -270,7 +274,8 @@ Build sequentially. Do not jump to dashboards before telemetry contracts are sta
 - cost-ledger failure;
 - SSE disconnect;
 - multi-instance/concurrency;
-- load/overhead measurement.
+- load/overhead measurement;
+- exceptional archive burst/backpressure/outage/queue saturation, partial trace/chunk loss, retry/idempotency, tail-sampling memory, Collector/bridge restart, malformed OTLP, simulated GCS latency/errors and reconstruction performance. Live checks require exact approval; isolated failure tests can run locally.
 
 ### Exit
 - observability still explains the system when dependencies fail;
@@ -286,7 +291,8 @@ Build sequentially. Do not jump to dashboards before telemetry contracts are sta
 - runbooks;
 - owners;
 - SRE and FinOps review cadence;
-- production release checklist.
+- production release checklist;
+- separately approved exceptional archive bridge deployment, dedicated environment-isolated GCS bucket/lifecycle, service identity, least-privilege writer/reader IAM, monitoring/alerting and retrieval runbook; live transport/lifecycle/retrieval validation. No activation by roadmap implication.
 
 ### Exit
 All applicable checks in `15_DEFINITION_OF_DONE.md` pass.

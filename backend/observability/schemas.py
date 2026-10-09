@@ -290,7 +290,8 @@ class ResourceMetadata(Contract):
     def resource_scope(cls, value):
         if not set(value).issubset(RESOURCE_ATTRIBUTES):
             raise ValueError('Per-run attributes cannot be resource attributes')
-        return value
+        from .resource_policy import project
+        return {Attribute(key):item for key,item in project({key.value:item for key,item in value.items()}).items()}
 
 class OperationalEvent(str, Enum):
     INITIALIZED = 'telemetry.initialized'

@@ -2,6 +2,7 @@
 from collections.abc import Mapping
 from typing import Literal
 from urllib.parse import urlsplit
+from .retention_registry import REGISTRY as RETENTION_POLICIES
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 SETTING_NAMES = (
@@ -33,6 +34,9 @@ SETTING_NAMES = (
     'QUEUE_WAIT_TIMEOUT_SECONDS',
     'RETRY_MINIMUM_SECONDS', 'WATCHDOG_CHECK_SECONDS', 'BLOCKING_WORKERS',
     'BLOCKING_PENDING', 'BUSINESS_QUEUE_CAPACITY', 'BUSINESS_QUEUE_BYTES',
+    'FINOPS_RECONCILIATION_ENABLED',
+    'FINOPS_UNIT_ECONOMICS_ENABLED',
+    'FINOPS_CONTROLS_ENABLED',
     'FINOPS_WRITE_SECONDS', 'FINOPS_WRITE_ATTEMPTS', 'FINOPS_WRITE_CONCURRENCY',
     'FINOPS_ADMISSION_WAIT_SECONDS', 'FINOPS_RECOVERY_BATCH', 'FINOPS_RECOVERY_SECONDS',
     'FINOPS_RECOVERY_ATTEMPTS', 'FINOPS_CHECKPOINT_SECONDS', 'FINOPS_SHUTDOWN_SECONDS',
@@ -63,14 +67,14 @@ class ObservabilityConfig(BaseModel):
     projection_terminal_attempts: int = Field(default=3, gt=0, le=5)
     projection_retry_seconds: float = Field(default=5, gt=0, le=30)
     projection_shutdown_seconds: float = Field(default=5, gt=0, le=30)
-    projection_terminal_hours: int = Field(default=24, gt=0, le=168)
-    projection_success_days: int = Field(default=30, gt=0, le=365)
-    projection_exceptional_days: int = Field(default=90, gt=0, le=365)
+    projection_terminal_hours: int = Field(default=RETENTION_POLICIES['active_terminal'].horizon, gt=0, le=168)
+    projection_success_days: int = Field(default=RETENTION_POLICIES['ordinary_summary'].horizon, gt=0, le=365)
+    projection_exceptional_days: int = Field(default=RETENTION_POLICIES['exceptional_summary'].horizon, gt=0, le=365)
     observability_enabled: bool = False
     otel_enabled: bool = False
     otel_exporter_otlp_endpoint: SecretStr | None = None
     otel_service_name: str = Field(default='slopanoc', pattern=r'^[a-zA-Z0-9_.-]{1,64}$')
-    otel_environment: str = Field(default='development', pattern=r'^[a-zA-Z0-9_.-]{1,64}$')
+    otel_environment: Literal['local','development','test','staging','production'] = 'development'
     otel_exporter_mode: Literal['otlp', 'local', 'none'] = 'otlp'
     otel_protocol: Literal['http/protobuf'] = 'http/protobuf'
     otel_export_timeout_seconds: float = Field(default=2, gt=0, le=30)
@@ -127,7 +131,10 @@ class ObservabilityConfig(BaseModel):
     finops_recovery_attempts: int = Field(default=5, ge=1, le=10)
     finops_checkpoint_seconds: float = Field(default=30, gt=0, le=60)
     finops_shutdown_seconds: float = Field(default=3, gt=0, le=5)
-    finops_retention_months: int = Field(default=24, ge=24, le=120)
+    finops_retention_months: int = Field(default=RETENTION_POLICIES['financial_history'].horizon, ge=24, le=120)
+    finops_reconciliation_enabled: bool = False
+    finops_unit_economics_enabled: bool = False
+    finops_controls_enabled: bool = False
     finops_billing_ingestion_enabled: bool = False
     finops_billing_delayed_seconds: int = Field(default=86400,ge=1,le=2592000)
     finops_billing_stale_seconds: int = Field(default=259200,ge=1,le=2592000)

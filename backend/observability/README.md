@@ -611,7 +611,7 @@ names and environment/operation/status/window labels only, no identifiers/exempl
 Detailed Billing is actual charge authority; Pricing Export is reference tariff
 truth; FOCUS is independent supplementary data. M10's attempts/quantities/immutable
 BASE records and M9 completeness formula are unchanged. M12 reconciliation and
-allocation remain absent. No per-turn catalog estimator is activated.
+allocation are provided by the derived M12 layer below. No per-turn catalog estimator is activated.
 
 `finops/bigquery_source.py` owns fixed parameterized queries against versioned
 normalized views in `infra/observability/bigquery`. No query executes in a chat/API
@@ -661,7 +661,7 @@ Three GETs: `/api/observability/finops/billing-health`, `/billing-summary`,
 `/pricing-status` under the same prefix. Summary basis usage/invoice, dates<=31days,
 page<=100, signed scope/generation cursor, query deadline2s. No raw query/row/mutation
 endpoint. Settings FinOps uses existing ReadState/query/layout patterns, independent
-source states and exact native-currency display. Reconciliation remains M12.
+source states and exact native-currency display. Reconciliation is described below.
 
 Migration d11b4a8c9e32 after c10a8f6e2d41 adds only three application-owned tables.
 Local migration/fixture/Collector/SQL/Terraform evidence does not validate shared
@@ -671,3 +671,145 @@ production downgrade is destructive. No exports, datasets, IAM, scheduler, share
 migration or deployment was performed. Any such action needs AGENTS.md exact-operation
 approval. Terraform billing module is an inert binding/SQL rendering contract,
 following the existing provider-free sidecar pattern, not deployed infrastructure.
+
+
+## M12 — reconciliation and classification (local implementation)
+
+M10 remains quantity authority, M11 Detailed Billing monetary authority, and M11
+Pricing Export reference evidence. The enabled-by-policy M12 worker consumes a
+successful M11 extraction after its source publication. It attests the full
+fingerprint, multiplicity and controls, then retains generation-linked aggregate
+inputs; it never persists raw billing rows or rewrites source records. Earlier M11
+manifests without detail report INPUT_DETAIL_UNAVAILABLE until a normal source
+refresh supplies a complete extraction. M12 never initiates BigQuery jobs.
+
+Reconciliation uses environment, UTC usage day and compatible provider/model/SKU/
+component/unit/region dimensions. Invoice months remain separate. M10 snapshots
+include BASE records, referenced adjustments in their original period, attempt
+states, debt and pending obligations in one read transaction. Late corrections
+create a new digest. Missing quantities are NULL with explicit unknown counts.
+
+Deployment-owned immutable effective-dated registries use exact hashed service,
+SKU and project identities, canonical model and quantity-field semantics. Overlap
+and nested token categories are rejected at load/write/execution. M10 has no project
+identity: dedicated workload attribution requires an explicit trusted scope
+attestation. Matching quantities supports AGGREGATED confidence; it never proves
+attempt-level EXACT lineage. Unsupported units are not converted.
+
+Each sign-preserving financial component is classified once as DIRECT, SHARED or
+UNALLOCATED. Shared pools retain verified membership, method/driver and ownership
+version; they are not apportioned to users or turns. Attached credits follow proven
+charge ownership; detached credits remain unallocated. Tax and rounding are
+unallocated in policy-v1. Exact per-currency signed-net, kind, absolute amount and
+count controls reject both double allocation and zero-net cancellation loss.
+Actual amounts use Decimal strings, never financial floats or catalog estimates.
+Native EUR reporting is supported; other currencies remain separate with EUR
+unavailable. Optional reference comparisons require proven matching account scope,
+DEFAULT consumption mode, unique full-day observations and a flat compatible tariff.
+Account-month tiers remain unavailable. Reference calculations use HALF_EVEN at
+38 decimal places; ratios/percentages use 12. All zero denominators return NULL.
+
+Four derived tables are added by e12c6d8a4b50 after d11b4a8c9e32: registry, frozen
+input, immutable generation and mutable publication state. CAS revision fencing,
+source-vector locks and deterministic revalidation protect atomic current-pointer
+publication. Failures preserve prior generations. Bounded daily scheduling revisits
+recent and retained periods; no invoice is treated as permanently settled.
+
+Three cache-only GETs under /api/observability/finops: /reconciliation,
+/reconciliation/{period}, /allocation. Verified FINANCIAL_DATA and environment
+permissions are required; Admin has no implicit access. Reads are capped at31days,
+31items and2seconds; quantity detail is capped100 with an explicit bounded-summary
+flag. Safe DTOs expose controls, separate quantity/price/mapping/accounting/allocation
+coverage, exact amounts, immutable generation versions and current source/debt
+quality. Raw source identifiers, SQL and content are excluded. Existing Settings
+FinOps shows backend state, amounts first, prominent unallocated exposure and
+read-only policy. M13/M14 cards remain unavailable. No React financial formulas.
+
+Reconciliation metrics have fixed instrument names and four bounded projection
+labels; identifiers and exemplars are rejected by SDK/encoder/Collector controls.
+Default enablement is false. Local provisional limits:100000source rows,
+10000aggregate buckets/components,128MiB serialized payload,60seconds/job,
+2partitions/cycle,7day overlap,731day retained revisit. No deletion job is enabled.
+
+SQLite fixtures and offline PostgreSQL DDL do not prove production PostgreSQL
+locking, real SKU/ownership mappings, source bindings or throughput. Shared migration,
+live billing/pricing reads, deployment, IAM and infrastructure mutations were not
+executed and require exact-operation approval under AGENTS.md. This is local M12
+validation; it does not authorize M13 work or production activation.
+
+## M13 — derived unit economics (local implementation)
+
+`SLOPANOC_FINOPS_UNIT_ECONOMICS_ENABLED` defaults false. Enabling the approved
+worker requires the additive `f13a7c9d2e61` schema after M12 `e12c6d8a4b50`;
+startup never creates tables. Deployment-owned `app.state.finops_unit_policy` and
+`app.state.finops_unit_drivers` are read-only policies, not Settings mutations.
+The default driver registry is empty and business population proof is false.
+A denominator by itself never authorizes a unit price.
+
+Twenty immutable `units-v1` definitions cover provider attempts, distinct logical
+model operations, accepted/availability-good/timely-terminal turns, four canonical
+request classes and eleven deferred outcome/agent/tool/retrieval units. Provider
+and model numbers are reconciled aggregate averages, not individual billed lineage.
+Turn pricing needs exact ownership attestations, compatible workload and day, and
+proven business-population coverage. Request-class counts cannot prorate all cost.
+System warmup, ingestion and background cost cannot enter user-turn prices.
+Outcome prices remain unavailable until authoritative M19/ITSM evidence exists.
+
+M13 reads M9/M10/M11/M12 without updating their sources, classification or ledger.
+M9 capture runs every sixty seconds independently of billing, yesterday before today,
+and persists safe daily counts before receipt expiry. Current-day/incomplete/gapped
+capture never creates a complete price; expired unsnapshotted history is unknown.
+Captured snapshots survive M9 pruning. M10 start time owns the usage day; differing
+observation-day evidence or a moved M12 runtime digest prevents exact pricing.
+Cross-midnight turn cohorts remain counted by acceptance but cannot price an
+unproven cross-day financial cohort. Safe M9 latency/availability context uses the
+same acceptance cohort; it is operational reliability, not M19 business quality.
+
+Signed Decimal components remain in their M12 DIRECT/SHARED/UNALLOCATED classes.
+Only explicitly compatible DIRECT components enter the numerator. Versioned approved
+SHARED drivers use exact ownership selectors and deterministic largest-remainder
+allocation at 38 fractional digits. Missing drivers leave visible undistributed
+SHARED amounts; UNALLOCATED never enters prices. Native currencies remain separate,
+without FX guesses. Direct and fully loaded prices are separate, and alternative
+unit/model views are non-additive. Zero and unknown denominators produce null prices.
+
+Frozen unit definitions, driver policies, denominator snapshots and analytical
+results have append-oriented generations and revision-fenced current pointers.
+Publication revalidates all calculations and locks/checks M12, the M11 source vector
+and M13 snapshot heads in one transaction. Stale workers cannot replace current
+results; failed publication preserves prior history. Corrections create generations.
+Historical revisits are bounded to 731 days and two partitions per cycle. Per-job
+limits are 100,000 source rows, 10,000 components/buckets, 100 models, 10,000 results,
+128 MiB serialized payload and sixty seconds. Oversize inputs fail, without truncation.
+
+Protected GET `/api/observability/finops/unit-economics` and `/{unit_id}` read cached
+safe aggregates only: financial capability plus environment checks, at most 31 days,
+signed scoped cursors and two-second deadlines. GET never calls source extraction or
+generation. Source movement/debt/error overlays current quality while retaining
+historical prices for audit. The existing Settings → Observability & FinOps panel
+shows counts, direct/fully loaded averages, coverage, freshness and prominently
+undistributed/unallocated exposure. M14 remains unavailable; no browser financial
+formula or runtime policy editor exists. Nine finite pipeline counters contain no
+financial amounts, generation/snapshot IDs or unrestricted labels/exemplars.
+
+Local SQLite migrations, publication/concurrency/replay and guarded test doubles
+validate the implementation. Cloud SQL migration, live PostgreSQL locking, approved
+production ownership/driver policies, production source coverage and deployment are
+not executed or runtime-validated. Any such operation needs specific user approval.
+
+### M14 financial controls (local implementation)
+
+`SLOPANOC_FINOPS_CONTROLS_ENABLED` defaults false. The off-path worker reads immutable
+M12/M13 generations; cache GETs never extract or calculate. Source-controlled
+`infra/observability/finops/budgets.json` starts empty (NOT_CONFIGURED);
+`control_policy.json` defines provisional thresholds/maturity/quality/caps.
+Budgets bind exact financial population/environment/native currency/month.
+Tier1: A+(A/k)*(D-k), k eligible completed days, not elapsed calendar days.
+Tier2 needs 56 prior eligible days, >=8/weekday and same-fold walk-forward quality
+known by issue. Tier3 unavailable. Scenario ranges are not confidence intervals.
+Missing/open/stale/partial days stay explicit. Later corrections preserve original
+forecast and separately version scoring truth. Financial capabilities/environment
+are server-enforced; all controls are read-only and never authorize business actions.
+M14 migration a14d2e6f8c70 follows f13a7c9d2e61. No startup DDL. No live deployment,
+channels or shared migration executed. Six disabled alert definitions/runbooks require
+exact-operation approval before any deployment. No M15 work is implemented here.

@@ -10,6 +10,8 @@ one-way legacy migration, the Alembic migration, and the absence of competing wr
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation
+
 import json
 import os
 import re
@@ -194,7 +196,7 @@ async def test_progression_pending_step_observations_and_hypotheses_survive_a_ne
     assert controller.pending_step().step_id == cell.step_id and controller.pending_context()["command"] == "st cell"
     hypothesis = progression.hypotheses[0]
     assert (hypothesis.state, hypothesis.transitions[-1].evidence_ids) == (HypothesisState.SUPPORTED, [ru.result.result_id])
-    assert repository.version == 5 and fresh.state[ACTIVE_THREAD_STATE_KEY]["fault_id"] == controller.fault_id
+    assert repository.version == 5 and correlation(fresh.state[ACTIVE_THREAD_STATE_KEY]["fault_id"]) == correlation(controller.fault_id)
 
 
 # ---- concurrency ------------------------------------------------------------------------------------------------
@@ -275,7 +277,7 @@ async def test_legacy_state_migrates_one_way_into_the_case_progression(cases) ->
     stored = (await store.load(case_id)).progression
     assert repository.imported == ["FAULT-LEGACY"] and [s.check_id for s in stored.steps] == ["chk-legacy"]
     assert any(e.event == "migrated_to_case" for e in stored.events)
-    assert state[PROGRESSION_REF_KEY]["case_id"] == case_id
+    assert correlation(state[PROGRESSION_REF_KEY]["case_id"]) == correlation(case_id)
 
     # Legacy state edited afterwards is never imported again: the projection is simply re-derived.
     extra = TroubleshootingState(fault_id="FAULT-STRAY", symptom_summary="stray").model_dump(mode="json")
@@ -332,10 +334,10 @@ async def test_two_chat_sessions_on_one_case_share_the_runtime_progression(isola
 
     t1 = await first.turn("Ericsson 5G: radio unit fault alarm on the node. What should I check?", propose_ru, "Run st ru.", {"subject_component": "radio unit"})
     assert t1["record"]["diagnostic_step"]["command"] == "st ru"
-    assert t1["state"].get(PROGRESSION_STATE_KEY) is None and t1["state"][PROGRESSION_REF_KEY]["case_id"] == case_id
+    assert t1["state"].get(PROGRESSION_STATE_KEY) is None and correlation(t1["state"][PROGRESSION_REF_KEY]["case_id"]) == correlation(case_id)
 
     t2 = await second.turn("what is next cmd?", propose_ru, "Run st ru.")
-    assert t2["tae_request"]["pending_step"]["procedure_action_id"] == _RU, "the second session resolves the SAME pending step"
+    assert correlation(t2["tae_request"]["pending_step"]["procedure_action_id"]) == correlation(_RU), "the second session resolves the SAME pending step"
     t3 = await second.turn("$ st ru\nRadioUnit=1 OPER=ENABLED", propose_ru, "Run st ru again.")
     assert [e for e in t3["trace"]["operational_events"] if e.get("stage") == "progression"][-1]["decision"] == "rejected_repeated_step"
 

@@ -21,6 +21,7 @@ PROHIBITED_FIELDS = frozenset({"password", "api_key", "access_token", "oauth_tok
     "teams_message_body", "attachment_contents", "knowledge_body", "chain_of_thought",
     "reasoning", "query_text", "command", "user_request_text", "diagnostic_objective",
     "title", "section_heading", "content", "error_message", "stack_trace"})
+MODEL_PATTERN = r'(?:gemini-(?:2[.]5|3)-(?:flash|pro)(?:-preview)?(?:-[0-9]{3}|-[0-9]{2}-[0-9]{2})?|text-embedding-005|other)'
 
 def classify_field(name: str) -> DataClassification:
     name = name.lower().replace("-", "_")
@@ -75,6 +76,8 @@ def safe_span_attributes(attributes):
     safe.update(project(attributes or {}))
     from .reliability_contract import project as reliability_project
     safe.update(reliability_project(attributes or {}))
+    from .archive import closure_attributes
+    safe.update(closure_attributes(attributes or {}))
     return safe
 
 
@@ -102,7 +105,7 @@ def safe_model_attributes(attributes):
             safe[key] = value
     for key in ('gen_ai.request.model','gen_ai.response.model','slopanoc.model_version'):
         value = attributes.get(key)
-        if isinstance(value,str) and (value == 'other' or re.fullmatch(r'(?:gemini-|text-embedding-|embedding-)[A-Za-z0-9_.-]{1,100}',value)):
+        if isinstance(value,str) and re.fullmatch(MODEL_PATTERN,value):
             safe[key] = value
     for key in ('slopanoc.logical_call_id','slopanoc.attempt_id'):
         value = attributes.get(key)

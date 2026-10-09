@@ -121,6 +121,10 @@ class RunState(Contract):
     retention_class: Literal['normal', 'exceptional'] = 'exceptional'
     timeline_truncated_count: Count = 0
     events: tuple[DiagnosticEvent, ...] = Field(default=(), max_length=128)
+    archive_trace_class: Literal['SAFETY','GOVERNED','FAILED','TIMEOUT','EVER_STALLED','HEALTHY','UNKNOWN'] = 'UNKNOWN'
+    archive_expected_spans: int = Field(default=0,ge=0,le=10000)
+    archive_population_digest: str | None = Field(default=None,pattern='^[0-9a-f]{64}$')
+    archive_population_closed: bool = False
 
     _tool = field_validator('current_tool')(DependencyState.known_tool.__func__)
 
@@ -223,6 +227,9 @@ class Publisher:
                     tool=p.current_tool, dependency=p.current_dependency, error_code=turn.error_code)
                 self.events, dropped = retain_events((*self.events, event))
                 self.truncated += dropped
+            from .runtime import resource_metadata
+            from .attributes import Attribute
+            metadata=resource_metadata(config).attributes
             self.coordinator.submit(RunState(run_id=p.run_id, producer_instance_id=self.coordinator.instance_id,
                 state_version=self.version, session_id=p.session_id if turn._session_verified else None, turn_id=p.turn_id,
                 turn_id_origin=p.turn_id_origin, trace_id=p.trace_id, root_span_id=p.span_id,
@@ -234,7 +241,8 @@ class Publisher:
                 work_deadline_at=work, total_deadline_at=total, stalled=p.stalled,
                 ever_stalled=self.ever_stalled, stalled_at=stalled_at, terminal_at=p.terminal_at,
                 error_code=turn.error_code, error_stage=turn.error_stage, cleanup_status=p.cleanup_outcome, delivery_status=p.delivery,
-                service_version=config.otel_service_version, git_sha=config.otel_git_sha,
-                release_id=config.otel_release_id, revision=config.otel_cloud_run_revision,
-                region=config.otel_region, config_version=self.coordinator.config_version,
-                retention_class='normal' if terminal and p.status == RunStatus.COMPLETED and turn._session_verified and not self.ever_stalled and not self.operational_seen else 'exceptional', timeline_truncated_count=self.truncated, events=self.events))
+                service_version=metadata.get(Attribute.SERVICE_VERSION), git_sha=metadata.get(Attribute.GIT_SHA),
+                release_id=metadata.get(Attribute.RELEASE_ID), revision=metadata.get(Attribute.CLOUD_RUN_REVISION),
+                region=metadata.get(Attribute.REGION), config_version=self.coordinator.config_version,
+                retention_class='normal' if terminal and p.status == RunStatus.COMPLETED and turn._session_verified and not self.ever_stalled and not self.operational_seen else 'exceptional', timeline_truncated_count=self.truncated, events=self.events,
+                **getattr(turn,'_archive_expectation',{})))

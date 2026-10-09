@@ -16,6 +16,8 @@ Invariant under test:
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlations, correlation
+
 import json
 from typing import Any, Optional
 
@@ -69,7 +71,7 @@ async def _turn1(conv: _Conversation) -> dict[str, Any]:
         tae_args=TM_TURN1_ARGS,
     )
     trace = _trace(t1)
-    assert len(trace["searches"]) == 1 and trace["searches"][0]["applicability_context"] == {}
+    assert "applicability_context" not in trace["searches"][0]  # M15: raw applicability values stay in governed business state.
     assert t1["records"][-1]["applicability_clarification"]["missing_dimensions"] == ["technology", "vendor"]
     assert t1["completed"]["knowledge_sources"][0]["applicability_outcome"] == "unknown"  # Candidate source
     assert not [c for c in trace["command_authority"] if c["decision"] == "authorized"]
@@ -113,22 +115,22 @@ async def test_live_sequence_resolved_clarification_resumes_governed_retrieval(c
 
     # Server-side resumption: ONE fresh governed search in this run under the confirmed context.
     (resumption,) = _events(t2, "retrieval_resumption")
-    assert resumption["status"] == "searched" and resumption["clarification_id"] == question.question_id
-    assert resumption["previous_selected_sources"] == [DOC.canonical]
-    assert [(a["section_id"], a["applicability_outcome"]) for a in resumption["available"] if a["section_id"] == DOC.section] == [(DOC.section, "match")]
+    assert resumption["status"] == "searched" and correlation(resumption["clarification_id"]) == correlation(question.question_id)
+    assert correlations(resumption["previous_selected_sources"]) == correlations([DOC.canonical])
+    assert [(a["section_id"], a["applicability_outcome"]) for a in resumption["available"] if correlation(a["section_id"]) == correlation(DOC.section)] == [(correlation(DOC.section), "match")]
     (search,) = trace["searches"]
-    assert {k: [v.casefold() for v in vals] for k, vals in search["applicability_context"].items()} == {"vendor": ["ericsson"], "technology": ["4g"]}
+    assert "applicability_context" not in search  # M15: raw applicability values stay in governed business state.
     # Fresh, explicit selection; recomputed applicability MATCH; contract reflects real runtime.
     assert trace["selections"][-1]["status"] == "accepted" and trace["selected"] == [
-        {"knowledge_id": DOC.kid, "version_label": DOC.ver, "section_id": DOC.section}
+        {"knowledge_id": correlation(DOC.kid), "version_label": correlation(DOC.ver), "section_id": correlation(DOC.section)}
     ]
     assert trace["technical_authority"]["selection_contract"]["governed_search_performed"] is True
     (outcome,) = _events(t2, "retrieval_resumption_outcome")
-    assert outcome["governed_search_performed"] is True and outcome["selected"] == [{"source_id": DOC.canonical, "applicability_outcome": "match"}]
+    assert outcome["governed_search_performed"] is True and outcome["selected"] == [{"source_id": correlation(DOC.canonical), "applicability_outcome": "match"}]
     # Normal authority chain, freshly in this run.
-    assert trace["action_catalogs"][-1]["actions"][0]["action_id"] == ALT_ID
+    assert correlation(trace["action_catalogs"][-1]["actions"][0]["action_id"]) == correlation(ALT_ID)
     assert trace["action_resolutions"][-1]["command_authority"] == "authorized"
-    assert any(c["decision"] == "authorized" and c["command"] == "alt" and c["source_id"] == DOC.canonical for c in trace["command_authority"])
+    assert any(c["decision"] == "authorized" and "command" not in c and correlation(c["source_id"]) == correlation(DOC.canonical) for c in trace["command_authority"])
     record = t2["records"][-1]
     assert [(c["command"], c["source_id"]) for c in record["approved_commands_catalog"]] == [("alt", DOC.canonical)]
     assert record["diagnostic_step"]["command"] == "alt" and record["diagnostic_step"]["command_source"] == DOC.canonical
@@ -181,7 +183,7 @@ async def test_b_resolved_but_nothing_applicable_still_fails_closed_on_fresh_sta
     )
     (resumption,) = _events(t2, "retrieval_resumption")
     assert resumption["status"] == "searched"
-    assert all(a["applicability_outcome"] != "match" for a in resumption["available"] if a["section_id"] == DOC.section)
+    assert all(a["applicability_outcome"] != "match" for a in resumption["available"] if correlation(a["section_id"]) == correlation(DOC.section))
     contract = _trace(t2)["technical_authority"]["selection_contract"]
     assert contract["governed_search_performed"] is True and contract["explicit_negative_selection"] is True
     record = t2["records"][-1]

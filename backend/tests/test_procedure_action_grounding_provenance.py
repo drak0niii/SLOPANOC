@@ -178,7 +178,7 @@ async def test_tae_legacy_free_form_read_command_is_rejected_while_resolver_path
     t1 = await conv.turn("unit 4 looks down, what should I check?", [_search("unit state check"), _select(_KID, _SEC), legacy], "Run hget Unit=9.",
                          {"subject_component": "unit"})
     assert t1["record"]["diagnostic_step"]["command"] is None
-    assert any(c["command"] == "hget Unit=9" and c["decision"] == "rejected" and c["stage"] == "grounding" for c in t1["trace"]["command_authority"])
+    assert any("command" not in c and c["decision"] == "rejected" and c["stage"] == "grounding" for c in t1["trace"]["command_authority"])
     assert "hget Unit=9" not in t1["final"]
 
     read_id = next(a.action_id for a in pa.actions_for_evidence(_ev(), _ev().metadata)[0] if a.command_template == _READ)

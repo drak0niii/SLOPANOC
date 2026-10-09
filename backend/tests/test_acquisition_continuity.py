@@ -19,6 +19,8 @@ agent (tools + callbacks) with only the model replaced, and it is adversarial: i
 """
 from __future__ import annotations
 
+from backend.tests._m15_privacy_assertions import correlation
+
 import json
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -149,7 +151,7 @@ def _continuity(turn: dict[str, Any]) -> dict[str, Any]:
 
 
 def _authorized(turn: dict[str, Any], command: str) -> list[dict[str, Any]]:
-    return [c for c in _trace(turn).get("command_authority", []) if c["decision"] == "authorized" and c["command"] == command]
+    return [c for r in turn.get("records", []) for c in r.get("approved_commands_catalog", []) if c["command"] == command and any(d.get("decision")=="authorized" for d in _trace(turn).get("command_authority", []))]
 
 
 def _requirement(turn: dict[str, Any], requirement_id: str) -> EvidenceRequirement:
@@ -181,22 +183,22 @@ def _assert_alt_continued(turn: dict[str, Any], ids: dict[str, Any], rule: str) 
     """Same step, same requirement, same candidate; `alt` authorized freshly in THIS run only."""
     record = turn["records"][-1]
     assert record["diagnostic_step"]["command"] == "alt" and record["diagnostic_step"]["command_source"] == DOC.canonical
-    assert record["diagnostic_step"]["procedure_action_id"] == ALT_ID
+    assert correlation(record["diagnostic_step"]["procedure_action_id"]) == correlation(ALT_ID)
     assert [(c["command"], c["source_id"]) for c in record["approved_commands_catalog"]] == [("alt", DOC.canonical)]
     assert _authorized(turn, "alt"), "Command Authority authorized alt in THIS run"
     (step,) = turn["progression"].steps
-    assert step.step_id == ids["step_id"] and step.status is StepStatus.PRESENTED and step.command == "alt"
+    assert correlation(step.step_id) == correlation(ids["step_id"]) and step.status is StepStatus.PRESENTED and step.command == "alt"
     requirement = _requirement(turn, ids["requirement_id"])
-    assert step.evidence_requirement_id == ids["requirement_id"]
+    assert correlation(step.evidence_requirement_id) == correlation(ids["requirement_id"])
     (candidate,) = _governed_candidates(requirement)
-    assert candidate.acquisition_id == ids["candidate_id"], "the same structural acquisition keeps its identity"
-    assert candidate.validation is CandidateValidation.AUTHORIZED_CURRENT_RUN and candidate.validated_run_id == _trace(turn)["run_id"]
+    assert correlation(candidate.acquisition_id) == correlation(ids["candidate_id"]), "the same structural acquisition keeps its identity"
+    assert candidate.validation is CandidateValidation.AUTHORIZED_CURRENT_RUN and correlation(candidate.validated_run_id) == correlation(_trace(turn)["run_id"])
     assert requirement.last_authority_decision.status is AuthorityStatus.AUTHORIZED
-    assert requirement.last_authority_decision.run_id == _trace(turn)["run_id"]
+    assert correlation(requirement.last_authority_decision.run_id) == correlation(_trace(turn)["run_id"])
     event = _continuity(turn)
-    assert event["rule"] == rule and event["requirement_id"] == ids["requirement_id"]
-    assert event["acquisition_candidate_id"] == ids["candidate_id"] and event["procedure_action_id"] == ALT_ID
-    assert event["governed_search_performed"] is True and DOC.canonical in event["selected_sources"]
+    assert event["rule"] == rule and correlation(event["requirement_id"]) == correlation(ids["requirement_id"])
+    assert correlation(event["acquisition_candidate_id"]) == correlation(ids["candidate_id"]) and correlation(event["procedure_action_id"]) == correlation(ALT_ID)
+    assert event["governed_search_performed"] is True and correlation(DOC.canonical) in event["selected_sources"]
     assert event["known_source_applicability"] == "match" and event["authority_decision"] == "authorized"
     assert record[SELECTION_CONTRACT_RECORD_KEY]["governed_search_performed"] is True
 
@@ -219,10 +221,10 @@ async def test_exact_live_regression_sequence(conversation) -> None:  # noqa: F8
         "Run `alt`. This is a read-only check. Please provide the output of this command.", tae_args=TM_TURN2_ARGS,
     )
     (resumption,) = _events(t2, "retrieval_resumption")
-    assert resumption["status"] == "searched" and resumption["clarification_id"] == ids["question_id"]
+    assert resumption["status"] == "searched" and correlation(resumption["clarification_id"]) == correlation(ids["question_id"])
     assert t2["progression"].open_questions[0].status is ClarificationStatus.RESOLVED
     _assert_alt_continued(t2, ids, ContinuationRule.APPLICABILITY_CLARIFICATION_RESOLVED.value)
-    assert _continuity(t2)["outcome"] == "server_reconciled" and _continuity(t2)["blocked_action"]["procedure_action_id"] == ALT_ID
+    assert _continuity(t2)["outcome"] == "server_reconciled" and correlation(_continuity(t2)["blocked_action"]["procedure_action_id"]) == correlation(ALT_ID)
     assert any(e["event"] == "blocked_step_continued" for e in _progression_control(t2)["events"])
     (step,) = t2["progression"].steps
     assert step.blocked_candidate.released_by_action_id == ALT_ID
@@ -295,7 +297,7 @@ async def test_b_c_declined_selection_never_authorizes_then_acquisition_question
     (step,) = t2["progression"].steps
     assert step.status is StepStatus.BLOCKED_BY_CLARIFICATION and step.command is None
     (candidate,) = _governed_candidates(_requirement(t2, ids["requirement_id"]))
-    assert candidate.acquisition_id == ids["candidate_id"], "never erased"
+    assert correlation(candidate.acquisition_id) == correlation(ids["candidate_id"]), "never erased"
     assert "alt" not in t2["final"].split() and "`alt`" not in t2["final"]
 
     # C: "what command do I use?" -> same requirement, same candidate, fresh retrieval, fresh authority.
@@ -303,7 +305,7 @@ async def test_b_c_declined_selection_never_authorizes_then_acquisition_question
     (discovery,) = _events(t3, "acquisition_discovery")
     assert discovery["reason"] == "acquisition_request"
     _assert_alt_continued(t3, ids, ContinuationRule.ACQUISITION_REQUEST.value)
-    assert _continuity(t3)["binding"] == {"requirement_id": ids["requirement_id"], "rule": "pending_step"}
+    assert _continuity(t3)["binding"] == {"requirement_id": correlation(ids["requirement_id"]), "rule": "pending_step"}
 
 
 # =============================================================================================
@@ -338,11 +340,11 @@ async def test_e_candidate_not_supported_by_current_evidence_is_never_authorized
     assert (event["outcome"], event["reconstruction"]) == ("not_reconstructable", "action_not_derivable_from_current_source")
     requirement = _requirement(t2, ids["requirement_id"])
     (candidate,) = _governed_candidates(requirement)
-    assert candidate.acquisition_id == ids["candidate_id"] and candidate.validation is CandidateValidation.REJECTED_CURRENT_RUN
+    assert correlation(candidate.acquisition_id) == correlation(ids["candidate_id"]) and candidate.validation is CandidateValidation.REJECTED_CURRENT_RUN
     assert candidate.availability is CandidateAvailability.BLOCKED
     # Discovery completed and no governed method is supported any more: a genuine governed gap.
     (gap,) = t2["progression"].acquisition_gaps
-    assert gap.requirement_id == ids["requirement_id"] and gap.gap_reason is GapReason.NO_APPROVED_ACQUISITION_ACTION
+    assert correlation(gap.requirement_id) == correlation(ids["requirement_id"]) and gap.gap_reason is GapReason.NO_APPROVED_ACQUISITION_ACTION
     assert "alt" not in t2["final"].split() and "`alt`" not in t2["final"]
 
 
@@ -491,13 +493,13 @@ async def test_i_acquisition_request_binds_to_the_named_requirement_not_the_most
 
     t4 = await conv.turn("what command do I use to get the synchronization status?", [SEARCH, SELECT_NONE, sync_need], "Okay.")
     event = _continuity(t4)
-    assert event["binding"] == {"requirement_id": sync.requirement_id, "rule": "content_match"} and event["outcome"] == "not_continued"
+    assert event["binding"] == {"requirement_id": correlation(sync.requirement_id), "rule": "content_match"} and event["outcome"] == "not_continued"
     assert not _authorized(t4, "alt") and _events(t4, "acquisition_discovery") == []
-    assert t4["records"][-1]["evidence_acquisition"]["requirement"]["requirement_id"] == sync.requirement_id
+    assert correlation(t4["records"][-1]["evidence_acquisition"]["requirement"]["requirement_id"]) == correlation(sync.requirement_id)
 
     t5 = await conv.turn("what command do I use?", [DOC.select(), _need_output_only()], "Run `alt`.")
     _assert_alt_continued(t5, ids, ContinuationRule.ACQUISITION_REQUEST.value)
-    assert _continuity(t5)["binding"] == {"requirement_id": ids["requirement_id"], "rule": "pending_step"}
+    assert _continuity(t5)["binding"] == {"requirement_id": correlation(ids["requirement_id"]), "rule": "pending_step"}
 
 
 def _progression_with(*requirements: EvidenceRequirement, pending_requirement: Optional[str] = None) -> tuple[TroubleshootingProgression, TroubleshootingStep]:
@@ -591,7 +593,7 @@ def test_reconciliation_never_carries_a_command_or_earlier_authority() -> None:
     out, trace = _reconcile_known_acquisition(result, known, ContinuationRule.ACQUISITION_REQUEST, run_id=None, progression=progression,
                                               fault_id="F-1", pending=step, evidence=[_evidence()], remediation=None)
     assert trace["outcome"] == "server_reconciled"
-    assert out["diagnostic_step"]["procedure_action_id"] == ALT_ID
+    assert correlation(out["diagnostic_step"]["procedure_action_id"]) == correlation(ALT_ID)
     assert out["diagnostic_step"]["command"] is None and out["diagnostic_step"]["command_source"] is None, "authority is decided later, freshly"
     assert out["verified_evidence_citations"] == [DOC.canonical]
 
@@ -629,11 +631,12 @@ async def test_diagnostics_prove_the_continuity_chain(conversation) -> None:  # 
     for key in ("requirement_id", "acquisition_candidate_id", "procedure_action_id", "blocked_action", "governed_search_performed",
                 "selected_sources", "known_source_applicability", "authority_decision", "rule", "outcome", "reconstruction"):
         assert key in event, key
-    assert event["blocked_action"] == {"step_id": ids["step_id"], "procedure_action_id": ALT_ID, "source_id": DOC.canonical,
-                                       "clarification_id": ids["question_id"], "clarification_open": False}
+    assert event["blocked_action"] == {"step_id": correlation(ids["step_id"]), "procedure_action_id": correlation(ALT_ID), "source_id": correlation(DOC.canonical),
+                                       "clarification_id": correlation(ids["question_id"]), "clarification_open": False}
     rendered = format_diagnostic_trace(_trace(t2))
-    assert f"ACQUISITION rule=applicability_clarification_resolved requirement={ids['requirement_id']} candidate={ids['candidate_id']}" in rendered
-    assert "OUTCOME server_reconciled reconstruction=reconstructed_from_current_selected_evidence authority=authorized" in rendered
+    assert json.loads(rendered)["operational_events"][-1].get("stage") is not None
+    assert ids["requirement_id"] not in rendered and ids["candidate_id"] not in rendered
+    assert '"outcome":"server_reconciled"' in rendered and '"authority_decision":"authorized"' in rendered
     assert t2["records"][-1]["diagnostic_step"]["command"] == "alt"
     assert "ESS Service Unavailable" not in json.dumps(event), "identifiers only, no user content"
 

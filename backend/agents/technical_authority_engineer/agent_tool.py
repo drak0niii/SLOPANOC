@@ -315,7 +315,7 @@ def build_server_validated_evidence(
             tuples_by_display.setdefault(f"{ident[0]}:{ident[1]}:{ident[2]}", set()).add(ident)
         ambiguous = {display for display, tuples in tuples_by_display.items() if len(tuples) > 1}
         for display in sorted(ambiguous):
-            logger.warning("Withholding selected governed evidence: display id %r is shared by %d distinct identities", display, len(tuples_by_display[display]))
+            logger.warning("telemetry.evidence_identity_conflict")
             try:
                 from backend.tools.knowledge.diagnostic_trace import record_operational_event
 
@@ -373,7 +373,7 @@ def build_server_validated_evidence(
                 )
             )
         else:
-            logger.warning("Rejecting ungrounded caller evidence item: %r", c_src)
+            logger.warning("telemetry.caller_evidence_rejected")
 
     return evidence_items
 
@@ -607,7 +607,7 @@ def authorize_grounded_command(
     # eligible, even when that exact composed string is present in approved, selected evidence.
     violation = single_invocation_violation(grounded.command)
     if violation:
-        logger.warning("Rejecting command authorization: %r is not a single command invocation (%s)", grounded.command, violation)
+        logger.warning("telemetry.command_single_invocation_rejected")
         record_command_authority(
             command=grounded.command, source_id=grounded.source_id, decision="rejected",
             reason=f"not a single command invocation: {violation}", stage="authorization",
@@ -616,7 +616,7 @@ def authorize_grounded_command(
 
     op_type = classify_command_operation(grounded.command)
     if op_type == CommandOperationType.UNKNOWN:
-        logger.warning("Rejecting command authorization: unknown operation type for %r", grounded.command)
+        logger.warning("telemetry.command_operation_unknown")
         record_command_authority(
             command=grounded.command, source_id=grounded.source_id, decision="rejected",
             reason="unknown operation type", stage="authorization",
@@ -625,7 +625,7 @@ def authorize_grounded_command(
 
     clean_cmd = re.sub(r"\*\*|`", "", grounded.command).strip()
     if _PLACEHOLDER_REGEX.findall(clean_cmd):
-        logger.warning("Rejecting command authorization: unresolved placeholders in %r", grounded.command)
+        logger.warning("telemetry.command_placeholder_rejected")
         record_command_authority(
             command=grounded.command, source_id=grounded.source_id, decision="rejected",
             reason="unresolved placeholders", stage="authorization",
@@ -639,17 +639,14 @@ def authorize_grounded_command(
             clean_cmd, trusted_context.get("target_validation") if isinstance(trusted_context, dict) else None
         )
         if target_problem:
-            logger.warning("Rejecting command authorization: state change %r has no validated current-case target (%s)", grounded.command, target_problem)
+            logger.warning("telemetry.command_target_rejected")
             record_command_authority(
                 command=grounded.command, source_id=grounded.source_id, decision="rejected",
                 reason=f"{getattr(op_type, 'value', op_type)} requires a validated current-case target: {target_problem}", stage="authorization",
             )
             return None
         if not is_target_confirmed:
-            logger.warning(
-                "Rejecting command authorization: mutating/config command %r requires trusted target confirmation",
-                grounded.command,
-            )
+            logger.warning("telemetry.command_confirmation_required")
             record_command_authority(
                 command=grounded.command, source_id=grounded.source_id, decision="rejected",
                 reason=f"{getattr(op_type, 'value', op_type)} requires trusted target confirmation", stage="authorization",
@@ -712,24 +709,24 @@ def build_server_validated_commands(
                 l_status = str(meta.get("lifecycle_status", "")).lower()
                 app_outcome = str(meta.get("applicability_outcome", "")).lower()
                 if l_status != "approved":
-                    logger.warning("Rejecting command source %r: lifecycle_status=%r != approved", src_id, l_status)
+                    logger.warning("command_source_rejected_lifecycle")
                     record_command_authority(
                         command="", source_id=src_id, decision="rejected",
-                        reason=f"source lifecycle_status={l_status!r} != approved", stage="source",
+                        reason="source_lifecycle_not_approved", stage="source",
                     )
                     continue
                 if app_outcome != "match":
-                    logger.warning("Rejecting command source %r: applicability_outcome=%r != match", src_id, app_outcome)
+                    logger.warning("command_source_rejected_applicability")
                     record_command_authority(
                         command="", source_id=src_id, decision="rejected",
-                        reason=f"source applicability_outcome={app_outcome!r} != match", stage="source",
+                        reason="source_applicability_not_match", stage="source",
                     )
                     continue
                 if not is_action_source(meta):
                     # Diagnostic knowledge (RCA / KB / ...) informs reasoning; it is never an action source.
                     record_command_authority(
                         command="", source_id=src_id, decision="rejected",
-                        reason=f"source document_type={governed_document_type(meta)!r} is diagnostic knowledge, not an approved action source",
+                        reason="source_not_action_authority",
                         stage="source",
                     )
                     continue
@@ -750,20 +747,16 @@ def build_server_validated_commands(
             authorized_sources=authorized_sources,
         )
         if not grounded:
-            logger.warning(
-                "Rejecting ungrounded candidate command: %r (not found in matching evidence %r)",
-                raw_cmd,
-                raw_src,
-            )
+            logger.warning("command_candidate_rejected_ungrounded")
             canonical = resolve_canonical_source_id(raw_src, evidence_references) or raw_src
             record_command_authority(
                 command=raw_cmd,
                 source_id=raw_src,
                 decision="rejected",
                 reason=(
-                    "command text/template not found (or prohibited) in the cited selected section"
+                    "command_not_grounded"
                     if canonical in authorized_sources
-                    else "cited source is not selected, approved, applicability-MATCH governed evidence"
+                    else "source_not_current_authority"
                 ),
                 stage="grounding",
             )
@@ -775,10 +768,7 @@ def build_server_validated_commands(
             trusted_context=trusted_context,
         )
         if not authorized:
-            logger.warning(
-                "Rejecting unauthorized grounded command: %r (failed operational safety contract)",
-                raw_cmd,
-            )
+            logger.warning("telemetry.command_safety_rejected")
             continue
 
         record_command_authority(
