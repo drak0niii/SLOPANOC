@@ -40,8 +40,10 @@ class StoredProgression:
 
 
 class CaseProgressionStore:
-    def __init__(self, database: Optional[CaseDatabase] = None) -> None:
+    def __init__(self, database: Optional[CaseDatabase] = None, *, audit_capture=None, audit_environment=None) -> None:
         self._db = database or get_case_database()
+        self.audit_capture = audit_capture
+        self.audit_environment = audit_environment
 
     async def linked_case_id(self, session_id: Optional[str]) -> Optional[str]:
         """The Case this session is linked to, from the authoritative link table (or None)."""
@@ -68,6 +70,8 @@ class CaseProgressionStore:
         now = datetime.now(timezone.utc)
         document = progression.model_dump(mode="json")
         async with self._db.session() as session:
+            previous=await session.get(CaseTroubleshootingProgressionRecord,case_id) if expected_version is not None and self.audit_capture is not None else None
+            previous_selection=self._selection(previous.progression) if previous else ()
             if expected_version is None:
                 session.add(
                     CaseTroubleshootingProgressionRecord(
@@ -76,6 +80,8 @@ class CaseProgressionStore:
                     )
                 )
                 try:
+                    await session.flush()
+                    await self._audit(session,case_id,1,now,session_id,document,previous_selection)
                     await session.commit()
                 except IntegrityError:
                     await session.rollback()
@@ -93,8 +99,36 @@ class CaseProgressionStore:
                 await session.rollback()
                 current = await session.get(CaseTroubleshootingProgressionRecord, case_id)
                 raise ProgressionConflict(case_id, expected_version, current.version if current else None)
+            await self._audit(session,case_id,expected_version+1,now,session_id,document,previous_selection)
             await session.commit()
             return expected_version + 1
+
+
+    @staticmethod
+    def _selection(document):
+        if not isinstance(document,dict):return ()
+        return tuple(sorted((step.get('step_id'),e.get('knowledge_id'),e.get('version_label'),e.get('section_id'))
+            for step in document.get('steps',[]) for e in step.get('selected_evidence',[])))
+
+    async def _audit(self,session,case_id,version,at,session_id,document=None,previous_selection=()):
+        if self.audit_capture is None:return
+        from backend.observability.hybrid.capture import make_event
+        await self.audit_capture.append(session,make_event('governance.progression.recorded',
+            self.audit_environment,'governance',case_id,version,at,source_version=version,
+            session_id=session_id))
+        selected=self._selection(document)
+        from backend.execution_audit.runtime import current
+        if selected!=previous_selection and current() is not None:
+            from backend.execution_audit.journal import event
+            # Revision is the exact provenance locator; arbitrary legacy source IDs
+            # stay in the authoritative Case record, never copied as unbounded text.
+            from backend.execution_audit.runtime import references
+            refs=references()
+            if session_id is not None:refs['session_id']=session_id
+            await self.audit_capture.append(session,event('evidence.selection.recorded',
+                self.audit_environment,case_id,version,at=at,consistency_class='A',outcome='RECORDED',
+                provenance_reference=case_id,source_revision=str(version),**refs,
+                selected_count=len(selected)))
 
 
 @lru_cache(maxsize=1)

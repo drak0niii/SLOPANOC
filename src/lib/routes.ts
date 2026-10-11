@@ -12,3 +12,5 @@ export const APP_ROUTE = "/app";
  * mount and cleared immediately after, so it never lingers as state.
  */
 export const DRAFT_HANDOFF_KEY = "landing-draft-handoff";
+
+export const OBSERVABILITY_ROUTE = "/resources/observability";

@@ -1,4 +1,5 @@
-import { ApiError, getJson } from './client';
+import { getObservabilityJson } from './observabilityClient';
+import { ApiError } from './client';
 import { ContractError } from '../components/shell/settings/observability/contract';
 const datasets = ['active_terminal', 'ordinary_summary', 'exceptional_summary', 'application_logs', 'cloud_trace', 'exceptional_archive', 'analytical_metrics', 'financial_history', 'slo_receipts', 'slo_working_buckets'] as const;
 const capabilities = ['own_progress', 'operational_metadata', 'technical_diagnostics', 'financial_data', 'effective_configuration', 'governed_summaries'] as const;
@@ -34,7 +35,7 @@ export function decodeAccess(value: unknown) {
     return { capabilities: list(a.capabilities, 6).map(v => choice(v, capabilities)), environments: list(a.environments, 5).map(v => choice(v, environments)) };
 }
 async function read<T>(path: string, decode: (v: unknown) => T, signal?: AbortSignal) {
-    try { return decode(await getJson<unknown>('/api/observability/' + path, signal)); }
+    try { return decode(await getObservabilityJson<unknown>('/api/observability/' + path, signal)); }
     catch (error) { if (error instanceof ApiError) throw new ApiError('Diagnostic request unavailable.', error.status); throw error; }
 }
 export const getPolicies = (signal?: AbortSignal) => read('policies', decodePolicies, signal);

@@ -1,0 +1,6301 @@
+{
+  "model_table_count": 31,
+  "migration_table_count": 31,
+  "tables": {
+    "ai_usage_ledger": {
+      "model": {
+        "columns": {
+          "event_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "attempt_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "payload_hash": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "record_kind": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "original_event_id": {
+            "type": "VARCHAR(36)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "correction_reason": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "correction_process": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "metadata_safe": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "observed_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "created_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "input_tokens": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "output_tokens": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "candidate_tokens": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "cached_tokens": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "total_tokens": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "thought_tokens": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "tool_input_tokens": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "billable_characters": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind IN ('BASE','ADJUSTMENT')"
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment",
+              "attempt_id"
+            ],
+            "references": [
+              "finops_runtime_attempt.environment",
+              "finops_runtime_attempt.attempt_id"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "(record_kind = 'BASE' AND original_event_id IS NULL) OR (record_kind = 'ADJUSTMENT' AND original_event_id IS NOT NULL)"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR thought_tokens IS NULL OR thought_tokens >= 0"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "event_id"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR input_tokens IS NULL OR input_tokens >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR total_tokens IS NULL OR total_tokens >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR billable_characters IS NULL OR billable_characters >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "environment IN ('local','development','staging','production')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR output_tokens IS NULL OR output_tokens >= 0"
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "original_event_id"
+            ],
+            "references": [
+              "ai_usage_ledger.event_id"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR candidate_tokens IS NULL OR candidate_tokens >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR tool_input_tokens IS NULL OR tool_input_tokens >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR cached_tokens IS NULL OR cached_tokens >= 0"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_finops_ledger_time",
+            "columns": [
+              "environment",
+              "observed_at",
+              "event_id"
+            ],
+            "unique": false
+          },
+          {
+            "name": "ux_finops_base_attempt",
+            "columns": [
+              "environment",
+              "attempt_id"
+            ],
+            "unique": true
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "event_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "attempt_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "payload_hash": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "record_kind": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "original_event_id": {
+            "type": "VARCHAR(36)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "correction_reason": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "correction_process": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "metadata_safe": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "observed_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "created_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "input_tokens": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "output_tokens": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "candidate_tokens": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "cached_tokens": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "total_tokens": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "thought_tokens": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "tool_input_tokens": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "billable_characters": {
+            "type": "BIGINT",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR tool_input_tokens IS NULL OR tool_input_tokens >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR output_tokens IS NULL OR output_tokens >= 0"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "event_id"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR thought_tokens IS NULL OR thought_tokens >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "environment IN ('local','development','staging','production')"
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "original_event_id"
+            ],
+            "references": [
+              "ai_usage_ledger.event_id"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind IN ('BASE','ADJUSTMENT')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR candidate_tokens IS NULL OR candidate_tokens >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR cached_tokens IS NULL OR cached_tokens >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR total_tokens IS NULL OR total_tokens >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR billable_characters IS NULL OR billable_characters >= 0"
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment",
+              "attempt_id"
+            ],
+            "references": [
+              "finops_runtime_attempt.environment",
+              "finops_runtime_attempt.attempt_id"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "(record_kind = 'BASE' AND original_event_id IS NULL) OR (record_kind = 'ADJUSTMENT' AND original_event_id IS NOT NULL)"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "record_kind = 'ADJUSTMENT' OR input_tokens IS NULL OR input_tokens >= 0"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_finops_ledger_time",
+            "columns": [
+              "environment",
+              "observed_at",
+              "event_id"
+            ],
+            "unique": false,
+            "keywords": {
+              "unique": "False"
+            }
+          },
+          {
+            "name": "ux_finops_base_attempt",
+            "columns": [
+              "environment",
+              "attempt_id"
+            ],
+            "unique": true,
+            "keywords": {
+              "unique": "True",
+              "postgresql_where": "sa.text(\"record_kind = 'BASE'\")",
+              "sqlite_where": "sa.text(\"record_kind = 'BASE'\")"
+            }
+          }
+        ]
+      },
+      "milestone": "M10",
+      "revision": "c10a8f6e2d41",
+      "purpose": "Append-oriented usage/correction ledger",
+      "dependencies": [
+        "ai_usage_ledger",
+        "finops_runtime_attempt"
+      ],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_accounting_source": {
+      "model": {
+        "columns": {
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "coverage_start": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "updated_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "last_observation": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_persistence": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "admission_failures": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "migration": {
+        "columns": {
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "coverage_start": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "updated_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "last_observation": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_persistence": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "admission_failures": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "milestone": "M10",
+      "revision": "c10a8f6e2d41",
+      "purpose": "Coverage, debt and source freshness",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_anomaly_transition": {
+      "model": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "anomaly": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "generation": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "previous": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "state": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "state IN ('OBSERVED','ACTIVE','RESOLVED')"
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ],
+            "references": [
+              "finops_control_generation.identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_control_anomaly_history",
+            "columns": [
+              "anomaly",
+              "at"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "anomaly": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "generation": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "previous": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "state": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "state IN ('OBSERVED','ACTIVE','RESOLVED')"
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ],
+            "references": [
+              "finops_control_generation.identity"
+            ]
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_control_anomaly_history",
+            "columns": [
+              "anomaly",
+              "at"
+            ],
+            "unique": false,
+            "keywords": {
+              "unique": "False"
+            }
+          }
+        ]
+      },
+      "milestone": "M14",
+      "revision": "a14d2e6f8c70",
+      "purpose": "Append-oriented anomaly transition history",
+      "dependencies": [
+        "finops_control_generation"
+      ],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_billing_ingest_state": {
+      "model": {
+        "columns": {
+          "key": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "source": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "partition": {
+            "type": "VARCHAR(10)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "mode": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "revision": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "generation": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_success": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_attempt": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "error": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "key"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "environment IN ('local','development','staging','production')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "revision >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "mode IN ('TEST_FIXTURE','BIGQUERY')"
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ],
+            "references": [
+              "finops_billing_publication.generation"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "source IN ('DETAILED_BILLING','PRICING_EXPORT','FOCUS')"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_billing_state_scope",
+            "columns": [
+              "environment",
+              "source",
+              "scope",
+              "partition"
+            ],
+            "unique": true
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "key": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "source": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "partition": {
+            "type": "VARCHAR(10)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "mode": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "revision": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "generation": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_success": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_attempt": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "error": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "mode IN ('TEST_FIXTURE','BIGQUERY')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "source IN ('DETAILED_BILLING','PRICING_EXPORT','FOCUS')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "revision >= 0"
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ],
+            "references": [
+              "finops_billing_publication.generation"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "environment IN ('local','development','staging','production')"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "key"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_billing_state_scope",
+            "columns": [
+              "environment",
+              "source",
+              "scope",
+              "partition"
+            ],
+            "unique": true,
+            "keywords": {
+              "unique": "True"
+            }
+          }
+        ]
+      },
+      "milestone": "M11",
+      "revision": "d11b4a8c9e32",
+      "purpose": "Environment/source partition publication pointer",
+      "dependencies": [
+        "finops_billing_publication"
+      ],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_billing_projection_cache": {
+      "model": {
+        "columns": {
+          "generation": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "summaries": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "prices": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ],
+            "references": [
+              "finops_billing_publication.generation"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "migration": {
+        "columns": {
+          "generation": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "summaries": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "prices": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ],
+            "references": [
+              "finops_billing_publication.generation"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "milestone": "M11",
+      "revision": "d11b4a8c9e32",
+      "purpose": "Published normalized billing/pricing projections",
+      "dependencies": [
+        "finops_billing_publication"
+      ],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_billing_publication": {
+      "model": {
+        "columns": {
+          "generation": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "state_key": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "fingerprint": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "schema_version": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "mapping_version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "window_start": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "window_end": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "extracted_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "export_time": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "price_from": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "price_to": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "row_count": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "late_rows": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "correction_rows": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "unmapped_rows": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "evidence_rows": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "controls": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "published_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "status = 'PUBLISHED'"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "schema_version = 1"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "row_count >= 0 AND late_rows >= 0 AND correction_rows >= 0 AND unmapped_rows >= 0"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_billing_publication_history",
+            "columns": [
+              "state_key",
+              "published_at"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "generation": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "state_key": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "fingerprint": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "schema_version": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "mapping_version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "window_start": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "window_end": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "extracted_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "export_time": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "price_from": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "price_to": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "row_count": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "late_rows": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "correction_rows": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "unmapped_rows": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "evidence_rows": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "controls": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "published_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "status = 'PUBLISHED'"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "schema_version = 1"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "row_count >= 0 AND late_rows >= 0 AND correction_rows >= 0 AND unmapped_rows >= 0"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_billing_publication_history",
+            "columns": [
+              "state_key",
+              "published_at"
+            ],
+            "unique": false,
+            "keywords": {
+              "unique": "False"
+            }
+          }
+        ]
+      },
+      "milestone": "M11",
+      "revision": "d11b4a8c9e32",
+      "purpose": "Immutable provider publication manifest",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_budget_definition_version": {
+      "model": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "recorded_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          },
+          {
+            "type": "UniqueConstraint",
+            "name": null,
+            "columns": [
+              "version"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "migration": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "recorded_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          },
+          {
+            "type": "UniqueConstraint",
+            "name": null,
+            "columns": [
+              "version"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "milestone": "M14",
+      "revision": "a14d2e6f8c70",
+      "purpose": "Versioned budgets",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_control_generation": {
+      "model": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "definitions": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "inputs": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "month": {
+            "type": "VARCHAR(7)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "kind": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "issue": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "published_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "inputs"
+            ],
+            "references": [
+              "finops_control_input.identity"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "kind IN ('BUDGET','FORECAST','ANOMALY')"
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "definitions"
+            ],
+            "references": [
+              "finops_budget_definition_version.identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_control_history",
+            "columns": [
+              "environment",
+              "scope",
+              "month",
+              "kind",
+              "issue"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "definitions": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "inputs": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "month": {
+            "type": "VARCHAR(7)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "kind": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "issue": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "published_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "kind IN ('BUDGET','FORECAST','ANOMALY')"
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "inputs"
+            ],
+            "references": [
+              "finops_control_input.identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "definitions"
+            ],
+            "references": [
+              "finops_budget_definition_version.identity"
+            ]
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_control_history",
+            "columns": [
+              "environment",
+              "scope",
+              "month",
+              "kind",
+              "issue"
+            ],
+            "unique": false,
+            "keywords": {
+              "unique": "False"
+            }
+          }
+        ]
+      },
+      "milestone": "M14",
+      "revision": "a14d2e6f8c70",
+      "purpose": "Published forecast/budget/anomaly result",
+      "dependencies": [
+        "finops_budget_definition_version",
+        "finops_control_input"
+      ],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_control_input": {
+      "model": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "month": {
+            "type": "VARCHAR(7)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "cutoff": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_control_input_asof",
+            "columns": [
+              "environment",
+              "scope",
+              "month",
+              "cutoff"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "month": {
+            "type": "VARCHAR(7)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "cutoff": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_control_input_asof",
+            "columns": [
+              "environment",
+              "scope",
+              "month",
+              "cutoff"
+            ],
+            "unique": false,
+            "keywords": {
+              "unique": "False"
+            }
+          }
+        ]
+      },
+      "milestone": "M14",
+      "revision": "a14d2e6f8c70",
+      "purpose": "Known-as-of control inputs",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_control_publication": {
+      "model": {
+        "columns": {
+          "key": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "month": {
+            "type": "VARCHAR(7)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "kind": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "selection": {
+            "type": "VARCHAR(128)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "revision": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "generation": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_attempt": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_success": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "error": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "kind IN ('BUDGET','FORECAST','ANOMALY')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "environment IN ('local','development','staging','production')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "revision >= 0"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "key"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ],
+            "references": [
+              "finops_control_generation.identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ux_control_publication",
+            "columns": [
+              "environment",
+              "scope",
+              "month",
+              "kind",
+              "selection"
+            ],
+            "unique": true
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "key": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "month": {
+            "type": "VARCHAR(7)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "kind": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "selection": {
+            "type": "VARCHAR(128)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "revision": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "generation": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_attempt": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_success": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "error": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "key"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ],
+            "references": [
+              "finops_control_generation.identity"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "environment IN ('local','development','staging','production')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "kind IN ('BUDGET','FORECAST','ANOMALY')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "revision >= 0"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ux_control_publication",
+            "columns": [
+              "environment",
+              "scope",
+              "month",
+              "kind",
+              "selection"
+            ],
+            "unique": true,
+            "keywords": {
+              "unique": "True"
+            }
+          }
+        ]
+      },
+      "milestone": "M14",
+      "revision": "a14d2e6f8c70",
+      "purpose": "Current selected control generation",
+      "dependencies": [
+        "finops_control_generation"
+      ],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_forecast_backtest_generation": {
+      "model": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "forecast": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "truth": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scoring_version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "known_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_control_backtest_asof",
+            "columns": [
+              "environment",
+              "scope",
+              "known_at"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "forecast": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "truth": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scoring_version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "known_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_control_backtest_asof",
+            "columns": [
+              "environment",
+              "scope",
+              "known_at"
+            ],
+            "unique": false,
+            "keywords": {
+              "unique": "False"
+            }
+          }
+        ]
+      },
+      "milestone": "M14",
+      "revision": "a14d2e6f8c70",
+      "purpose": "Immutable forecast backtests",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_reconciliation_generation": {
+      "model": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "registry": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "runtime_input": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "billing_input": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "pricing_input": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "published_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "pricing_input"
+            ],
+            "references": [
+              "finops_reconciliation_input.identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "runtime_input"
+            ],
+            "references": [
+              "finops_reconciliation_input.identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "registry"
+            ],
+            "references": [
+              "finops_reconciliation_registry.identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "billing_input"
+            ],
+            "references": [
+              "finops_reconciliation_input.identity"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "migration": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "registry": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "runtime_input": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "billing_input": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "pricing_input": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "published_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "pricing_input"
+            ],
+            "references": [
+              "finops_reconciliation_input.identity"
+            ]
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "runtime_input"
+            ],
+            "references": [
+              "finops_reconciliation_input.identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "registry"
+            ],
+            "references": [
+              "finops_reconciliation_registry.identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "billing_input"
+            ],
+            "references": [
+              "finops_reconciliation_input.identity"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "milestone": "M12",
+      "revision": "e12c6d8a4b50",
+      "purpose": "Immutable reconciliation/allocation result",
+      "dependencies": [
+        "finops_reconciliation_input",
+        "finops_reconciliation_registry"
+      ],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_reconciliation_input": {
+      "model": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "period": {
+            "type": "VARCHAR(10)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "kind": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "source_generation": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "kind IN ('BILLING','RUNTIME','PRICING')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "environment IN ('local','development','staging','production')"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_reconciliation_inputs",
+            "columns": [
+              "environment",
+              "scope",
+              "period",
+              "kind",
+              "source_generation"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "period": {
+            "type": "VARCHAR(10)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "kind": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "source_generation": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "environment IN ('local','development','staging','production')"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "kind IN ('BILLING','RUNTIME','PRICING')"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_reconciliation_inputs",
+            "columns": [
+              "environment",
+              "scope",
+              "period",
+              "kind",
+              "source_generation"
+            ],
+            "unique": false,
+            "keywords": {
+              "unique": "False"
+            }
+          }
+        ]
+      },
+      "milestone": "M12",
+      "revision": "e12c6d8a4b50",
+      "purpose": "Versioned reconciliation source snapshots",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_reconciliation_registry": {
+      "model": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "ownership_version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "environment IN ('local','development','staging','production')"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ux_reconciliation_registry_version",
+            "columns": [
+              "environment",
+              "version",
+              "ownership_version"
+            ],
+            "unique": true
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "ownership_version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "environment IN ('local','development','staging','production')"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ux_reconciliation_registry_version",
+            "columns": [
+              "environment",
+              "version",
+              "ownership_version"
+            ],
+            "unique": true,
+            "keywords": {
+              "unique": "True"
+            }
+          }
+        ]
+      },
+      "milestone": "M12",
+      "revision": "e12c6d8a4b50",
+      "purpose": "Versioned allocation/ownership rules",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_reconciliation_state": {
+      "model": {
+        "columns": {
+          "key": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "period": {
+            "type": "VARCHAR(10)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "revision": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "generation": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_attempt": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_success": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "error": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "key"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "revision >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "environment IN ('local','development','staging','production')"
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ],
+            "references": [
+              "finops_reconciliation_generation.identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ux_reconciliation_period",
+            "columns": [
+              "environment",
+              "scope",
+              "period"
+            ],
+            "unique": true
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "key": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "period": {
+            "type": "VARCHAR(10)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "revision": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "generation": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_attempt": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_success": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "error": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "revision >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "environment IN ('local','development','staging','production')"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "key"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ],
+            "references": [
+              "finops_reconciliation_generation.identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ux_reconciliation_period",
+            "columns": [
+              "environment",
+              "scope",
+              "period"
+            ],
+            "unique": true,
+            "keywords": {
+              "unique": "True"
+            }
+          }
+        ]
+      },
+      "milestone": "M12",
+      "revision": "e12c6d8a4b50",
+      "purpose": "Published period generation pointer",
+      "dependencies": [
+        "finops_reconciliation_generation"
+      ],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_runtime_attempt": {
+      "model": {
+        "columns": {
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "attempt_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "identity": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "state": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "admitted_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "started_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "provider_finished_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "deadline_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "captured_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "gap_reason": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "environment IN ('local','development','staging','production')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "state IN ('ADMITTED','STARTED','PROVIDER_FINISHED','USAGE_CAPTURED','NOT_STARTED','FINAL_CAPTURE_PENDING','FINAL_CAPTURE_FAILED','OUTCOME_UNKNOWN','CONFLICT')"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment",
+              "attempt_id"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_finops_attempt_debt",
+            "columns": [
+              "environment",
+              "state",
+              "deadline_at"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "attempt_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "identity": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "state": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "admitted_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "started_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "provider_finished_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "deadline_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "captured_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "gap_reason": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment",
+              "attempt_id"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "state IN ('ADMITTED','STARTED','PROVIDER_FINISHED','USAGE_CAPTURED','NOT_STARTED','FINAL_CAPTURE_PENDING','FINAL_CAPTURE_FAILED','OUTCOME_UNKNOWN','CONFLICT')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "environment IN ('local','development','staging','production')"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_finops_attempt_debt",
+            "columns": [
+              "environment",
+              "state",
+              "deadline_at"
+            ],
+            "unique": false,
+            "keywords": {
+              "unique": "False"
+            }
+          }
+        ]
+      },
+      "milestone": "M10",
+      "revision": "c10a8f6e2d41",
+      "purpose": "Unsampled billable attempt population",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_unit_definition_version": {
+      "model": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "UniqueConstraint",
+            "name": null,
+            "columns": [
+              "version"
+            ]
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "migration": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          },
+          {
+            "type": "UniqueConstraint",
+            "name": null,
+            "columns": [
+              "version"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "milestone": "M13",
+      "revision": "f13a7c9d2e61",
+      "purpose": "Versioned unit definitions",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_unit_denominator_snapshot": {
+      "model": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "period": {
+            "type": "VARCHAR(10)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "source": {
+            "type": "VARCHAR(8)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "captured_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "source IN ('M9','M10')"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_unit_snapshot_period",
+            "columns": [
+              "environment",
+              "period",
+              "source"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "period": {
+            "type": "VARCHAR(10)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "source": {
+            "type": "VARCHAR(8)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "captured_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "source IN ('M9','M10')"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_unit_snapshot_period",
+            "columns": [
+              "environment",
+              "period",
+              "source"
+            ],
+            "unique": false,
+            "keywords": {
+              "unique": "False"
+            }
+          }
+        ]
+      },
+      "milestone": "M13",
+      "revision": "f13a7c9d2e61",
+      "purpose": "M9/M10 denominator snapshots",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_unit_driver_version": {
+      "model": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ux_unit_driver_version",
+            "columns": [
+              "environment",
+              "scope",
+              "version"
+            ],
+            "unique": true
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ux_unit_driver_version",
+            "columns": [
+              "environment",
+              "scope",
+              "version"
+            ],
+            "unique": true,
+            "keywords": {
+              "unique": "True"
+            }
+          }
+        ]
+      },
+      "milestone": "M13",
+      "revision": "f13a7c9d2e61",
+      "purpose": "Versioned allocation/unit drivers",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_unit_economics_generation": {
+      "model": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "definitions": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "drivers": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "reconciliation": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "turn_snapshot": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "model_snapshot": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "published_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "turn_snapshot"
+            ],
+            "references": [
+              "finops_unit_denominator_snapshot.identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "drivers"
+            ],
+            "references": [
+              "finops_unit_driver_version.identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "model_snapshot"
+            ],
+            "references": [
+              "finops_unit_denominator_snapshot.identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "definitions"
+            ],
+            "references": [
+              "finops_unit_definition_version.identity"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "migration": {
+        "columns": {
+          "identity": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "definitions": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "drivers": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "reconciliation": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "turn_snapshot": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "model_snapshot": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "body": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "published_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "drivers"
+            ],
+            "references": [
+              "finops_unit_driver_version.identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "turn_snapshot"
+            ],
+            "references": [
+              "finops_unit_denominator_snapshot.identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "definitions"
+            ],
+            "references": [
+              "finops_unit_definition_version.identity"
+            ]
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "model_snapshot"
+            ],
+            "references": [
+              "finops_unit_denominator_snapshot.identity"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "milestone": "M13",
+      "revision": "f13a7c9d2e61",
+      "purpose": "Immutable financial/unit result",
+      "dependencies": [
+        "finops_unit_definition_version",
+        "finops_unit_denominator_snapshot",
+        "finops_unit_driver_version"
+      ],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_unit_economics_publication": {
+      "model": {
+        "columns": {
+          "key": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "period": {
+            "type": "VARCHAR(10)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "kind": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "revision": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "snapshot": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "generation": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_attempt": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_success": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "error": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "snapshot"
+            ],
+            "references": [
+              "finops_unit_denominator_snapshot.identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ],
+            "references": [
+              "finops_unit_economics_generation.identity"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "kind IN ('M9','M10','ECONOMICS')"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "key"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "revision >= 0"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ux_unit_publication",
+            "columns": [
+              "environment",
+              "scope",
+              "period",
+              "kind"
+            ],
+            "unique": true
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "key": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "scope": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "period": {
+            "type": "VARCHAR(10)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "kind": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "revision": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "snapshot": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "generation": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_attempt": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "last_success": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "error": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "kind IN ('M9','M10','ECONOMICS')"
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "snapshot"
+            ],
+            "references": [
+              "finops_unit_denominator_snapshot.identity"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "generation"
+            ],
+            "references": [
+              "finops_unit_economics_generation.identity"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "revision >= 0"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "key"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ux_unit_publication",
+            "columns": [
+              "environment",
+              "scope",
+              "period",
+              "kind"
+            ],
+            "unique": true,
+            "keywords": {
+              "unique": "True"
+            }
+          }
+        ]
+      },
+      "milestone": "M13",
+      "revision": "f13a7c9d2e61",
+      "purpose": "Published snapshot/generation pointer",
+      "dependencies": [
+        "finops_unit_denominator_snapshot",
+        "finops_unit_economics_generation"
+      ],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_usage_bucket": {
+      "model": {
+        "columns": {
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": true
+          },
+          "provider": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "model": {
+            "type": "VARCHAR(128)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "agent": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "workload": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "operation": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "operation_type": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "good": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "bad": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "quantity_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "quantity_partial": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "input_tokens": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "input_tokens_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "output_tokens": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "output_tokens_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "candidate_tokens": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "candidate_tokens_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "cached_tokens": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "cached_tokens_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "total_tokens": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "total_tokens_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "thought_tokens": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "thought_tokens_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "tool_input_tokens": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "tool_input_tokens_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "billable_characters": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "billable_characters_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment",
+              "at",
+              "provider",
+              "model",
+              "agent",
+              "workload",
+              "operation",
+              "operation_type"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "good >= 0 AND bad >= 0 AND quantity_known >= 0 AND quantity_partial >= 0"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_finops_bucket_time",
+            "columns": [
+              "environment",
+              "at"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": true
+          },
+          "provider": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "model": {
+            "type": "VARCHAR(128)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "agent": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "workload": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "operation": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "operation_type": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "good": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "bad": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "quantity_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "quantity_partial": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "input_tokens": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "input_tokens_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "output_tokens": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "output_tokens_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "candidate_tokens": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "candidate_tokens_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "cached_tokens": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "cached_tokens_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "total_tokens": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "total_tokens_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "thought_tokens": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "thought_tokens_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "tool_input_tokens": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "tool_input_tokens_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "billable_characters": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "billable_characters_known": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment",
+              "at",
+              "provider",
+              "model",
+              "agent",
+              "workload",
+              "operation",
+              "operation_type"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "good >= 0 AND bad >= 0 AND quantity_known >= 0 AND quantity_partial >= 0"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_finops_bucket_time",
+            "columns": [
+              "environment",
+              "at"
+            ],
+            "unique": false,
+            "keywords": {
+              "unique": "False"
+            }
+          }
+        ]
+      },
+      "milestone": "M10",
+      "revision": "c10a8f6e2d41",
+      "purpose": "Minute usage/cost aggregates",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "finops_usage_inbox": {
+      "model": {
+        "columns": {
+          "event_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "attempt_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "payload": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "payload_hash": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "delivered": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          },
+          "attempts": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "next_attempt_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "created_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "delivered_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "exhausted": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "event_id"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment",
+              "attempt_id"
+            ],
+            "references": [
+              "finops_runtime_attempt.environment",
+              "finops_runtime_attempt.attempt_id"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "attempts >= 0"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_finops_inbox_pending",
+            "columns": [
+              "delivered",
+              "exhausted",
+              "next_attempt_at"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "event_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "attempt_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "payload": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "payload_hash": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "delivered": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          },
+          "attempts": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "next_attempt_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "created_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "delivered_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "exhausted": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "event_id"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "attempts >= 0"
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment",
+              "attempt_id"
+            ],
+            "references": [
+              "finops_runtime_attempt.environment",
+              "finops_runtime_attempt.attempt_id"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_finops_inbox_pending",
+            "columns": [
+              "delivered",
+              "exhausted",
+              "next_attempt_at"
+            ],
+            "unique": false,
+            "keywords": {
+              "unique": "False"
+            }
+          }
+        ]
+      },
+      "milestone": "M10",
+      "revision": "c10a8f6e2d41",
+      "purpose": "Durable accounting delivery/retry inbox",
+      "dependencies": [
+        "finops_runtime_attempt"
+      ],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "observability_archive_receipt": {
+      "model": {
+        "columns": {
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "trace_id": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "trace_class": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "expected_spans": {
+            "type": "INTEGER",
+            "nullable": false,
+            "primary_key": false
+          },
+          "population_digest": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "terminal_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "population_closed": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          },
+          "policy_version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "confirmed_digest": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "confirmed_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "expected_spans >= 0 AND expected_spans <= 10000"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment",
+              "trace_id"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_archive_receipt_environment_terminal",
+            "columns": [
+              "environment",
+              "terminal_at"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "trace_id": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "trace_class": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "expected_spans": {
+            "type": "INTEGER",
+            "nullable": false,
+            "primary_key": false
+          },
+          "population_digest": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "terminal_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "population_closed": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          },
+          "policy_version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "confirmed_digest": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "confirmed_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment",
+              "trace_id"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "expected_spans >= 0 AND expected_spans <= 10000"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_archive_receipt_environment_terminal",
+            "columns": [
+              "environment",
+              "terminal_at"
+            ],
+            "unique": false,
+            "keywords": {}
+          }
+        ]
+      },
+      "milestone": "M15",
+      "revision": "b15e3f7a9c81",
+      "purpose": "Sanitized exceptional archive population/retention receipts",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "observability_retention_checkpoint": {
+      "model": {
+        "columns": {
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "dataset": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "policy_version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "cutoff": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "cursor": {
+            "type": "VARCHAR(1024)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "generation": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "complete": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "generation >= 0"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment",
+              "dataset"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "migration": {
+        "columns": {
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "dataset": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "policy_version": {
+            "type": "VARCHAR(32)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "cutoff": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "cursor": {
+            "type": "VARCHAR(1024)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "generation": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "complete": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "generation >= 0"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment",
+              "dataset"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "milestone": "M15",
+      "revision": "b15e3f7a9c81",
+      "purpose": "Bounded retention progress/checkpoint metadata",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "observability_run_event": {
+      "model": {
+        "columns": {
+          "run_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "event_seq": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": true
+          },
+          "state_version": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "event_type": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "timestamp": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "elapsed_ms": {
+            "type": "FLOAT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "stage": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "agent": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "tool": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "dependency": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "error_code": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "stage IN ('request.received','request.validated','session.load.started','session.load.completed','attachments.started','attachments.completed','planning.started','planning.model.started','planning.model.completed','planning.completed','planning.failed','thread.resolve.started','thread.resolve.completed','pending_interaction.resolve.started','pending_interaction.resolve.completed','source_requirements.completed','context.selection.started','context.selection.completed','context.item.selected','context.item.excluded','agent.started','agent.completed','agent.failed','agent.team_manager','agent.technical_authority','agent.incident_manager','agent.problem_manager','agent.automated_operations','model.request.started','model.first_token','model.request.completed','model.request.failed','model.request.timeout','tool.started','tool.completed','tool.failed','tool.timeout','knowledge.search.started','knowledge.search.completed','teams.list_chats.started','teams.list_chats.completed','teams.read_messages.started','teams.read_messages.completed','database.query.started','database.query.completed','storage.operation.started','storage.operation.completed','knowledge.selection.completed','procedure_action.resolved','command_authority.completed','approval.requested','approval.completed','authority.selected','provenance.completed','command_egress.completed','synthesis.started','synthesis.completed','persistence.started','persistence.completed','sse.started','sse.completed','turn.completed','turn.failed','turn.timeout','turn.cancelled','run.stalled','heartbeat')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "event_seq >= 0 AND state_version >= 0 AND elapsed_ms >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "event_type IN ('started','stage','agent','tool','dependency','stalled','resumed','terminal','cleanup','delivery','identity','deadline')"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "run_id",
+              "event_seq"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "status IN ('PENDING','RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','STALLED')"
+          }
+        ],
+        "indexes": []
+      },
+      "migration": {
+        "columns": {
+          "run_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "event_seq": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": true
+          },
+          "state_version": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "event_type": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "timestamp": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "elapsed_ms": {
+            "type": "FLOAT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "stage": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "agent": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "tool": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "dependency": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "error_code": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "status IN ('PENDING','RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','STALLED')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "event_type IN ('started','stage','agent','tool','dependency','stalled','resumed','terminal','cleanup','delivery','identity','deadline')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "event_seq >= 0 AND state_version >= 0 AND elapsed_ms >= 0"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "run_id",
+              "event_seq"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "stage IN ('request.received','request.validated','session.load.started','session.load.completed','attachments.started','attachments.completed','planning.started','planning.model.started','planning.model.completed','planning.completed','planning.failed','thread.resolve.started','thread.resolve.completed','pending_interaction.resolve.started','pending_interaction.resolve.completed','source_requirements.completed','context.selection.started','context.selection.completed','context.item.selected','context.item.excluded','agent.started','agent.completed','agent.failed','agent.team_manager','agent.technical_authority','agent.incident_manager','agent.problem_manager','agent.automated_operations','model.request.started','model.first_token','model.request.completed','model.request.failed','model.request.timeout','tool.started','tool.completed','tool.failed','tool.timeout','knowledge.search.started','knowledge.search.completed','teams.list_chats.started','teams.list_chats.completed','teams.read_messages.started','teams.read_messages.completed','database.query.started','database.query.completed','storage.operation.started','storage.operation.completed','knowledge.selection.completed','procedure_action.resolved','command_authority.completed','approval.requested','approval.completed','authority.selected','provenance.completed','command_egress.completed','synthesis.started','synthesis.completed','persistence.started','persistence.completed','sse.started','sse.completed','turn.completed','turn.failed','turn.timeout','turn.cancelled','run.stalled','heartbeat')"
+          }
+        ],
+        "indexes": []
+      },
+      "milestone": "M7",
+      "revision": "9f71c2a64e08",
+      "purpose": "Bounded run event timeline",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "observability_run_status": {
+      "model": {
+        "columns": {
+          "current_span_id": {
+            "type": "VARCHAR(16)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "current_agent": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "current_tool": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "dependencies": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "stage_started_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "last_progress_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "heartbeat_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "observed_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "work_deadline_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "total_deadline_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "stalled": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          },
+          "stalled_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "run_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "producer_instance_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "state_version": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "session_detached": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          },
+          "session_id": {
+            "type": "VARCHAR(128)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "turn_id": {
+            "type": "VARCHAR(128)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "turn_id_origin": {
+            "type": "VARCHAR(16)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "trace_id": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "root_span_id": {
+            "type": "VARCHAR(16)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "environment": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "current_stage": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "started_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "terminal_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "elapsed_ms": {
+            "type": "FLOAT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "error_code": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "error_stage": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "cleanup_status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "delivery_status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "service_version": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "git_sha": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "release_id": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "revision": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "region": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "config_version": {
+            "type": "VARCHAR(16)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "telemetry_schema_version": {
+            "type": "INTEGER",
+            "nullable": false,
+            "primary_key": false
+          },
+          "projection_schema_version": {
+            "type": "INTEGER",
+            "nullable": false,
+            "primary_key": false
+          },
+          "retention_class": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "ever_stalled": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          },
+          "timeline_truncated_count": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "expiry_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "run_id"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "cleanup_status IN ('pending','running','completed','failed','timeout')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "retention_class IN ('normal','exceptional')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "state_version >= 0 AND elapsed_ms >= 0 AND timeline_truncated_count >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "telemetry_schema_version = 1 AND projection_schema_version = 1"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "(status IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED') AND terminal_at IS NOT NULL) OR (status IN ('PENDING','RUNNING','STALLED') AND terminal_at IS NULL)"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "status NOT IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED') OR (current_agent IS NULL AND current_tool IS NULL)"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "current_stage IN ('request.received','request.validated','session.load.started','session.load.completed','attachments.started','attachments.completed','planning.started','planning.model.started','planning.model.completed','planning.completed','planning.failed','thread.resolve.started','thread.resolve.completed','pending_interaction.resolve.started','pending_interaction.resolve.completed','source_requirements.completed','context.selection.started','context.selection.completed','context.item.selected','context.item.excluded','agent.started','agent.completed','agent.failed','agent.team_manager','agent.technical_authority','agent.incident_manager','agent.problem_manager','agent.automated_operations','model.request.started','model.first_token','model.request.completed','model.request.failed','model.request.timeout','tool.started','tool.completed','tool.failed','tool.timeout','knowledge.search.started','knowledge.search.completed','teams.list_chats.started','teams.list_chats.completed','teams.read_messages.started','teams.read_messages.completed','database.query.started','database.query.completed','storage.operation.started','storage.operation.completed','knowledge.selection.completed','procedure_action.resolved','command_authority.completed','approval.requested','approval.completed','authority.selected','provenance.completed','command_egress.completed','synthesis.started','synthesis.completed','persistence.started','persistence.completed','sse.started','sse.completed','turn.completed','turn.failed','turn.timeout','turn.cancelled','run.stalled','heartbeat')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "status IN ('PENDING','RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','STALLED')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "delivery_status IN ('pending','relayed','disconnected')"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_observability_active",
+            "columns": [
+              "environment",
+              "status",
+              "heartbeat_at",
+              "run_id"
+            ],
+            "unique": false
+          },
+          {
+            "name": "ix_observability_session",
+            "columns": [
+              "session_id",
+              "started_at",
+              "run_id"
+            ],
+            "unique": false
+          },
+          {
+            "name": "ix_observability_status_expiry",
+            "columns": [
+              "expiry_at",
+              "run_id"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "current_span_id": {
+            "type": "VARCHAR(16)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "current_agent": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "current_tool": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "dependencies": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "stage_started_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "last_progress_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "heartbeat_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "observed_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "work_deadline_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "total_deadline_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "stalled": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          },
+          "stalled_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "run_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "producer_instance_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "state_version": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "session_detached": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          },
+          "session_id": {
+            "type": "VARCHAR(128)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "turn_id": {
+            "type": "VARCHAR(128)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "turn_id_origin": {
+            "type": "VARCHAR(16)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "trace_id": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "root_span_id": {
+            "type": "VARCHAR(16)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "environment": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "current_stage": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "started_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "terminal_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "elapsed_ms": {
+            "type": "FLOAT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "error_code": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "error_stage": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "cleanup_status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "delivery_status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "service_version": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "git_sha": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "release_id": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "revision": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "region": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "config_version": {
+            "type": "VARCHAR(16)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "telemetry_schema_version": {
+            "type": "INTEGER",
+            "nullable": false,
+            "primary_key": false
+          },
+          "projection_schema_version": {
+            "type": "INTEGER",
+            "nullable": false,
+            "primary_key": false
+          },
+          "retention_class": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "ever_stalled": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          },
+          "timeline_truncated_count": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "expiry_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "run_id"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "cleanup_status IN ('pending','running','completed','failed','timeout')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "delivery_status IN ('pending','relayed','disconnected')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "status IN ('PENDING','RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','STALLED')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "status NOT IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED') OR (current_agent IS NULL AND current_tool IS NULL)"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "current_stage IN ('request.received','request.validated','session.load.started','session.load.completed','attachments.started','attachments.completed','planning.started','planning.model.started','planning.model.completed','planning.completed','planning.failed','thread.resolve.started','thread.resolve.completed','pending_interaction.resolve.started','pending_interaction.resolve.completed','source_requirements.completed','context.selection.started','context.selection.completed','context.item.selected','context.item.excluded','agent.started','agent.completed','agent.failed','agent.team_manager','agent.technical_authority','agent.incident_manager','agent.problem_manager','agent.automated_operations','model.request.started','model.first_token','model.request.completed','model.request.failed','model.request.timeout','tool.started','tool.completed','tool.failed','tool.timeout','knowledge.search.started','knowledge.search.completed','teams.list_chats.started','teams.list_chats.completed','teams.read_messages.started','teams.read_messages.completed','database.query.started','database.query.completed','storage.operation.started','storage.operation.completed','knowledge.selection.completed','procedure_action.resolved','command_authority.completed','approval.requested','approval.completed','authority.selected','provenance.completed','command_egress.completed','synthesis.started','synthesis.completed','persistence.started','persistence.completed','sse.started','sse.completed','turn.completed','turn.failed','turn.timeout','turn.cancelled','run.stalled','heartbeat')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "state_version >= 0 AND elapsed_ms >= 0 AND timeline_truncated_count >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "telemetry_schema_version = 1 AND projection_schema_version = 1"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "(status IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED') AND terminal_at IS NOT NULL) OR (status IN ('PENDING','RUNNING','STALLED') AND terminal_at IS NULL)"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "retention_class IN ('normal','exceptional')"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_observability_active",
+            "columns": [
+              "environment",
+              "status",
+              "heartbeat_at",
+              "run_id"
+            ],
+            "unique": false,
+            "keywords": {}
+          },
+          {
+            "name": "ix_observability_session",
+            "columns": [
+              "session_id",
+              "started_at",
+              "run_id"
+            ],
+            "unique": false,
+            "keywords": {}
+          },
+          {
+            "name": "ix_observability_status_expiry",
+            "columns": [
+              "expiry_at",
+              "run_id"
+            ],
+            "unique": false,
+            "keywords": {}
+          },
+          {
+            "name": "ix_m15_run_retention",
+            "columns": [
+              "environment",
+              "expiry_at",
+              "run_id"
+            ],
+            "unique": false,
+            "keywords": {}
+          }
+        ]
+      },
+      "milestone": "M7",
+      "revision": "9f71c2a64e08",
+      "purpose": "Durable cross-instance active/terminal run state",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "observability_sre_bucket": {
+      "model": {
+        "columns": {
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "slo_id": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": true
+          },
+          "good": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "bad": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "unknown": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "excluded": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment",
+              "slo_id",
+              "at"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "migration": {
+        "columns": {
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "slo_id": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": true
+          },
+          "good": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "bad": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "unknown": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "excluded": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment",
+              "slo_id",
+              "at"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "milestone": "M9",
+      "revision": "b37e90a14c62",
+      "purpose": "Minute SLO counters",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "observability_sre_receipt": {
+      "model": {
+        "columns": {
+          "run_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "due_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "payload": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "contribution": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "settled": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "run_id"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_sre_due",
+            "columns": [
+              "settled",
+              "due_at"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "run_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "due_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "payload": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "contribution": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          },
+          "settled": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "run_id"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_sre_due",
+            "columns": [
+              "settled",
+              "due_at"
+            ],
+            "unique": false,
+            "keywords": {}
+          }
+        ]
+      },
+      "milestone": "M9",
+      "revision": "b37e90a14c62",
+      "purpose": "Pending/settled SLO contribution receipts",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "observability_sre_source": {
+      "model": {
+        "columns": {
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "coverage_start": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "updated_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "capture_complete": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "migration": {
+        "columns": {
+          "environment": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "coverage_start": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "updated_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "capture_complete": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "environment"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "milestone": "M9",
+      "revision": "b37e90a14c62",
+      "purpose": "Coverage and producer freshness evidence",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    },
+    "observability_turn": {
+      "model": {
+        "columns": {
+          "run_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "producer_instance_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "state_version": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "session_detached": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          },
+          "session_id": {
+            "type": "VARCHAR(128)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "turn_id": {
+            "type": "VARCHAR(128)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "turn_id_origin": {
+            "type": "VARCHAR(16)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "trace_id": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "root_span_id": {
+            "type": "VARCHAR(16)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "environment": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "current_stage": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "started_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "terminal_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "elapsed_ms": {
+            "type": "FLOAT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "error_code": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "error_stage": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "cleanup_status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "delivery_status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "service_version": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "git_sha": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "release_id": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "revision": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "region": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "config_version": {
+            "type": "VARCHAR(16)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "telemetry_schema_version": {
+            "type": "INTEGER",
+            "nullable": false,
+            "primary_key": false
+          },
+          "projection_schema_version": {
+            "type": "INTEGER",
+            "nullable": false,
+            "primary_key": false
+          },
+          "retention_class": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "ever_stalled": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          },
+          "timeline_truncated_count": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "expiry_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "retention_class IN ('normal','exceptional')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "state_version >= 0 AND elapsed_ms >= 0 AND timeline_truncated_count >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "telemetry_schema_version = 1 AND projection_schema_version = 1"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "current_stage IN ('request.received','request.validated','session.load.started','session.load.completed','attachments.started','attachments.completed','planning.started','planning.model.started','planning.model.completed','planning.completed','planning.failed','thread.resolve.started','thread.resolve.completed','pending_interaction.resolve.started','pending_interaction.resolve.completed','source_requirements.completed','context.selection.started','context.selection.completed','context.item.selected','context.item.excluded','agent.started','agent.completed','agent.failed','agent.team_manager','agent.technical_authority','agent.incident_manager','agent.problem_manager','agent.automated_operations','model.request.started','model.first_token','model.request.completed','model.request.failed','model.request.timeout','tool.started','tool.completed','tool.failed','tool.timeout','knowledge.search.started','knowledge.search.completed','teams.list_chats.started','teams.list_chats.completed','teams.read_messages.started','teams.read_messages.completed','database.query.started','database.query.completed','storage.operation.started','storage.operation.completed','knowledge.selection.completed','procedure_action.resolved','command_authority.completed','approval.requested','approval.completed','authority.selected','provenance.completed','command_egress.completed','synthesis.started','synthesis.completed','persistence.started','persistence.completed','sse.started','sse.completed','turn.completed','turn.failed','turn.timeout','turn.cancelled','run.stalled','heartbeat')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "(status IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED') AND terminal_at IS NOT NULL) OR (status IN ('PENDING','RUNNING','STALLED') AND terminal_at IS NULL)"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "cleanup_status IN ('pending','running','completed','failed','timeout')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "delivery_status IN ('pending','relayed','disconnected')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "status IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "status IN ('PENDING','RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','STALLED')"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "run_id"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_observability_recent",
+            "columns": [
+              "environment",
+              "started_at",
+              "run_id"
+            ],
+            "unique": false
+          },
+          {
+            "name": "ix_observability_summary_expiry",
+            "columns": [
+              "expiry_at",
+              "run_id"
+            ],
+            "unique": false
+          },
+          {
+            "name": "ix_observability_summary_session",
+            "columns": [
+              "session_id",
+              "started_at",
+              "run_id"
+            ],
+            "unique": false
+          },
+          {
+            "name": "ix_observability_terminal",
+            "columns": [
+              "environment",
+              "terminal_at",
+              "run_id"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "migration": {
+        "columns": {
+          "run_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": true
+          },
+          "producer_instance_id": {
+            "type": "VARCHAR(36)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "state_version": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "session_detached": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          },
+          "session_id": {
+            "type": "VARCHAR(128)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "turn_id": {
+            "type": "VARCHAR(128)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "turn_id_origin": {
+            "type": "VARCHAR(16)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "trace_id": {
+            "type": "VARCHAR(32)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "root_span_id": {
+            "type": "VARCHAR(16)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "environment": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "current_stage": {
+            "type": "VARCHAR(64)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "started_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "terminal_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "elapsed_ms": {
+            "type": "FLOAT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "error_code": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "error_stage": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "cleanup_status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "delivery_status": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "service_version": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "git_sha": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "release_id": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "revision": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "region": {
+            "type": "VARCHAR(64)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "config_version": {
+            "type": "VARCHAR(16)",
+            "nullable": true,
+            "primary_key": false
+          },
+          "telemetry_schema_version": {
+            "type": "INTEGER",
+            "nullable": false,
+            "primary_key": false
+          },
+          "projection_schema_version": {
+            "type": "INTEGER",
+            "nullable": false,
+            "primary_key": false
+          },
+          "retention_class": {
+            "type": "VARCHAR(16)",
+            "nullable": false,
+            "primary_key": false
+          },
+          "ever_stalled": {
+            "type": "BOOLEAN",
+            "nullable": false,
+            "primary_key": false
+          },
+          "timeline_truncated_count": {
+            "type": "BIGINT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "expiry_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "status IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED')"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "run_id"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "status IN ('PENDING','RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','STALLED')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "cleanup_status IN ('pending','running','completed','failed','timeout')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "delivery_status IN ('pending','relayed','disconnected')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "telemetry_schema_version = 1 AND projection_schema_version = 1"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "current_stage IN ('request.received','request.validated','session.load.started','session.load.completed','attachments.started','attachments.completed','planning.started','planning.model.started','planning.model.completed','planning.completed','planning.failed','thread.resolve.started','thread.resolve.completed','pending_interaction.resolve.started','pending_interaction.resolve.completed','source_requirements.completed','context.selection.started','context.selection.completed','context.item.selected','context.item.excluded','agent.started','agent.completed','agent.failed','agent.team_manager','agent.technical_authority','agent.incident_manager','agent.problem_manager','agent.automated_operations','model.request.started','model.first_token','model.request.completed','model.request.failed','model.request.timeout','tool.started','tool.completed','tool.failed','tool.timeout','knowledge.search.started','knowledge.search.completed','teams.list_chats.started','teams.list_chats.completed','teams.read_messages.started','teams.read_messages.completed','database.query.started','database.query.completed','storage.operation.started','storage.operation.completed','knowledge.selection.completed','procedure_action.resolved','command_authority.completed','approval.requested','approval.completed','authority.selected','provenance.completed','command_egress.completed','synthesis.started','synthesis.completed','persistence.started','persistence.completed','sse.started','sse.completed','turn.completed','turn.failed','turn.timeout','turn.cancelled','run.stalled','heartbeat')"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "state_version >= 0 AND elapsed_ms >= 0 AND timeline_truncated_count >= 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "(status IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED') AND terminal_at IS NOT NULL) OR (status IN ('PENDING','RUNNING','STALLED') AND terminal_at IS NULL)"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": null,
+            "columns": [],
+            "expression": "retention_class IN ('normal','exceptional')"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "ix_observability_recent",
+            "columns": [
+              "environment",
+              "started_at",
+              "run_id"
+            ],
+            "unique": false,
+            "keywords": {}
+          },
+          {
+            "name": "ix_observability_summary_expiry",
+            "columns": [
+              "expiry_at",
+              "run_id"
+            ],
+            "unique": false,
+            "keywords": {}
+          },
+          {
+            "name": "ix_observability_summary_session",
+            "columns": [
+              "session_id",
+              "started_at",
+              "run_id"
+            ],
+            "unique": false,
+            "keywords": {}
+          },
+          {
+            "name": "ix_observability_terminal",
+            "columns": [
+              "environment",
+              "terminal_at",
+              "run_id"
+            ],
+            "unique": false,
+            "keywords": {}
+          },
+          {
+            "name": "ix_m15_summary_retention",
+            "columns": [
+              "environment",
+              "expiry_at",
+              "run_id"
+            ],
+            "unique": false,
+            "keywords": {}
+          }
+        ]
+      },
+      "milestone": "M7",
+      "revision": "9f71c2a64e08",
+      "purpose": "Retained terminal turn summaries",
+      "dependencies": [],
+      "schema": "public (current default search_path)",
+      "status_in_shared_database": "MISSING"
+    }
+  },
+  "differences": [
+    {
+      "table": "observability_run_status",
+      "kind": "indexes",
+      "model_only": [],
+      "migration_only": [
+        [
+          "ix_m15_run_retention",
+          [
+            "environment",
+            "expiry_at",
+            "run_id"
+          ],
+          false
+        ]
+      ]
+    },
+    {
+      "table": "observability_turn",
+      "kind": "indexes",
+      "model_only": [],
+      "migration_only": [
+        [
+          "ix_m15_summary_retention",
+          [
+            "environment",
+            "expiry_at",
+            "run_id"
+          ],
+          false
+        ]
+      ]
+    }
+  ]
+}

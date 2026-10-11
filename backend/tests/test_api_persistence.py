@@ -15,6 +15,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("local_application_identity")
 from google.adk.sessions import DatabaseSessionService
 
 from backend.api.pending_action import map_pending_action

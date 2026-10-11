@@ -82,23 +82,29 @@ class TimelinePage(Contract):
 
 class HealthView(Contract):
     persistence: Literal['disabled','healthy','degraded','unavailable']
-    writer_scope: Literal['process_local'] = 'process_local'
+    writer_scope: Literal['process_local','process_local_anoc_unavailable'] = 'process_local'
     durable_scope: Literal['authorized_environments'] = 'authorized_environments'
     as_of: AwareDatetime
-    pending: Count
-    admitted: Count
-    terminal_pending: Count
+    pending: Count | None
+    admitted: Count | None
+    terminal_pending: Count | None
     stale_records: Count | None = None
     exporter_state: Literal['disabled','healthy','degraded','unknown']
-    collector_configured: bool
+    collector_configured: bool | None
     last_success: AwareDatetime | None = None
-    accepted: Count = 0
-    coalesced: Count = 0
-    attempts: Count = 0
-    persisted: Count = 0
-    failed: Count = 0
-    retries: Count = 0
-    rejected: Count = 0
-    terminal_unpersisted: Count = 0
-    shutdown_incomplete: Count = 0
-    invalid: Count = 0
+    accepted: Count | None = 0
+    coalesced: Count | None = 0
+    attempts: Count | None = 0
+    persisted: Count | None = 0
+    failed: Count | None = 0
+    retries: Count | None = 0
+    rejected: Count | None = 0
+    terminal_unpersisted: Count | None = 0
+    shutdown_incomplete: Count | None = 0
+    invalid: Count | None = 0
+
+    read_plane_state: Literal['healthy','unavailable'] | None = None
+    anoc_state: Literal['unknown'] | None = None
+    collector_state: Literal['unknown'] | None = None
+    archive_state: Literal['unknown'] = 'unknown'
+    source_freshness: Literal['unknown'] = 'unknown'

@@ -122,3 +122,22 @@ def clear_direct_fast_path_registries() -> None:
     yield
     _pending_trusted_result_by_run.clear()
     _trust_validation_failed_runs.clear()
+
+
+@pytest.fixture()
+def local_application_identity(tmp_path, monkeypatch):
+    """Explicit low-privilege local grants for existing business API regressions.
+
+    This fixture is opt-in; protected observability tests still default denied.
+    Production code never detects pytest or substitutes a test provider.
+    """
+    import json
+    policy = tmp_path / 'development-auth.json'
+    policy.write_text(json.dumps({'default_subject': 'api-user', 'users': {
+        subject: {'role': 'User', 'capabilities': ['own_progress'], 'environments': ['development']}
+        for subject in ('api-user', 'alice', 'bob', 'mallory', 'eve')
+    }}))
+    monkeypatch.setenv('SLOPANOC_AUTH_MODE', 'development')
+    monkeypatch.setenv('SLOPANOC_DEV_AUTH_POLICY_FILE', str(policy))
+    monkeypatch.setenv('SLOPANOC_OTEL_ENVIRONMENT', 'development')
+    return policy

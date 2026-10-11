@@ -95,3 +95,12 @@ CI must detect:
 - prohibited field names,
 - fake-secret fixtures appearing in exporter payloads,
 - raw exception duplication in known critical paths.
+
+## Hybrid service logs
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) extends the existing safe JSON logging policy to publisher/projector/adapter
+and DLQ processing. Log only finite schema/failure/state categories and permitted
+correlation; never rejected event bytes, decoded raw OTLP, SQL/commands, arbitrary
+validation inputs or exception strings. Audit delivery logs are diagnostics, not
+proof of authoritative capture or successful projection commit. pgAudit/Cloud Audit
+Logs are independently configured restricted security surfaces, not application logs.

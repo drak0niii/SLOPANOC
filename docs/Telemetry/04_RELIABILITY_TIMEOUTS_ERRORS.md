@@ -145,3 +145,12 @@ No secrets or raw stack traces in user responses.
 ## SLO interaction
 
 Timeout and terminal semantics must match `21_SLO_FORMULAS_AND_INITIAL_TARGETS.md` so reliability controls and SLO denominators cannot diverge.
+
+## Event distribution failure isolation
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) adds independently bounded publisher leases/batches/retries, projector
+inflight/deadlines and separate Pub/Sub retry/DLQ/capacity domains. Audit debt remains
+SQL durable and visible; operational loss remains measured. Invalid events are
+rejected using safe finite categories, without raw payload/error logs. Re-delivery
+cannot replay business execution or change existing retry/timeout/approval rules.
+Projection lag/unknown status never overwrites authoritative terminal outcome.

@@ -9,19 +9,20 @@ const messages: Record<ReadError, string> = {
     failed: 'Diagnostic request failed. Please try again.', malformed: 'The diagnostic response could not be read safely.',
     incompatible: 'This diagnostics schema is not supported by this UI version.', throttled: 'Diagnostic request limit reached. Try refreshing later.'
 };
-export function ReadState<T>({ query, children, empty }: {
+export function ReadState<T>({ query, children, empty, compact = false }: {
     query: QueryState<T> & {
         refresh: () => void;
     };
     children: (data: T) => ReactNode;
     empty?: boolean;
+    compact?: boolean;
 }) {
-    return <div aria-busy={query.loading}>
-  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-tertiary">
+    return <div aria-busy={query.loading} className={compact ? 'obs-query' : undefined}>
+  {!compact && <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-tertiary">
    <span>{query.updatedAt ? `Last API refresh: ${new Date(query.updatedAt).toLocaleTimeString()}` : 'No data fetched yet.'}</span>
    <button type="button" className={buttonClass} disabled={query.loading} onClick={query.refresh}>Refresh</button>
-  </div>
-  {query.loading && <p role="status" className="text-sm text-tertiary">Loading diagnostics…</p>}
+  </div>}
+  {query.loading && <div role="status" className="obs-loading"><span className="sr-only">Loading diagnostics…</span><div className="obs-skeleton" /><div className="obs-skeleton" /><div className="obs-skeleton" /></div>}
   {query.error && <p role="alert" className="rounded-lg border border-subtle/50 p-3 text-sm text-secondary">{messages[query.error]}</p>}
   {query.data !== undefined && !query.error && (empty ? <p className="text-sm text-tertiary">No data available.</p> : children(query.data))}
  </div>;

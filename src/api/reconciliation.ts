@@ -1,4 +1,5 @@
-import { getJson, ApiError } from './client';
+import { getObservabilityJson } from './observabilityClient';
+import { ApiError } from './client';
 import { ContractError } from '../components/shell/settings/observability/contract';
 export interface ReconciliationAmount {currency:string;gross:string;credit:string;adjustment:string;tax:string;rounding:string;net:string;absolute:string;direct:string;shared:string;unallocated:string;catalog_reference:string|null;monetary_variance:string|null;eur_state:string;percentages:{direct:string|null;shared:string|null;unallocated:string|null};ratios:{direct:string|null;shared:string|null;unallocated:string|null}}
 export interface ReconciliationQuantity {model:string;component:string;unit:string;runtime_quantity:string|null;billing_quantity:string|null;difference:string|null;variance_pct:string|null;runtime_unknown:number;billing_unknown:number;confidence:string;reason:string|null}
@@ -37,6 +38,6 @@ export function decodeReconciliation(value:unknown):ReconciliationPage {
 }
 export async function getReconciliation(signal?:AbortSignal,period?:string):Promise<ReconciliationPage>{
  if(period&&!/^\d{4}-\d\d-\d\d$/.test(period))throw new ContractError();
- try{return decodeReconciliation(await getJson('/api/observability/finops/reconciliation'+(period?'/'+period:''),signal));}
+ try{return decodeReconciliation(await getObservabilityJson('/api/observability/finops/reconciliation'+(period?'/'+period:''),signal));}
  catch(e){if(e instanceof ApiError)throw new ApiError('Reconciliation is unavailable.',e.status);if(e instanceof SyntaxError)throw new ContractError();throw e;}
 }

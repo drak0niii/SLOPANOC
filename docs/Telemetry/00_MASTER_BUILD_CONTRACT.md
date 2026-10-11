@@ -214,3 +214,23 @@ Critical policy must not be hidden in magic constants.
 ## Delivery rule
 
 Implement milestone by milestone. Each milestone must leave the repository importable, migration-safe and compatible with existing safety controls.
+
+## Operational read plane and console placement
+
+Doc [25](25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md) separates operations reads
+from the ANOC business/agent runtime. `/resources/observability` is the primary
+console inside the existing shell; Settings retains effective policy/configuration.
+The reader never invokes models/agents/tools/commands, mutates business authority
+or runs financial jobs on GET. Existing M7–M15 truths remain unchanged. This is
+an architecture workstream, not M17; M16 acceptance is not waived.
+
+## Approved hybrid audit/event planes
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) adds critical Cloud SQL audit + same-transaction outbox and a separate
+outbox publisher and Phase-1 audit Pub/Sub. Operational Telemetry Pub/Sub is
+OPTIONAL / SCALE-TRIGGERED, disabled, curated only after measured need,
+and projection-only service. ANOC request paths contain no direct operational
+Pub/Sub publication. Existing run/turn/terminal/attempt/usage/governance owners
+remain authoritative; dashboard status/aggregates are derived. Telemetry is NEVER
+EVIDENCE / NEVER AUTHORITY. Resource authoring/review does not authorize activation,
+shared migrations or M17. Existing fixed Google destinations remain intact.

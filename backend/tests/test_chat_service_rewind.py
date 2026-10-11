@@ -37,6 +37,8 @@ from __future__ import annotations
 import inspect
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("local_application_identity")
 from fastapi.testclient import TestClient
 
 import backend.api.chat_service as chat_service_module

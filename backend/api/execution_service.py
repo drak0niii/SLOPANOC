@@ -150,22 +150,24 @@ async def execute(
         # run_in_threadpool keeps this off the event loop, exactly the
         # same escape hatch FastAPI/Starlette itself uses for sync path
         # operations.
-        if proposal.operation == WriteOperation.TEAMS_CREATE_CHAT:
-            result = await run_in_threadpool(
-                teams_create_chat,
-                proposal.payload.get("title", ""),
-                list(proposal.payload.get("members", [])),
-                tool_context=tool_context,
-            )
-        elif proposal.operation == WriteOperation.TEAMS_SEND_MESSAGE:
-            result = await run_in_threadpool(
-                teams_send_message,
-                proposal.payload.get("chatId", ""),
-                proposal.payload.get("message", ""),
-                tool_context=tool_context,
-            )
-        else:  # pragma: no cover -- unreachable given WriteOperation's closed 2-member enum
-            raise internal_error("Unsupported action type.")
+        from backend.execution_audit.runtime import correlation
+        with correlation(session_id=session_id):
+            if proposal.operation == WriteOperation.TEAMS_CREATE_CHAT:
+                result = await run_in_threadpool(
+                    teams_create_chat,
+                    proposal.payload.get("title", ""),
+                    list(proposal.payload.get("members", [])),
+                    tool_context=tool_context,
+                )
+            elif proposal.operation == WriteOperation.TEAMS_SEND_MESSAGE:
+                result = await run_in_threadpool(
+                    teams_send_message,
+                    proposal.payload.get("chatId", ""),
+                    proposal.payload.get("message", ""),
+                    tool_context=tool_context,
+                )
+            else:  # pragma: no cover -- unreachable given WriteOperation's closed 2-member enum
+                raise internal_error("Unsupported action type.")
 
         if "error" in result:
             # Re-raises the tool layer's own SafeError shape unchanged --

@@ -14,7 +14,7 @@ from backend.observability.finops.reconciliation_models import ReconciliationBas
 async def test_additive_frozen_migration_isolated_constraints_and_postgres_ddl(tmp_path):
     spec=importlib.util.spec_from_file_location('m12','alembic/versions/e12c6d8a4b50_finops_reconciliation.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
     assert m.down_revision=='d11b4a8c9e32'
-    config=Config();config.set_main_option('script_location','alembic');assert ScriptDirectory.from_config(config).get_heads()==['b15e3f7a9c81']
+    config=Config();config.set_main_option('script_location','alembic');assert ScriptDirectory.from_config(config).get_heads()==['e27b2c8d0f51']
     db=Database('sqlite+aiosqlite:///'+str(tmp_path/'migration.db'),isolated_test=True)
     try:
         async with db.engine.begin() as c:

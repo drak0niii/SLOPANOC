@@ -2,11 +2,11 @@
 
 ## Program Status
 
-Current milestone: **M15 — IMPLEMENTED AND LOCALLY VALIDATED; production pending**
+Current milestone: **M16 — INCOMPLETE — LOCAL ACCEPTANCE FAIL**
 
 Last completed milestone: **M15 (all38 user blocking local criteria and approved C01–C35 local evaluations PASS; production validation pending)**
 
-Next permitted action: **STOP. M15 local gate passed; M16 NOT IMPLEMENTED BY DESIGN. A separate instruction is required to start M16. No deployment or cloud operation authorized.**
+Next permitted action: **M16 ONLY. CPU attribution and scoped repairs are recorded; all three authoritative repeats still fail the unchanged <3% gate (7.411445%, 6.005011%, 12.422544%). Dependency <10ms passes. C41/C42 FAIL; Ready for Next Milestone NO. Stop pending further M16 CPU work. M17 requires separate instruction; no deployment or cloud operation authorized.**
 
 Overall status: **M0 VALIDATED COMPLETE; M1–M15 IMPLEMENTED AND LOCALLY VALIDATED; CLOUD NOT EXECUTED**
 
@@ -36,7 +36,7 @@ Authoritative architecture:
 | M13 | Unit Economics | IMPLEMENTED AND LOCALLY VALIDATED; all local gates PASS; production pending | YES (local only; STOP before M14) |
 | M14 | Budgets / Forecasting / Anomalies | IMPLEMENTED AND LOCALLY VALIDATED; all35 blocking local gates PASS; production pending | YES (local only; STOP before M15) |
 | M15 | Security / Retention / Sampling Hardening | IMPLEMENTED AND LOCALLY VALIDATED; all38 user local gates PASS; B01 RESOLVED; production pending | YES (local only; STOP before M16) |
-| M16 | Validation + Failure Injection | NOT STARTED; M15 local gate passed; no instruction to implement M16 | NO |
+| M16 | Validation + Failure Injection | INCOMPLETE — local acceptance FAIL; scoped repairs and executed profiles recorded below | NO |
 | M17 | Production Operationalization | BLOCKED BY M16 | NO |
 | M18 | Release / CI / IaC Hardening | BLOCKED BY M17 | NO |
 | M19 | Quality / Outcome + Continuous Profiling | BLOCKED BY M18 | NO |
@@ -14063,3 +14063,3885 @@ New files:
 - `src/components/shell/settings/observability/PolicyPanels.test.tsx`
 
 M15 IMPLEMENTED AND LOCALLY VALIDATED. Ready for Next Milestone: YES (local only). STOP; M16 NOT IMPLEMENTED BY DESIGN.
+
+## M16 — PLANNED — NOT IMPLEMENTED — 2026-10-09
+
+Authorization: user's attached M16 request, planning only. This section is the
+current M16 plan; earlier milestone sections remain historical evidence.
+No implementation, failure injection, load run, deployment or M17 work is authorized
+by this pass. Ready To Implement M16: YES. Ready for Next Milestone: NO.
+
+### Predecessor gate, actual audit and evidence limits
+
+Entry gate PASS for local planning: matrix and individual completion records report
+M0–M15 locally complete, M15 U01–U38 and C01–C35 local acceptance PASS, and M15 Ready
+for Next Milestone YES (local only). Actual M0–M15 packages, tests, UI, Collector
+configuration and migration b15e3f7a9c81 exist. No dedicated M16 stress/resilience
+program was found by filename/source inventory; predecessor failure/performance tests
+are reuse assets, not M16 implementation. M17 production operationalization remains
+blocked by M16. M15 full-suite evidence is historical: 5,835 backend passed /12 skipped,
+979 frontend passed and build PASS. These tests were NOT rerun or recertified here.
+
+The working tree was clean at planning entry. A SHA256 baseline of 1,116 repository
+files was stored outside the repo for the final scope audit. Only this execution
+record is intended to change. No remote repository was consulted.
+
+Production-unvalidated carry-forward: GCS exceptional archive, archive bridge
+deployment, archive IAM, real lifecycle behavior, production tail-sampling capacity,
+production Collector memory, production retention scheduling, shared Cloud SQL
+migration, production PostgreSQL concurrency/fencing, and native Terraform validation.
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED.
+
+Authoritative sources read: AGENTS.md; .agent/PLANS.md; Telemetry README and docs
+00,01,02,03,04,05,06,09,10,12,13,14,15,16,17,18,20,21,22,23. Docs22/23 inform existing
+contracts and validation only; no M18 release/CI/IaC rollout or M19 profiling added.
+
+Objective: validate the existing architecture under named local faults and bounded
+load; expose and repair only demonstrated defects required by M0–M15 contracts.
+Observability is NEVER EVIDENCE. No new turn executor, run registry, financial truth,
+provider retry policy, authority mechanism or autonomous remediation.
+
+### Failure-domain inventory and reuse map
+
+Paths below are actual inspected owners; FinOps lives under backend/observability/finops,
+not backend/finops. Tests must invoke these owners with fault adapters, not replicas.
+
+| Domain | Actual components / test reuse | Validation responsibility |
+|---|---|---|
+| Root turn, Team Manager, specialists | backend/api/chat_service.py; turn_trace.py; agent_instrumentation.py; adk_adapter.py; test_observability_turn_trace.py and agent/tool/execution_coverage tests | One acceptance, one terminal closure, canonical TurnPlan/primary/supporting ownership, source/authority/provenance/egress intact |
+| Sessions and state | backend/api/session_service.py; chat_service lock/driver; active_runs.py; persistence.py; repository.py; persistence/repository tests | Same-session serialization, independent relay, late write isolation, durable stale truth across process loss |
+| Deadlines/watchdog/workers | deadlines.py; watchdog.py; blocking_work.py; reliability_contract.py; test_observability_reliability.py | Absolute hierarchy, material progress, cleanup reserve, detached workers retain admission until actual completion |
+| SSE/activity | delivery.py; backend/api/app.py; backend/api/activity_queue.py | Slow ASGI send, detach, count/byte bounds, terminal persistence independent of delivery |
+| Provider/model | model_provider.py; model_adapter.py; model_instrumentation.py; model_usage.py; model provider/usage/coverage tests | Generation, streams, embeddings, image interpretation, SDK physical attempts, partial usage, bounded retries |
+| SQL | dependency_database.py; database.py; session/case/attachment/knowledge repository engines | Acquisition/query/commit failures, pool exhaustion, constraints, actual transactions/fencing |
+| Gateway/Graph | dependency_http.py; dependency_instrumentation.py; dependency_contract.py; test_observability_dependency_http.py | Locally fake Power Automate is visible dependency; do not infer direct Graph health from gateway failures |
+| Retrieval/storage/secrets | knowledge_instrumentation.py; dependency_storage.py; knowledge runtime/repositories; dependency knowledge/storage tests | Empty/invalid/slow retrieval; fake GCS/Secret Manager; preserve governed evidence selection |
+| SDK/export/log/metric | runtime.py; exporters/queue.py; exporters/otlp.py; logging.py; metrics.py; exporter/runtime/logging tests | Local SDK initialization, bounded drop/health/flush, no recursion or sensitive fallback |
+| Collector | infra/observability/collector/config{,.local}.yaml; version.json; test_observability_collector.py; test_m15_collector.py; _m1_otel.py | Actual pinned process, sanitized dual branches, memory/tail caches, isolated Trace-like/metric/log receivers |
+| Exceptional archive | archive.py; archive_bridge.py; archive_metadata.py; test_m15_archive.py and test_m15_evidence.py | Durable chunks, immutable manifest/commit anchor, reconstruction, branch isolation and pressure |
+| M10 | finops/usage_ledger.py, repository.py, recovery.py, models.py; runtime ledger/integration/recovery tests | Durable admission before physical dispatch; inbox-only accounting recovery; uniqueness/corrections/debt |
+| M11 | finops/billing_ingestion.py, billing_repository.py, billing_sources.py | Extraction/normalization/publication isolation; monotonic revision CAS and immutable cache |
+| M12 | finops/reconciliation{,_repository,_worker,_inputs}.py | Conservation and source-vector fences; no imbalanced head |
+| M13 | finops/unit_economics{,_repository,_worker}.py; unit_drivers.py; unit_denominators.py | Shared conservation, unavailable drivers, frozen denominators and history |
+| M14 | finops/control_repository.py; control_worker.py; forecasting.py; anomalies.py; forecast_backtesting.py | Immutable predictions, independent scoring and publication, M12/M13 truth unchanged |
+| Retention | retention_registry.py; retention_worker.py; policy_models.py; test_m15_retention.py | Environment/time/lineage bounds, dry-run, rollback, checkpoint CAS; UNKNOWN retains |
+| Protected API/UI | backend/api/observability_routes.py; authorization.py; service.py; finops/*_service.py; useObservabilityQuery.ts; RunDetail.tsx; FinOpsPanel.tsx; PolicyPanels.test.tsx | Authorization before data work, finite pages/cursors, read deadlines, multiple-flight revocation and polling |
+
+### Actual configured limits and concurrency plan
+
+These are source defaults, not assertions about production effective configuration.
+Every run must emit a safe effective-limit manifest and introspect actual pool objects.
+
+| Subsystem | Inspected source default | Planned local pressure |
+|---|---|---|
+| BlockingExecutor | 8 workers +16 pending; admission maximum24; queue max24; daemon threads and history128 | Active4/8/12; admitted12/24/36; burst48. Hold workers with releasable barriers; over-capacity must reject without starting work |
+| SSE DeliveryBuffer | 256 events;4MiB total; queue wait1s; ASGI send10s | Fill half/full/1.5x offered event and byte capacity independently; payload just below/at/above bound |
+| Activity channel | 16 events/run; put_nowait drop + bounded saturation metric | 8/16/24 events; business continues; channel discarded |
+| SDK trace/log queues | 2048 records each; batch256; interval5s; export2s; shutdown5s | 1024/2048/3072 offered records with blocked sink; count drops and in-flight batch separately |
+| Projection coordinator | capacity2048; attempt1s; terminal attempts3; retry5s; checkpoint15s; shutdown5s | Small explicit CI capacity plus extended default half/full/over; coalescing, stale/failure visible, no claim of crash-durable delivery |
+| M9 writer |1024 in-flight/queue; save/evaluation2s; close3s; lost coverage flag |512/1024/1536 offered publications; loss makes coverage incomplete, never false healthy |
+| Accounting | write semaphore8; wait.25s; total prepare/capture2s; attempts<=3; recovery batch100/time2s/attempts5; checkpoint30s/close3s |4/8/12 writers; burst16; blocked admission provider count0; durable inbox populations50/100/150 |
+| Observability-owned PostgreSQL pools |2 connections, overflow0, pool timeout1s per Database instance |1/2/3 contenders; burst4; hold transactions, then release and remeasure |
+| Session/case/attachment/knowledge pools | source preserves SQLAlchemy defaults5 + overflow10; observed acquire timeout defaults5s; knowledge pre_ping/recycle300; SQLite in-memory StaticPool | Verify effective dialect/ADK pool at runtime before using8/15/23 contenders, burst30; aggregate across separately owned engines, not one global pool |
+| Knowledge dense request semaphore | default4 within a query call |2/4/6; concurrent queries multiply this per-call bound; measure aggregate worker limit |
+| Diagnostic reads | semaphore4; total query2s; rate60/subject/minute; principal registry2048 |2/4/6 requests; burst8; separate identities only for authorized synthetic fixture; test429 intentionally |
+| Collector tail caches |256 traces per branch; expected_new_traces_per_sec32 is sizing hint, not admission guarantee; prod wait240s/local2s; memory limit160MiB/spike32MiB |128/256/384 resident trace identities; estimate rate from residence time, then measure; long open traces before terminal and after eviction |
+| Collector exporters | independent128-batch queues,1 consumer; batch200; local/bridge export2s and retries1–2s/max5s; prod Google export5s |64/128/192 offered batches; do not equate batches with spans; inspect native default Google retry behavior before accepting budget |
+| Local archive bridge |4 nonblocking admitted handlers; socket read2s; ThreadingHTTPServer spawns thread before admission |2/4/6 clients; burst8; stalled headers/body + concurrency; semaphore does NOT prove bounded thread creation |
+| Filesystem archive |4MiB request;64MiB logical trace;10,000 spans;256 events/span;256 pending traces;256MiB spool; staging360s; quota/expiry scans1s | Sequential and2/4/6 concurrent commits; pending128/256/384, byte and time limits; reduced explicit CI bounds; complete-trace tests at2/100/1000spans |
+| Archive write/read fence | in-process RLock serializes submits; nonblocking cross-process flock; atomic hard-link create/fsync | Same/different trace, same/different payload, independent processes, concurrent protected reads; bridge4 is not four parallel disk commits |
+| Retention |batch100 default/max1000; batch timeout2s/max10; dependency scan256/max1000; checkpoint row lock + original-generation CAS |50/100/150 candidate populations; two and three workers same/different dataset/environment; block lock and publication races |
+
+No global configured turn capacity exists in the inspected local executor. Turn
+concurrency is a workload input; limiting subsystem determines rejection/waiting.
+Do not call32traces/s x240s safe: that implies7,680resident traces versus256 slots
+per tail cache before considering span memory and dual caches. This is a sizing
+risk to measure, not a measured defect or invented production capacity.
+
+### Explicit failure matrix
+
+Replay column addresses automatic BUSINESS replay due to injection/recovery. A
+bounded byte retry, read retry or accounting materialization is not business replay.
+Only preexisting explicit retry-safe provider policy may dispatch a new physical
+attempt, with its own admission/identity/ledger event. No test adapter grants retry.
+
+| Component | Failure Mode | Expected User Effect | Expected Recovery | Replay Allowed? |
+|---|---|---|---|---|
+| Root/session load | unavailable/permanent DB failure | Safe existing failure, one terminal or documented orphan on process death | Restore DB; old status remains truthful; no implicit resume | No |
+| Session lock | slow/timeout/saturation | Bounded waiting then safe timeout; no concurrent state mutation | Lock released by executing owner; next independently submitted turn works | No |
+| Agent/tool worker | blocked worker/timeout | Correct owning timeout/unknown remote outcome | Running thread retains slot; late result/deferred writes discarded; eventual slot released | No |
+| Watchdog | genuine stall/monitor exception | Safe stage remains visible; independent deadline still active | Material progress resumes RUNNING; EVER_STALLED stays exceptional | No |
+| Streaming provider | slow-but-progressing/partial response | Progress without false stall; partial usage honest; terminal bound | Existing cleanup closes stream; never restart to reconstruct output | No |
+| Provider transport | timeout/transient429/5xx | Canonical model error or existing legitimate bounded retry | Retry only existing SDK policy within remaining budget; distinct physical attempt | Existing policy only |
+| Provider result | malformed/permanent auth failure | Safe failure or existing validation outcome | No telemetry-triggered retry; unknown usage preserved | No |
+| M10 admission | DB unavailable/timeout/queue saturation | Intentional accounting dependency impact; safe unavailable | Repair admission; provider count remains0 for failed admitted request | No |
+| M10 attempt | crash admitted before STARTED | Interrupted turn; not assumed billed | Reopen durable state; mark admitted-not-started conservatively | No |
+| M10 attempt | crash STARTED before capture | Interrupted/unknown outcome; visible debt | Accounting-only reconciliation; no fabricated tokens/provider charge | No |
+| User delivery | crash after provider result before response | Response delivery unknown; saved state used if committed | Inspect actual persisted boundary; orphan/stale/debt if missing; no automatic model/tool restart | No |
+| M10 capture/inbox | DB failure after provider success | Business result preserved with one call | STARTED/FINISHED obligation survives; inbox recovery idempotent if captured | No |
+| M10 inbox/ledger | duplicate/concurrent/conflicting message | No extra business work | Unique event; identical duplicate once; conflict visible; append correction/reversal only | No |
+| M11 publication | normalized result then transaction failure/stale publisher | Previous known-good billing/pricing view plus degradation | Transaction rollback; newer revision fenced; later accounting job may recompute locally | No |
+| M12 control | conservation failure/permanent invalid inputs | Prior view retained; failed generation visible | Reject imbalanced publish; repair data then separate generation | No |
+| M13 driver | unavailable/conflicting/partial | Undistributed shared remains visible | No forced allocation; prior generation on failed publish | No |
+| M14 forecast/anomaly/backtest | detector/forecast/score/publish failure | Unavailable/stale analytical result; business untouched | Preserve M12/M13 and immutable forecast; later independent score/generation | No |
+| Gateway | slow/timeout/transient error/malformed/duplicate result | Existing safe TOOL_TIMEOUT/TOOL_ERROR; no invented Graph origin | Existing read-only retry if declared, deduplicate consumption; reject malformed authority | No extra gateway action |
+| Knowledge | empty/unavailable/timeout/malformed metadata | Valid source gap or safe canonical knowledge error | Governed source selection unchanged; telemetry cannot replace evidence | No |
+| Secret Manager | unavailable/permanent denial | Existing dependency failure, safe fixed error | Fake cache miss restored; no identifiers/values in error | No |
+| GCS attachment | timeout/not-found/corrupt metadata/permission denial | Existing safe attachment failure | Local adapter recovery; no signed URL/content fallback | No |
+| App exporter | unavailable/queue saturation/hung export | Business continues; diagnostics degradation | Finite queue drops + health; transport retries only; bounded shutdown | No |
+| Collector | outage/process crash/restart | Business continues; telemetry may be lost | Bounded SDK queues; restarting local collector resumes new exports, no durable-queue claim | No |
+| Trace-like exporter | unavailable/permanent error | Archive can continue; Trace delivery unknown/failed | Independent branch byte retries and explicit loss | No |
+| Archive branch/sink | unavailable/429-like/5xx/timeout | Business and available Trace branch continue | Bounded byte retries; coverage pending/failed, not complete | No |
+| Archive/bridge | queue/spool saturation/slow commit | Explicit telemetry degradation; no sensitive spill | Reject/backpressure within bounds; recover with capacity; retain exceptional class | No |
+| Archive assembly | missing span/final manifest/interrupted write | Incomplete/unknown reconstruction | Persist accepted safe chunks; complete only with valid closure | No |
+| Archive commit | crash at receive/write/object/pre-ack/post-ack | Chunk ack is not full trace success | Reopen same spool, immutable identical retry, fixed first commit anchor | No |
+| Archive chunks | duplicate/stale/conflicting/late response | Complete history remains truthful | Deduplicate; conflict rejected; late valid supersession immutable, never overwrite | No |
+| Archive input | malformed OTLP/oversize/path traversal | Safe rejection and fixed health error | No arbitrary write/crash loop; valid subsequent payload succeeds | No |
+| Retention | unavailable dependency/UNKNOWN/pressure | Protected history retained | Conservative dependency state; no force-delete | No |
+| Retention batch | crash/timeout/lost fence mid-delete | No corrupt history/checkpoint | Entire uncommitted batch rollback; resume committed cursor; dry-run never deletes | No |
+| DB pool | saturation/transient disconnect/restart | Bounded acquisition/query error; accounting admission intentionally blocks | Dispose/reacquire safely; checked-out connections return after recovery | No |
+| Protected read/UI | slow/stale/malformed response | Loading then safe unavailable/denied; freshness visible | Abort/generation fence; errors stop polling; explicit refresh only | No |
+| Authorization | revoked role/cross-environment selector/late success | Protected data cleared; no existence leak | Deny before data work; late response cannot restore it | No |
+| Backend | graceful/forced shutdown/restart under load | Turn may interrupt; no claimed exactly-once external delivery | Bound graceful cleanup; durable stale/orphan truth, debt and immutable heads inspected after hard kill | No |
+
+### Workload model and load shapes
+
+Use server-owned RequestClass from slo_contract.py with precedence COMPLEX_MULTI_AGENT
+> GOVERNED_TROUBLESHOOTING > TEAMS_LOOKUP > explicit GENERAL > UNKNOWN. Streaming,
+exceptional and FinOps-heavy are test overlays, not new SLO labels. Model user/system/
+image/embedding workload attribution stays in the current model contracts.
+
+| Workload | Production code exercised with synthetic local inputs |
+|---|---|
+| General | ordinary Team Manager turn, planning/context/finalization with fake provider |
+| Teams lookup | gateway read/page/metadata path through IM; no real gateway |
+| Governed troubleshooting | TAE knowledge/source/ProcedureAction/authority/egress, harmless command spy |
+| Complex multi-agent | real orchestrator + two or more specialist paths, existing primary/supporting ownership |
+| Streaming | long SSE and model stream, progressing chunks and stopped chunks independently |
+| Exceptional | SAFETY/GOVERNED/FAILED/TIMEOUT/EVER_STALLED, including successful governed/stall-resumed turns |
+| FinOps-heavy | concurrent admission/capture + bounded synthetic M11–M14 generations + protected reads |
+
+Workloads are fixtures with known physical invocation budgets. Baseline mix may be
+40% general/20% Teams/20% governed/10% complex/10% long-stream as a PROVISIONAL LOCAL
+ASSUMPTION only; also run each separately and FinOps-heavy overlays. Exceptional
+storm is95–100% exceptional; healthy mix is separately100% then10% retained at
+Collector. SDK capture remains100% in every comparison.
+
+Shapes: correctness(one), low(0.5x owner capacity), expected(1x configured capacity),
+burst(short2x admission), spike(1.5x active capacity sustained briefly), saturation
+(held workers/pools/queues to boundary+1), bounded soak, restart-under-load, and
+dependency-degraded load. Separate closed-loop latency runs from bounded open-loop
+arrival runs to reveal queues/rejections and avoid coordinated-omission claims.
+Arrival generator itself has a finite outstanding limit and reports rejected work.
+Never send arbitrary10,000concurrent turns;10,000spans is a payload boundary only.
+
+### Fault-injection architecture and implementation order (future only)
+
+1. Recheck predecessor/local status and effective limits; inventory existing retries,
+   real authority owners and exact dispatch boundaries; add isolated runner fixtures.
+2. Add named deterministic scenario definitions, barrier-driven phases and external
+   supervisor receipts; exercise root/session/deadline/provider/SSE first.
+3. Add concurrent admission/ledger and M11–M14 publication/retention failure cases.
+4. Add actual pinned Collector/local bridge dual receivers, process restart and archive
+   assembly pressure; test SDK, Collector and archive resource use independently.
+5. Exercise disposable PostgreSQL if safely available; never substitute shared SQL.
+6. Run CI subset, optional extended local profile, privacy/integrity/sampling comparisons;
+   repair only evidenced contract defects and rerun affected + applicable regressions.
+7. Record capacity envelopes, gate-by-gate evidence/limits, UI impact and stop before M17.
+
+Prefer pytest monkeypatch/injected repository/transport/storage/clock seams already
+used in tests. Named modes: BEFORE_DISPATCH, AFTER_ADMISSION, AFTER_STARTED,
+AFTER_PROVIDER_RESULT, AFTER_INBOX_COMMIT, BEFORE_PUBLICATION_COMMIT,
+BEFORE_RETENTION_COMMIT, ARCHIVE_CHUNK_DURABLE, ARCHIVE_OBJECT_DURABLE, BEFORE_ACK,
+AFTER_ACK. These are harness vocabulary, not new production telemetry/error enums.
+Use asyncio/thread barriers for ordering; bounded synthetic delay for real-clock
+transport tests; fixed seed only for enumerated malformed-input permutations.
+
+Future runner must be repo-owned (temporary M7 guard is reusable evidence, not CI
+infrastructure). It must remove inherited cloud/provider/DB/proxy/credential settings,
+use empty temporary credential HOME/config for CHILD PROCESSES only, prohibit
+non-loopback IPv4/IPv6/DNS/HTTP traffic including subprocesses, and disallow use of
+Docker-mounted credentials/host databases. Select only explicitly disposable paths/
+DSNs; no inherited real DB. Audit file side effects and subprocess environment.
+Do not start app import/model warmup until this guard and fake dependencies apply.
+Existing socket guard covers connect/connect_ex but is insufficient alone for
+all subprocess/DNS/sendto/container egress; strengthening local isolation is planned.
+
+Invocation proof: external supervisor records fixed synthetic attempt/turn identities
+and dispatch counts for model, agent, tool, command, remediation, gateway and accepted
+turn. Establish allowed counts from no-fault workload and explicit retry policy;
+compare fault workload at actual entry/transport boundaries, not log/span counts.
+Use durable local spy receipts for hard-kill tests so memory reset cannot hide replay.
+Recovery processes import only accounting/archive/retention owners and attach fail-on-
+dispatch spies; they must dispatch zero business operations. Test double callbacks
+never grant authority or generate alternative evidence. No real operation/command.
+
+### Turn, deadline, watchdog and cancellation validation
+
+For recoverable faults and graceful termination: one accepted root and exactly one
+COMPLETED/FAILED/TIMEOUT/CANCELLED; STALLED remains nonterminal. No duplicate wire
+terminal/root finish, leaked locks/ContextVars/evidence channels/tasks; final cleanup
+runs, late worker/persistence completion cannot rewrite outcome. Reuse M2 backstop,
+versioned repository ownership and M6 controller; concurrency includes same-session
+serialization and independent sessions, multi-process durable read without stickiness.
+
+Hard kill cannot run finally or magically persist terminal state. Test persisted
+stale/orphan status + M9 bad/unknown completion, explicit outcome uncertainty and
+no duplicate terminal, rather than fabricating a recovered COMPLETED. If any exact-
+one acceptance requirement demands durable hard-crash terminalization not present
+in M7, record a blocking contract gap and smallest justified repair; never waive it.
+
+M6 default total180s/work175s/cleanup reserve5s; model120/agent150/tool30/gateway10/
+knowledge15/DB acquire5/query15/storage30/secret10; remaining parent always wins.
+Test every category shorter than, equal to and greater than remaining budget; queue
+wait/cleanup included; nested iteration has one budget, not per-chunk renewal.
+CI uses explicit scaled limits like existing M6 fixtures; extended includes real
+configured windows/near-boundary cases. Scheduler tolerance measured from no-fault
+baseline and fixed before run (CI initial allowance100ms); never loosen after failure.
+Retry time+backoff <= remaining parent; dispatch after seal/deadline forbidden.
+
+Watchdog: stopped dependency, slow real material progress, long chunked stream,
+blocked worker and stalled queue. SSE comments/heartbeats never reset material
+progress. Stall-resume-complete keeps EVER_STALLED eligible, final COMPLETED and
+correct availability. Monitor failure must leave independent deadline enforcement.
+Cancellation tested independently: confirmed user/client, service, timeout and process
+shutdown. Disconnect alone detaches relay while backend runs; unknown/system origin
+is eligible bad availability, confirmed client cancellation excluded only where doc21
+requires it. Never infer cancellation origin from free text.
+
+### Provider, retry and accounting validation
+
+All physical Gemini/Vertex generation/stream/embedding/image transports replaced by
+local fakes using actual wrappers; cumulative token snapshots replace, never sum.
+Validate canonical timeout/rate-limit/auth/provider/invalid-response taxonomy and
+partial/unknown usage. Legitimate existing SDK retry gets fresh physical admission/
+attempt/event; logical operation remains one; no silent wrapper retry. Audit aiohttp
+internal attempts and SDK backoffs, gateway policy, knowledge existing read retry,
+DB reconnection, Collector transport retry and accounting write/recovery budgets.
+No circuit breaker is assumed or added: repeated failure first measures storm counts;
+only demonstrated existing-contract defect permits bounded repair.
+
+Crashes: admission before STARTED is not assumed billed; STARTED before usage yields
+durable debt; result before delivery never authorizes replay; durable inbox recovers
+once. Fail admit/start concurrently => provider count0. Fail finished/capture/materialize
+post-success => business result retained, provider count1 (unless explicitly legitimate
+retry already counted), obligation visible even if failed_capture DB write also fails.
+Debt must be honest; unknown billed/token/cost values stay unknown. Ledger correction/
+reversal append; no historical update, no estimated/billed substitution.
+Admission latency p50/p95/p99 is separate critical-path measurement: durability is not
+weakened to improve overhead. Existing3write attempts are inside2s total; recovery
+batch100 is durable inbox work, not a memory queue that can silently discard payload.
+
+### Database and genuine local PostgreSQL plan
+
+Read-only tool discovery: postgres/initdb/pg_ctl/psql and Terraform absent from PATH;
+no PostgreSQL/Terraform directories found in inspected standard opt locations.
+Docker executable exists; daemon, local image and disposable runtime availability
+UNVERIFIED. No daemon call/container start/image pull/install/database connection
+occurred in planning. PostgreSQL is currently NOT LIVE-VALIDATED.
+
+Future authorized local implementation preflight may inspect Docker read-only info
+and locally cached PostgreSQL images, or existing local executables. Only initialize
+a unique disposable cluster/data root with loopback or private socket and synthetic
+credentials, or a cached-image container with no external networking/host mounts.
+No automatic installation/image pull/shared Cloud SQL fallback. If unavailable,
+record conditional PostgreSQL gates NOT LIVE-VALIDATED explicitly, never SQLite PASS.
+
+Use actual migration chain to b15e3f7a9c81 exclusively against the verified disposable
+DSN; two independent engines/processes and barriers, actual constraints/transactions:
+M10 simultaneous identical/conflicting ledger inserts; M11–M14 out-of-order reserve/
+publish, commit failure and changing source vectors; M15 same checkpoint row lock/
+lost generation rollback; archive eligibility/receipt metadata duplication. Race
+retention with financial publishers: current non-SQLite financial dependency checker
+returns UNKNOWN intentionally; test retention, do not disable that guard.
+Hold entire pool, expire pending acquire, inspect connection/task counts, release,
+then read/write successfully. Restart ONLY owned disposable DB mid-query/commit;
+uncertain commit reconciled using identity, never repeated provider/command. Observe
+transaction rollback and financial integrity after each case. SQLite covers logical
+failure paths; StaticPool cannot certify PostgreSQL locking or pool behavior.
+
+### Collector, exporter and exceptional archive validation
+
+Pinned0.160.0 contrib local binary exists at /private/tmp/m1-collector/otelcol-contrib;
+reuse hash/version verification before future execution. Google production image
+is not locally/live-qualified by that binary. Use actual loopback Collector/OTLP
+receivers/bridge, native health/self-metrics and external process RSS/CPU counters.
+Trace test sink is a local receiver, not Google Cloud Trace service certification.
+
+Inject Collector unavailable/restart, trace/metric/log exporter errors independently,
+both trace branches down and recovered; blocked exporters fill finite SDK/Collector
+queues. App SDK export failure currently counts failed batch as dropped; it does
+not replay buffered failed spans. Do not claim durable Collector queues: configs do
+not enable persistent queue storage. Check health, refused/dropped counts, flush
+bounds, no recursive diagnostics or raw console logging. Validate common sanitization
+before branch fanout and independent recovery both directions. A full forward branch
+could backpressure common ingestion: measure and surface any coupling, not assume
+independence merely from YAML. Safe degradation is visible if telemetry itself lost.
+
+Run healthy100/10% sampling over identical workload and accounting fixtures, healthy
+archive count0; incident storm95–100% exceptional is ALWAYS_KEEP pressure. Measure
+both tail caches, export queues, spans/events/bytes, decision latency and archive
+completeness with unsampled pre-export denominator. Accepted/chunk-acked/COMPLETE
+are distinct. Test missing eligibility population => ratio UNKNOWN, never100%.
+
+Long trace sequence: first child before decision, root/exception beyond decision,
+boundary around local2s/prod240s, beyond turn cap and cache eviction/restart; chunks
+out of order and duplicate. Compression of time is useful unit evidence only;
+extended opt-in run uses actual240s window. Late exceptional must not be silently
+classified healthy. If native decision cache prevents promised retention/assembly,
+report blocking retention gap and scope repair; do not relabel exception or archive
+healthy traffic to mask it. Production affinity/memory remains unvalidated.
+
+Archive sequential2/100/1000span commits then2/4/6 concurrent writers, native export
+queue saturation, bridge slow body/read timeout, file-lock contention and simulated
+GCS429/5xx/timeout/partial write. M15~846ms per1000span commit is one local observation,
+not rate guarantee. Track producer/bridge wait, spool bytes/count, rejection/timeouts,
+RSS, handles and completeness. Test all five exceptional classes, governed successful
+turns, safety and stall-resume; unknown classification never automatically archived.
+
+Partial/archive crash phases: before durable receive, after safe chunk fsync, interrupted
+_create temporary file, after envelope object before final manifest, before and after
+HTTP acknowledgement; reopen SAME trusted disposable root, retry identical bytes.
+No COMPLETE without registered expected population, hierarchy/timings and manifest;
+no arbitrary filesystem write, temp-file leak or crash loop on malformed OTLP.
+Duplicate acknowledgement cannot reset90day anchor; conflict safe; late valid complete
+version supersedes immutably. Verify chunk TTL cannot delete manifest dependencies.
+Concurrent authorized reconstruction during writes returns complete verified envelope
+or explicit unavailable/partial state, never torn content; auth/environment/caps intact.
+GCS attachment/object fault adapter simulates behavior only; GCS remains unvalidated.
+
+### Retention and FinOps generation failure/recovery
+
+Retention dry-run concurrent normal reads/writes must leave rows/checkpoints unchanged;
+real local batches delete at most batch count within timeout. Inject dependency lookup
+failure/UNKNOWN, deep/malformed lineage, scan overflow, locked row, deadline and lost
+fence. Every correction/pricing/source/publication/denominator/forecast/backtest/anomaly
+reference retains its dependency; no forced CLEAR. Crash before delete commit rolls
+back rows+cursor atomically; after commit resume from committed cursor without
+repeating destructive side effects. Check dependencies when cutoff changes, committed
+batch replay and multiple environments. Measure lock wait/query/delete/checkpoint
+latency and interactive impact; no long lock claim without PostgreSQL evidence.
+
+M11: extraction/normalization succeed then publication insert/CAS/commit fails =>
+previous current billing/pricing generation unchanged, failure/staleness visible.
+M12: deliberately perturb exact native/reporting conservation or source version =>
+no new current imbalanced view; keep allocated+shared+unallocated source total.
+M13: unavailable/conflicting shared drivers => undistributed retained, no fabricated
+allocation; stale fencing/commit failure preserves prior current economics.
+M14: forecast, detector, separate backtest and publication each fail independently;
+prediction history immutable, M12/M13 rows/heads byte-identical, previous applicable
+head preserved; no infrastructure change/automated action. Detector recomputation
+is analytical work only. Use existing bounded synthetic populations then increasing
+within each policy cap; run concurrent interactive turns and check starvation and
+pool pressure. No background/scheduling separation is presumed without measurement.
+
+### SSE, queues, API load and UI impact
+
+Delivery overflows count and bytes independently, timeout producer wait, detach slow
+consumer, suppress further buffering and let canonical backend complete/persist.
+Test oversized event/response, ASGI send block, browser disconnect before/after final
+emit and explicit user cancel separately. Terminal root status is not inferred from
+wire success. Draining/detaching must release memory and lock cleanup follows owner.
+Worker slots kept for underlying sync activity until release, history bounded; test
+aggregate multiple query/bridge request threads, not just semaphore occupancy.
+
+Every queue gets producer rate, residence, maximum depth/bytes, enqueue wait,
+rejection/drop and recovery evidence: SSE256, activity16, SDK2048/signal, M7projection2048,
+M9writer1024, workers24, Collector128batches/branch, archive256pending/256MiB and
+M10 durable inbox/recovery batch100. Inbox is append-durable backlog, not finite
+in-memory buffer; disk/population limits and recovery age/debt must be observed.
+If an applicable queue lacks explicit saturation behavior, that is a defect candidate.
+
+Protected APIs: page/query/payload bounds, remaining deadlines, cancellation, rate429,
+cursor tamper, stale generation and unauthenticated/role/env denial at high request
+rate. Count DB calls on denied traffic; backend enforces role ceilings; FinOps never
+gets technical archive/content access. Existing diagnostic semaphore4/2s applies
+only to that service; inspect each FinOps service's independent bounds.
+
+useObservabilityQuery currently permits one active request per mounted section,
+10s deadline, completion-scheduled15s polling, visibility cancellation and stops
+on failure. Test slow response + repeated refresh without amplification, error/
+malformed/throttled responses, hidden/unmounted/key change, multiple independently
+mounted financial/technical sections then revocation. Late success (including fake
+adapter ignoring AbortSignal) must not restore protected data anywhere. No local/
+sessionStorage/IndexedDB/cache/URL persistence of protected content. Missing cross-
+section invalidation is a test question, not assumed solved by one hook generation.
+
+Five required Settings decisions: (1) failure/queue/debt/archive freshness information
+supports existing Overview/Reliability/SLOs/FinOps/Data & Retention/Diagnostics;
+(2) reuse read-only current health/run/policy/financial contracts, add only bounded
+truthful field if a demonstrated diagnostic defect requires it; (3) M16 UI scope
+is failure/revocation/polling tests and necessary bounded recovery fixes, no new UI;
+(4) existing server RBAC+environment isolation applies, FinOps/content separation;
+(5) effective IaC/env/backend configuration remains view-only, no runtime mutation.
+No dashboards deployed; local fixtures only when needed. Runbook edits only for
+newly exposed missing diagnostic steps, never autonomous remediation.
+
+### Restart/crash matrix and post-scenario integrity
+
+All starts/kills below target only harness-owned local PIDs and disposable directories.
+Bound subprocess shutdown, then force kill within supervisor deadline; do not kill
+unidentified host processes or a shared Docker daemon.
+
+| Process / sequence | Injection boundaries | Durable/recoverable expectation |
+|---|---|---|
+| Backend graceful | active turn/model/SSE, accounting capture, archive write, retention or generation task | Cleanup bounded; session lock released; known terminal once or explicit failure; finite flush |
+| Backend hard kill/restart | admission, STARTED, result-before-delivery, inbox commit | No re-execution; durable attempt/debt/inbox, stale/orphan run and M9 uncertainty truthful |
+| Collector only | live ingress and queues, repeated restart | App survives; volatile span loss reported; new ingress recovers; no business replay |
+| Bridge only | chunk, temp/object, manifest, pre/post ack | Durable accepted chunks reopen; idempotent complete retry; incomplete never complete |
+| Collector then bridge | active exceptional burst | Independent bounded branch recovery; retained chunks/denominator truthful |
+| Bridge then Collector | active exceptional burst | Same invariants; ack loss allows byte retry only |
+| Both/repeated combined | randomized ordering excluded; named sequence and barriers | No unsafe duplicate business work; missing volatile chunks stay partial/unknown |
+| Disposable PostgreSQL only | held pool/query/commit/fences | Identity reconciles uncertain commit; rollback/head consistency and pool recovery |
+| Backend+disposable DB | provider-result/accounting/retention/publication boundaries | No provider replay; financial debt/checkpoint/pointers consistent |
+
+After EVERY crash/load scenario: M10 immutable ledger uniqueness/payload/conflict/
+correction chains and inbox/debt; M11 publication manifest/cache/current pointer;
+M12 exact conservation and source-vector provenance; M13 distributed+undistributed
+shared conservation and denominator history; M14 immutable forecasts/backtest links;
+M15 chunk/envelope digests/expected spans/manifest commit times; retention atomic
+checkpoint/cursor/generation + dependencies. Check terminal ownership/version and
+session state separately. Do not silently rerun until green: each failed scenario
+records injection point, expected/observed, violated invariant, root cause, scoped
+repair, regression test and final status. Discovered authority defect stops progression.
+
+### Privacy, malformed input and resource-leak strategy
+
+Repeat M15 prohibited marker corpus through timeout, exception, malformed model/
+DB/export/archive failures and high volume. Inspect SDK queues, native common
+redaction receiver, both branches, structured/error logs, spool/temp files, ledger/
+financial snapshots, API/SSE and UI. No credentials/auth headers, secrets, hidden
+reasoning, full prompts/responses/Teams/documents/attachments, raw args/results/
+SQL/binds/URLs or raw billing identifiers. Test sentinels known only to fakes; raw
+business fixture data can live solely in trusted fixture state, never diagnostic
+reports. Safe corpus summaries contain counts/hashes, not leaked values. Zero leak.
+
+Bounded deterministic fuzz: protobuf malformed/truncated/unknown nested fields,
+invalid enum/time/trace ID/env, duplicate/conflicting attributes/spans, traversal and
+symlinks, invalid/tampered cursor, timestamps and oversized request/response/page/
+archive envelope. Exercise exact actual maxima and boundary+1; reject safely and
+prove next valid request still works. No unbounded fuzz worker population.
+
+Machine-check label keys+values against finite per-instrument registries after
+stress; exemplars remain stripped; unique synthetic IDs cannot grow series cardinality.
+Measure logs/sec/bytes and duplicate fixed errors; preserve unique safety-critical
+signals. Existing safe logging/health counters reused; add suppression only if
+measured repeated failure violates bounds, with aggregate suppressed counts.
+
+RSS/process CPU sampling per application/Collector/bridge/DB every1s (CI coarse
+phase snapshots acceptable). Warm up, baseline, repeat3 fault/drain cycles, settle,
+compare threads/tasks/FDs/sockets/DB checked-out connections/temp files/archive
+handles and queue/backlog. Use current RSS (not lifetime maxrss) and sustained slope;
+Python allocator retained plateau is not leak. Planned initial local allowance:
+settled last-cycle RSS increase <=max(16MiB,10% warmed RSS) and no positive drift
+across settled windows beyond repeated-baseline noise; register threshold before
+run and report confidence. Persistent unexplained growth/unreleased work blocks;
+threshold adjustment requires new justified baseline, not hiding a failing run.
+Worker threads may persist up to configured8 as warm pool; hung sync workers stay
+occupied and are explicitly bounded until test barrier release/process exit.
+At settle: request tasks0 above baseline, checked-out DB connections0, handles/
+temp artifacts0 above expected durable objects, queues drain or explicit durable debt
+with bounded recovery. Harness metrics/receipts themselves must be bounded.
+
+### SLO/FinOps invariants, performance and capacity envelopes
+
+Exact unsampled truth from M9 receipts and M10 ledger, not retained spans. Re-evaluate
+accepted/cancelled/terminal/source-gap/clarification populations and settle watermark
+under load. Legitimate business failures worsen SLOs; lost source coverage marks
+UNKNOWN/unavailable, not shrinking denominator into healthy state. Trace capture
+completeness, Cloud Trace export and archive completeness stay separate.
+Same business fixtures healthy100→10% sampling/export outage leave M10–M14 usage,
+price version, cost, native/EUR values, reconciliation and generations identical;
+M9 arithmetic changes only for actual outcome differences, never sampling itself.
+A blocked provider due to admission is genuine business dependency impact.
+
+Measure paired warmed telemetry on/off, identical fake provider timing/workload,
+with accounting durability enabled in BOTH; isolated/export network measured
+separately. Doc01 targets: instrumentation CPU overhead <3% typical-turn workload,
+synchronous instrumentation <10ms excluding provider/export network. Use repeated
+matched runs, process CPU per completed comparable turn and dispersion; tiny fake
+CPU baseline yields inconclusive ratio, never a false PASS. Accounting admission
+critical-path latency reported separately; no durability bypass baseline. Root
+latency compared locally against provisional8/20/30/45s classes, streaming first
+provider output5s, exact event ratios; not production certification. Deliberately
+failed load may miss latency targets while safety gates pass; distinguish expected
+fault effect from overhead failure and unexplained regressions.
+
+Envelope rows for each subsystem/profile/shape/class/environment include effective
+limits, offered+accepted throughput/concurrency, completed/rejected/error rate,
+latency p50/p95/p99, sample count, duration, CPU/RSS, queue maximum/residence, backlog/
+debt, recovery time and invariant verdict. Report p99 only with >=1,000measured
+operations per population; otherwise N/A with max/p95 where adequate (p95>=100).
+Do not merge latency populations or call laptop maximum a production capacity.
+
+Dedicated archive table: traces/sec, spans/sec, bytes/sec, mean spans/trace,
+serialization/commit/reconstruct latency, concurrent reads/writes, queue/spool/depth,
+RSS and COMPLETE/eligible ratio including failed unseen delivery. Collector table:
+SDK100% production volume vs healthy100/10%, dual tail cache residence/eviction,
+queue batches, exporter latency and exceptional storm. DB table separately labels
+SQLite versus actual local PostgreSQL: transaction throughput, pool wait/admission
+p95, fencing failures and retention lock/delete impact. M15 historical benchmarks
+are reference points only; all M16 measurements PENDING.
+
+### CI, extended local and production profiles
+
+CI: deterministic correctness + bounded pressure with small explicit capacities
+and shortened policy windows; three repeat fault/drain cycles,30s soak, target <=120s
+for added non-native CI subset. Actual native Collector mini profile target <=60s
+separate group. Include no-replay spies, concurrent duplicates, all accounting crash
+windows, publication failures, retention rollback/UNKNOWN, canonical root/deadlines/
+cancellations, both sampling rates and SLO/FinOps invariance, branch isolation,
+archive byte retry/idempotency/partial ack, failure privacy and resource counters.
+All named scenarios finite deadlines. Native binary required for native group,
+unavailability not a passing skip. Repo-local guarded invocation; marker selection
+only after profile files actually exist. No M18 CI infrastructure rollout.
+
+Extended local: opt-in steady profiles60s each, burst/spike10s, soak10min with1s
+samples and3 settle/drain cycles; separate240s-tail-window cases (bounded up to6min),
+restart combos and exceptional storms. Workload/capacity scaling per table, retained
+input populations bounded by policy caps, optional real disposable PostgreSQL and
+native-process RSS. Initial supervisor wall cap30min, with progress and scoped
+phase timeouts. Normal unit suite must not silently include this long profile.
+
+Production validation profile — NOT EXECUTED: future M17 separate exact-operation
+approval, agreed synthetic identities/data, deployment/rollback window, capacity
+limits and cost cap before traffic. Real deployed Collector/bridge, Cloud Run
+concurrency/revisions, Cloud SQL schema/instances/fencing, GCS immutable writes/IAM/
+lifecycle/soft delete/retrieval, Trace/Monitoring/Logging acknowledgements and
+network envelope. Source-controlled effective IaC stays authoritative. Local
+restart stress never grants approval to restart production DB/Collector/service.
+Production SLO baseline and archive/DB/Collector capacity pending; no project selected.
+
+### Files expected to change during later authorized implementation
+
+Only .agent/OBSERVABILITY_EXECUTION.md changed in this planning pass.
+Planned new files (not yet present):
+- backend/tests/_m16_harness.py — deterministic barriers, fault adapters, receipts, integrity and resource observers.
+- backend/tests/test_m16_turn_resilience.py — root/session/deadline/watchdog/SSE/provider no replay.
+- backend/tests/test_m16_accounting_resilience.py — admission/capture/crash/retry/duplication stress.
+- backend/tests/test_m16_finops_resilience.py — M11–M14 generations and conservation under pressure.
+- backend/tests/test_m16_database_resilience.py — isolated PostgreSQL/SQLite-separated evidence.
+- backend/tests/test_m16_collector_resilience.py — native dual branches/tail memory/restarts.
+- backend/tests/test_m16_archive_resilience.py — commit/crash/partial/read/saturation adapters.
+- backend/tests/test_m16_retention_resilience.py — dependency/rollback/checkpoint concurrency.
+- backend/tests/test_m16_security_resilience.py — malformed inputs, privacy, RBAC/cardinality.
+- backend/tests/test_m16_load_profiles.py — bounded CI/extended scenarios and report aggregation.
+- scripts/observability/run_m16_validation.py — repo-owned egress guard, isolated processes and profile supervisor.
+- src/components/shell/settings/observability/Resilience.test.tsx — multi-flight polling/revocation/failure behavior.
+- docs/Telemetry/validation/M16_LOCAL_VALIDATION.md — sanitized scenario/gate/envelope results, not rewritten specifications.
+
+Reuse existing M6/M10–M15 test fixtures listed above; extend relevant existing tests
+where narrower than a new module. Possible runtime repairs ONLY after failing
+scenario: blocking_work.py, delivery.py, deadlines.py, watchdog.py, model_provider.py,
+exporters/queue.py, logging.py, persistence.py, slo_sources.py, archive.py,
+archive_bridge.py, archive_metadata.py, retention_worker.py, finops owning repositories/
+workers, useObservabilityQuery.ts and existing protected panels. Collector config
+changes only to repair proven capacity/late-decision/queue defect, versioned and
+native-validated. No speculative schema change/migration currently planned. No
+TurnAuthority/ProcedureAction/authority/routing/source/Teams change except a proven
+M0–M15 regression with explicit evidence. Keep files scoped and preserve local work.
+
+### Planned validation commands — NOT EXECUTED
+
+Existing predecessor runner (outside repo) shows safe approach; future repo runner
+must carry equivalent-and-stronger isolation rather than rely on /private/tmp.
+Proposed invocation interface below must be implemented before commands can run:
+
+```sh
+.venv/bin/python scripts/observability/run_m16_validation.py --profile ci
+.venv/bin/python scripts/observability/run_m16_validation.py --profile native
+.venv/bin/python scripts/observability/run_m16_validation.py --profile extended
+.venv/bin/python scripts/observability/run_m16_validation.py --profile postgres
+.venv/bin/python scripts/observability/run_m16_validation.py --profile regression
+npm test -- --run
+npm run build
+git diff --check
+```
+
+Runner maps regression to guarded full backend/tests (historical command:
+`.venv/bin/python /private/tmp/slopanoc-m7-test-guard/run_tests.py backend/tests -s`).
+CI/native/extended/postgres collect only declared local M16 + affected predecessor
+files; full backend regression required after repairs, frontend/build after relevant
+UI/contracts changes and final milestone acceptance. Imports/compilation, pinned
+Collector config validation and isolated migration upgrade/head/downgrade/upgrade
+plus offline PostgreSQL DDL are included; offline DDL is not transaction evidence.
+Choose PostgreSQL DSN solely via runner-created sandbox, never caller environment.
+Do not invoke a future production profile; author approval checklist only.
+
+If Terraform becomes available: inspect module providers/backend/static bindings,
+`terraform fmt -check -recursive infra/observability/terraform`, then isolated
+`terraform validate` only with local/preinstalled provider initialization and no
+remote backend/cloud calls. Missing CLI/providers = NOT EXECUTED with reason;
+no automatic provider download, terraform plan/apply/import/state mutation. Native
+Terraform currently NOT EXECUTED — CLI unavailable. Static review is separate.
+
+### Individual M16 exit criteria — all PENDING / NOT TESTED
+
+Each C gate needs scenario identity, actual code path, expected/observed receipts,
+report link, PASS/FAIL and honest local/live scope. No implementation exit passes
+from this plan. Conditional availability gates need recorded preflight/limitation;
+required safety scenarios cannot be skipped. Any blocking failure stops progression.
+
+| Gate | Objective required evidence |
+|---|---|
+| C01 | Model/agent/tool/command/remediation/gateway/turn dispatch counts show zero unintended business replay for every injected observability/accounting/archive/retention/diagnostic failure |
+| C02 | Recoverable/graceful accepted root closes exactly once; hard-crash stale/orphan and any terminalization gap explicitly evaluated without fabricated success |
+| C03 | Session locks, state ownership, activity/evidence channels and cleanup released; late results cannot mutate finalized state |
+| C04 | Every deadline category and remaining parent propagation bounded; cleanup inside total reserve |
+| C05 | Retry +backoff fits remaining operation/turn budget; no post-terminal dispatch or multiplicative storm; only preexisting legitimate retries |
+| C06 | Genuine stall, progressing stream, blocked worker/queue correct; EVER_STALLED survives successful completion; monitor failure cannot disable timer |
+| C07 | User/client/service/timeout/shutdown cancellation origins preserve M9 availability/completion semantics |
+| C08 | Blocking workers at/above admission bounds reject safely, no hidden drop or thread/task runaway; detached running capacity retained |
+| C09 | Every applicable queue has measured finite saturation/drop/backpressure and recovery; durable accounting inbox/debt not discarded |
+| C10 | SSE count/byte/send bounds hold, slow/disconnected consumer cannot deadlock backend; terminal persistence independent |
+| C11 | Admission/start failure under concurrent load dispatches provider0 times |
+| C12 | Provider success + capture/materialize failure preserves business result and one physical invocation with durable/visible debt |
+| C13 | All admission/STARTED/result/inbox crash windows recover accounting only; partial/unknown usage truthful |
+| C14 | Legitimate physical retries distinct/idempotent in M10; immutable usage correction/reversal and exact totals preserved |
+| C15 | M11 normalized-success/publish failure/stale revision preserves previous current billing/pricing generation |
+| C16 | M12 failed conservation/source fence cannot publish imbalanced financial view |
+| C17 | M13 unavailable/conflicting drivers preserve undistributed shared, conservation and prior head on failed publish |
+| C18 | M14 forecast/detector/backtest/publication faults preserve prior applicable head, immutable history and M12/M13 truth; no autonomous action |
+| C19 | Collector outage/restart and independent exporters leave business execution safe, queues/flush bounded and health truthful |
+| C20 | Cloud Trace-like/archive branches fail/recover independently; common pressure coupling explicitly tested and any blocking isolation gap repaired |
+| C21 | Healthy traces never enter archive at100/10%; SDK capture100%; exceptional class never downgraded under pressure |
+| C22 | Exceptional storm measured across tail caches/exporters/bridge/spool; capacity exceeded degrades explicitly without replay/content spill |
+| C23 | Tail-window/long-stream/late-exception/eviction/restart behavior preserves required eligibility; limitations exposed, no silent early healthy decision |
+| C24 | Chunk retries/duplicates/pre/post ack crash idempotent, immutable complete commits and retention anchor stable |
+| C25 | Missing spans/closure/manifest, partial writes, conflicts and malformed OTLP never produce false COMPLETE; actual reconstruction validated |
+| C26 | Archive concurrent protected reads/writes preserve environment/capability isolation, bounds and verified full safe trace |
+| C27 | Retention dry-run nonmutating; bounded batches crash/resume/lost CAS roll back rows+checkpoint atomically |
+| C28 | Financial dependencies/UNKNOWN coverage retained under pressure; no unsafe deletion or archive-financial dependency invented |
+| C29 | DB pool saturation/wait/query failure and recovery bounded; no connection leak; actual pool/dialect limits recorded |
+| C30 | Genuine disposable PostgreSQL M10–M15 concurrency/fencing/restart tested if available; otherwise NOT LIVE-VALIDATED explicitly with no shared fallback |
+| C31 | M9 exact populations/settlement correct under load and sampling; missing source coverage UNKNOWN, not false healthy |
+| C32 | M10–M14 exact unsampled truth invariant under sampling/export outage; admission completeness/latency tradeoff visible |
+| C33 | Privacy marker corpus zero leak in every failure/export/spool/log/metric/ledger/API/UI path; metric registries/cardinality/exemplars bounded |
+| C34 | Authorization/env isolation under traffic, cursors/path traversal/malformed/time/enum/payload boundaries reject safely and no protected data leak |
+| C35 | Polling/deadline/cancellation/error behavior has no amplification/infinite retry; cross-section revocation late responses cannot restore data |
+| C36 | Repeated failure/soak RSS and FD/socket/task/thread/DB/temp/handle evidence shows no unbounded growth, justified warmed plateaus only |
+| C37 | Backend/Collector/bridge/disposable DB restart combinations and graceful/forced shutdown yield consistent durable uncertainty/debt/heads/checkpoints |
+| C38 | Every scenario post-check passes M10 uniqueness, M11 links, M12/M13 conservation, M14 immutability, M15 manifests/checkpoints and governance boundaries |
+| C39 | Deterministic bounded CI suite exists + opt-in extended profile executed/evidenced; normal suite remains practical; failures documented and repaired |
+| C40 | App/accounting/archive/Collector/DB/API/retention/FinOps envelopes have measured limits/sample sizes and no production-capacity claims |
+| C41 | Doc01 instrumentation CPU<3% and sync<10ms budget evaluated with valid matched evidence; inconclusive is not PASS; provisional local SLO results separate |
+| C42 | Imports/build and milestone + applicable backend/frontend/migration/native Collector regressions pass; blocking defects fixed; scoped hygiene reviewed |
+| C43 | PostgreSQL/GCS/lifecycle/IAM/production Collector/shared migration/Terraform pending statuses truthful; explicit M17 approval handoff |
+| C44 | No cloud/shared/external mutation, deployment, M17/M18/M19 implementation or governance weakening |
+
+### Cloud disposition, risks, planning validation and readiness
+
+No cloud/infrastructure operation required for M16 planning or isolated ordinary
+local validation. Exact pending M17 families: approved archive bridge deployment,
+GCS environment bucket/immutable Custom-Time object binding/lifecycle/soft-delete,
+writer+reader identities/IAM, Collector deployment/routing/affinity/capacity, Cloud
+SQL migration b15e3f7a9c81 and real PostgreSQL fencing, retention/archive reconciliation
+scheduling, monitoring/alerts/log-retention/retrieval activation and live checks.
+Targets/projects/accounts/tenant/environment deliberately not inferred or selected.
+Before any such operation present exact command, target, resources, necessity,
+operational/security/IAM/cost impact, data-loss/interruption risk, rollback and
+DEV/STAGING/PRODUCTION; wait for specific approval. This plan grants none.
+
+Risks/questions to resolve during implementation: unbounded pre-admission HTTP
+thread creation/slowloris in local bridge; serialized~846ms1000span archive commit;
+128batches and two256trace caches under incident storms; decision wait vs late
+terminal/classification and eviction; volatile Collector/projection loss on hard
+crash; cross-section UI revocation; aggregate per-engine pools/per-query semaphores;
+unknown physical retry/backoff visibility; local PostgreSQL unavailability and
+Terraform CLI/provider absence; <3% CPU evidence invalid with tiny synthetic work.
+These are audit risks, not proven predecessor failures or silently waived gates.
+No unresolved predecessor acceptance failure was found in the local records/source
+existence audit. No separate user choice is needed to complete this planning pass.
+
+Planning validation performed: read-only specification/source/test/UI/config/tool
+inspection; verified predecessor record and implementation existence; capacity
+values tied to actual code; proposed scenario/profile/restart/integrity/gate coverage
+review; final diff/status/untracked/SHA256 scope check recorded below. No M16 test,
+load/performance run, import/build, PostgreSQL migration/restart, Docker operation,
+Terraform command, real API call or external mutation performed. No implementation
+exit criterion asserted PASS; no measured M16 capacity exists. No repairs performed.
+
+M16 — PLANNED — NOT IMPLEMENTED.
+Ready To Implement M16: YES (local plan readiness; requires subsequent instruction).
+Ready for Next Milestone: NO. M17 remains BLOCKED BY M16. STOP.
+
+Final planning hygiene: `git diff --check` PASS; git status/diff/untracked reviewed.
+SHA256 audit: only .agent/OBSERVABILITY_EXECUTION.md changed; 1,115 other baseline
+files unchanged; zero new/removed files. Machine-checked C01–C44 sequential coverage
+PASS (planning coverage only). Source/specifications/tests/configuration untouched.
+This evidence validates document scope, not M16 implementation or runtime behavior.
+
+
+## M16 implementation authorization — 2026-10-09
+
+User approved local M16 implementation only. Predecessor local gate PASS; M17
+blocked. First blocking gate is native pinned-Collector late exceptional retention;
+no broad stress proceeds before understanding/repairing/passing this gate.
+Approved plan above remains implementation/safety/validation contract.
+Production GCS/bridge/tail capacity/PostgreSQL fencing/retention scheduling remain
+unvalidated; Terraform availability will be rechecked. No remote mutation pending
+execution or authorized. Runtime repairs require reproduced failing contract test.
+Implementation baseline saved outside repo; existing local planning changes preserved.
+Ready for Next Milestone: NO.
+
+## M16 local implementation and acceptance audit — 2026-10-09
+
+This section supersedes the planning-only M16 status above. Predecessor local
+acceptance remains PASS; no earlier milestone implementation was reset/discarded.
+M16 has scoped implementation and observed validation, but is **INCOMPLETE**.
+Ready for Next Milestone: **NO**. No M17/M18/M19 work was performed.
+
+### Implementation performed and actual scope
+
+- Reproduced late exceptional loss with pinned native contrib0.160.0: previous
+  local2s timer, children first, terminal FAILED/TIMEOUT/EVER_STALLED four seconds
+  later =>0/3 complete exceptional archives. Changed both local source defaults
+  to240s, matching existing production source. Added local window/population
+  planning guard; unsafe overrides are explicitly rejected by that planning check.
+  It is not deployment wiring; production config remains unchanged/unqualified.
+- Reproduced slow-header bridge admission defect:20 incomplete requests spawned20
+  threads because the semaphore ran after HTTP header parsing. Four-slot admission
+  now precedes thread creation; socket timeout precedes parsing; overload503 is
+  bounded and slots release in finally. No business worker/retry/authority path
+  changed. The identical regression passes.
+- Reproduced original baseline UI hook failures for401/403 across mounted sections.
+  Added revocation subscriptions, response-generation cancellation, protected-data
+  clearing and polling stop. Prior authorization survives intervening503/key change;
+  initial role-specific403 remains an independent access probe, avoiding FinOps or
+  User role elevation/technical disclosure. No cache, permission grant or new UI.
+- Added repo-local isolated supervisor, fail-closed egress guard, named fixed-deadline
+  CI/native/full-window/extended/regression profiles, owned-process-group shutdown,
+  no-install/no-shared-DSN PostgreSQL probe and safe measurement helpers.
+- Added canonical turn/worker/SSE pressure, physical provider accounting failure
+  spies, true child accounting/archive hard exits, retention concurrency, poisoned
+  financial publication controls, mixed M12/M13/control reads and immutable-body
+  audit, malformed/privacy failure tests, actual SDK2048 and SLO1024 queue pressure,
+  three-cycle30s/600s archive soaks and60s application/accounting/exporter soak.
+- Added matched telemetry on/off benchmark with durable accounting enabled in BOTH
+  modes, and a safe existing dependency-benchmark diagnostic after reproducing its
+  unchanged10ms budget failure. No cost-ledger bypass or fabricated CPU baseline.
+
+Exact implementation files are listed in `docs/Telemetry/validation/M16_LOCAL_VALIDATION.md`
+and the final scope/receipt audit below. All production logging, active-run storage,
+SLO/FinOps truth, governed evidence, Team Manager/TurnPlan/TurnAuthority, approvals,
+Command Authority, provenance, session persistence/SSE/rewind architectures remain
+unchanged. The current three production-path repairs are confined to local Collector
+source defaults, the local archive bridge and existing UI query invalidation.
+
+### Validation performed / observed evidence
+
+Commands use `.venv/bin/python scripts/observability/run_m16_validation.py --profile`:
+CI, native, sampling, tail-long, extended, regression, postgres. Supervisor isolates
+credentials/proxies/HOME/TMPDIR/DSNs; Python rejects non-loopback network/DNS. Native
+fixtures configure only loopback receivers/exporters and owned temporary storage.
+All child kills target harness-owned PIDs/process groups. No GCP, IAM, billing,
+Terraform state, remote database, Graph, provider or external resource was mutated.
+
+- Native first gate:1 PASS in245.12s with configured240s timer and root delayed180s.
+  Short repaired10s gate keeps3/3, unsafe previous2s fixture keeps0/3. Long healthy
+  traces remain probabilistically sampleable and absent from archive.
+- Default-window pressure:1 PASS in245.19s,128/128 exceptional traces COMPLETE,
+  all256 spans in Cloud Trace-like receiver, terminal evidence at180s; completion
+  observed242.23s. Real sampler residency, not a Python policy mirror alone.
+- Native group25 PASS in154.93s. Follow-up Collector hard-kill/graceful-bridge-reopen
+  repetition3 PASS in25.61s; volatile child loss PARTIAL, exact telemetry-byte
+  retry COMPLETE and duplicate-safe. These are not every combined crash order.
+- Final labeled envelopes8 PASS in28.12s: accounting cohorts4/8/12 kept separate;
+  archive12 operations is1 unique trace+11 duplicates; native128/256 bursts fully
+  complete, explicit16-entry/24-trace overflow loses eligibility with16 dual-branch
+  early-eviction observations. A missing pending-depth metric is NULL, not zero;
+  Collector RSS samples are labeled startup/after-ingress, never an invented peak.
+- SDK trace/log queues2304 accepted each (256 in flight+2048 queued),100 rejected,
+  bounded held flush failure, recovery to0. SLO1024 admitted/100 rejected preserves
+  lost-source UNKNOWN after drain. Other queue saturation/residence work is pending.
+- Expanded declared CI178 PASS in55.37s before the added mixed financial scenario;
+  final-scope CI result is appended below after completion. No failed predicate is
+  silently removed from selection or weakened.
+- Extended archive1 PASS in602.33s:600.20s measured,2388 operations,597 samples,
+  CPU16.21s, p50/p95/max22.64/34.87/54.39ms; p99N/A. Warmed RSS184139776B,
+  peak184221696B; settled168345600/168820736/169328640B, threads5/FDs6 constant,
+  one immutable complete object+manifest, no temp artifacts.
+- Counter-only fake transport application soak1 PASS in62.60s:60.72s measured,
+ 256 canonical turns=256 physical fake model calls=256 ledger rows, no debt;
+ 3 export-fault/drain cycles; RSS196952064B baseline, peak203161600B, settled
+ 198098944/197394432/198606848B; threads17/FDs14/tasks1 stable, DB checked-out0;
+ turn p50/p95/max106.18/180.20/246.26ms,256 samples,p99N/A. Actual SDK processors,
+ queues, accounting and ChatService run; cloud transport/session DB are not proven.
+- Mixed finance1 PASS in2.97s:24 concurrent financial reads with16 M12/M13 background
+ generation attempts; M12/M13/M14 immutable bodies equal before/after, pools idle0.
+- Frontend983 PASS/67 files; TypeScript/Vite build PASS. Compilation/diff whitespace
+ checks PASS. Full backend final recorded run:5904 PASS,14 SKIP,1 FAIL in453.98s.
+ Its unchanged dependency-overhead p95 was13.415ms against<10ms. Subsequent isolated
+ diagnostic1 PASS/5922 deselected in5.48s:100pairs each, p95HTTP0.462ms/DB1.350ms/
+ storage0.647ms/knowledge1.663ms. This does NOT erase the full-run failure.
+- Matched CPU CI:25 measured turns/mode,60 fake calls=60 durable rows,debt0;
+ disabled/enabled median wall25.38/30.97ms, CPU18.46/23.96ms. Synthetic delta29.77%;
+ typical-turn CPU<3% remains INCONCLUSIVE and is not PASS. An optional request for
+ the representative local workload was sent; no answer/approval is inferred.
+
+### Failures encountered, repairs and unresolved defects
+
+Product defects: local late-tail loss, unbounded slow-header thread admission and
+cross-section protected-data retention were reproduced, repaired and regressed as
+above. No opportunistic runtime refactor or unrelated governance repair occurred.
+
+Harness repairs: invalid fixture links/closure encoding; transient staging-rglob
+race; incorrect fault seam bypassed by correct immutable duplicate behavior; React
+mock recreated per render; guard missing-enable RuntimeError ignored by Python;
+misleading absent pending metric0, cumulative accounting cohorts and duplicate
+archive operations labeled as unique traces. These are recorded as fixture/report
+corrections, not invented application defects or financial-history changes.
+
+Application capture soak failed before full worker warmup (13→17 threads, four→eight
+bounded retained workers). Warming the actual five-connection SQLite pool and eight
+workers removed that variance without raising limits. Capture-sink RSS nevertheless
+failed after warming the64-snapshot metric cache:197656576→221069312B in60s, over
+max(16MiB,10%). Heap diagnosis retained2048 spans/504 logs/64 metrics, with dominant
+SDK safe-record allocations. Development sinks intentionally retain payloads;
+production transport does not. A separate non-retaining fake-sink profile passed
+using the SAME allowance and accounting. Earlier capture failures remain recorded;
+no general production leak verdict is inferred and no threshold was raised.
+
+Unresolved full-run10ms failure: isolated diagnostic passes but scheduler/GC/
+fixture/capture interference has not been fully proven. Full run also contains
+legacy aiosqlite worker callbacks into closed event loops. No assertion was waived
+or raw driver error normalized into a passing acceptance result. CPU<3% remains
+unqualified by the small synthetic baseline. These block M16 acceptance.
+
+### UI / Settings impact — five required evaluations
+
+1. Queue/drop/debt/archive/freshness/failure information supports existing Overview,
+   Reliability/SLOs/FinOps/Data & Retention/Diagnostics. Safe ordinary progress remains.
+2. Existing read-only run/health/policy/financial API contracts reused; no new backend
+   diagnostic data field or persistent protected client cache was added.
+3. Current UI scope is revocation/failure/polling validation and its demonstrated
+   repair. No later-milestone view, dashboard, alert rollout or new design system.
+4. Existing server RBAC/environment checks remain authoritative; User/FinOps does
+   not receive technical archive/content through hook invalidation or access probes.
+5. IaC/env/backend-managed configuration remains effective read-only. No Settings
+   mutation, cloud mutation, authority selection or approved command is introduced.
+
+### Individually evaluated M16 exit criteria
+
+PASS below is limited to observed local evidence. FAIL includes partial coverage;
+no unexecuted matrix cell, cloud path or inconclusive benchmark is treated as PASS.
+
+| Gate | Result | Evidence / remaining work |
+|---|---|---|
+| C01 | FAIL | Observed GENERAL/provider/tool no-replay spies pass; full governed workflow+combined failure dispatch matrix incomplete |
+| C02 | FAIL | Recoverable roots close once; actual backend hard-crash accepted-run/orphan matrix incomplete |
+| C03 | PASS | Canonical locks/tasks released; existing late state/authority/version regressions pass |
+| C04 | PASS | All deadline categories/remaining parents and cleanup reserve covered by existing reliability suite |
+| C05 | PASS | Existing physical retry/backoff/budget denial and post-terminal dispatch guards pass |
+| C06 | PASS | Watchdog/stall/progress/monitor-failure/EVER_STALLED regressions pass |
+| C07 | PASS | Existing cancellation origins and unsampled receipt semantics pass |
+| C08 | PASS | Actual8+16 worker admission,24 excess rejects, release/recovery and late-result guards |
+| C09 | FAIL | SDK/SLO/SSE/worker bounds measured; all projection/activity/Collector exporter queue residence/saturation profiles incomplete |
+| C10 | PASS | SSE count/bytes/oversize/send timeout/disconnect, independent backend completion/lock cleanup |
+| C11 | PASS | Admission/STARTED failures at4/8/12 cause provider0 |
+| C12 | PASS | Success+capture failure preserves result, one physical invocation, visible debt, no replay |
+| C13 | PASS | SQLite true child hard exits after admission/STARTED/result/inbox; truthful unknown and accounting-only replay |
+| C14 | PASS | Existing legitimate physical retry identity, immutable correction/reversal and exact quantities regressions |
+| C15 | PASS | M11 normalized/publish/stale-head failure regressions preserve prior billing/pricing generations |
+| C16 | PASS | M12 signed-net/components/absolute/count poison and source-fence regressions preserve current |
+| C17 | PASS | M13 driver/conservation/fence/publication regressions preserve shared/undistributed and prior head |
+| C18 | PASS | M14 forecasting/detector/backtest/publication/no-external-hook/history regressions |
+| C19 | PASS | Owned Collector restart/outage and SDK queue/flush failures bounded; business paths unaffected in tested profiles |
+| C20 | FAIL | Individual cloud/archive branches isolate faults; common memory-limiter stress/isolation evidence incomplete |
+| C21 | PASS | Native100/10% healthy archive exclusion, SDK ALWAYS_ON and exceptional classes preserved within admitted shape |
+| C22 | FAIL |128/256 exceptional bursts and explicit cache overflow tested; full exporter/spool/mixed storm saturation matrix incomplete |
+| C23 | PASS | Real240s/180s late-terminal128-trace gate, unsafe2s loss, cache keep/drop/eviction/restart behavior; deployment affinity pending |
+| C24 | PASS | Actual durable chunk/object/manifest exits, byte duplicate retries and existing anchor/idempotency regressions |
+| C25 | PASS | Partial/missing closure/span/conflict/malformed objects never falsely COMPLETE; verified reconstruction |
+| C26 | PASS | Concurrent protected reads/writes and existing capability/environment/size/digest API checks |
+| C27 | FAIL | Exception rollback/resume/CAS/dry-run pass; actual retention process kill before/after commit matrix incomplete |
+| C28 | PASS | Existing UNKNOWN/financial lineage/dependency/correction retention guards plus local batches |
+| C29 | PASS | SQLite actual pool wait/query failure/deadline/recovery regressions and idle0 after concurrent financial/accounting workloads |
+| C30 | PASS | Conditional availability evaluated truthfully: genuine PostgreSQL NOT LIVE-VALIDATED; no binary/socket, install/pull/shared fallback |
+| C31 | PASS | Unsampled exact receipts/settlement and SLO writer lost-source UNKNOWN; native retention is separate |
+| C32 | PASS | M10 physical attempt/quantity totals and M11–M14 sampling invariance regressions; actual export-fault accounting256/256 |
+| C33 | PASS | Observed local marker/fuzz/common-redaction/archive/ledger/UI tests and fixed metric registry regressions; no production claim |
+| C34 | PASS | Existing server RBAC/env/cursor/traversal/bounds/rate checks plus malformed ingest recovery |
+| C35 | PASS |983 UI tests incl four-section401/403 invalidation/late result/outage/poll/deadline/cleanup/access-probe regressions |
+| C36 | FAIL | Archive10min and counter-sink application60s pass; complete multi-process resource matrix/legacy closed-loop warnings unresolved |
+| C37 | FAIL | Ledger/archive seam hard exits and Collector+graceful bridge repetitions pass; all backend/bridge/DB combined hard-crash orders incomplete |
+| C38 | FAIL | Relevant per-profile integrity plus mixed M12–M14 immutable bodies pass; whole cross-generation audit after every crash/load cell incomplete |
+| C39 | PASS | Bounded declared CI, native and opt-in extended artifacts exist; archive600s+application60s components executed separately with truthful scope |
+| C40 | FAIL | Five main local shapes measured; exhaustive mixed API/retention/FinOps and queue/byte/residence envelopes incomplete; no production capacity claim |
+| C41 | FAIL | Typical CPU<3% INCONCLUSIVE; full-run sync p95 13.415ms violates<10ms despite separate isolated pass |
+| C42 | FAIL | Imports/build/CI/native/UI pass; full backend retains1 failed performance assertion, hence no validated-complete claim |
+| C43 | PASS | PostgreSQL/GCS/lifecycle/IAM/production exporters/shared migrations/Terraform statuses explicitly unvalidated/unexecuted |
+| C44 | PASS | No cloud/shared/external mutation, M17–M19 implementation, unrelated overwrite or authority weakening |
+
+### Cloud/infrastructure and pending operations
+
+Cloud deployment = **NOT EXECUTED — USER APPROVAL REQUIRED**. Native Terraform
+fmt/validate = **NOT EXECUTED — CLI unavailable**. PostgreSQL = **NOT LIVE-VALIDATED**;
+postgres/initdb/pg_ctl/psql absent, Docker sockets absent. No daemon was contacted,
+image pulled, binary installed, supplied shared DSN used or remote migration applied.
+GCS/lifecycle/IAM, production Collector/Google exporters, Cloud SQL active-run/session
+semantics, production multi-instance affinity and all shared migrations remain
+**NOT LIVE-VALIDATED**. M15 migration source b15e3f7a9c81 remains unchanged/unapplied
+remotely. Production healthy retention remains100% in source.
+
+No exact remote action is proposed or needed to execute the present local M16
+repair work. Future approved rollout would require separately identified target
+project/account/environment and exact GCS/lifecycle/IAM/Collector/Cloud Run/SQL/
+Terraform operations with rollback/cost/security/availability review. No project
+or resource identifier is guessed; this record grants no mutation approval.
+
+### Next permitted action / limitations
+
+Remain in M16. Repair/evaluate C01/C02/C09/C20/C22/C27/C36/C37/C38/C40/C41/C42;
+do not start M17. A representative local CPU workload is required to qualify the
+3% budget, without delaying fakes or disabling accounting to manufacture a pass.
+The failed full-run synchronous predicate must be explained/repaired and validated
+under a controlled full run; isolated passing diagnostics alone are insufficient.
+All remaining local matrix cells above remain genuine requirements, not silent
+waivers. Production validation requires exact separate approval when proposed.
+**Ready for Next Milestone: NO. STOP progression.**
+
+### Final declared CI and artifact audit
+
+Final declared CI **179 PASS in54.65s**; final preflight1 PASS in1.65s.
+Safe measured receipts: `docs/Telemetry/validation/M16_LOCAL_RECEIPTS.json`.
+No raw telemetry/financial exports/DB contents/credentials are committed.
+Actual files changed (25):
+
+- `.agent/OBSERVABILITY_EXECUTION.md`
+- `backend/observability/archive_bridge.py`
+- `backend/tests/_m16_harness.py`
+- `backend/tests/test_m16_accounting_resilience.py`
+- `backend/tests/test_m16_archive_resilience.py`
+- `backend/tests/test_m16_collector_resilience.py`
+- `backend/tests/test_m16_finops_resilience.py`
+- `backend/tests/test_m16_load_profiles.py`
+- `backend/tests/test_m16_performance.py`
+- `backend/tests/test_m16_queue_resilience.py`
+- `backend/tests/test_m16_retention_resilience.py`
+- `backend/tests/test_m16_security_resilience.py`
+- `backend/tests/test_m16_turn_resilience.py`
+- `backend/tests/test_observability_collector.py`
+- `backend/tests/test_observability_dependency_performance.py`
+- `docs/Telemetry/validation/M16_LOCAL_RECEIPTS.json`
+- `docs/Telemetry/validation/M16_LOCAL_VALIDATION.md`
+- `infra/observability/collector/README.md`
+- `infra/observability/collector/config.local.yaml`
+- `scripts/observability/guard/sitecustomize.py`
+- `scripts/observability/m16_sampling_preflight.py`
+- `scripts/observability/run_m16_validation.py`
+- `src/components/shell/settings/observability/FinancialSourcePanel.test.tsx`
+- `src/components/shell/settings/observability/useObservabilityQuery.test.tsx`
+- `src/components/shell/settings/observability/useObservabilityQuery.ts`
+
+Full backend acceptance remains FAIL; Ready for Next Milestone: NO.
+
+Final scope SHA256 audit:9 existing files changed,0 removed,all changes in
+approved M16 scope; no unrelated baseline file changed.25 total changed/new files.
+C01–C44 individually enumerated:32 local PASS,12 FAIL/partial acceptance.
+Receipt corpus checked for credential/prompt/response sentinels:0 matches.
+Final compile/import and git diff --check PASS; no generated DB/secret/raw
+payload/production export in tracked or proposed untracked artifacts.
+M16 remains INCOMPLETE. Ready for Next Milestone: NO.
+
+## M16 continuation: failed-gate mapping and repair plan — 2026-10-09
+
+User rejected prior M16 acceptance. M16 ONLY; M17 remains prohibited even if local
+acceptance becomes green. Exact C01–C44 definitions above were reread before code
+editing, together with README, master contract, roadmap, execution guide and DoD.
+Doc01 CPU<3% typical turn and synchronous<10ms remain unchanged.
+
+| Gate | Required invariant (authoritative gate) | Current evidence / why failed | Classification |
+|---|---|---|---|
+| C01 | Exact provider/agent/tool/command/remediation/gateway/turn counts; zero unintended business replay for every injected ancillary failure | General turns/provider/tools pass; integrated governed approval/command and recovery matrix absent | MISSING_TEST_EVIDENCE |
+| C02 | Accepted recoverable root closes once; hard-crash stale/orphan/terminal gaps truthful | Graceful roots pass; actual canonical backend process exits absent | MISSING_TEST_EVIDENCE |
+| C09 | Every actual queue finite saturation/drop/backpressure/recovery; accounting debt preserved | SDK/SLO/SSE/worker measured; projection/activity/exporter and accounting admission coverage incomplete | MISSING_TEST_EVIDENCE |
+| C20 | Export branches independent; common-pressure coupling explicitly tested and defects repaired | Individual branch failures pass; common limiter pressure untested | MISSING_TEST_EVIDENCE |
+| C22 | Storm covers caches/exporters/bridge/spool; explicit degradation without replay/content spill | Tail bursts/overflow pass; exporter/spool saturation absent | MISSING_TEST_EVIDENCE |
+| C27 | Dry-run nonmutating; crash/resume/CAS atomically rolls back rows/checkpoint | Exceptions/concurrency pass; real retention process exits absent | MISSING_TEST_EVIDENCE |
+| C36 | Repeated warmed/settled RSS/FD/socket/task/thread/DB/temp/handle evidence bounded | Archive/counter-sink soak passes; process-wide matrix and closed-loop worker warnings unresolved | MISSING_TEST_EVIDENCE (possible resource defect pending diagnosis) |
+| C37 | Distinct backend/Collector/bridge/local DB restart orders preserve uncertainty/debt/heads/checkpoints | Individual hard exits and Collector+graceful bridge only | MISSING_TEST_EVIDENCE |
+| C38 | Post-scenario uniqueness, source links, conservation, immutability, manifests/checkpoints and governance intact | Partial M12–M14 concurrent audit; cross-generation/restart coverage absent | MISSING_TEST_EVIDENCE |
+| C40 | Measured app/accounting/archive/Collector/DB/API/retention/FinOps envelope, sample sizes; no production claims | Partial local shapes; mixed API/retention/financial/residence data absent | MISSING_TEST_EVIDENCE |
+| C41 | Valid matched typical-turn CPU<3% and synchronous<10ms | Full-run paired dependency p95=13.415ms; tiny fake-turn CPU delta29.77% unqualified | REAL_DEFECT (measured budget violation; root cause not yet established) |
+| C42 | Imports/build/all applicable tests/migrations/native checks pass; blocking defects repaired | Full backend5904 pass/14 skip/1 performance failure | REAL_DEFECT (acceptance failure from C41) |
+
+No failed gate is excused by environment availability. Conditional C30 permits
+PostgreSQL unavailable status only after local discovery; C43 records native
+Terraform/provider availability and production validation separately.
+
+Plan: first decompose/profile the existing overhead benchmark (tracing, projection,
+metrics, complete wrappers; allocation/locks/context/eligibility), repair only proven
+hotspots, and repeat identical benchmark and CPU workload with durable accounting
+in both modes. Then add actual local governed dispatch, canonical process crash,
+retention process exits, financial correction/publication and combined owned
+process-order evidence. Enumerate actual queues; test normal/full/overflow/recovery,
+native exporter/common limiter and archive spool pressure. Measure current Collector
+pending/drop/decision metrics and RSS, declare supported vs overload envelopes,
+execute all five long classifications against actual240s configuration. Complete
+resource/mixed-read profiles and rerun extended soak. Final sequence: CI/native/
+extended/full backend/full frontend/TypeScript/build/migrations/privacy/cardinality/
+local availability/diff audit; individually reevaluate C01–C44.
+
+Reuse current M16 harness and predecessor fixtures, canonical ChatService, actual
+accounting/financial/retention repositories, native pinned Collector, filesystem
+archive and existing UI hook. Expected changes: scoped M16 tests/harness/runner,
+validation receipts/documents and this record; production runtime changes only
+when measured failure proves necessity (candidate safe tracing/projection hotspot).
+No approved threshold, timeout, queue/memory bound or governance semantics weakened.
+No deployment/migration/shared database/network resource mutation. Child crashes
+only owned local PIDs, isolated temporary SQLite/filesystem and loopback services.
+
+UI impact: existing Settings data/revocation contracts reused; no new UI planned;
+server RBAC authoritative; all IaC/environment configuration read-only. Resource
+receipts contain counts/timings only, never prompts/responses/secrets/content.
+Ready for Next Milestone: NO. Validation pending; no prior PASS blindly inherited.
+
+
+## M16 continuation implementation / acceptance checkpoint — 2026-10-10
+
+Current milestone remains M16 INCOMPLETE. CPU is a measured REAL_DEFECT, not an
+availability exception or an inconclusive synthetic benchmark. M17 is prohibited.
+The original 12 failures and original full-run 13.415ms result remain preserved.
+
+Implementation: profiled safe projection and SDK final attribute work; retained all
+validators, privacy/surface/producer checks, event classes, metrics, SDK capture,
+accounting, governance and budgets. Added canonical backend hard exits (eight),
+integrated governed boundaries (seven × seven faults) with exact provider/agent/tool/
+gateway/command/turn1 and remediation0, retention process exits (five), six owned
+backend/Collector/bridge crash orders including two simultaneous pairs, real default
+exporter saturation/recovery, common limiter coupling, finite projection/activity/
+accounting/materializer/spool bounds, protected reads, shared four-milestone correction
+lineage, nonempty reviewed budget and two actual financial publication process exits.
+No equipment execution or remediation capability was introduced. SQLite is local.
+
+A test-only engine ownership fixture repairs legacy closed-loop aiosqlite callbacks.
+Its first full-run version disposed a cached in-memory case DB without invalidating
+its cached schema owner, causing two case-progression failures. Root cause reproduced:
+`no such table: slopanoc_cases`. Fixed by clearing only local case factory caches
+between tests after disposal. In-test singleton behavior and production lifecycle
+are unchanged. All14 case-progression tests pass; final full rerun is pending.
+
+Validation currently completed:
+- final guarded CI:260 PASS,0 FAIL,81.69s; all49 governed cases have exact turn1;
+- native full:35 PASS,1 opt-in full-window SKIP,271.23s; actual full-window separately
+  PASS at245.93s; simultaneous pairs separately2 PASS,23.68s;
+- default256MiB logical spool bound/256 pending bound and expiry/recovery:2 PASS;
+  byte-pressure seam is a corrupt sparse staging file, not256MiB valid payload/RSS;
+- four-milestone nonempty budget/corrections and publication process exits:3 PASS;
+- measured privacy/model/cardinality/sampling/migration selection:126 PASS; final
+  full suite must validate the last projection refinements as well;
+- frontend985 PASS/67 files; late401/403 covers every Settings query family;
+- TypeScript/production build PASS; compile and git diff --check PASS;
+- real240s/180s gate:148 pending per branch,128 exceptional COMPLETE,256 exceptional
+  spans,all four classes32 each,healthy archive0,early eviction0,queue0;175 RSS samples;
+- extended archive600.269s:2388 operations/597 samples,3 fault/recovery cycles,protected
+  reconstruction,one immutable object/manifest,no temporary commit files,stable
+  FD10/socket2/thread5; warmed186728448B,peak187514880B,settled170786816B;
+- final real OTLP-encoding application soak60.822s:256 physical calls=256 ledger rows,
+  debt0,pool checked-out0,trace queue0,stable FD15/socket2/thread17/task1;
+  warmed194854912B,peak201850880B,settled198868992B (<unchanged10%/16MiB allowance).
+
+CPU final isolated gate FAIL:60 measured turns/mode,ten warm turns per block,two
+reversed blocks/mode,identical real ADK governed workload,GenAI fake HTTP and durable
+M10 accounting. Fixture setup excluded; warm batches drained; normal async exports
+settled inside process CPU timing; no synthetic padding or provider waits. Baseline
+137.044133ms,enabled149.240783ms,+12.196650ms,+8.899797%,threshold<3% UNCHANGED.
+Physical1120=ledger1120,debt0. P99 N/A (n60). First final full run measured+12.594627%
+and failed that assertion; it also exposed the two fixture-owner bugs repaired above.
+First full result:5996 PASS,15 SKIP,3 FAIL,600.17s,0 closed-loop thread warnings.
+Earlier full snapshot after initial optimization:5915 PASS,15 SKIP,0 FAIL; it does
+not supersede the newer CPU failure or authorize milestone completion.
+
+Final full dependency benchmark from the failed full run PASS (n100/subsystem):
+http pairedp95=.165667ms,database=.530958ms,storage=.179126ms,knowledge=.687791ms;
+original<10ms unchanged. P99 N/A (<1000 samples). Decomposition n1000 reports p50/p95/
+p99 and separately profiles projection/SDK/metrics/full wrappers; it is diagnostic,
+not a replacement for the full-suite gate. Original13.415ms wall-tail cause not
+fully isolated; redundant allocation/enum/family scans and event projection are
+proven hotspots. No unproven scheduling/GC attribution is asserted.
+
+UI impact: existing information/API contracts support Settings; no new UI built;
+server RBAC and resource/environment scope retained; runtime/IaC settings remain
+read-only; late authorization loss clears mounted values and rejects stale results.
+
+Availability:postgres/initdb/pg_ctl/psql absent from PATH,Postgres.app,Homebrew and
+/Library/PostgreSQL. Docker CLI exists,all usual local sockets and its configured
+Unix context socket absent. No daemon/install/pull/shared DSN fallback. PostgreSQL
+NOT LIVE-VALIDATED (C30 conditional). Terraform CLI absent,native validation NOT
+EXECUTED. Production Cloud Run/Cloud SQL NOT EXECUTED; Collector/Cloud Trace/GCS NOT
+LIVE-VALIDATED. Cloud deployment=NOT EXECUTED — USER APPROVAL REQUIRED. No exact
+cloud operation proposed or authorized in M16; pending source-controlled deployment,
+IAM/GCS/archive/Collector/Cloud SQL migration families remain in the prior handoff.
+
+Actual proposed files (all in M16 scope; baseline SHA audit14 existing files changed,
+0 removed; no unrelated baseline file changed):
+- `.agent/OBSERVABILITY_EXECUTION.md`
+- `backend/observability/archive_bridge.py`
+- `backend/observability/model_instrumentation.py`
+- `backend/observability/privacy_policy.py`
+- `backend/observability/redaction.py`
+- `backend/observability/tracing.py`
+- `backend/tests/_m1_otel.py`
+- `backend/tests/test_observability_collector.py`
+- `backend/tests/test_observability_dependency_performance.py`
+- `infra/observability/collector/README.md`
+- `infra/observability/collector/config.local.yaml`
+- `src/components/shell/settings/observability/FinancialSourcePanel.test.tsx`
+- `src/components/shell/settings/observability/useObservabilityQuery.test.tsx`
+- `src/components/shell/settings/observability/useObservabilityQuery.ts`
+- `backend/tests/_m16_backend_child.py`
+- `backend/tests/_m16_harness.py`
+- `backend/tests/test_m16_accounting_resilience.py`
+- `backend/tests/test_m16_additional_queues.py`
+- `backend/tests/test_m16_archive_resilience.py`
+- `backend/tests/test_m16_backend_crashes.py`
+- `backend/tests/test_m16_collector_resilience.py`
+- `backend/tests/test_m16_combined_crashes.py`
+- `backend/tests/test_m16_financial_cross_generation.py`
+- `backend/tests/test_m16_finops_resilience.py`
+- `backend/tests/test_m16_governed_no_replay.py`
+- `backend/tests/test_m16_governed_performance.py`
+- `backend/tests/test_m16_load_profiles.py`
+- `backend/tests/test_m16_native_saturation.py`
+- `backend/tests/test_m16_overhead_decomposition.py`
+- `backend/tests/test_m16_performance.py`
+- `backend/tests/test_m16_protected_read_capacity.py`
+- `backend/tests/test_m16_queue_resilience.py`
+- `backend/tests/test_m16_retention_resilience.py`
+- `backend/tests/test_m16_security_resilience.py`
+- `backend/tests/test_m16_turn_resilience.py`
+- `docs/Telemetry/validation/M16_LOCAL_RECEIPTS.json`
+- `docs/Telemetry/validation/M16_LOCAL_VALIDATION.md`
+- `scripts/observability/guard/sitecustomize.py`
+- `scripts/observability/m16_owned_resources.py`
+- `scripts/observability/m16_sampling_preflight.py`
+- `scripts/observability/run_m16_validation.py`
+
+Final full regression and final C01–C44 reevaluation pending. CPU remains FAIL;
+Ready for Next Milestone: NO. No threshold waiver and no M17 implementation.
+
+## Final M16 continuation acceptance — 2026-10-10
+
+This final result supersedes the pending checkpoints above. M16 remains INCOMPLETE:
+42 local criteria PASS, C41 FAIL and C42 FAIL. Ready for Next Milestone: NO.
+M17 is NOT IMPLEMENTED and must not begin, including after any later green M16 run
+without a separate instruction. No cloud/shared/external mutation occurred.
+
+Final guarded full backend: **5,998 passed, 15 skipped, 1 failed**, 838 warnings,
+598.67s. The sole failure is `test_representative_governed_turn_cpu`; the two cached
+case-database fixture regressions are repaired. Closed-loop aiosqlite thread warnings:
+zero. Skips: eleven unavailable real-corpus tests, two opt-in extended tests executed
+separately, one separate full-window test executed separately, and one existing
+pending-value semantic skip. Final CI:260 passed/0 failed/81.69s. Frontend:985 tests
+in67 files pass; TypeScript and production build PASS. Local migration/privacy/
+cardinality regressions pass in the selected126 and final full suite. Native full:
+35 pass/1 opt-in skip; full-window executed separately. Compile and diff check PASS.
+
+### Final overhead evidence
+
+Original dependency paired p95=13.415ms. The unchanged <10ms gate now PASS in the
+full suite, n100 per dependency after10 warm iterations, rotating mode order:
+
+| Dependency | Baseline wall p50 ms | Enabled wall p50 ms | Paired overhead p50 ms | Paired overhead p95 ms | Median ratio increase % |
+|---|---:|---:|---:|---:|---:|
+| HTTP | .001666 | .146729 | .145103 | .362083 | 8704.67 |
+| Database | .260875 | .745250 | .482250 | .540917 | 185.67 |
+| Storage | .001709 | .142583 | .140896 | .357292 | 8243.19 |
+| Knowledge | .048125 | .596208 | .547854 | .595083 | 1138.88 |
+
+Ratio uses (enabled median / baseline median -1)*100; paired median is calculated
+separately, not by subtracting medians. Tiny wait-excluded HTTP/storage baselines
+make relative ratios large; acceptance is absolute synchronous overhead. P99 N/A
+at n100. macOS26.6.2 arm64, Python3.11.2, local SQLite/fake dependencies. Complete
+wrapper diagnostic n1000 thread CPU p50 improved277.834→109.334µs (p95119.625µs,
+p99136.542µs in the recorded repaired diagnostic). Immutable registries, eager
+allocation, repeated SDK mapping/projections and final attribute validation are
+measured hotspots. The complete original wall-tail cause was not fully isolated;
+no unsupported scheduler/GC attribution. No telemetry/privacy/accounting removed.
+
+Representative settled CPU is a **REAL_DEFECT, FAIL**: full-suite baseline mean
+137.092517ms, enabled155.207133ms, increment18.114617ms, **13.213425%**, unchanged
+required <3%. Isolated final also FAIL:137.044133→149.240783ms,+8.899797%.
+60 measured turns/mode,10 warm turns/block,2 reversed blocks/mode, identical ADK
+Team Manager→TAE retrieval/ProcedureAction/command presentation and durable M10 in
+both modes. Setup excluded, warm batches drained, normal asynchronous batching,
+all measured export work settled inside process CPU timing, no synthetic padding.
+1,120 physical calls=1,120 ledger rows, debt0. Full turn p50 baseline136.1315ms,
+enabled144.0555ms; p95145.835/163.740ms; p99 N/A. Earlier tiny-turn CPU was diagnostic
+only and cannot qualify this gate. A passing microbenchmark cannot override this.
+
+### Final scenario and resource evidence
+
+- Actual240s/180s native run PASS:148 pending/branch,128 exceptional COMPLETE,
+  32 each FAILED/TIMEOUT/EVER_STALLED→COMPLETED/GOVERNED; healthy archive0, early
+  evictions0,256 exceptional cloud-like spans,queues0,completion242.237s.
+  RSS175 samples:warm213663744B/peak214925312B/settled143294464B.
+- Planning envelope:180s supported root+23s SDK/export allowance+9s conservative
+  transport allowance=212s≤240s. At .5 traces/s and burst64,25% headroom population
+  ceil((.5*240+64)*1.25)=230≤256. This is a conditional planning bound; native
+  long run measured148 pending and 2 spans/trace. The configured expected32 new
+  traces/s is a sizing hint, not validated admission capacity or a promise to keep.
+- 128/256 trace storms are distinct supported short-window local tests;16-entry/
+  24-trace overflow intentionally exposes eviction/incomplete capture. Exporter
+  storms200 traces/400 spans overflow actual128 request queues with fixturebatch1:
+  cloud failure drops271 spans with sibling200/200 archives; archive failure drops
+  270 with sibling400 distinct cloud spans and archive0/200 COMPLETE. Same-process
+  heal drains queues0 and fresh exceptional archive succeeds. Common1MiB test seam
+  refuses4 spans/503 across both branches; source160MiB restart recovers. The160MiB
+  limiter is a heap policy, not an RSS cap. Overload is degradation, never complete
+  retention. Exporter recovery3 PASS; RSS peak deltas below unchanged64MiB allowance.
+- Default spool pending256 rejects257th then601s expiry/recovery. Default logical
+  bytequota256MiB verified with a corrupt sparse staging file; rejection then expiry
+  and COMPLETE recovery pass. This does not qualify256MiB valid payload or RSS.
+- All49 governed cases PASS:actual turn/provider/agent/tool/gateway/command count1,
+  remediation0. Approval consumption cannot replay. Seven boundaries × seven faults
+  include real retention SQL rollback and protected-diagnostics service failure;
+  all HTTP and simulated command effects remain fake/local.
+- Eight real backend exits PASS. Accepted-before-first-await lacks a durable
+  operational row before any business dispatch: explicit truthful gap. STARTED
+  uncertainty stays UNKNOWN/stale, completed invocation has one ledger row, terminal
+  persistence remains COMPLETED. Recovery never changes dispatch receipts; owner/CAS
+  fences prevent late overwrite. No fabricated terminal or automatic business retry.
+- Six three-process restart orders PASS, including genuinely simultaneous backend+
+  bridge and Collector+bridge. Reconstructed archive complete only after missing
+  bytes restored; volatile early child loss stays PARTIAL. Prior manifest immutable.
+  All three owned PIDs measured before kill; two restarted PIDs measured after.
+- Five actual retention exits PASS:before transaction/scan/delete/precheckpoint/
+  postcommit. Uncommitted8 rows/gen0; committed1 row/gen1 for batch7; restart deletes
+  only remaining rows and then0. No duplicate side effect/checkpoint inconsistency.
+- Shared nonempty100EUR reviewed budget, M11–M14 corrections and two publication
+  exits PASS:24 concurrent audits, four histories each,20/30/40 corrections, exact
+  conservation, coherent unique head, prior histories byte/JSON immutable, reopen
+  returns same valid head,checked-out DB0. Financial dependency/UNKNOWN tests pass.
+- Archive soak600.269s PASS:2388 operations,597 samples,three fault/recovery cycles,
+  protected reconstruction,one immutable manifest/object,no transient commit files.
+  Warm/peak/settled RSS186728448/187514880/170786816B,FD10/socket2/thread5 stable.
+- Final nonretaining real-OTLP-encoding application soak60.822s PASS:256 calls=
+  256ledger,debt0,pool0,tracequeue0,FD15/socket2/thread17/task1 stable. Warm/peak/
+  settled RSS194854912/201850880/198868992B. Three cycles,privacy sentinel intact;
+  unchanged10%/16MiB allowance. Earlier extended command overall1 FAIL(CPU)/2 PASS
+  is preserved, not relabeled as profile PASS. Intentional bounded development
+  capture is TEST_HARNESS_ONLY; production config rejects local capture exporter.
+- Native Collector settled FD9/socket3/thread13–15; bridge FD5/socket2/thread2;
+  running backend FD12–14/thread8–10. Backend self task10,pool0,export queues0.
+  External process asyncio task counts are N/A, not assumed0. Stagingchunks0,
+  completedversions2,temporaryfiles15 in the crash fixture. No monotonic unbounded
+  resource growth or unrecovered backlog in the measured local profiles.
+- Protected reads48 mixed requests with4 permits; fifth blocked read deadline2s
+  returns503,permits recover4,healthy200,revokedUser403 before query. FinOps reads24;
+  accounting admission8 and ninth bounded .25s/provider0; activity16/projection2048/
+  financial materializers2 recover after overflow. Existing SSE/SDK/SLO bounds pass.
+- Paired100%/10% native sampling evidence and final full M9–M14 invariance tests
+  PASS: healthy sampling cannot alter unsampled arithmetic or accounting. Final
+  privacy, SDK limit0/1/2/3/128, cardinality, server RBAC and environment isolation
+  PASS. Frontend401/403 clears all query families and rejects late results.
+
+### Threshold / assertion audit
+
+| Item | Old | New | Reason |
+|---|---|---|---|
+| Dependency threshold | <10ms | <10ms | Unchanged approved contract |
+| CPU threshold | <3% | <3% | Unchanged approved contract; still FAIL |
+| Local decision wait, both branches | 2s | 240s | Align already-production240s; supported root/arrival derivation and native long gate |
+| Collector num_traces/export queues/memory | 256 /128 /160MiB | Same | No production bound inflation |
+| Spool pending/logical bytes |256 /256MiB | Same | Default pressure seams validate actual bounds |
+| Bridge admission / socket timeout |4 /2s | Same | Admission moved ahead of parsing/thread creation; .1s overload response is bounded rejection |
+| Resource limits |64MiB exporter delta;10%/16MiB app | Same | No relaxation |
+| Financial panel alert count |1 |3 | Revocation now correctly clears all3 protected sections; content-clearing assertions retained |
+| Diagnostic p99 |reported at n100 |N/A below1000 | Honest statistical reporting, no acceptance threshold change |
+
+Fast fixtures explicitly override decision waits/batching/memory only for named
+fault seams, never source production policy. Full pressure uses actual240s. All
+changed assertions preserve or strengthen business, privacy and completeness rules.
+CPU failure has not been relabeled or waived. Test-only SQLite cache cleanup fixes
+the fixture defect and does not change production case persistence.
+
+### Complete C01–C44 exit table
+
+| Gate | Objective | Final local result |
+|---|---|---|
+| C01 | Governed no-replay exact dispatch | PASS |
+| C02 | Accepted roots / hard-crash uncertainty | PASS |
+| C03 | Ownership, locks and cleanup | PASS |
+| C04 | Deadlines and parent budgets | PASS |
+| C05 | Bounded legitimate retry | PASS |
+| C06 | Stall classifications | PASS |
+| C07 | Cancellation semantics | PASS |
+| C08 | Worker admission | PASS |
+| C09 | Finite queues and recovery | PASS |
+| C10 | SSE backpressure | PASS |
+| C11 | Admission prevents provider dispatch | PASS |
+| C12 | Capture failure preserves result/debt | PASS |
+| C13 | Accounting crash recovery | PASS |
+| C14 | Idempotency and corrections | PASS |
+| C15 | M11 publication fencing | PASS |
+| C16 | M12 conservation | PASS |
+| C17 | M13 allocation conservation | PASS |
+| C18 | M14 immutable histories | PASS |
+| C19 | Collector outage and restart | PASS |
+| C20 | Independent exporters / common pressure | PASS |
+| C21 | Healthy vs exceptional eligibility | PASS |
+| C22 | Exceptional overload degradation | PASS |
+| C23 | Late sampling and eviction | PASS |
+| C24 | Archive idempotent commits | PASS |
+| C25 | No false COMPLETE | PASS |
+| C26 | Protected archive isolation | PASS |
+| C27 | Retention process-kill atomicity | PASS |
+| C28 | Financial retention dependencies | PASS |
+| C29 | DB saturation and recovery | PASS |
+| C30 | Conditional PostgreSQL availability | PASS — conditional discovery; PostgreSQL NOT LIVE-VALIDATED |
+| C31 | M9 sampling invariance | PASS |
+| C32 | M10–M14 sampling invariance | PASS |
+| C33 | Privacy and metric cardinality | PASS |
+| C34 | Authorization and environment isolation | PASS |
+| C35 | Polling and revocation races | PASS |
+| C36 | Settled resources and soak | PASS |
+| C37 | Combined restart orders | PASS |
+| C38 | Cross-generation integrity | PASS |
+| C39 | Bounded CI and extended validation | PASS |
+| C40 | Measured local envelopes | PASS |
+| C41 | CPU and synchronous overhead | FAIL |
+| C42 | Complete regression and build | FAIL |
+| C43 | Truthful pending infrastructure | PASS |
+| C44 | No mutation / no later milestone | PASS |
+
+### Scope, limitations and final disposition
+
+All PASS entries describe local evidence and actual gate scope, not production
+qualification. PostgreSQL conditional discovery PASS:postgres/initdb/pg_ctl/psql
+absent, Docker CLI present but configured/local sockets absent; no install/start/
+pull/shared fallback. Native Terraform CLI unavailable. Accepted-before-first-await
+root durable gap and volatile early trace loss remain explicit above. CPU remains
+a blocking defect; full backend remains failing. Artifact receipts contain sanitized
+aggregate measurements only, never raw prompts, telemetry payloads, DB files or keys.
+
+Production Cloud Run load: NOT EXECUTED. Production Cloud SQL: NOT EXECUTED.
+Production PostgreSQL concurrency: NOT LIVE-VALIDATED. Production Collector capacity:
+NOT LIVE-VALIDATED. Production Cloud Trace: NOT LIVE-VALIDATED. Production GCS archive:
+NOT LIVE-VALIDATED. Native Terraform validation: NOT EXECUTED. M17: NOT IMPLEMENTED.
+Cloud deployment: NOT EXECUTED — USER APPROVAL REQUIRED. No exact cloud operation
+was proposed/authorized/executed; prior source-controlled pending deployment/IAM/
+archive/Collector/shared migration families remain pending and require the exact
+10-point operation approval gate. No M17/M18/M19 work occurred.
+
+UI impact: existing Settings information/API contracts reused; existing component
+patterns retained; server RBAC applies; authorization loss clears mounted values;
+configuration remains effective read-only. No infrastructure mutation control or
+later-milestone UI introduced. Files changed are listed in the checkpoint above.
+
+Ready for Next Milestone: **NO**. Stop at M16.
+
+## M16 CPU-only closure plan — 2026-10-10
+
+Current milestone M16; C41/C42 FAIL. User latest CPU-only instruction is authoritative.
+Objective: attribute representative steady-state process CPU, make minimum proven
+architecture-preserving repairs and rerun CPU repeatedly before final regression.
+Authoritative specs:00 master,01 overhead budget,02 telemetry,03 instrumentation,
+09 privacy,12 M16 roadmap,13 validation,15 DoD,18 logging,20 unsampled accounting.
+Inspected current benchmark, Runtime, SafeSpanProcessor/SafeLogProcessor, projection,
+metric registries and guarded runner. Existing canonical ADK/ChatService/workflow,
+accounting fixture, providers, fake HTTP and settled reversed-block test reused.
+Expected changes:diagnostic benchmark helpers/test receipts; only profiler-proven
+observability hot paths; execution/report/receipts. No unrelated UI/tail/retention/
+FinOps calculations/governance/timeouts/capacity changes. Initial attribution runs
+must precede runtime optimization. Diagnostics may gate layers only locally and
+must never alter production configuration or export outside local guarded sinks.
+
+Benchmark definition confirmed:60 measured turns/mode,10 warm turns per block,
+two reversed blocks/mode; time.process_time total owned application process CPU,
+measured exports settled inside timing, construction and shutdown outside. Real
+Team Manager→TAE knowledge/ProcedureAction/command presentation, installed GenAI
+fake transport; same durable M10 in both modes. Existing total1120 calls/ledger
+must persist; add exact per-mode accepted/provider/model/agent/tool/admission/terminal
+counts independently of telemetry enablement. Separately record initialization,
+first/warm, measured block and export settlement CPU, plus profiler/harness costs.
+
+Plan: establish equivalent counts; diagnostic A–I same-workflow feature ladder and
+baseline/enabled cProfile (main and exporter threads if needed), bounded top self/
+cumulative delta; record attribution before editing production. Implement only
+measured duplicate/static work with immutable scoped caches and fail-closed dynamic
+validation. Differential tests against captured reference required on projection
+paths. Run sentinel/cardinality/exemplar/SDK-limit regressions after meaningful
+changes. Repeat unchanged authoritative CPU,dependency benchmarks; only if CPU
+passes proceed full backend,CI,focused invariance/privacy/config,full frontend/build.
+No long stress rerun unless sampling/span timing/Collector/terminal metadata changes.
+Exit:CPU<3% AND dependency<10ms unchanged; equivalence preserved; full backend0fail;
+C01–C44 individual audit; no cloud mutation/noM17. If profiled scoped repairs cannot
+meet budget,record exact residual/top contributors/architecture options and STOP NO.
+UI impact: no new Settings data/API/UI/configuration expected; existing RBAC and
+read-only production settings preserved. Cloud status NOT EXECUTED — approval
+required; no cloud operation proposed. PostgreSQL/Terraform limits unchanged.
+
+## M16 CPU closure attribution before production edits — 2026-10-10
+
+Diagnostic A–I gates reuse actual workflow/SDK/processors; no external export. H
+adds real population/classification and I has no additional separable layer in this
+configuration. Producer projection and separate model-log gates were corrected in
+the diagnostic harness and B–E repeated. Initial runs preserved as history.
+
+| Layer | Mean CPU ms/turn | Increment previous ms | Paired increment vs own baseline ms | Paired overhead % |
+|---|---:|---:|---:|---:|
+| A | 137.480300 | N/A | 0.000000 | 0.000000 |
+| B | 133.881417 | -3.598883333333305 | -2.528083 | -1.853304 |
+| C | 137.040017 | 3.1585999999999217 | 0.312283 | 0.228398 |
+| D | 136.262850 | -0.777166666666659 | 2.085000 | 1.553908 |
+| E | 142.261900 | 5.999049999999983 | 9.312183 | 7.004290 |
+| F | 170.005700 | 27.74380000000005 | 31.195950 | 22.473890 |
+| G | 169.233700 | -0.7719999999999914 | 12.100600 | 7.700860 |
+| H | 149.886950 | -19.346750000000043 | 9.497650 | 6.765224 |
+| I | 151.235267 | 1.3483166666666762 | 17.717000 | 13.269345 |
+
+The means are noisy and nonadditive: negative increments are retained, not selected
+away. A is the actual disabled business+accounting baseline, not an enabled no-op
+substitution. B infrastructure; C root; D children; E metrics; F typed projection;
+G structured logs; H archive metadata; I full. The profile, not a noisy layer
+increment alone, supports optimizing per-span family scans and enum set rebuilding.
+
+Business equivalence before edits:80 turns/outcomes,560 provider/model/admissions/
+ledger,160 agents,320 FunctionTool calls per mode; additionally80 custom specialist
+tool calls were identified and are now counted explicitly (total400 tools/mode).
+Physical1120=ledger1120. Initialization and first turns are outside measured blocks;
+warm export drained and measured export settled inside total process CPU.
+
+Main cProfile delta (60 measured turns/mode), diagnostic inflated times:
+- observability/redaction.py:80:safe_span_attributes: calls8340, delta self1.981840ms/turn, delta cumulative6.849568ms/turn, avg self18.627µs/call.
+- observability/tracing.py:171:on_end: calls2460, delta self1.245353ms/turn, delta cumulative10.775396ms/turn, avg self30.374µs/call.
+- observability/redaction.py:145:safe_model_attributes: calls4560, delta self0.813999ms/turn, delta cumulative1.419017ms/turn, avg self13.241µs/call.
+- observability/privacy_policy.py:114:<dictcomp>: calls2460, delta self0.311298ms/turn, delta cumulative0.455294ms/turn, avg self7.593µs/call.
+- observability/tracing.py:149:on_start: calls2460, delta self0.281632ms/turn, delta cumulative0.458492ms/turn, avg self6.869µs/call.
+- observability/tracing.py:75:safe_events: calls2460, delta self0.258112ms/turn, delta cumulative2.877164ms/turn, avg self6.295µs/call.
+- observability/tracing.py:121:set_final_attributes: calls840, delta self0.227080ms/turn, delta cumulative1.167825ms/turn, avg self20.030µs/call.
+- observability/tracing.py:99:safe_context: calls4920, delta self0.226439ms/turn, delta cumulative0.425875ms/turn, avg self2.761µs/call.
+
+SDK attribute assignment delta82,020 calls/60 turns; profile self2.124ms/turn and
+cumulative5.708ms/turn, overlapping child cleaning functions. Total enabled export
+profile:3280 spans and640 logs across80 turns; trace encoding0.605504s,log0.081885s.
+These profiler times cannot be added to unprofiled13.213425% or used as subtraction.
+Profiled benchmark:417.368→455.658ms,+9.174%, DIAGNOSTIC ONLY. No threshold changed.
+Healthy app path serializes its required OTLP trace once; exceptional archive envelope
+creation happens in Collector/bridge and is not invoked for healthy app CPU.
+No accounting duplication, diagnostic DTO/retention/forecast construction or provider
+startup was found in the recurring extra business work. Instruments are created once;
+some metric registry dicts still rebuilt, but profile contribution is smaller.
+
+## Final CPU-only continuation — 2026-10-10
+
+M16 remains BLOCKED. C41 FAIL; C42 FAIL; Ready for Next Milestone NO. The unchanged
+representative process CPU requirement is <3%; unchanged dependency requirement
+<10ms. No threshold/timeout/queue/memory/sampling/retention/accounting/governance/UI
+policy changed. No cloud operation and no M17 implementation.
+
+### Scoped repairs and validation
+
+1. safe_span_attributes previously selected families then scanned/projected them
+   repeatedly. It now visits present fields once using an immutable finite dispatch
+   of the same type/enum/regex/range checks. Unknown fields deny. Arbitrary values
+   still validate; no credential/content/identifier value is cached. Closure handling
+   retains the original validator. Immutable finite regex and enum definitions are
+   constructed once; there is no mutable global request state.
+2. SafeSpanProcessor rebuilt producer/name sets from Enum.value at each span end;
+   safe_events converted the same finite event names repeatedly. Immutable canonical
+   producer/event tables replace this work. Safe event attributes, parentage, status,
+   archive class/population metadata, event order and metrics remain unchanged.
+
+Independent pre-edit reference covers every field with SAFE/RESTRICTED/PROHIBITED,
+unknown/wrong types, oversized values, NaN/infinity/overflow, bounded enums, and
+prompt/response/credential/secret/command/SQL/Teams/hidden-reasoning markers plus
+10,000 deterministic mixed mappings. All producer/surface/environment boundaries,
+512 concurrent request mappings and all event classes/modes match the reference.
+No permissive trusted bypass was introduced. Actual privacy/cardinality/exemplar/
+SDK limits and installed GenAI/ADK transport paths also pass after repair.
+
+Initial projection/privacy/SDK selection19 PASS; final bounded M16 CI395 PASS,
+0fail,82.11s (includes new reference/event tests and actual M15 privacy evidence);
+focused real SDK/model/logging/export/parentage/server-policy/sampling selection
+399 PASS,0fail,17.91s. Frontend985 PASS/67files,10.71s; TypeScript and production
+build PASS (Vite4.10s). Compile and git diff --check PASS. No frontend change this
+CPU-only continuation. Existing long/native/archive/retention/crash evidence is
+preserved; no sampling, span boundary timing policy, Collector or terminal metadata
+change justified rerunning long stress. No long stress was rerun.
+
+### Authoritative repeats — all results, no selection
+
+| Run | Baseline mean CPU ms/turn | Enabled mean CPU ms/turn | Increment ms/turn | Overhead % | Result |
+|---|---:|---:|---:|---:|---|
+| 1 | 139.140433 | 149.452750 | 10.312317 | 7.411445 | FAIL |
+| 2 | 132.492133 | 140.448300 | 7.956167 | 6.005011 | FAIL |
+| 3 | 131.579467 | 147.924983 | 16.345517 | 12.422544 | FAIL |
+
+Original full-suite13.213425%, original isolated8.899797%. Final authoritative
+repeat12.4225436390278%; required<3%, Threshold changed NO. No test rounded or
+relabeled as PASS. Every run60 measured turns/mode,10 warm turns/block,two reversed
+blocks/mode,normal async batching,measured export settled inside process CPU timer.
+Same ADK Team Manager→TAE retrieval/ProcedureAction/command presentation,fake installed
+GenAI transport and same durable M10. Assertions/receipt checking remain symmetric;
+per-turn profiler objects/imports were moved outside timing in both modes, and
+count-only spies are identical in both modes. This is not padding or estimated CPU
+subtraction. Diagnostic feature gates/profile runs skip only their qualification
+assertion explicitly and print DIAGNOSTIC_ONLY; their pytest PASS is not C41 PASS.
+
+Each authoritative mode:80 accepted/completed turns including warm,560 provider
+calls/model operations/accounting admissions/ledger rows,160 agent operations,
+400 tools (320 FunctionTool +80 custom TAE tool),debt0. Total1120=1120 ledger.
+Per measured block30 turns=210 physical calls; accounting is never disabled.
+Runtime setup5.512–5.850ms and fake-provider fixture setup19.420–20.258ms are outside
+steady state. Lazy first-provider initialization occurs in first warm turn. First
+turn and final export settlement CPU are individually retained per block in receipts;
+recurring export settlement stays inside the measured mean. Shutdown13.573–15.061ms
+is measured separately after qualification. CPU scope is the application process,
+including its worker threads; Collector/bridge are separate processes, not measured
+here, and no work was moved out of scope to lower this metric.
+
+### Residual CPU profile and limits of attribution
+
+The full before-edit A–I table and profile above remain the source of attribution.
+Layer means from independent processes vary; negative increments and full-vs-layer
+variation are retained. They are not additive costs or acceptance. Main cProfile
+covers60 measured turns/mode using thread CPU; worker profiles cover80 enabled
+turns including warm. cProfile changes timings: the after profile403.059→456.529ms,
+13.266%, is diagnostic only. Profiles do not exactly reconcile an unprofiled run's
+18.114617ms or16.345517ms because of profiling perturbation and business CPU noise.
+Exact dispatch counts exclude extra business work as the cause; none was found.
+
+Key after-repair profile deltas per measured turn, overlapping cumulative costs:
+
+| Function | Enabled calls | Delta self ms/turn | Delta cumulative ms/turn | Enabled self µs/call |
+|---|---:|---:|---:|---:|
+| opentelemetry/attributes/__init__.py:289:__setitem__ | 82020 | 2.113589 | 5.692517 | 1.546 |
+| observability/redaction.py:153:safe_span_attributes | 8340 | 1.514241 | 4.363894 | 13.767 |
+| opentelemetry/attributes/__init__.py:50:_clean_attribute | 82020 | 1.307258 | 2.811418 | 0.956 |
+| observability/tracing.py:182:on_end | 2460 | 1.005930 | 8.079673 | 24.535 |
+| opentelemetry/attributes/__init__.py:229:_clean_attribute_value | 82020 | 0.606724 | 0.870134 | 0.444 |
+| opentelemetry/attributes/__init__.py:254:__init__ | 8640 | 0.539891 | 4.600361 | 3.749 |
+| opentelemetry/sdk/trace/__init__.py:1180:start_span | 2460 | 0.511713 | 4.985794 | 12.481 |
+| observability/redaction.py:106:validate | 35160 | 0.345326 | 0.657524 | 0.740 |
+| opentelemetry/attributes/__init__.py:286:__getitem__ | 81480 | 0.313073 | 0.313073 | 0.231 |
+| observability/tracing.py:160:on_start | 2460 | 0.267182 | 0.447551 | 6.517 |
+| observability/tracing.py:132:set_final_attributes | 840 | 0.234869 | 1.171376 | 20.163 |
+| observability/tracing.py:88:safe_events | 2460 | 0.226602 | 1.978485 | 5.527 |
+| observability/tracing.py:110:safe_context | 4920 | 0.221749 | 0.420749 | 2.704 |
+| opentelemetry/sdk/trace/__init__.py:891:set_attributes | 3300 | 0.215062 | 1.991111 | 3.910 |
+| opentelemetry/sdk/trace/__init__.py:806:__init__ | 2460 | 0.199215 | 2.812248 | 4.859 |
+
+Projection cumulative delta6.849568→4.363894ms/turn and span processor delta
+10.775396→8.079673ms/turn in diagnostic profiles. SDK attribute assignment still
+82,020 extra calls/60 measured turns (1,367/turn); required capture/start/final/event
+metadata remains intact. Trace worker encodes3280 spans and log worker640 records
+across80 turns. Their recurring encoding is charged inside settlement. Resource
+hashing/copying, protobuf key/value encoding, safe log DTO revalidation and SDK
+metric aggregation remain; metric instruments are registered once. Some finite
+metric registry rebuilding remains a smaller contributor. No repeated policy
+schema construction or retained raw payload was found in the new fast dispatch.
+Healthy application traffic produces required OTLP trace payloads; archive envelope
+serialization remains Collector/bridge work, not an application eligibility scan.
+The representative governed trace has archive eligibility; source/profile inspection
+shows no archive submit/full reconstruction/retention/forecast/API DTO work on this
+application path. Context attach/detach and duration clocks retain required semantics.
+
+The remaining last-run increment16.345517ms exceeds its3.947384ms allowed increment
+by12.398133ms. Even the lowest measured repeat remains6.005011%, not PASS. Further
+closure needs deeper producer/SDK/exporter data-flow work, rather than removing
+observations or bypassing validations. This investigation does not prove a universal
+lower bound or that no future implementation can meet3%; it proves the current
+scoped repairs do not. Candidate designs, not implemented or approved departures:
+- Immutable request-local validated attribute fragments/certificates reused across
+  required sinks, retaining full validation of arbitrary/mutated input and each
+  surface's filtering. Risk: stale trust or mutable nested values can breach privacy;
+  SDK limits/evictions, concurrency, full trace/event equivalence require proof.
+- A more efficient SDK/OTLP encoding path retaining all fields, boundaries and worker
+  CPU in acceptance. Risk: compatibility/serialization/exemplar/privacy regressions;
+  native dependency changes or replacing SDK internals need separate technical review.
+Neither moves CPU into an unmeasured process nor disables trace/metric/log/accounting.
+
+### Dependency regression and unchanged acceptance
+
+Final bounded CI paired p95, n100 each after10 warm iterations:
+HTTP0.110333ms,database0.416292ms,storage0.109292ms,knowledge0.464750ms; all<10ms.
+P99 N/A. No synchronous regression introduced; original full-suite dependency pass
+remains historical, and these current-source results are CI, not a new full-suite
+claim. Paired M9 and M10–M14 sampling invariance pass after changes; accounting
+admission, recovery and governed no-replay stay intact.
+
+Full backend this CPU-only turn: NOT RERUN. User requires C41 PASS before that full
+rerun; all three current authoritative CPU runs failed. Last full backend remains
+5998 PASS,15 SKIP,1 CPU FAIL on the preceding source revision. Current source has
+395 CI and399 focused passes, not a false current-source full-regression PASS.
+C42 FAIL. No full-suite isolated success overrides a full-suite failure.
+
+### Complete status and scope audit
+
+C01–C40 PASS by current focused/CI evidence and preserved unaffected extended/native
+receipts; C30 remains conditional discovery PASS with PostgreSQL NOT LIVE-VALIDATED.
+C41 FAIL,C42 FAIL,C43 PASS,C44 PASS. Individual authoritative44 definitions unchanged.
+PostgreSQL concurrency NOT LIVE-VALIDATED; native Terraform NOT EXECUTED (CLI absent).
+Production Cloud Run load/Cloud SQL NOT EXECUTED; production PostgreSQL/Collector/
+Cloud Trace/GCS archive NOT LIVE-VALIDATED. No external mutation/deployment, credential
+use, shared migration, infrastructure installation or M17 implementation occurred.
+Cloud deployment remains NOT EXECUTED — USER APPROVAL REQUIRED; no exact remote
+operation is proposed. UI/contracts/RBAC/read-only configuration remain unchanged.
+
+Actual CPU-only changed files:backend/observability/redaction.py,tracing.py;
+backend/tests/test_m16_governed_performance.py; new diagnostic/reference/differential
+files _m16_cpu_diagnostic.py,_m16_cpu_projection_reference.py,
+test_m16_cpu_projection_differential.py; guarded runner; execution/report/receipts.
+Prior unrelated local changes preserved. No acceptance threshold/assertion inflation,
+sampling percentages/decision waits,queue sizes,memory bounds or policy weakening.
+
+Ready for Next Milestone: **NO**. STOP at M16; M17 NOT IMPLEMENTED.
+
+Attribution limitation: B–E diagnostic ablations also remove producer projection
+housekeeping that the disabled authoritative mode can still execute against no-op
+spans. Thus negative paired deltas are not purely scheduling noise, and the ladder
+is not an orthogonal causal partition of the18.114617ms historical increment.
+All business/accounting counts remain equal. Independent before/after call profiles
+identify the repeated work; no diagnostic ablation or estimated subtraction enters
+the unchanged authoritative CPU runs. A precise additive attribution remains a
+limitation, not a qualification claim.
+
+
+## Observability Console + Separate Read Plane — architecture-only workstream — 2026-10-10
+
+Introduced after the M16 validation baseline by explicit user request; NOT M17.
+Current milestone remains M16 INCOMPLETE/BLOCKED; C41 FAIL, C42 FAIL, Ready for
+Next Milestone NO. All prior acceptance results/receipts remain unchanged. Final
+M16 CPU/regression acceptance must be rerun after integration, with unchanged
+thresholds and scope. This workstream cannot bypass the existing CPU defect.
+
+Objective: document `/resources/observability` in the existing SLOPANOC shell and
+an independently deployable protected GET-only operational read plane; retain
+effective policy/configuration in Settings. No application implementation yet.
+
+Authoritative inputs: AGENTS.md, .agent/PLANS.md; Telemetry README, 00, 01, 05,
+09, 10, 11, 12, 14, 15, 16, 23 and new 25. Current source inspected: FastAPI
+app/lifespan and mixed observability routes; identity/verified-principal seam;
+Service, SLO and financial read facades, DB pool; frontend API transport/base,
+router/AppShell/state/nav and existing operational/policy panels/polling.
+Reuse existing GET handlers, repositories, role ceilings/capabilities/environment
+and cursor enforcement, safe DTOs/decoders, SLO/financial truth, M15 archive
+reconstruction, SafeError, shell/panels/read states and bounded polling.
+
+Plan and expected changes: new doc 25, targeted authority/link updates to README,
+00/01/05/10/11/12/15/16/23, synchronize only touched ALL_IN_ONE sections and append
+this record. Inspect source first; document writer/read dependency gaps, future
+config/runtime boundaries, phased implementation and validation; validate doc
+links/combined sections/diff and preserve existing M16 source/acceptance history.
+
+Safety invariants: observability never evidence/authority; no model/agent/tool/
+command/business mutations from reader; no GET financial jobs; server verified
+identity/capabilities/environment and privacy preserved; no cloud mutation, no
+code/config/IaC edits, no milestone progression. Settings-first placement is
+superseded only by the user's explicit new route decision.
+
+UI impact evaluation: (1) existing operational information moves to the console;
+Settings keeps policy/integrations/access/retention/sampling/archive/environment.
+(2) API contracts reuse GETs but need independent base/read dependencies and
+truthful remote producer health/policy; missing aggregates remain unavailable.
+(3) UI implementation is outside this documentation pass; future phase 4.
+(4) existing server RBAC applies separately to operations/financial/technical/
+configuration; visible navigation grants nothing. (5) IaC/backend-owned effective
+configuration remains read-only; no runtime mutation is added.
+
+Implementation performed: architecture documentation only; phases defined in
+doc 25, no application code/config/IaC implementation. Actual files changed:
+this execution record; docs/Telemetry/{README,00_MASTER_BUILD_CONTRACT,
+01_TARGET_ARCHITECTURE,05_STORAGE_APIS_AND_UI,10_DASHBOARDS_RUNBOOKS_OPERATING_MODEL,
+11_SLOPANOC_INTEGRATION_MAP,12_IMPLEMENTATION_ROADMAP,15_DEFINITION_OF_DONE,
+16_PRODUCTION_TELEMETRY_BACKEND,23_TERRAFORM_AND_OBSERVABILITY_AS_CODE,ALL_IN_ONE}.md;
+new docs/Telemetry/25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md.
+
+Validation commands: local Python3 document-link/embedded-section consistency
+and preserved-file SHA256 checks; execution-record prefix comparison;
+`git diff --check`; `git status --short`; scoped `git diff --stat`/diff review.
+No runtime suite required for documentation-only edits; no new runtime acceptance
+claim. Validation results recorded below after checks.
+
+Known limitations/blockers: verified-principal provider defaults None; writer-shaped
+read dependencies/local health counters; mixed POST SSE receipts router; unavailable
+aggregate/trend/alert-history source contracts; independent service/read privileges/
+origins and production auth bindings not yet supplied or implemented; shared DB
+contention and archive resource limits require qualification; unresolved M16 CPU.
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED. Future pending
+operations: reviewed separate service deployment/identity/IAM, DB read principal/
+grants/secret binding, origin/auth/frontend routing and optional DNS/monitoring;
+no exact remote operation proposed or authorized in this pass.
+
+Architecture ready for scoped implementation planning; application NOT STARTED.
+M16 exit criteria unchanged: C41 FAIL, C42 FAIL; no acceptance repair performed.
+Ready for Next Milestone: **NO**. Stop after this documentation pass.
+
+Documentation validation results: PASS. All 11 modified/new ALL_IN_ONE embedded
+sections match source documents; added local links resolve; SHA256 comparison
+confirms all pre-existing application/config/IaC/tests/validation receipts unchanged.
+The prior execution record remains a byte-for-byte prefix (append-only update).
+`git diff --check` PASS; status/untracked/scoped diff reviewed. Existing local M16
+changes were preserved. Initial snapshot command used unavailable `python`; rerun
+with `python3` succeeded before existing-file edits. No runtime tests or cloud
+operations executed. Documentation scope criteria PASS; application acceptance
+NOT EVALUATED/NOT IMPLEMENTED. M16 C41/C42 remain FAIL; next milestone NO.
+
+
+## Observability Console + Separate Read Plane — local implementation plan — 2026-10-10
+
+Explicit local feature authorization received; architecture pass approved. NOT M17.
+M16 incomplete: C41/C42 FAIL pending separate final revalidation; thresholds intact.
+Objective: dedicated existing-shell /resources/observability console and independently
+runnable GET-only FastAPI reader; configuration-only Settings. Specs: doc25 and
+README/00/01/05/09/12/13/14/15/16/20/21/23; AGENTS.md and .agent/PLANS.md.
+Audited actual app startup/router/service/identity, DB pools and SRE/financial
+repositories; frontend route/shell/Sidebar/Resources, Settings, API clients,
+decoders, polling/revocation and Vite proxy/tests. Existing local edits preserved.
+
+Reuse: GET route endpoint functions and DTOs; capability/role/environment/cursor
+checks; existing SLO snapshots/evaluator, published financial projections; archive
+reconstruction; safe error mapping; shell/state, read states/panels/polling.
+Implementation map: new reader app/config/pool/read adapters/route allowlist/tests;
+small compatible nullable health fields and writer-independent admission view;
+independent frontend transport/query scope; console/route/navigation/Settings and
+tests; docs/local launch instructions and record. No business pipeline changes.
+
+Plan: separate mixed route composition; build inert reader lifespan/read facades;
+wire bounded read-only pool, explicit CORS and independent API base; implement
+eight URL-backed sections/shared controls and Settings CTA; prove route/startup/
+GET side-effect isolation, durable reads, auth/environment/privacy and real separate
+local processes; focused then affected backend/full frontend/type/build/regression.
+
+Invariants: no reader model/agent/tool/command/provider, financial job, receipt,
+retention or producer telemetry startup; only durable/published reads, truthful
+unknown producer counters, server RBAC and environment isolation; safe data only;
+no browser persistence; no cloud/shared mutations and no M17.
+UI impact: existing operational data moves to console, policy remains Settings;
+compatible health contracts must admit unknown process-local fields; existing
+RBAC applies; effective production config read-only. UI work authorized here.
+Tests: .venv/bin/python -m pytest focused reader/API/SLO/financial/privacy suites;
+separate-process loopback test with disposable DB/test identity; npm test focused
+then full; npm run build; full backend if lifecycle/runtime changed materially;
+git diff --check/status/diff and acceptance1–31 individual review. Authoritative
+M16 CPU gate is not waived or relabeled by feature tests.
+Exit: all31 feature criteria pass or Ready For Review NO; record measured local
+startup/GET/burst/business latency honestly. Production isolation/principal/auth/
+contention remain not live-validated; no cloud operations authorized.
+
+
+## Observability Console + Separate Read Plane — implementation and local review
+
+Feature, not M17. Implementation performed: independent GET-only factory and
+lifespan; explicit 30-route allowlist and source classification; shared GET router
+separate from ANOC receipt POST; bounded reader-only PostgreSQL pool and disposable
+SQLite read-only proof; repository-only accounting/published financial facades;
+truthful unavailable ANOC counters; immutable effective producer policy snapshot;
+existing archive read adapter without directory creation. Server RBAC/environment/
+cursors and existing SLO/financial semantics reused, not reimplemented.
+
+Existing-shell /resources/observability console, eight URL sections, sidebar and
+Resources navigation, shared environment/completed UTC range/manual refresh;
+in-flight sharing only with reference-count cancellation; no protected browser
+persistence; preserved query-generation/revocation controls. Overview authoritative
+availability and published actual/forecast values; unsupported aggregate/agent/
+financial attribution fields unavailable. Existing run, SLO and financial panels
+reused. Settings reduced to effective configuration/policy/integrations/access/
+retention with console CTA. Safe archive waterfall from actual parent/time records,
+raw attributes/events excluded from React state. Local launch and deployment gaps
+in docs/Telemetry/OBSERVABILITY_READ_PLANE_LOCAL.md; doc25/ALL_IN_ONE synchronized.
+
+Architecture safety review: no business app import by reader factory, no producer
+acquire/warmup/worker or source extraction startup; no business mutation routes,
+SSE receipts, dispatch, retention or financial generation on GET. Native DB grants
+are still required; read-only settings supplement them. Public readiness is SELECT1
+connectivity only. The retained archive reconstruction thread keeps its reader slot
+until actual completion even after request cancellation. ANOC archive semantics
+are preserved. Dependency owner audit registers the new read-only pool explicitly.
+
+UI impact: (1) current existing operational data moves to console; (2) health/ledger
+contracts admit unavailable producer fields and all read clients use the independent
+base; (3) this feature explicitly authorizes UI work outside M17; (4) server roles/
+capabilities/environment still decide each source, FinOps does not gain raw content;
+(5) policy and IaC-owned configuration remain read-only. No runtime config writes.
+
+Actual files changed since implementation authorization (54; pre-existing unrelated
+local edits are not counted):
+- `.agent/OBSERVABILITY_EXECUTION.md`
+- `backend/api/observability_app.py`
+- `backend/api/observability_routes.py`
+- `backend/observability/api_models.py`
+- `backend/observability/archive.py`
+- `backend/observability/dependency_instrumentation.py`
+- `backend/observability/finops/api_models.py`
+- `backend/observability/finops/service.py`
+- `backend/observability/read_config.py`
+- `backend/observability/read_database.py`
+- `backend/observability/read_service.py`
+- `backend/observability/slo_service.py`
+- `backend/tests/_observability_plane_child.py`
+- `backend/tests/test_observability_read_plane.py`
+- `backend/tests/test_observability_read_process.py`
+- `docs/Telemetry/25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md`
+- `docs/Telemetry/ALL_IN_ONE.md`
+- `docs/Telemetry/OBSERVABILITY_READ_PLANE_LOCAL.md`
+- `src/App.tsx`
+- `src/ProductApp.tsx`
+- `src/api/client.ts`
+- `src/api/config.ts`
+- `src/api/financialControls.ts`
+- `src/api/finops.ts`
+- `src/api/observability.ts`
+- `src/api/observabilityArchive.ts`
+- `src/api/observabilityClient.test.ts`
+- `src/api/observabilityClient.ts`
+- `src/api/observabilityPolicy.ts`
+- `src/api/observabilityScope.tsx`
+- `src/api/observabilityTypes.ts`
+- `src/api/reconciliation.ts`
+- `src/api/unitEconomics.ts`
+- `src/components/observability/ArchiveTrace.test.tsx`
+- `src/components/observability/ArchiveTrace.tsx`
+- `src/components/observability/ObservabilityConsole.test.tsx`
+- `src/components/observability/ObservabilityConsole.tsx`
+- `src/components/shell/MainWorkspace.tsx`
+- `src/components/shell/Sidebar.tsx`
+- `src/components/shell/settings/SettingsModal.tsx`
+- `src/components/shell/settings/SettingsModal.test.tsx`
+- `src/components/shell/settings/observability/DiagnosticsPanel.test.tsx`
+- `src/components/shell/settings/observability/FinOpsPanel.tsx`
+- `src/components/shell/settings/observability/IntegrationsPanel.tsx`
+- `src/components/shell/settings/observability/ObservabilitySettings.test.tsx`
+- `src/components/shell/settings/observability/ObservabilitySettings.tsx`
+- `src/components/shell/settings/observability/RunDetail.tsx`
+- `src/components/shell/settings/observability/Timeline.tsx`
+- `src/components/shell/settings/observability/contract.ts`
+- `src/components/shell/settings/observability/performance.test.tsx`
+- `src/components/shell/settings/observability/useObservabilityQuery.ts`
+- `src/data/landingNav.ts`
+- `src/lib/routes.ts`
+- `vite.config.ts`
+
+Failures and repairs: initial reader composition appended APIRoutes directly,
+losing app dependency overrides; replaced with include_router. Null omitted parent/
+terminal archive cursor now decoded as null; sorted archive assertions inspect
+parentage rather than assuming span order. Existing Settings tests migrated to
+configuration-only tabs. Direct-route lazy import test allows transform startup.
+Full frontend archive test used wrong case and reused an already-consumed Response;
+fixed fixture case and new Response per request. Collector null binding now shows
+unavailable. Full backend dependency coverage required an explicit reader pool
+owner; registered it. Supervised process fixture originally removed the local-test
+guard activation while retaining guard PYTHONPATH; preserved the flag in owned
+children, without enabling external egress. Added meaningful archive cancellation,
+shared-consumer cancellation and cursor-window preservation tests.
+
+Validation performed so far: affected backend 336 PASS; latest expanded reader/API/
+M15/archive/security-contract 238 PASS (includes cancellation gate); focused privacy/
+contract reader suite 150 PASS; real separate process + dependency coverage 3 PASS;
+full frontend 1005 PASS before two extra transport tests; TypeScript + production
+build PASS. First full backend regression: 6014 PASS, 15 SKIP, 4 FAIL (M16 CPU,
+new pool registration, sorted archive assertion and child guard flag). All three
+feature failures repaired and focused revalidated. Full post-repair regression and
+latest frontend transport additions running; final results appended below.
+
+Initial full-regression authoritative M16 CPU: 7.426635264971552% overhead vs <3%
+required; 137.34573333333296 ms baseline, 147.54590000000007 ms enabled; 60 measured
+turns/mode, reversed settled blocks, actual scripted governed calls and same durable
+accounting. Do not relabel this as PASS or feature-isolation evidence. C41/C42 remain
+subject to final revalidation; M16 not declared complete; M17 unstarted. Historical
+M16 tests/receipts and core instrumentation hashes remain byte-identical to the
+implementation-start snapshot.
+
+Local process measurements (3-PASS dedicated process/coverage run): reader startup
+1334.693 ms, ANOC startup 1736.776 ms, reader restart 1328.617 ms; first trace read
+15.594 ms, repeated reads 4.019–4.576 ms. Thirty successful reads in 83.324 ms;
+business session request 1.568–2.023 ms idle, 1.988–11.892 ms during burst, 2.041 ms
+with slow reader and 2.315 ms with reader down. Different PIDs and zero model/agent/
+tool/command/financial jobs. These are loopback SQLite fixture observations, not
+production guarantees, p95 certification, whole-turn/SSE load or shared PG bounds.
+Overview JSDOM mocked-DTO first render is reported by frontend test; it does not
+include browser/network/production query latency. FinOps published-read timing is
+measured separately on real disposable published rows, without extraction on GET.
+
+Individual local feature acceptance review:
+| Criterion | Status | Evidence / qualification |
+|---|---|---|
+| 1 Route | PASS | App/shell direct route test and SPA fallback |
+| 2 Dedicated console | PASS | Eight URL-backed existing-shell sections |
+| 3 Authoritative Overview | PASS | M9 availability/M14 actual; unsupported KPIs unavailable |
+| 4 Traces | PASS | Existing filters/pagination/detail/timeline; retained archive hierarchy |
+| 5 Supported Agents | PASS | Durable agent usage only; missing statistics/cost unavailable |
+| 6 Reliability | PASS | Durable projection vs reader-local vs unknown ANOC/Collector |
+| 7 M9 SLOs | PASS | Existing provider/evaluator, read-only suppresses metric emission |
+| 8 M10–M14 FinOps | PASS | Existing DTOs/repositories/panels; no client financial formulas |
+| 9 Read-only Alerts | PASS | SLO/control states only; no delivery/remediation invented |
+| 10 Diagnostics capabilities | PASS | Existing server technical/operational ceilings |
+| 11 No hidden reasoning | PASS | Sanitization and archive projection privacy tests |
+| 12 Configuration-only Settings | PASS | Migrated Settings tests / console CTA |
+| 13 Separate API base | PASS | Six clients and production HTTPS/missing-base denial |
+| 14 Separate process | PASS | Actual ANOC/reader factories, different PIDs |
+| 15 No business mutation | PASS | Allowlist table + 405 mutation rejection |
+| 16 ANOC-only receipts | PASS | Router split + business POST transport regression |
+| 17 Inert startup | PASS | Actual lifespan under forbidden producer/warmup/worker spies |
+| 18 GETs no jobs | PASS | Every allowlisted GET + actual published billing read |
+| 19 Truthful local state | PASS | Null counters/unknown states, no fabricated producer health |
+| 20 RBAC | PASS | Default denied, canonical roles/capabilities, FinOps separation |
+| 21 Environment | PASS | Verified scope + selector + cross-environment cursor denial |
+| 22 Explicit CORS | PASS | Exact origins / no wildcard / denied origin / GET-only policy |
+| 23 Revocation/races | PASS | Existing generation/cancellation + global protected revocation |
+| 24 No protected persistence | PASS | No protected localStorage/sessionStorage/cache writes |
+| 25 Reader failure isolation | PASS | Slow/down/restart leave ANOC session path operational |
+| 26 Zero dispatch | PASS | Installed provider/ADK/tool/command/job counters zero in process fixture |
+| 27 Privacy | PASS | Minimized technical DTOs, archive markers, invalid query no reflection |
+| 28 Frontend/build regression | PASS | Full frontend 1007 PASS; TypeScript/production build PASS |
+| 29 No remote mutations | PASS | Only local code/disposable tests; no external operations |
+| 30 M16 truthful | PASS | CPU failure retained, C41/C42 unresolved, M16 incomplete |
+| 31 M17 unstarted | PASS | No milestone progression |
+
+Known limitations: production Cloud Run isolation NOT DEPLOYED; read-only DB
+principal NOT CREATED; production CORS/auth topology and shared DB contention
+NOT LIVE-VALIDATED; verified identity still defaults denied. Archive uses existing
+filesystem adapter, not a newly deployed GCS access plane. Missing time-series and
+alert history remain unavailable. ANOC pending/admitted/terminal-pending/accepted/
+coalesced/attempts/persisted/failed/retries/rejected/terminal-unpersisted/shutdown-
+incomplete/invalid and ledger admission failures are not made durable; exporter/
+Collector config/health and gateway dependency health unavailable without publication.
+Terraform native validation NOT EXECUTED (CLI absent); no feature Terraform authored.
+
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED. Pending future
+operations require exact review: separate service deployment/bindings/identity,
+read DB principal/grants/secret binding, production auth/origin/hosting fallback,
+optional monitoring/DNS. No exact external mutation is proposed in this feature.
+Ready for Next Milestone: NO. Ready For Review pending final checks below.
+
+Final frontend run: `npm test -- --reporter=dot` 70 files / 1007 tests PASS,
+11.21 seconds; scoped independent cancellation and cursor-window tests included.
+`npm run build` PASS, TypeScript and Vite, console separate chunk 78.00 kB /
+22.08 kB gzip. Reader current-source 8 PASS, 10.26 seconds including archive
+slot retention after cancellation. Published FinOps GET measured 6.617 ms (real
+local published rows, in-process ASGI, one observation); Overview mock JSDOM
+render results remain fixture-only. Expanded backend 238 PASS, 10.42 seconds.
+All 31 local feature criteria now PASS; full backend post-repair result pending
+record below. No production or M16 milestone acceptance inferred.
+
+Final navigation review repaired the Settings CTA to use the existing client
+router and explicitly close the modal rather than trigger a page reload. Workspace
+state continuity preserved; modal/router regression added. Relevant Settings
+tests use the existing RouterProvider. Full frontend/build rerun follows.
+Archive deadline cancellation retains the slot until filesystem work ends; bounded
+thread cancellation gate PASS. Additional transport scoped cancellation/cursor
+gates PASS. No new cloud action, auth bypass or producer startup introduced.
+
+Production logging review reuses ProductionLogging as a formatter-only lease in
+reader lifespan, restored at shutdown. No telemetry runtime/OTLP exporter acquired.
+Added privacy proof: production legacy log message/args/authorization extras become
+safe JSON, not raw content. This satisfies existing structured production logging
+without starting producer instrumentation. Local guide records the lease.
+
+Final review frontend: 1008 PASS / 70 files, 12.44 seconds; TypeScript/Vite build
+PASS (4.04 seconds Vite build). Settings CTA close/router test included. Current
+reader/API/M15/security-contract regression: 239 PASS, 9.80 seconds; production
+JSON privacy gate included. FinOps GET latest 4.833 ms, earlier 6.617 ms; single
+local observations, no performance threshold inferred. Final shutdown always
+releases formatter lease even if DB disposal fails. Docs embedded consistency
+and git diff --check PASS; untracked/status/scoped diffs reviewed.
+
+Post-repair full regression CPU gate still FAIL: 14.250654257326776% overhead
+against unchanged <3% requirement, baseline 139.92328333333336 ms / enabled
+159.86326666666645 ms, 60 measured turns per mode, 1120 provider calls and
+ledger rows. This reinforces unresolved C41; no acceptance claim or threshold
+change. Variability across runs is not a production qualification. Historical
+receipts unchanged. Final Overview JSDOM fixture render 61.206 ms (one run); no
+network or production load included. M16 C42 remains subject to final revalidation.
+
+
+### Final local feature disposition
+
+Full post-repair backend regression executed with the existing local-only guarded
+supervisor: 6017 PASS, 15 SKIP, 1 FAIL, 838 warnings, 626.18 seconds. Sole failure:
+backend/tests/test_m16_governed_performance.py::test_representative_governed_turn_cpu
+(14.250654257326776% vs unchanged <3%). All three earlier feature regression
+failures repaired and PASS. The full collection began before the final archive
+cancellation/production-formatter test additions; current-source expanded 239 PASS
+and final reader/dependency 11 PASS explicitly validate those additions and final
+shutdown structure. Existing warnings/skips are not silently reclassified.
+Full frontend latest 1008 PASS; TypeScript/production build PASS; no required
+feature architecture item omitted. All31 feature criteria individually PASS under
+explicit local review scope; full M16 acceptance remains FAIL, not waived.
+
+Guarded full-run real process measurements: reader startup 1333.789 ms, ANOC
+startup 1841.847 ms, reader restart 1228.795 ms, first trace GET 14.973 ms,
+repeated GETs 2.888–3.590 ms; 30/30 successful burst requests in 78.296 ms.
+Business session request idle 1.276–2.005 ms, burst 1.786–13.841 ms,
+slow reader 1.826 ms, stopped reader 3.180 ms. Installed dispatch/job counters all
+zero and independent PIDs confirmed. No production latency/CPU/shared database
+contention inference. The earlier dedicated process measurements remain recorded
+as separate observations, not replaced with a favorable benchmark.
+
+Final repository hygiene: git status/untracked/scoped diff inspected;
+git diff --check PASS; doc25 embedded-section consistency PASS; original M16
+receipts/tests/core instrumentation hashes and historical execution prefix
+preserved. Feature changes are 54 local files, listed above; no generated secrets,
+production payloads, local DB files or exports added. Cloud/shared mutations NONE.
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED; pending exact
+operations remain the production service/identity/read grants/auth/origins/hosting
+handoff described above. No Terraform CLI available and no feature IaC apply or
+migration attempted.
+
+Local implementation: IMPLEMENTED AND LOCALLY VALIDATED. Ready For Review: YES
+(feature only, not production/M16 acceptance). C41 remains FAIL subject to final
+revalidation; C42 remains FAIL subject to final revalidation. M16 is not complete.
+M17 unstarted. Ready for Next Milestone: NO. Stop here.
+
+
+## Resources-only Observability UX correction — plan — 2026-10-11
+
+Explicit user architecture correction supersedes all earlier app-shell / Settings
+placement. Local frontend migration only; read plane unchanged; NOT M17. C41/C42
+remain unresolved subject to final revalidation; no milestone or cloud progression.
+Objective: one full-width Resources console, all operational and configuration
+views, existing top navigation/branding, no app sidebar/modal/workspace overlay.
+Specs: user correction, docs/Telemetry README/00/12/14/15/25 and privacy/RBAC
+contracts. Inspected App route, LandingHeader/DesktopNav/MobileNav/Resources menu,
+ProductApp/AppState/shared panels/SettingsModal and API/query contracts.
+Reuse existing site header, all console panels, query scope/revocation, read base,
+backend DTOs/RBAC. Plan: standalone Resources shell/page entry; remove console
+branch/link wrappers from app shell and Settings navigation/type/mount; relocate
+configuration wrapper and its tests into console domain with URL subnavigation;
+verified access admission state; route/reload/menu/Open app/Settings security
+regressions, full frontend/type/build and focused backend RBAC checks. No business
+pipeline/backend/IaC changes. Expected files: App/MainWorkspace/Sidebar/SettingsModal/
+types; Resources shell, console/configuration/tests; doc25/local guide/execution.
+Safety: no public data due Resources placement; identity/capabilities remain server
+owned; no durable browser data or reasoning; no models/jobs/receipts in reader;
+financial formulas reused; unknown values remain unavailable; existing local edits
+preserved. UI impact: all UI moved, independent read contracts unchanged, RBAC
+applies, policy remains view-only. Exit: requested route/visual-shell/Settings/
+configuration/security tests and full frontend/build pass; backend file hashes
+unchanged; document actual results, limitations and cloud NONE EXECUTED.
+
+
+## Resources-only Observability UX correction — results — 2026-10-11
+
+IMPLEMENTED AND LOCALLY VALIDATED. Canonical full console now mounts through
+ObservabilityResourcesPage -> ResourcesShell -> existing LandingHeader, preserving
+site branding/top Resources/Desktop/Mobile navigation and Open app link. Full-width
+(max 1920px) dark operations body; established dark palette is scoped to the Resources
+lifecycle including menu portals, restored on unmount. No ProductApp, ANOC sidebar,
+New Chat/Projects/Scheduler/Chats/Settings/workspace return overlay in this route.
+AppState remains above routes to preserve ANOC continuity. Business shell untouched
+apart from removing obsolete console branch/link wrappers.
+
+App Settings Observability & FinOps entry/type/lazy mount/CTA removed entirely.
+Obsolete ObservabilitySettings wrapper and test relocated into Configuration;
+unused ObservabilityNav and TracingPanel wrappers removed. Shared panel/query/API
+modules retained where used/tested; directory location does not mount Settings UI.
+Console primary sections are Overview/Traces/Agents/Reliability/SLOs/FinOps/Alerts/
+Diagnostics/Configuration. Configuration subroutes are data-retention/integrations/
+access/effective-configuration. Existing policy/retention/view-only contracts reused;
+integrations additionally show safe reader and financial-source states. No financial
+formulas or backend contracts recreated. Access labels Financial Data and Technical
+Diagnostics reflect decoded server capabilities, with no edits or authority grant.
+
+Protected admission gates panel mounting on verified /access. Unverified or denied
+users get explicit authentication/access state, not operational reads/data. Every
+source still enforces its own server capability/environment; financial/technical
+roles remain separate. Independent read base, in-flight cancellation, scope/cursors,
+revocation/generation guards and absence of protected browser persistence preserved.
+No model/agent/tool/command/financial job or receipt/retention behavior changed.
+
+Actual scoped changed/new/deleted files (26, includes renamed wrapper/test and
+removed obsolete navigation wrappers; unrelated local edits preserved):
+- `.agent/OBSERVABILITY_EXECUTION.md`
+- `docs/Telemetry/25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md`
+- `docs/Telemetry/ALL_IN_ONE.md`
+- `docs/Telemetry/OBSERVABILITY_READ_PLANE_LOCAL.md`
+- `src/App.tsx`
+- `src/components/observability/ObservabilityConfiguration.test.tsx`
+- `src/components/observability/ObservabilityConfiguration.tsx`
+- `src/components/observability/ObservabilityConsole.test.tsx`
+- `src/components/observability/ObservabilityConsole.tsx`
+- `src/components/observability/ObservabilityResourcesPage.tsx`
+- `src/components/resources/ResourcesShell.tsx`
+- `src/components/shell/MainWorkspace.tsx`
+- `src/components/shell/Sidebar.tsx`
+- `src/components/shell/settings/SettingsModal.test.tsx`
+- `src/components/shell/settings/SettingsModal.tsx`
+- `src/components/shell/settings/observability/AccessPanel.tsx`
+- `src/components/shell/settings/observability/IntegrationsPanel.tsx`
+- `src/components/shell/settings/observability/ObservabilityNav.tsx`
+- `src/components/shell/settings/observability/ObservabilitySettings.test.tsx`
+- `src/components/shell/settings/observability/ObservabilitySettings.tsx`
+- `src/components/shell/settings/observability/Panels.test.tsx`
+- `src/components/shell/settings/observability/TracingPanel.tsx`
+- `src/components/shell/settings/observability/performance.test.tsx`
+- `src/index.css`
+- `src/types.ts`
+- `vite.config.ts`
+
+Validation performed:
+- Full frontend `npm test -- --reporter=dot`: 70 files, 1010 PASS, final run 9.45s.
+  Includes route/reload/Resources menu/Open app/app Settings absence, configuration
+  deep links and keyboard navigation, auth gate, financial/technical access,
+  environment scope, delayed revocation races, privacy and browser-storage checks.
+- TypeScript and Vite `npm run build`: PASS; explicit synthetic HTTPS fixture build
+  used only for isolated browser interception, then normal build rerun to restore
+  default local artifacts. No synthetic source added to application runtime.
+- Focused unchanged backend `pytest -q backend/tests/test_observability_read_plane.py
+  backend/tests/test_observability_api.py`: 66 PASS, 16.55s. No backend/lifecycle code
+  edits; full backend/M16 CPU rerun not necessary or claimed for this frontend move.
+- Real isolated Chrome/CDP + loopback production preview, safe synthetic fixtures
+  and blocked external page requests: PASS. 1440x1000 and 390x844 widths have exact
+  document scroll widths 1440 and 390; dark RGB(23,22,26) under light OS preference;
+  no app sidebar/Settings; configuration reload, FinOps view, Open app + theme
+  restoration, actual app Settings absence, and authentication denial validated.
+  Browser exceptions 0. Screenshots in /tmp/observability-resources-{1440,390}.png
+  and /tmp/observability-resources-finops.png, inspected. Browser/preview owned
+  processes terminated; disposable profile removed. Fixture validation is not live
+  authentication, production data, production CORS or deployment acceptance.
+- git status/untracked/scoped diffs reviewed, git diff --check PASS. SHA256 baseline
+  confirms every backend/infra/script and historical M16 validation receipt unchanged.
+  Historical execution record remains byte-for-byte prefix; doc25 embedded section
+  matches ALL_IN_ONE. Frontend remaining Observability & FinOps occurrences: canonical
+  console title and Settings absence assertions only; obsolete app Settings removed.
+
+Failures/repairs: navigation test encountered JSDOM's missing canvas/matchMedia in
+unrelated landing hero; isolated that visual-only component while testing real site
+header/menu/router. Legacy config test expectation forbidding financial status reads
+updated to allow legitimate protected integration status and still forbid mutations/
+run calls; integration unknown assertion handles multiple truthful unknown sources.
+Browser harness fixed repo import path, selected its owned page rather than Chrome
+extension background target, and configured intercepted HTTPS fixture base/CORS.
+Default production missing read-base correctly failed closed during initial check.
+Actual mobile trace-table overflow caught by browser: implicit grid min-content column
+widened page; explicit one-column mobile grid and shrinking panels repaired. Final
+real browser bounds and full frontend rerun PASS; no exit criterion waived.
+
+Exit criteria individually: Resources shell/full console PASS; direct/reload/back/
+forward/menu route PASS; normal app/Open app PASS; no app Settings entry/config PASS;
+nine primary and four configuration routes PASS; responsive dark width/no chrome
+PASS; auth/financial/technical/environment/revocation/privacy PASS; backend separate
+and independent read base unchanged PASS; frontend/type/build PASS; no cloud/shared
+mutation PASS; M16 status preserved PASS. Ready For Visual Review YES.
+
+Known limitations unchanged: production verified identity remains unconfigured/
+default denied; explicit read-base/producer policy snapshot required for populated
+views; missing authoritative metrics remain Unknown/Unavailable. Cloud Run isolation
+NOT DEPLOYED, read DB principal NOT CREATED, production CORS/auth topology and shared
+DB contention NOT LIVE-VALIDATED. Terraform/native cloud validation not executed by
+this UI move. Local browser screenshots use clearly isolated fixture DTOs, not live
+operational or financial data. Cloud changes: NONE EXECUTED. Cloud deployment status
+NOT EXECUTED — USER APPROVAL REQUIRED. No exact external operation proposed.
+
+M16 not complete. C41/C42 remain subject to final revalidation, prior FAIL results
+unchanged and CPU threshold not waived. M17 unstarted. Ready for Next Milestone NO.
+Stop after Resources UX correction; Ready For Visual Review YES.
+
+
+## Authoritative dashboard integration — plan — 2026-10-11
+
+Separate authorized Console workstream, not M17. M16 C41/C42 unchanged.
+Objective: wire Resources Overview to existing M7–M15 read DTOs, enforce admission
+before protected requests, preserve approved visual language and independent base.
+Specifications inspected: Telemetry README/00/12/14/15/25, 09/13/18; actual 30
+GET route inventory, M7/9/10/11/12/13/14/15 DTOs and existing six API clients,
+query cancellation, run/detail/archive and financial/configuration panels.
+Reuse all backend services, clients, runtime quantity contracts, financial decimal
+strings, SLO semantics and archive hierarchy. No backend change planned.
+Expected files: Console, dashboard projection helpers/tests, scope/client, query
+success notification, console tests, source audit and this execution record.
+Plan: record source map before frontend edits; capability-gate transport from
+verified access; compatible 1/7/30 completed UTC day ranges; shared agent usage
+query, recent/active runs, billing and SLO KPI reads, coverage-aware projection;
+reuse published finance/diagnostics/configuration. Hide unsupported trends/topology.
+Safety: no jobs/writes/receipts, financial formulas or inferred authority; no unlike
+units/currency combination, incomplete pages never aggregates, no browser storage.
+UI impact: current Resources workstream owns overview and global controls; server
+RBAC applies; configuration read-only; no later milestone work.
+Validation: focused/frontend full Vitest, TypeScript/Vite build, local guarded
+read-plane/API/financial/privacy tests, git diff --check and scoped hygiene review.
+Exit: source map covers 30 GETs; supported data wired, missing values truthful;
+pre-admission protection, scope/refresh/revocation and partial failures tested;
+backend unchanged and side-effect gates pass. No remote/cloud operations.
+
+## Authoritative dashboard integration — results — 2026-10-11
+
+IMPLEMENTED AND LOCALLY VALIDATED (separate Console workstream, not M17).
+Audited all 30 allowlisted GET routes and actual M7–M15 DTOs before frontend edits;
+full endpoint and component/field/capability/range/environment/support map is
+`docs/Telemetry/OBSERVABILITY_DASHBOARD_SOURCES.md`.
+
+Implementation: Overview uses shared M10 agent-group usage for provider total tokens,
+component breakdown and agent activity; quantities retain unknown/unrepresented
+counts and incomplete-page aggregates remain unavailable. Total component is not
+reconstructed by double-counting cached/candidate/thought components; characters
+remain separate. Actual billed net costs use M11 by category/currency, exact signed
+Decimal-string display aggregation (BigInt), no pricing estimates or FX. Recent M7
+runs open reused safe detail/timeline/archive. Active runs use current durable
+snapshot including runs started today; pagination prevents false aggregate counts.
+Backend availability semantics supply success rate with explicit rolling window;
+M9 threshold compliance is never mislabeled p95. No fabricated token/cost trend or
+static workflow. M14 monthly finance, confidence/risk/anomalies and M12 allocation/
+M13 unit economics/configuration/diagnostics remain existing source-backed reads.
+Finance topline sources fail independently; alert controls use settled reads so
+one source failure preserves the others (all-source failure remains a failed query).
+
+Protected requests are admitted from verified `/access` capabilities before fetch;
+server checks still own authority/environment validation. Initial role denial makes
+no protected network request. Existing cancellation/generation/revocation guards
+clear data and block late restoration. Global successful-retrieval timestamp and
+refresh reuse query ownership; access is refreshed too; 1/7/30 completed UTC day
+queries, current active snapshot, fixed 28-day SLOs and published-month controls
+are labelled honestly. Missing/blank read API base now fails closed in development
+and production, removing the former ANOC same-origin/proxy fallback. Tests supply
+an explicit isolated loopback read-base; runtime has no synthetic binding or data.
+No additional polling or motion; native labels/focus/tables, shrinking grids and
+horizontal table containers retained. No protected persistence or reasoning.
+
+Actual files touched in this pass (14; pre-existing unrelated edits preserved):
+- `.agent/OBSERVABILITY_EXECUTION.md`
+- `.env.example`
+- `vitest.config.ts`
+- `docs/Telemetry/OBSERVABILITY_DASHBOARD_SOURCES.md` (new source audit)
+- `docs/Telemetry/OBSERVABILITY_READ_PLANE_LOCAL.md`
+- `src/api/observabilityClient.ts`
+- `src/api/observabilityClient.test.ts`
+- `src/api/observabilityScope.tsx`
+- `src/api/observability.test.ts`
+- `src/components/observability/DashboardData.tsx` (new projections/components)
+- `src/components/observability/DashboardData.test.tsx` (new)
+- `src/components/observability/ObservabilityConsole.tsx`
+- `src/components/observability/ObservabilityConsole.test.tsx`
+- `src/components/shell/settings/observability/useObservabilityQuery.ts`
+No backend/infra/producer/financial worker/test threshold/receipt changes in this pass.
+
+Validation:
+- Full frontend after binding hardening: 71 files / 1015 PASS, 10.89s.
+- Focused dashboard, financial decimal/unknown-page/currency/stale, role admission,
+  scopes/refresh, partial source failure, trace/navigation and revocation tests PASS.
+- TypeScript/production Vite build PASS, latest binding build 3.68s.
+- Offline guarded backend read-plane/API/M15 archive/policy/M10–M14 financial API:
+  200 PASS in 27.08s. Actual startup/every-GET spies prove zero model/agent/tool/
+  command/job dispatch, no retention/extraction/generation/receipt ingestion;
+  published billing/archive and privacy/environment/cursor/role gates included.
+- Independent actual ANOC/reader local process test: 1 PASS in 5.89s under egress
+  guard (loopback only), disposable SQLite, separate PIDs. 30/30 burst reads in
+  77.544ms; first trace 15.658ms; repeated 3.858–5.171ms; reader startup
+  1436.375ms/restart 1329.358ms. Business request slow reader 1.918ms, reader
+  down 3.710ms; all model/agent/tool/command/jobs counters zero. Fixture-only
+  timings, no production/shared-DB/performance/CPU acceptance inferred.
+- Overview JSDOM fixture first render 14.538ms in final full binding run; includes
+  mocked async reads, excludes browser/network/production query/render latency.
+- Overview test asserts ≤11 initial GETs including access, one runtime-usage read
+  and one billing-summary read shared across their cards; no per-card polling.
+- git status/untracked and scoped changes reviewed; git diff --check PASS.
+
+Failures and repairs: initial build caught obsolete unused Timeline import, removed;
+initial tests used a unique text assertion for amounts now correctly repeated in
+headline and breakdown, changed to plural queries. Backend command first named
+nonexistent API tests (zero collected), corrected to actual suite files. Process
+fixture first failed sandbox loopback bind; exact isolated test rerun with approved
+sandbox escalation passed; guard still prohibited non-loopback traffic. Final review
+repaired active-window filtering and removed development business-proxy fallback.
+No threshold or exit criterion waived.
+
+Individual local exit criteria:
+| Criterion | Result |
+|---|---|
+| 30-route/DTO audit before frontend implementation | PASS |
+| Independent explicit read base, no business runtime fallback | PASS |
+| Authoritative tokens/coverage, signed actual costs/currency separation | PASS |
+| Current active snapshot/recent durable runs; accurate labels | PASS |
+| Agent model usage; no fabricated running/online/latency/activity | PASS |
+| Financial confidence/quality and partial-source rendering | PASS |
+| Existing safe trace/retention/archive/SLO/diagnostic/configuration reuse | PASS |
+| Pre-fetch capabilities, server scope, cancellation/revocation/privacy | PASS |
+| Refresh/timestamp/compatible ranges/shared request ownership | PASS |
+| Frontend full/type/build + applicable backend read/financial/security | PASS |
+| Zero read-plane business/producer/job side effects | PASS |
+| No cloud/shared mutation or milestone progression | PASS |
+
+Known limitations: no authoritative jointly bucketed token/cost series, p95 latency,
+per-run token/cost/model-call/request-class joins, agent execution/failure/duration/
+tool/session aggregates, online state, previous-period comparisons or alert history.
+M7 events have no parent spans; topology only comes from retained archive span IDs,
+requires technical capability and existing manifest digest. Source freshness is
+truthfully unavailable in M10 usage DTO; separate ledger health shows persistence/
+debt/staleness. Producer-local/Collector health remains unknown; production verified
+identity/read base/service/read grants/CORS/shared DB/live data not configured or
+validated by this pass. Responsive containers preserved; no new browser screenshot
+qualification claimed. Local test fixtures are not production observations.
+
+Cloud changes NONE EXECUTED. Cloud deployment status = NOT EXECUTED — USER APPROVAL
+REQUIRED. Existing pending production service/identity/read DB grants/auth/origin/
+hosting handoff unchanged; no exact external mutation proposed. No remote migration,
+IaC apply, billing configuration or IAM change. UI/configuration remains read-only.
+M16 status unchanged: incomplete, C41/C42 require final unchanged validation; prior
+FAIL evidence retained. M17 unstarted. Ready for Next Milestone NO.
+Ready For Visual Review YES (local source-backed integration, not live deployment).
+
+Final current-source acceptance: full frontend 71 files / 1015 PASS in 11.91s;
+TypeScript/Vite production build PASS (Vite 3.35s). Final Overview mocked DTO
+render 17.276ms; prior observations retained, no favorable benchmark substituted.
+Alerts now combine existing protected read-plane/database health and durable stale
+records with SLO/financial states; unknown Collector state remains unknown. Eleven
+bounded initial GETs including access; shared card sources have no extra polling.
+Final git diff --check PASS, status/untracked/scoped source review performed;
+30-route audit counted and runtime source verified free of fixture imports.
+Independent process 1 PASS and guarded backend 200 PASS unchanged (backend source
+unchanged). No new cloud action. All local workstream exits PASS; live production
+validation NOT EXECUTED. Ready For Visual Review YES. Ready for Next Milestone NO.
+Stop after this dashboard integration; M16 incomplete / M17 unstarted.
+
+
+## Console visual / UX refinement — plan — 2026-10-11
+
+Authorized frontend-only Resources workstream. Backend integration approved;
+no M7–M15 changes, no M17, M16 status and thresholds unchanged.
+Objective: compact six-KPI hierarchy, real ranked agent token visualization,
+actual currency-separated financial composition, usable recent run table,
+bounded overview attention list and compact source-owned SLO summary.
+Specs: latest attached visual brief; Telemetry README/00/12/14/15/25 and existing
+30-route dashboard source audit. Inspected current Console/DashboardData, query/
+RBAC/scope/client, shared detail/timeline/archive/StatusBadge/DiagnosticsPanel,
+ResourcesShell/LandingHeader/BrandMark and existing dark theme/type tokens.
+Reuse every existing loader and backend DTO; no new endpoint or aggregation API.
+Design: existing near-black shell, indigo/blue surfaces, crisp 13px secondary type,
+restrained borders; one-row desktop KPIs, two-column token/activity row and lower
+runs/financial/attention row, SLO rows inside reliability panel. Remove fake-p95
+placeholder, unavailable chart panel and repeated refresh metadata from Overview.
+KPI icons come from existing lucide-react. No external imagery needed for this
+operational data UI; original logo/header/nav/typography preserved.
+Expected files: Console/DashboardData plus visual helpers/styles/tests; shared
+status badge/ReadState/DiagnosticsPanel presentation; execution record.
+Safety: unsupported quantities/lineage remain unknown; costs retain exact decimal
+strings/currencies; missing or negative composition is not forced into a chart;
+no SLO frontend evaluation; no invented parentage; capped overview alerts retain
+full Alerts tab; no authorisation/cancellation/query ownership changes.
+UI impact: current authorized visual workstream only, protected data remains
+server-scoped, all configuration read-only. No protected persistence.
+Validation: focused/full frontend, auth/revocation, tsc/production build; actual
+headless Chrome/CDP at 1440/1024/390px, screenshots, navigation/refresh/run detail/
+loading/partial-error/stale/denied/reduced-motion checks with isolated test DTO
+interception and all external requests blocked. Verify backend/infra/script hashes
+unchanged, git status/diff/untracked and diff --check. No remote mutation.
+Exit: real supported visuals, compact accurate KPIs, responsive unclipped rows,
+5-item attention limit, truthful states, keyboard/reduced-motion behavior, tests/
+build/browser PASS, backend unchanged. Record actual screenshot paths/limitations.
+
+## Console visual / UX refinement — results — 2026-10-11
+
+IMPLEMENTED AND LOCALLY VALIDATED. Frontend presentation only; original Resources
+logo/header/navigation/Open app, dark palette and Ericsson/fallback typography
+retained. Styling is scoped to the Console and existing brand tokens; shared
+operational status/read components retain their data/authority contracts.
+
+Implementation:
+- Compact requested page title/subtitle, right-hand environment/time/refresh/last
+  retrieval controls; nine underline tabs with horizontal active-tab visibility.
+- Six compact icon/value/source KPIs: total tokens, actual cost, active runs,
+  observed agent activity, server success rate, financial coverage. Unsupported
+  p95 card and unavailable-only time-series panel removed. Source failures never
+  become zero; missing billed coverage remains Unknown.
+- Primary ranked actual M10 total_tokens bars, unknown-call disclosure and source
+  details; shared model-call/coverage table contains all five named agents. Full
+  Agents view retains token components and recent M7 latest-agent run metadata;
+  full historical participation and provider/model-per-agent joins not invented.
+- Actual M11 cost-category stacked composition with exact billed net amounts,
+  currency-specific totals and percentages. Never merge currencies, estimate
+  price, draw missing pages or force signed credit regimes into positive charts.
+- Compact recent runs table, latest reported agent, semantic status chips, safe
+  duration and shortened actual start timestamp with full timestamp tooltip;
+  five overview rows, existing trace/detail links. Unsupported run cost/tokens
+  omitted. M7 significant events use a clean sequential timeline; original
+  exceptional archive hierarchy/timing/parentage unchanged.
+- Overview attention combines actual SLO, financial, ledger and read-model states,
+  sorted/capped at five with full Alerts link. Compact backend actual/target/state
+  SLO rows with additional SLOs expandable. No browser SLO calculation.
+- FinOps has four compact actual/budget/forecast/unallocated cards, real cost
+  composition and existing financial views. Monthly LOW-confidence forecast is
+  explicitly labelled. Daily unallocated values are display-summed only within
+  currency and eligible published rows; incomplete pages remain unavailable;
+  unit-economic alternative views are never summed.
+- Duplicate Overview refresh controls/large copy/nested metrics removed; source
+  detail stays expandable. Configuration remains simple read-only settings.
+  Independent skeletons and inline partial-source errors preserve existing
+  generation/cancellation/revocation; no transport/query/auth changes. Brief
+  section reveal and restrained hover/focus only; reduced-motion disables motion.
+
+Actual files touched this pass (11; unrelated local work preserved):
+- `.agent/OBSERVABILITY_EXECUTION.md`
+- `src/components/observability/ConsoleVisuals.tsx` (new)
+- `src/components/observability/ConsoleVisuals.test.tsx` (new)
+- `src/components/observability/DashboardData.tsx`
+- `src/components/observability/ObservabilityConsole.tsx`
+- `src/components/observability/ObservabilityConsole.test.tsx`
+- `src/components/shell/settings/observability/ReadState.tsx`
+- `src/components/shell/settings/observability/RunDetail.tsx`
+- `src/components/shell/settings/observability/StatusBadge.tsx`
+- `src/components/shell/settings/observability/Timeline.tsx`
+- `src/index.css`
+
+Validation:
+- Full current frontend: 72 files / 1019 PASS in 15.83s. Includes source-backed
+  chart/unknown/signed money/currency separation/capped attention/SLO-state tests,
+  route/configuration/financial capability/query scope/late revocation/privacy.
+- TypeScript + normal production build PASS; Vite 1.75s. Isolated browser build
+  placed only in /tmp/obs-visual-dist with intercepted synthetic HTTPS reader URL;
+  normal dist remains default, no fixture base in runtime source/test data imports.
+- Actual isolated headless Chrome/CDP production preview at 1440x1000,
+  1024x1000 and 390x844: PASS. Document widths exactly 1440/1024/390; panel/KPI
+  intersection checks show no overlaps. Six KPIs / at most five attention rows.
+  Full-page heights for populated worst-case fixtures 1421/2005/3171 pixels;
+  tablet/mobile reflow intentionally scroll vertically, tables locally scroll.
+  No claim of all content fitting in one viewport or a production-data screenshot.
+- Browser run/detail heading focus, trace explorer, Agents/FinOps/configuration
+  deep-link/reload, refresh, empty/stale/partial failed/restricted/loading states,
+  no unauthorized financial/archive requests, revocation clearing, native keyboard
+  visible focus and prefers-reduced-motion PASS. Browser exceptions 0; all
+  intercepted API methods GET. External page requests blocked; disposable Chrome
+  profile and owned preview/browser processes cleaned up.
+- Final full-page screenshots captured and visually inspected:
+  /tmp/observability-visual-desktop.png (1440px)
+  /tmp/observability-visual-tablet.png (1024px)
+  /tmp/observability-visual-mobile.png (390px).
+  Additional run-detail/traces/agents/finops/loading/stale/failed/empty/restricted
+  screenshots in /tmp/observability-visual-*.png; machine results in
+  /tmp/observability-visual-browser-results.json. All populated screenshots use
+  clearly isolated synthetic test DTO interception, never production observations.
+- Backend/infra/scripts SHA256 comparison with pre-pass baseline: ZERO changes.
+  No endpoints/DTOs/services/producer/accounting/retention/allowlist/IAM changed.
+- Production Console source scan: no fixture imports, hardcoded usage/cost/run/
+  agent state/trend/alert payloads, Math.random telemetry or fake online values.
+  Static labels/categories/brand colors are presentation, not invented data.
+- git status/untracked/scoped diffs reviewed; git diff --check PASS.
+
+Failures/repairs: first focused test expected a financial failure in an uncapped
+list; source failures now appropriately prioritize above unknown SLO states in the
+five-item attention view, test passes. Initial browser focus harness checked only
+outline and missed the existing Resources header focus ring; corrected to inspect
+actual :focus-visible outline OR box-shadow. Browser pass catches no production
+focus issue. Visual screenshot review reduced repeated totals/coverage paragraphs,
+compact agent table columns, oversized SLO implicit-grid rows and card whitespace;
+retains meaningful full detail through Agents/SLOs/expanders. No gate waived.
+
+Individual local exits: brand/header/nav preserved PASS; supported compact six
+KPIs PASS; true ranked token / actual currency-separated composition PASS;
+no unsupported p95/trends/lineage/online state PASS; recent safe run/detail links
+PASS; capped attention/backend SLO states PASS; financial source confidence and
+unknowns PASS; auth/revocation/privacy unchanged PASS; loading/error/stale/empty
+PASS; responsive bounds/intersections/keyboard/reduced-motion PASS; full frontend/
+type/build PASS; backend hash invariance and production mock scan PASS.
+
+Known limitations: unavailable backend data remains unavailable; normal verified
+identity/read base/source publication still required. Screenshots qualify local
+UI behavior with isolated fixtures, not production auth/data/CORS or deployment.
+No new complete-span relationships or provider/model-per-agent financial lineage.
+Worst-case populated overview requires vertical scrolling; secondary source data
+and SLO rows are deliberately expandable. Existing global regression warnings are
+not reclassified. No new backend/CPU acceptance measured or inferred.
+
+Backend changes NONE. Mock data NONE in production Console UI. Cloud changes NONE
+EXECUTED. Deployment status NOT EXECUTED — USER APPROVAL REQUIRED; prior exact-
+operation production handoff unchanged, no mutation proposed. M16 status unchanged,
+C41/C42 final validation pending with prior FAIL evidence/CPU threshold retained.
+M17 unstarted. Ready for Next Milestone NO. Ready For Visual Review YES.
+
+Final focused frontend/auth validation: 7 test files, 53 tests PASS (3.79s).
+Final `git diff --check`: PASS.
+
+
+## Local access repair — plan — 2026-10-11
+
+Active workstream: Console/read-plane authentication diagnosis and local transport
+repair, not a new milestone. M16/C41/C42 unchanged; M17 unstarted.
+Specifications: Telemetry README, master contract, roadmap, execution guide,
+definition of done, 09 privacy, 25 Console/read-plane, local launch guide.
+Inspected ANOC identity, frontend client/Resources shell, reader composition,
+verified-principal seam, access endpoint, capability/environment gates and CORS.
+Concrete root cause: ANOC has development-only unverified UserContext (no cookie,
+login or bearer verification); verified_principal_provider always returns None.
+A usable ANOC chat/session is not authenticated identity. Missing read-base and
+separate-origin transport plus catch-all Vite business proxy hide this prerequisite.
+Reuse existing Principal validation/access DTO/query revocation machinery.
+Plan: dedicated local reader proxy before business fallback, same-origin DEV
+transport, clear safe auth/denial/service errors, cancellable replacement access
+retry, transport/race/access/security tests and updated launch guidance.
+Expected files: Vite config, observability client and tests, query hook/tests,
+Console/tests, reader tests, env example, local guide and this record.
+Do not promote dev headers or add fabricated capabilities; no new authentication
+mechanism or cloud changes. Request actual shared verified adapter from user while
+completing independent repairs. Auth session-sharing gate cannot pass without it.
+Validation: targeted reader/access/identity/API/environment/CORS tests, focused
+frontend auth/revocation, full frontend, TypeScript/build, diff check; isolated
+local proxy exercise. UI consumes only server capabilities; configuration read-only.
+Exit: routing/retry/failure classification validated; production auth remains
+blocked if real provider not supplied. No protected persistence or business effects.
+
+
+## Local access repair — results — 2026-10-11
+
+Implemented dedicated Vite reader proxy before ANOC fallback, with SSE receipt
+exception preserved. Missing DEV base now uses this first-party proxy; missing
+production base still fails closed. Existing absolute HTTPS production bindings
+and frontend server-capability gating remain. No auth adapter or new identity
+mechanism invented. Verified provider still defaults denied.
+Access query now uses replacement refresh: clears scope immediately, cancels old
+request/deadline, increments generation and ignores late responses. Independent
+ordinary query polling keeps prior no-overlap behavior. UI distinguishes 401
+authentication, 403 capability/environment denial, network/502/503/504/deadline
+service outage, and other verification/configuration errors. No denied values
+persist; protected sections do not mount without verified access DTO.
+Actual files changed this pass: .env.example, vite.config.ts,
+src/api/observabilityClient.ts and .test.ts,
+src/components/observability/ObservabilityConsole.tsx and .test.tsx,
+src/components/shell/settings/observability/useObservabilityQuery.ts and .test.tsx,
+backend/tests/test_observability_read_plane.py,
+scripts/validate_observability_dev_proxy.mjs,
+docs/Telemetry/OBSERVABILITY_READ_PLANE_LOCAL.md, this record.
+Validation: focused frontend 7 files/64 tests PASS; full frontend 72 files/1030
+tests PASS (rerun after deadline classification); npm run build TypeScript/Vite
+PASS; backend read-plane/API/identity 78 tests PASS; independent process/restart
+test 1 PASS; loopback proxy validation PASS; git diff --check PASS.
+Proxy validation loads actual Vite config, verifies ports and route ordering,
+uses isolated ephemeral local stubs to confirm Cookie/Authorization forwarding,
+SPA paths and ANOC receipt isolation. Synthetic headers are transport fixtures,
+not verified login. Initial sandbox loopback bind failed EPERM; isolated test
+succeeded with sandbox escalation. No remote or shared resources involved.
+Access tests reject unverified cookie/bearer/dev-user/roles/capabilities, validate
+role ceilings and environment denial, verify minimized DTO and protected FinOps/
+technical gates. Existing reader tests verify exact noncredentialed-origin CORS,
+GET allowlist, read-only DB and zero producer lifecycle/request effects. No backend
+production code, schemas, migrations, IAM or authentication configuration changed.
+
+Exit criteria: local routing PASS; clear failure states PASS; replacement retry
+and revocation races PASS; capabilities/environment security PASS with isolated
+verified test provider; reader separation/zero business effects PASS; real
+authenticated /app -> Resources same principal BLOCKED (no verified /app login
+provider exists in current checkout). Test providers do not satisfy real identity.
+User clarification requested for existing verified adapter/config location.
+Read-plane restart transport/process isolation PASS; real session resolution after
+restart remains unvalidated until actual identity adapter is supplied.
+Separate-origin cookie CORS/session acceptance NOT APPLICABLE to current code:
+no cookie verifier/issuer exists; do not enable credentialed CORS by assumption.
+No protected Resources login state, capabilities or browser environment claims
+added. UI impact: safe auth/denial/outage states and current server scope only;
+RBAC stays server-enforced; effective configuration remains read-only.
+M16/C41/C42 unchanged; M17 unstarted; Ready for Next Milestone NO.
+Cloud deployment NOT EXECUTED — USER APPROVAL REQUIRED; no cloud action proposed.
+Overall authentication goal NOT COMPLETE until existing real verified adapter is
+identified and integrated; routing fixes alone do not authenticate ANOC dev users.
+
+
+## Shared LOCAL/DEV identity provider — plan — 2026-10-11
+
+User explicitly authorizes a server-side adapter of existing development user
+source for local/development only; no production human provider exists. This
+supersedes the prior blocked auth prerequisite for LOCAL/DEV, not production.
+Active Console/read-plane workstream; no numbered milestone progression.
+Inspected ANOC UserContext/dependency/default, Principal/role ceilings, access
+DTO, environment/cursor gates, Resources verified-access query, fetch/proxy,
+reader clean-import lifecycle and infra/docs for IAP/OIDC/IAM bindings. No existing
+verified human auth integration found. Follow Telemetry master/roadmap/guide/DoD,
+09 privacy and 25 read-plane plus explicit user LOCAL/DEV authorization.
+Plan: one lazy shared VerifiedIdentityProvider interface, disabled default,
+explicit development mode + bounded server-owned policy file; known subject maps
+to existing role/capabilities/local environments. Both ANOC UserContext and reader
+consume the same Principal dependency. Move historical default constant to inert
+module to avoid importing ADK in reader. Reject invalid grants and production
+development mode at startup before workers. IAP boundary inert and deny-only.
+Reuse existing access DTO, read-plane proxy and frontend retry/revocation; no
+second browser login/state or credentials. Add provider/access/ANOC ownership/
+restart/zero-effects tests and explicit local fixture auth for affected API tests.
+Files: shared auth module, API identity/app/session constant, authorization/read
+startup, tests/fixtures, local example policy, local/IAP docs, env example, record.
+Security: no browser roles/capabilities/environment claims, no dev grants to
+staging/production, role ceilings unchanged, no credentials telemetry/persistence.
+No financial/model/tool/jobs/receipts startup or dispatch in reader. Policy
+revalidated per request so server config revocation cannot reuse cached grants.
+Validation: provider/dev-prod/security/access/environment/capability suites,
+affected API regressions, clean import and zero effects, independent two-process
+restart/local identity proof, frontend access/revocation + full suite, TS/build,
+proxy validation, git status/diff/check. UI contract unchanged, capabilities only
+from server; all effective settings read-only. Local gates must pass individually;
+production/IAP deployment remains NOT EXECUTED — USER APPROVAL REQUIRED.
+M16/C41/C42 unchanged; M17 unstarted; Ready for Next Milestone NO.
+
+
+## Shared LOCAL/DEV identity provider — results — 2026-10-11
+
+Implemented one VerifiedIdentityProvider interface in backend/authentication.py.
+Default disabled; explicit development mode validates bounded server-owned JSON
+grants for listed subjects and local/development environments. Existing default
+api-user and optional dev-user source are shared by ANOC and reader; no browser
+roles/capabilities/environment grants. Default example explicitly grants Operator
+metadata only. Existing canonical single-role ceilings unchanged: no role supports
+both financial and technical permissions. Invalid/missing/duplicate/oversize/symlink
+policy fails closed; request-time reload applies grant revocation without caches.
+ANOC UserContext maps validated Principal.subject, preserving ownership contracts.
+Historical default constant moved to inert shared module; reader imports no ADK or
+business application. Both lifespans validate auth before resource/worker work.
+Development mode rejected in staging/production/test and on Cloud Run/App Engine
+markers even if deployment environment mislabelled; disabled/placeholder IAP
+mode deny requests. IAPVerifiedIdentityProvider intentionally authenticates nobody.
+No JWT decoding-as-verification or plain Google email trust. No cloud credentials
+or network lookups introduced by provider. Startup errors and HTTP denial remain
+sanitary, without policy paths or identities in response errors.
+
+Actual files changed this pass:
+- backend/authentication.py (new)
+- backend/api/identity.py, app.py, session_service.py, observability_app.py
+- backend/observability/authorization.py
+- config/auth/development.example.json (new)
+- backend/tests/conftest.py, test_authentication_provider.py (new)
+- backend/tests/test_api_identity.py, test_api_app.py, test_api_approval_endpoints.py,
+  test_api_attachment_endpoints.py, test_api_case_endpoints.py,
+  test_api_execution_endpoints.py, test_api_persistence.py,
+  test_api_run_cancellation.py, test_api_security_contract.py,
+  test_api_selection_endpoints.py, test_api_session_history_endpoints.py,
+  test_api_streaming_endpoint.py, test_chat_service_rewind.py,
+  test_latency_diagnosis_pass.py (explicit opt-in low-privilege local policy)
+- backend/tests/test_observability_read_plane.py,
+  _observability_plane_child.py, test_observability_read_process.py
+- src/components/observability/ObservabilityConsole.test.tsx
+- .env.example
+- docs/Telemetry/AUTHENTICATION.md (new), OBSERVABILITY_READ_PLANE_LOCAL.md,
+  25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md
+- .agent/OBSERVABILITY_EXECUTION.md
+Frontend production source/proxy/retry code unchanged this pass; prior fixes reused.
+
+Validation commands/results:
+1. Provider/access/identity/read-plane/M15 focused pytest: 128 PASS (10.31s).
+2. Business API/ownership/approval/execution/streaming/rewind/warmup/DB regression:
+   363 PASS (6.24s); initial run included existing SQLite thread-teardown warning.
+3. Final combined affected pytest: test_authentication_provider.py, test_api*.py,
+   test_observability_read_plane.py, test_observability_api.py, test_m15_policy_api.py,
+   test_observability_slo_api.py, test_finops_{runtime,billing,reconciliation,
+   unit_economics,control}_api.py, test_chat_service_rewind.py,
+   test_latency_diagnosis_pass.py, test_model_warmup.py,
+   test_runtime_database_policy.py: 600 PASS (24.31s), only Starlette deprecation.
+4. Isolated two-process test with actual local adapter (no injected Principal):
+   1 PASS (8.69s). Same api-user in ANOC and reader; /access scope matches server
+   policy, financial denied; read-plane POST receipts rejected; ANOC continues
+   during slowdown/burst/outage, same reader identity/scope restored after restart
+   without restarting ANOC. Model/agent/tool/command/jobs counters all zero.
+5. Focused frontend access/revocation: 7 files/66 PASS (4.31s).
+6. Full frontend: 72 files/1032 PASS (10.27s). New FinOps-only and technical-only
+   access tests demonstrate independent permitted sections and no forbidden GETs.
+7. npm run build: TypeScript/Vite PASS; compileall affected Python modules PASS.
+8. git diff --check PASS; status/diffs/untracked expected additions inspected.
+
+Failure/repair: process burst first run timed out on fixture stats while stderr
+was attached to an unread subprocess pipe. Redirected owned child diagnostics to
+disposable fixture files to remove pipe backpressure; identical burst and restart
+checks passed. No deadlines, admission limits or production safety checks relaxed.
+All test databases are isolated disposable SQLite; real ANOC/reader factories run
+in distinct loopback PIDs with explicit local policy. No real cloud/storage/model
+authentication or production DB connection performed. Synthetic fixtures only test
+safe DTOs; production dashboard reads existing real repositories unchanged.
+
+User scenario exit review:
+A /app server identity PASS (real UserContext/ANOC HTTP sessions and ownership).
+B Resources uses same logical identity PASS (common provider/default and two PIDs).
+C /access minimized authoritative scope PASS.
+D financial allowed PASS (FinOps local grant + frontend source loads).
+E financial absent PASS (Operator/SRE denied financial, permitted runs retained).
+F technical absent PASS (Operator/FinOps denied archive, run technical fields omit).
+G unconfigured/invalid provider or unknown subject PASS (401 and no protected data).
+H production fail-closed PASS (unconfigured/placeholder deny; dev startup rejects).
+I reader restart PASS (identity/access recovered with ANOC alive).
+Revocation late-response/server-policy reload PASS; role/environment separation
+PASS; reader startup/every-GET clean-import/read-only/zero-side-effects PASS.
+
+UI/Settings: server /access remains sole eligibility source, no new login/context
+or persisted auth data; safe 401/403/service states and replacement retry retained.
+Effective configuration view-only. Operator example requires explicit activation
+in both backend environments; real data requires existing approved read bindings.
+This is development policy validation, not cryptographic human authentication.
+Production IAP verification/deployment intentionally unimplemented, deny-only.
+Future IAP signed issuer/audience/time validation and trusted subject-grant mapping
+plus Cloud Run/IAP/IAM/service identity requirements documented against official
+Google signed-header/Cloud Run IAP docs. No project/resource operations proposed.
+
+Local repair IMPLEMENTED AND LOCALLY VALIDATED; production auth NOT CONFIGURED.
+Cloud changes NONE EXECUTED; cloud deployment NOT EXECUTED — USER APPROVAL REQUIRED.
+M16/C41/C42 unchanged, no CPU acceptance inferred, M17 unstarted.
+Ready for Next Milestone NO. Local same-user /app and Resources access YES when
+both processes explicitly use the reviewed shared development policy.
+
+## Current local runtime authentication repair — 2026-10-11 — plan
+
+Scope: repair the actual local launch configuration only; no milestone advancement.
+Authoritative references: Telemetry README, master contract, roadmap, execution
+guide, definition of done, docs 09/18/25, AUTHENTICATION.md and local reader guide.
+Inspected: actual ANOC/Vite listener processes, safe environment bindings, shared
+provider, identity adapter, role ceilings, reader lifecycle, Vite proxy and policy.
+Live before: localhost:5173/api/observability/access HTTP 500 with empty body;
+127.0.0.1:8001 connection refused (no reader); /api/sessions HTTP 401.
+Both ANOC reloader/worker lack all three auth bindings. Vite bases unset and
+proxy correctly targets reader 8001. No development policy is configured in ANOC.
+
+Reuse existing provider/default-subject mapping, role ceilings and GET-only reader.
+Expected files: this record, two explicit development policy profiles and local
+launch documentation. No authentication code or visual changes planned.
+Plan: activate development bindings in both local processes; preserve existing
+database configuration without printing credentials; disable model warmup for
+restart; start reader; verify live access via existing Vite and protected panel
+GETs; verify browser if local tooling exists; separately validate FinOps profile
+and capability revocation; restore Developer/SRE profile.
+Invariants: no cloud mutation, migrations, schema writes, financial/model jobs,
+browser-controlled grants, widened role ceilings or production fallback.
+Validation: live HTTP/process evidence; focused provider/read-plane tests;
+frontend access/revocation tests; git diff --check and scoped diff review.
+Exit: access 200, same verified api-user subject, development environment,
+role-compatible permissions, panel source/error states and server denial after
+revocation individually reported. All three permissions cannot coexist under the
+approved single-role ceiling: validate SRE and FinOps separately, never waive it.
+UI impact: /access already supplies scope; existing panel APIs/RBAC reused;
+configuration stays server-owned; no new UI or Settings work required.
+Cloud changes NONE EXECUTED. Ready for Next Milestone NO (unchanged M16 gates).
+
+### Current local runtime repair — results
+
+Root cause confirmed on actual Mac processes (initial sandbox listener PIDs were
+stale; fresh unsandboxed read-only listener inspection located actual processes):
+ANOC reloader/worker PIDs 45156/45165 had auth mode/environment/policy unset;
+Vite PID 45234 had both API bases unset and the correct proxy; no reader listener.
+Vite /access returned 500 empty body; direct reader connection refused. ANOC
+session-list GET returned sanitized authentication_error 401. Classification:
+proxy/network failure for console, independent authentication failure for ANOC.
+No configured policy/verified subject existed in the failing runtime.
+
+Implemented only local launch configuration: added config/auth/development.json
+(api-user Developer/SRE, operational_metadata + technical_diagnostics) and
+development.finops.json (same api-user FinOps, financial_data). Preserved example
+policy and all auth/frontend source. Appended exact loopback launch commands to
+docs/Telemetry/OBSERVABILITY_READ_PLANE_LOCAL.md and this status record. Actual
+files changed this repair: those four files only; all prior local work preserved.
+
+Stopped only existing local ANOC reloader and started ANOC PID 45446 and reader
+PID 45447, preserving existing explicit PostgreSQL bindings in process memory
+without printing/copying credentials. Both effective environments now contain:
+SLOPANOC_OTEL_ENVIRONMENT=development; SLOPANOC_AUTH_MODE=development;
+SLOPANOC_DEV_AUTH_POLICY_FILE=/Users/costi/Desktop/SLOPANOC/SLOPANOC-main/config/auth/development.json.
+Explicit SLOPANOC_MODEL_WARMUP_ENABLED=false prevents restart model calls (old
+SLOPANOC_MODEL_WARMUP=false was not the recognized warmup flag). No producer
+worker switches were enabled. Vite remains existing PID/port 5173; reader 8001;
+ANOC 8000. Logs are ignored local logs/local-auth-{anoc,reader}.log.
+
+Validation: live GET through actual localhost:5173 Vite /access now 200 with
+verified=true, environments=[development], capabilities=[operational_metadata,
+technical_diagnostics]. Actual process auth bindings inspected after restart;
+shared provider and ANOC adapter evaluated with each process's exact bindings
+both resolve verified subject/UserContext.user_id=api-user. /app browser loads,
+session-list API returns 200. Observability /access intentionally omits subject.
+Headless installed Chromium exercised actual /app, Overview, Diagnostics and
+FinOps routes without API stubs. Access-error banner absent on all routes.
+Overview renders source-unavailable states; Diagnostics renders sources/run UI.
+No false data or empty-success state substituted for persistence failure.
+
+Separate server-policy profile validation (same file reloaded per request):
+- SRE: financial ledger GET 403; technical archive GET passes auth, then 503
+  because archive source unavailable.
+- Remove technical_diagnostics: next /access omits it, archive GET 403; permitted
+  metadata sections remain usable. Existing metadata Diagnostics page is not
+  itself technical-only; archive protection is the applicable technical gate.
+- FinOps: /access 200 with financial_data only; FinOps UI renders; billing,
+  budgets, forecasts and ledger-completeness GETs 200 with honest source states;
+  runtime ledger/reconciliation GETs 503 for unavailable persistence; archive 403.
+- Remove financial_data: next /access has no capabilities; ledger GET 403;
+  financial panel shows permission denial and sends no financial GETs.
+Restored original SRE policy bytes after profile checks. All three permissions
+together NOT GRANTED: existing single-role ceiling forbids that combination.
+
+Tests: focused provider/identity/read-plane pytest 55 PASS; frontend console,
+client and Diagnostics tests 46 PASS; git diff --check PASS. Existing Starlette
+deprecation and frontend jsdom warnings unchanged. Browser tooling initially
+selected absent Chromium revision; reused installed executable. Profile browser
+guard initially blocked a frontend module named src/api/sessions; corrected guard
+to match actual /api/sessions pathname and repeated successfully. Profile checks
+blocked business session reads and all non-GET requests. No packages installed.
+
+Acceptance A/B/C/D/E PASS for shared development identity, console access 200,
+scope and role-compatible capabilities. F PARTIAL: access banner removed and
+Overview renders, but existing persistence returns 503 rather than real run data.
+G/H PASS for permission-gated panel rendering, PARTIAL for data availability.
+I PASS: protected financial/technical GETs 403 after grant revocation. Known
+non-auth issues intentionally untouched: diagnostics persistence unavailable;
+health GET 200 DTO is rejected by current frontend validation with 'The diagnostic
+response could not be read safely.' Authentication repair does not claim data
+pipeline or dashboard completeness. No schema/migration/source repair performed.
+
+Production fail-closed tests pass (disabled/IAP deny, development rejected in
+production/staging and hosted runtime); no browser-controlled grants or ceilings
+changed. UI/configuration remains existing and server-owned, no visual edits.
+Cloud changes NONE EXECUTED; cloud deployment NOT EXECUTED — USER APPROVAL REQUIRED.
+No deployments, migrations, IAM, IAP, Terraform or other cloud resource operations.
+Local auth repair VALIDATED; data-source/UI acceptance remains partial as above.
+Ready for Next Milestone NO; M16 gates unchanged and M17 unstarted. Stop here.
+
+## Data/read-plane integration repair — 2026-10-11 — plan
+
+Scope: current reader data failures and health wire contract only; auth/role
+ceilings unchanged, M17 unstarted. References: docs 05/09/13/18/25 and current
+M7–M15 repository models/migrations. Reuse GET router, ReadDatabase/ReaderService,
+canonical backend HealthView and existing frontend decoder; no producer work.
+Live reproduction: /access 200; /health 200 but null-valued required fields omitted;
+/runs and /active 503. Both actual processes use PostgreSQL asyncpg, database
+slopanoc, host 127.0.0.1:5433; reader inherits explicit SLOPANOC_DATABASE_URL.
+Read pool connects with transaction_read_only=on. Database revision d3f8b1c6a942;
+no observability/FinOps tables present. Port 5433 is cloud-sql-proxy targeting
+pr-msn-dev-gl-slopai-01:europe-west4:sloc-anoc-sandbox01 (shared Cloud SQL).
+Classification MIGRATION_MISSING; remote migrations prohibited, no application.
+Health defect: response_model_exclude_none removes required nullable fields that
+frontend deliberately validates. Plan: preserve canonical explicit nulls; share
+actual serialized fixtures across Python/TypeScript contract tests, retain strict
+validation; separately expose unknown archive/freshness states; validate local
+isolated reads, pool lifecycle and zero writes; restart only local reader and
+exercise real Vite/browser with each existing role-compatible policy.
+Expected files: route/DTO/read service, frontend type/decoder/health presentation,
+cross-language health fixtures/tests, this record. Safety: no migrations/shared
+writes, no schema creation in reader, no false empty results or inferred health.
+Commands: focused pytest, affected Vitest, npm run build, git diff --check;
+read-only live PostgreSQL schema/query diagnosis and GET/browser checks.
+Exit criteria: canonical DTO parse PASS, genuine missing tables retain 503,
+RBAC/read-only/zero producers PASS. Live records/empty acceptance remains blocked
+on shared schema deployment; Ready for Next Milestone NO. UI impact: effective
+health read DTO only, existing panels/RBAC/configuration remain server-owned.
+
+### Data/read-plane integration repair — results
+
+Database/repository investigation (read-only, actual reader bindings): PostgreSQL
+current_database=slopanoc, current_schema=public, transaction_read_only=on.
+ANOC and reader resolve the identical explicitly exported PostgreSQL asyncpg URL;
+reader dedicated URL unset, development fallback intentionally reuses ANOC URL.
+Both environment=development. Reader lifecycle initializes engine, bounded pool,
+Repository and bind_repositories successfully; no producer lifecycle is started.
+No SQLite database or alternate source introduced. All 31 observability/SRE/M10–M15
+ORM table names checked with SELECT to_regclass: all MISSING, including run_status,
+turn, run_event, usage ledger/buckets/inbox/source, published billing/reconciliation/
+unit/control tables, SRE buckets/source/receipts and archive/retention metadata.
+Shared database alembic_version=d3f8b1c6a942 is absent from local revision files;
+local observability chain starts 9f71c2a64e08 and ends b15e3f7a9c81. Migration history
+must be reconciled before any approved shared rollout. No migration attempted.
+
+Safe direct repository reproduction with the same ReadDatabase factory:
+Repository.list_runs (regular and active) and stale_count raise ProgrammingError,
+driver UndefinedTableError, SQLSTATE 42P01: relation observability_run_status does
+not exist. AccountingRepository.usage raises 42P01 for finops_usage_bucket;
+AccountingRepository.health raises 42P01 for finops_accounting_source.
+Existing live server log records GET/503 only: Service.query and financial facades
+intentionally suppress raw traceback/SQL/parameters into sanitized safe errors.
+No secret-bearing traceback, SQL bind values or URL was printed or persisted.
+
+Actual Vite 30-GET inventory (SRE and separate FinOps policies, restored afterward):
+- access/health/slos/slos/availability: 200 under SRE.
+- runs, active, runs/{id}, runs/{id}/timeline, sessions/{id}/runs and
+  runs/{id}/retention: 503 connector_unavailable, 'Diagnostics persistence is
+  unavailable.' Root: MIGRATION_MISSING. Run reads call Repository.list_runs/get/
+  events through Service.query; absent run tables fail before records can resolve.
+- finops/runtime-usage and ledger-health: 503 connector_unavailable, 'Runtime
+  accounting is unavailable.' Root: MIGRATION_MISSING; AccountingRead.repository
+  uses the same read sessions, usage/health confirmed above.
+- finops/reconciliation, reconciliation/{period}, allocation: 503
+  connector_unavailable, 'Reconciliation is unavailable.' Accounting live-health
+  query fails before source overlay; published financial tables also absent.
+- finops/unit-economics: 503 connector_unavailable, 'Unit economics is unavailable.'
+  Published unit repository required tables absent. Arbitrary invalid unit selector
+  correctly 400 (not a source failure).
+- archive/{trace}: 503 connector_unavailable, 'Archive retrieval is unavailable.'
+  Root: SOURCE_UNAVAILABLE; no read archive binding exists; not a DB auth problem.
+- finops/billing-summary, billing-health, pricing-status: 200 with NOT_CONFIGURED
+  states (server-owned source scopes/adapters unset, not a successful billing feed).
+- finops/ledger-completeness: 200 with source-unavailable SLO state; budgets,
+  forecasts, anomalies/list/detail: 200 canonical published/source states.
+- config/policies: 403 under SRE, expected role ceiling. Financial GETs 403 under
+  SRE; operational GETs 403 under FinOps. No ceilings/auth modifications.
+
+Health root cause: shared /health route used response_model_exclude_none=True,
+dropping required pending/admitted/terminal_pending/collector_configured and
+accounting-counter nulls. Backend HealthView is canonical; it now serializes all
+fields with explicit nulls. Decoder keeps strict required-field/count/boolean
+checks, requires null reader-local counters instead of converting fake zeros,
+and validates unknown archive/freshness states. Collector/archive states display
+individually using existing Metric components; no unrelated visual redesign.
+No existing generated cross-language health type found; shared synthetic serialized
+fixtures are matched against actual FastAPI responses in Python and parsed by the
+real frontend decoder in TypeScript, including healthy/empty/unavailable/producer
+cases. Drift or malformed required fields fail regression tests.
+
+Actual files changed this pass:
+- backend/api/observability_routes.py (preserve health nulls)
+- backend/observability/api_models.py (separate unknown archive/freshness fields)
+- src/api/observabilityTypes.ts; existing health contract.ts decoder
+- src/components/observability/ObservabilityConsole.tsx and its test
+- backend/tests/test_observability_read_plane.py
+- backend/tests/fixtures/observability_health.json (synthetic, shared wire fixture)
+- src/api/observabilityHealthContract.test.ts
+- .agent/OBSERVABILITY_EXECUTION.md
+No database/repository configuration workaround or authentication edits needed.
+Only local reader restarted, PID 46126; ANOC and Vite remain unchanged.
+
+Live acceptance after restart through localhost:5173: /access 200; /health 200
+accepted by frontend, persistence=unavailable, read_plane_state=healthy,
+ANOC/exporter/Collector/archive/freshness=unknown; all process-local counters null.
+Overview, Reliability and Diagnostics render without access or malformed-response
+banner; source failures remain contained in their existing panels. Dedicated
+FinOps policy renders finance panels; billing is NOT_CONFIGURED, runtime usage
+genuinely 503. Browser checks use actual services/no API response mocks, block
+business-session reads and non-GET requests, and restore SRE policy bytes.
+No fake live records/empty success introduced. Real and canonical empty queries
+return 200 in isolated repository tests; unavailable source remains 503. Shared
+live run/usage acceptance BLOCKED on missing schemas, not claimed complete.
+
+Validation performed:
+- Focused backend provider/read-plane/operational/M15/SLO/M10/M11 suite: 179 PASS.
+- Repository/persistence tests: 28 PASS.
+- Two-process reader lifecycle/failure/restart/zero-execution test: 1 PASS (explicit
+  loopback execution outside sandbox, isolated disposable DBs only).
+- Final reader suite after expanded empty/read-only checks: 17 PASS.
+- Focused frontend: 17 files/132 PASS; full frontend: 73 files/1036 PASS.
+- npm run build: TypeScript and Vite PASS. git diff --check PASS.
+- Reader GET SQL listener covers every allowlisted route: no INSERT/UPDATE/DELETE/
+  DDL attempted; disposable read pool rejects INSERT/UPDATE/DELETE with actual
+  'readonly database' errors. Every producer/model/financial/retention spy remains
+  zero; process test confirms execution separation and reader lifecycle isolation.
+Failures repaired: synthetic producer-disabled fixture initially had projection
+enabled in test config; corrected test config. Initial process test socket bind
+blocked by sandbox; reran isolated loopback test with required permission. One
+extra test command referenced nonexistent SLO service test; reran actual repository/
+persistence tests. No acceptance/test thresholds changed. Existing warnings only.
+
+Exit: health wire/UI/RBAC/read-only/zero-side-effect PASS. Live data readiness FAIL
+because shared observability schemas absent; billing/archive bindings unavailable.
+Ready For Live Local Review NO for the complete requested data integration.
+Cloud changes NONE EXECUTED; deployment/migrations NOT EXECUTED — USER APPROVAL
+REQUIRED. User explicitly prohibited cloud changes: no approval request or implicit
+cloud operation made. M16 gates unchanged, Ready for Next Milestone NO, M17 unstarted.
+
+## Shared migration forensics — 2026-10-11 — plan
+
+User explicitly authorizes forensic reads/local reports only. No upgrade/stamp,
+migration execution, CREATE/ALTER/DROP, cloud mutation, source restoration or
+history repair. References: existing Telemetry contract/read-plane docs, current
+Alembic env/version files and actual ORM metadata. No milestone progression.
+Inspect all local migrations and full revision graph; search all refs/tags/reflog
+and every local Git blob, including unreachable objects, for d3f8b1c6a942; capture
+safe read-only PostgreSQL catalog metadata and compare known application baseline;
+reconcile M7–M15 tables/indexes/constraints against ORM metadata. Reuse read-only
+ReadDatabase without producer lifecycle. Expected files: forensic report, static
+migration/schema inventories under docs/Telemetry/validation, this status record.
+No application/auth/UI/migration code changes. Offline SQL only if the actual
+database revision can be connected safely to target; otherwise explicitly NO.
+Validation: local Alembic heads/branches/history (no env/connection), AST inventory,
+read-only catalog queries, model/migration cross-check, Git search receipts and
+git diff --check. Exit: evidence-backed graph/origin limits, complete 31-table
+inventory, safety classification, conditional recovery and post-rollout plan;
+no claim of an executable path without historical source. UI/RBAC/configuration
+unchanged; schema availability affects existing read contracts only.
+
+### Shared migration forensics — results
+
+Forensic pass completed without database/cloud mutation, migration execution,
+stamp, source restoration, auth/UI/business changes or commit. Local graph: 12
+revisions, root d2081e4fd455, sole head b15e3f7a9c81; no branch points, merges,
+orphan revisions or missing local parents. Alembic heads/branches/history inspected
+without invoking env.py; `alembic show d3f8b1c6a942` confirms cannot locate revision.
+
+Search scope: full non-shallow local repo, all refs (Visit-Version and cached
+origin/Visit-Version), five tags, all reflogs, migration change history, and all
+2,319 Git blobs including unreachable objects. No historical migration source.
+One matching blob was only our recent status record. No remote fetch. Unknown
+revision's filename/parent/introducing commit/schema/deletion/rename/rebase origin
+cannot be established. Classification MISSING_HISTORICAL_MIGRATION (source absent
+locally); incorrect stamp/branch divergence/rebase are unproven alternatives.
+Cannot compare DB to unknown revision or safely reconnect history by restoration.
+
+Read-only shared snapshot: PostgreSQL 18.4, slopanoc/public, host 127.0.0.1:5433,
+transaction_read_only=on. Proxy target project pr-msn-dev-gl-slopai-01, region
+europe-west4, instance sloc-anoc-sandbox01. Runtime auth=development; target
+environment must be owner-confirmed. Current revision remains d3f8b1c6a942.
+Catalog inventory:16 public tables, 29 indexes, 125 columns, 119 PostgreSQL constraints
+(92 NOT NULL, 16 PK, 5 FK, 5 CHECK, 1 UNIQUE), no user views/triggers reported; schemas
+public/information_schema/pg_catalog/pg_toast; extensions plpgsql 1.0 / vector 0.8.5.
+Snapshot includes schema metadata only, not application/accounting rows/credentials.
+Known baseline+timestamp+attachments column/type/nullability comparison: no column
+differences across six tables. Business progression table from 7c4e9a2d1f05 missing.
+Four additional knowledge/experience/telco tables lack creation migrations in the
+local tree; preserve them and investigate provenance, do not attribute them to d3.
+
+Target cross-check: 31 exact M7–M15 table names in both migrations and ORM metadata;
+all absent from shared DB. M7=3,M8=0,M9=3,M10=5,M11=3,M12=4,M13=5,M14=6,M15=2.
+29 explicit indexes (7 unique);31 PK + 59 CHECK + 20 FK + 2 UNIQUE constraints =112, plus
+PostgreSQL NOT NULL catalog entries. Expected new backing/secondary indexes 62.
+Columns/types/nullability/PK/FK/check/unique metadata agree; only two additional
+M15 source-controlled indexes absent from ORM metadata. No migration functions
+called: only whitelisted literal SQLAlchemy schema expressions into memory.
+No new schema, extension, sequence, enum, job or producer enabling in target migrations.
+All eight telemetry upgrades CREATE_ONLY with INDEX_ONLY operations; M15 indexes
+existing M7 tables. Earlier timezone migration ALTER_EXISTING; all downgrades
+DESTRUCTIVE. Telemetry suffix does not modify business data/tables; missing
+progression prerequisite separately creates a business table/FK to slopanoc_cases.
+
+Offline rollout SQL NO: required safe graph connection is unavailable. No invented
+historical/no-op/bridge migration, stamps, parent rewrites or autogeneration. Desired
+local target b15e3f7a9c81; actual reconciled final head/path not certified. Known
+telemetry-only additive count 16 + 31 = 47; full known local target also requires missing
+progression, giving at least 48 known tables after separately reviewed prerequisite.
+
+Artifacts created under docs/Telemetry/validation:
+- M7_M15_MIGRATION_FORENSICS.md: evidence, full graph/inventory/safety and recovery plan.
+- M7_M15_MIGRATION_INVENTORY.json: all 12 migration purposes/parents/operations/hashes.
+- M7_M15_TARGET_SCHEMA.json:31 table schemas/purposes/dependencies and model comparison.
+- M7_M15_SHARED_SCHEMA_METADATA.json: sanitized catalog snapshot/known baseline comparison.
+- M7_M15_POST_ROLLOUT_CHECKS.sql: SELECT-only future verification, NOT migration SQL.
+This status file is the only other changed file. Existing local work untouched.
+
+Validation: graph/AST/model cross-checks PASS; all-object Git search complete;
+read-only catalog snapshot PASS; artifact assertions PASS (31 / 29 / 112, all missing,
+only two expected model-index differences, additive upgrades, SELECT-only checks).
+Initial analysis scripts needed Python import path/allowed schema expression
+adjustments and PostgreSQL catalog-byte normalization; repaired and repeated.
+No application tests/build required for forensic-only local documentation.
+
+Exact future intended invocation documented conditionally:
+.venv/bin/python -m alembic -c alembic.ini upgrade b15e3f7a9c81
+It is NOT executable/approval-ready now; cannot resolve actual DB revision. A real
+merge may change target and command. Recover original deployed migration source,
+reconcile applied history/structures and progression prerequisite, generate/review
+actual offline SQL, rehearse isolated approved clone, verify backup/PITR and owners,
+then present exact operation approval approval gate. No cloud approval requested
+for an unverified path. Transaction/lock/unknown runtime/IAM/cost/data loss/PITR/
+ambiguous commit/retry/destructive downgrade risks recorded in report.
+Billing=NOT_CONFIGURED; Archive=NOT_CONFIGURED remain separate from schema rollout.
+Forensic objective validated to evidence limits; exact safe rollout remains blocked.
+Safe To Request Migration Approval NO. Cloud / Database Changes Performed NONE.
+Ready for Next Milestone NO; M16 unchanged / M17 unstarted. Stop before any execution.
+
+
+## 2026-10-11 — Deployment provenance and historical migration recovery (read-only)
+
+Objective/specifications: newest explicit recovery request; Telemetry contract/roadmap/
+execution guide and prior M7-M15 forensic artifacts remain authoritative. M16 remains
+incomplete; M17 not started. Scope is historical recovery, no milestone implementation.
+Inspected current local graph, prior live fingerprint, actual origin, fresh all-ref
+remote mirror, sibling source/Git and named local source archives. Reuse existing
+ReadDatabase with transaction_read_only=on. Preserve current/sibling worktrees.
+Planned artifacts: recovery report, source receipt, normalized schema fingerprint,
+model comparison and this status record. No migration/source edits or graph integration.
+Plan: remote advertised refs/history/blob search; old-source/zip/Git search; safe
+Cloud Run/AR/Build metadata; Docker availability; live catalog recheck; compare recovered
+graph and models; rank reconciliation options. Invariants: no DDL/DML/stamp/upgrade,
+cloud mutation, login/config modification, secret output or historical parent rewrite.
+Validation: AST graph traversal, literal schema interpretation into memory (never
+upgrade/downgrade calls), JSON assertions, schema/constraint/index comparison, hash
+identity of shared ancestors, git status/diff review. Exit: bounded recovery report
+with unresolved operational evidence clearly identified; no rollout execution.
+
+Recovery YES: fresh remote branches second/Third/audit contain exact migration
+d3f8b1c6a942, parent c7e2a4f9b83d, blob c72d3fd3401f6008126cf2e997c1b7ae10483ecf,
+introduced by 1f1cbccd2203f3889af0e2c0cf0ae1d750592b83 (Sept 13 author date).
+Recovered seven-node full ancestor chain from d208 -> b852 -> 3e59 -> 9b6d -> a1f ->
+c7e -> d3f in /private/tmp isolated historical worktree. Source commit is not claimed
+as proven deployed Cloud Run commit. Fresh mirror scanned2046blobs; sibling main2
+Git scanned10884blobs and independently recovered exact blob. Working copies/archives
+searched27migration-related paths with no exact hit; historical Git supplied source.
+Third descendants e4a/f1b/b7c recovered separately, not presumed applied/prerequisites.
+All three shared ancestor source files byte-identical to current local files.
+
+Live SELECT-only snapshot confirms d3f,16tables,125columns,29indexes,119constraints,
+PostgreSQL18.4,vector0.8.5. All10 historical application tables match declared migration
+columns/types/nullability/defaults and full non-NOT-NULL constraints/index coverage.
+Six ADK/Alembic tables fingerprinted separately. Historical ORM has four TELCO timestamp
+and two evidence VARCHAR/TEXT declaration differences; recorded without repair.
+Current six baseline/attachment ORM tables match; progression remains absent live.
+Business revision7c4e parent3e59, introduced67680e1 Oct6, precedesM7; not part of d3
+applied branch. No existing bridge to b15. Exact historical source restoration plus
+explicit reviewed merge is safest later design; no stamp needed/implied by similarity.
+
+Cloud Run/Artifact Registry/Cloud Build read commands failed token refresh requiring
+reauthentication; metadata NOT VERIFIED. No auth changes attempted. Docker CLI installed
+but daemon unavailable: IMAGE CONTENT NOT INSPECTED, nothing pulled/started/installed.
+Local parsing needed static Vector type stub (pgvector package absent), SQL CHECK
+parenthesis representation adjustment and literal ORM constant inclusion; fixed and
+repeated. No package install or DB migration/test occurred.
+
+Actual changed files: docs/Telemetry/validation/MIGRATION_RECOVERY_REPORT.md,
+MIGRATION_RECOVERY_SOURCES.json, MIGRATION_RECOVERY_SCHEMA_FINGERPRINT.json,
+MIGRATION_RECOVERY_MODEL_COMPARISON.json; this status record. Recovered migration
+bodies retained as forensic JSON, never inserted into alembic/versions. Prior report
+remains historical; latest recovery report supersedes its source-unavailable finding.
+Validation PASS: seven-node ancestry, exact recovery, source hashes, live10-table
+compatibility including complete constraints/indexes, normalized16-table snapshot,
+model differences, JSON assertions. Git hygiene checked. Cloud provenance/image gates
+BLOCKED; integrated graph/forward SQL/rehearsal NOT IMPLEMENTED by this pass.
+UI impact: no new UI information/contracts/work; RBAC unchanged, configuration view-only.
+FinOps/producer/authority invariants unchanged. Cloud / Database Changes Performed NONE.
+Recovery report complete to evidence limits; Safe To Prepare Migration Rollout NO.
+Known limitations: deleted/private server refs unavailable; cloud deployment chronology
+unverified; schema alone never proves stamp safety; no reconciled runtime path yet.
+Ready for Next Milestone NO. STOP before integration, rollout, stamp or any mutation.
+
+## 2026-10-11 — Authorized local migration reconciliation (before implementation)
+
+Current milestone: M16 remains incomplete; this is M7–M15 migration-history reconciliation, not milestone progression. Objective: preserve exact applied history, join sibling heads, prove forward-only SQL and prepare an unexecuted shared-DB plan.
+Specifications: Telemetry README, 00, 12, 14, 15; recovery report/sources/fingerprint; existing migration inventory and acceptance doc 13. Inspected: current dirty tree, Alembic env/settings resolver, ReadDatabase read-only pool, historical recovery and current revisions. Reuse: exact recovery bodies, existing migration operations, PostgreSQL offline Alembic, catalog-only reader.
+Expected files: four restored migrations, one no-op merge, reconciliation validator/test and evidence/report/SQL; update graph-sensitive migration regression tests where necessary. Plan: read-only provenance; hash restoration; verify two heads; merge; offline SQL/path/object review; read-only live prerequisite/collision snapshot; discover isolated PostgreSQL availability; run graph/migration regressions; prepare rollout/failure checks.
+Invariants: no remote DDL/stamp/upgrade/deploy/cloud mutation; no applied-history rewrites; no unrelated work overwritten; telemetry not authority; no billing/archive activation; no credentials/content in artifacts. Offline URL must be fake and explicit; no live settings resolution for SQL generation.
+Validation: Alembic ScriptDirectory and _upgrade_revs path; actual env offline SQL; migration tests; SHA-256/source identity; SELECT-only catalog collision review; git diff --check. Exit: preserved branches, one merge head, expected nine sibling revisions only, 32 new tables with expected indexes/constraints, no unexpected business DDL. Rehearsal only if already available isolated PostgreSQL; report absence honestly. Live rollout/preflight and M16 completion remain gated.
+UI impact: schema supports existing console/read API contracts; no UI implementation here; server RBAC unchanged; configuration read-only; no mutation controls added.
+Cloud deployment status: NOT EXECUTED — USER APPROVAL REQUIRED. Pending exact shared DB upgrade to new merge revision (ID to be recorded); all other cloud operations excluded.
+
+### 2026-10-11 reconciliation — implementation/validation result
+
+Restored exact four historical sources (9b6/a1f/c7e/d3) with SHA-256 verification; all three common ancestors byte-identical. Added c16f4a8b2d90 no-op merge with parents d3 and b15, preserving all prior parents/operations. Historical descendants excluded. Added offline-only proof script and meaningful hash/graph/no-replay/SQL-safety tests; adjusted four existing graph-sensitive regression files to the new head and explicit SQLite telemetry target.
+Actual changed files this pass: .agent/OBSERVABILITY_EXECUTION.md; alembic/versions/{9b6df6490c0e_telco_context_profiles_and_assertions,a1f3c9e07b21_hybrid_retrieval_evidence_index,c7e2a4f9b83d_experience_memory_records,d3f8b1c6a942_experience_records_source_namespace,c16f4a8b2d90_reconcile_historical_and_observability}.py; scripts/observability/reconcile_migration_sql.py; backend/tests/test_migration_reconciliation.py; backend/tests/test_{observability,finops_control,finops_reconciliation,finops_unit_economics}_migrations.py; new validation artifacts MIGRATION_RECONCILIATION_{REPORT.md,GRAPH.json,SQL_REVIEW.json,GCP_PROVENANCE.json,BACKUP_CONFIG.json,BACKUP_RUNS.json,TEST_RESULTS.json} and M7_M15_{RECONCILED_ROLLOUT.sql,RECONCILIATION_PREFLIGHT.sql,RECONCILED_POST_ROLLOUT_CHECKS.sql}.
+Validation: 17-node static Alembic graph PASS; two heads before merge/one after/one root/no orphans/cycles PASS; actual offline env and unchanged forward modules select exactly nine siblings then merge PASS; no historical function executed PASS; SQL 32 tables/29 secondary indexes/34 key backing indexes/21 FK/60 CHECK/2 UNIQUE/258 NOT NULL/340 columns PASS. No business DML or DROP/ALTER/rename; 11 expected alembic_version DML reviewed. Expected final public totals 48 tables/465 columns/92 indexes/492 PG18 constraints, sole c16 version. Original business/ADK structures preserved in generated SQL. Full graph import FAIL (pgvector missing); migration regression 8 PASS, 5 FAIL, all missing dependency. No installation under user no-install instruction; optional local-install clarification pending. SQL proof explicitly uses AST historical identifiers with historical execution guards and does not claim ordinary module import acceptance.
+Read-only GCP successful: 19 services/149 revisions/348 builds/760 image versions; 140 revisions correlated to builds by digest. No identifiable SLOPANOC deployment or commit SHA; historical commit deployment provenance UNVERIFIED. Initial sandbox cache failure repaired with read-only-command escalation; revision projection error repaired. Cloud SQL backup/PITR config read only: both disabled, no backup runs. Recovery readiness FAIL.
+Fresh live DB checks BLOCKED: tool environment has no approved explicit DB binding. Previous read-only schema snapshot shows compatible VARCHAR cases PK and no planned table/index collisions, but fresh comprehensive namespace/type/fingerprint review NOT EXECUTED. Automatic review rejected process-environment credential recovery as unintended credential source; not retried/bypassed, user informed and approved config/binding requested. No shared DB queries in this pass. Local PostgreSQL rehearsal NOT EXECUTED: binaries/daemon unavailable; no install/start/shared rehearsal. Initial recovery JSON iteration encountered descendant entries without revision key after restoring files; fixed via filtered static hash validation; graph alternate-head check initially reused mutable nodes and failed, repaired with independent Revision objects; final static tests pass.
+Exit criteria: immutable history/merge/forward semantics/offline expected SQL PASS; ordinary imports/regression tests FAIL; fresh live safety FAIL/BLOCKED; PostgreSQL rehearsal NOT EXECUTED; backup/PITR recovery FAIL; deployment commit linkage UNVERIFIED. Static local design implemented, not validated complete or rollout-ready. No milestone complete/progression claim.
+UI impact: existing console/read-plane data schema only; no UI changes, no new API or RBAC behavior; configuration remains read-only. Billing=NOT_CONFIGURED; Archive=NOT_CONFIGURED.
+Cloud deployment status=NOT EXECUTED — USER APPROVAL REQUIRED. Exact pending migration (DO NOT EXECUTE): .venv/bin/python -m alembic -c alembic.ini upgrade c16f4a8b2d90, confirmed binding to pr-msn-dev-gl-slopai-01/europe-west4/sloc-anoc-sandbox01/slopanoc/public. Separate backup/PITR operations require their own later exact approval; none proposed/executed by implication. Environment/consumer/lock/role/recovery prerequisites remain open.
+Cloud / Database Changes Performed: NONE. Safe To Request Shared DB Migration Approval: NO. Ready for Next Milestone: NO; M16 incomplete; M17 not started. Detailed future preflight/execution/transaction-aware failure/application rollback/postflight plan in MIGRATION_RECONCILIATION_REPORT.md. Final git status/diff/untracked review and diff --check PASS; unrelated existing working tree preserved.
+
+## 2026-10-11 — Hybrid event-driven observability (before implementation)
+
+Current milestone: M16 INCOMPLETE; M17 UNSTARTED. User-authorized architecture /
+local scaffolding workstream only. Objective: two lanes (transactional critical
+audit/accounting and asynchronous operational OTLP), separate publisher/projector,
+read-only read plane, historical classification and provisioning review artifacts.
+Specifications inspected: README and docs 00–25, existing console/read-plane/local
+source mappings, privacy policy, Collector configs/version/component manifest,
+M16 receipts and migration reconciliation record. Existing architecture inspected:
+strict Contract/Stage/RunStatus/ErrorCode, M10 physical attempt/accounting contracts,
+M7 Coordinator (asynchronous/coalescing, not a critical audit transaction), reader
+pool/service and Collector common privacy gate plus independent cloud/archive tails.
+Reuse these owners; do not turn coalesced telemetry persistence into audit truth.
+Expected files: doc 26, resource manifest, affected source docs/ALL_IN_ONE, inert
+hybrid contracts/interfaces/config, dormant Collector branch and composition helper,
+contract/privacy/idempotency/static tests, validation receipt and this record.
+Plan: pinned component/wire verification; document source/derived boundaries and
+future schema after c16f4a8b2d90; pure strict envelopes and same-transaction ports;
+local no-op branch compilation; isolated tests and native Collector validation;
+static graph/doc consistency and Git hygiene review. No runtime wiring/migration.
+Invariants: no cloud/DB/external mutation, no unsafe dual-write, no second usage
+ledger or business source, no publication on request path, no authority/evidence
+from telemetry, no raw content, immutable history, bounded queues and read scans.
+Validation: .venv/bin/python -m pytest backend/tests/test_observability_hybrid.py
+backend/tests/test_migration_reconciliation.py; relevant privacy/Collector tests;
+pinned Collector validate with dummy config; doc/link/all-in-one assertions;
+static Alembic graph; git diff --check. Mermaid parser check only if installed.
+Exit criteria: all requested architecture decisions documented; resources classified
+with unconfirmed bindings explicit; contracts/privacy/idempotency proven locally;
+existing Collector branches unchanged; no runtime activation; M16 gates unchanged.
+UI impact: future freshness/debt/coverage and drill-down contracts required; no UI
+work in this pass, existing Resources console retained, config view-only, existing
+server RBAC/financial vs technical isolation applies. Next milestone permitted NO.
+Cloud deployment status: NOT EXECUTED — USER APPROVAL REQUIRED. Future exact
+operations are unapproved proposals in the resource manifest, not executable plans.
+
+### 2026-10-11 hybrid workstream — implementation/validation result
+
+Architecture/local scaffolding objective implemented and locally validated to its
+explicit boundaries; no milestone completion. Added authoritative doc 26 Mermaid,
+two lanes/data authority/capture classifications/outbox/wire/roles/debt/lag/backpressure/
+FinOps/audit/performance contracts and 33-resource phased manifest. Updated affected
+docs with specific integration/privacy/storage/reliability/financial/acceptance/IaC
+amendments; regenerated ALL_IN_ONE from current sources, preserving local work.
+Added strict inert v1 AUDIT/TELEMETRY/outbox models, ports, disabled HybridConfig,
+dormant Collector branch example and local nop composition helper. Nothing imported
+by ANOC/read app, no client/worker/job/projection endpoint or UI activation.
+
+Actual files changed this pass (full list and hashes in validation JSON):
+- docs/Telemetry/README.md
+- docs/Telemetry/00_MASTER_BUILD_CONTRACT.md
+- docs/Telemetry/01_TARGET_ARCHITECTURE.md
+- docs/Telemetry/02_TELEMETRY_DATA_CONTRACT.md
+- docs/Telemetry/03_INSTRUMENTATION_AND_RUNTIME.md
+- docs/Telemetry/04_RELIABILITY_TIMEOUTS_ERRORS.md
+- docs/Telemetry/05_STORAGE_APIS_AND_UI.md
+- docs/Telemetry/06_SRE_SLOS_METRICS_ALERTS.md
+- docs/Telemetry/07_FINOPS_ARCHITECTURE.md
+- docs/Telemetry/08_FINOPS_DATA_MODEL_AND_UNIT_ECONOMICS.md
+- docs/Telemetry/09_SECURITY_PRIVACY_RETENTION_SAMPLING.md
+- docs/Telemetry/10_DASHBOARDS_RUNBOOKS_OPERATING_MODEL.md
+- docs/Telemetry/11_SLOPANOC_INTEGRATION_MAP.md
+- docs/Telemetry/12_IMPLEMENTATION_ROADMAP.md
+- docs/Telemetry/13_TEST_VALIDATION_ACCEPTANCE.md
+- docs/Telemetry/15_DEFINITION_OF_DONE.md
+- docs/Telemetry/16_PRODUCTION_TELEMETRY_BACKEND.md
+- docs/Telemetry/17_INFRASTRUCTURE_OBSERVABILITY.md
+- docs/Telemetry/18_STRUCTURED_LOGGING_STANDARD.md
+- docs/Telemetry/20_FINOPS_ACCOUNTING_DURABILITY.md
+- docs/Telemetry/23_TERRAFORM_AND_OBSERVABILITY_AS_CODE.md
+- docs/Telemetry/25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md
+- docs/Telemetry/26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md
+- docs/Telemetry/GCP_HYBRID_OBSERVABILITY_RESOURCE_MANIFEST.md
+- docs/Telemetry/ALL_IN_ONE.md
+- docs/Telemetry/OBSERVABILITY_DASHBOARD_SOURCES.md
+- docs/Telemetry/OBSERVABILITY_READ_PLANE_LOCAL.md
+- backend/observability/hybrid/__init__.py
+- backend/observability/hybrid/contracts.py
+- backend/observability/hybrid/ports.py
+- backend/observability/hybrid/config.py
+- backend/tests/test_observability_hybrid.py
+- scripts/observability/hybrid_collector_config.py
+- infra/observability/collector/hybrid-branch.yaml.example
+- infra/observability/collector/README.md
+- docs/Telemetry/validation/HYBRID_ARCHITECTURE_LOCAL_VALIDATION.{md,json}
+- .agent/OBSERVABILITY_EXECUTION.md (appended this workstream only)
+
+Validation performed: final six-file scoped pytest suite 197 PASS / 0 FAIL / 0 SKIP,
+58.26s, one pre-existing Starlette/AnyIO deprecation warning. New modules import/
+compile PASS; strict envelope/privacy/environment/size/lifecycle/config tests PASS;
+SQLite atomicity + isolated idempotency/rollback/conflict/stale-order contract tests
+PASS (not actual future SQL adapters). Existing M0/M15 privacy and Collector/native
+routing/outage regressions PASS. Native contrib 0.160.0 validates existing source
+configs, composed dormant branch and future exporter schema without starting any
+cloud exporter. Loopback test proves operational safe spans arrive before tail wait.
+Pinned Google v0.160.0 source manifest explicitly contains googlecloudpubsubexporter:
+Collector Pub/Sub Capability PASS. Wire is OTLP protobuf/CloudEvents, not internal
+JSON; future safe deterministic normalization adapter explicitly unimplemented.
+No version/image/active Collector config changed by this pass. Static graph/recovery
+hash tests PASS:17 revisions, sole c16f4a8b2d90 head, no new migration. Doc/source-pack/
+links/manifest checks PASS; Git status/diff/untracked review and diff --check PASS.
+Mermaid parser NOT RUN (uninstalled); manual syntax/layout review only. Frontend
+regression NOT RUN because no frontend/API change. No shared DB/cloud test.
+
+Failures/repairs: initial 13 tests exposed TypeAdapter union input-hiding gap,
+nonpositive version constraint and AnnAssign omission; fixed all. First socket tests
+failed sandbox permission (11 errors/2 static passes); exact local-loopback escalation
+approved. Elevated baseline had one temporary staging rglob race (12 pass), focused
+rerun and final suite pass; no existing tests/implementation altered. Initial new
+branch fixture contained denied links and was fully dropped; fixed accepted fixture,
+retaining raw poison values for redaction. No privacy policy weakened. Full receipts
+record attempts, commands/results, limits and file hashes without payloads/credentials.
+
+Exit criteria: requested architecture/docs/manifest PASS; pure contract/import/privacy/
+idempotency/static/native local proof PASS; existing branches/pin/history preserved
+PASS; no production wiring/mutations PASS. Actual critical-owner transactional audit,
+publisher/leases/crash recovery/OTLP adapter/projector schemas/grants/service deployment/
+live delivery and throughput NOT IMPLEMENTED/NOT VALIDATED. Not waived. No claim of
+complete historical capture: CAPTURED/RECONSTRUCTED/UNKNOWN distinct; unknown never
+zero. Source-data/UI gaps remain explicit. No token/accounting duplicate truth.
+
+UI evaluation: future projection freshness/debt/capture/coverage and safe drill-down
+contracts needed; no UI work in this pass. Existing separate GET-only read plane and
+Resources console preserved; no jobs on GET, new streams or ANOC polling fallback.
+Server RBAC and financial/technical/content isolation unchanged; effective config
+view-only, no IaC bypass. Normal progress/conversational/governance semantics unchanged.
+
+Known limitations: project/account/env/bindings TBC; Collector source/native contrib
+validation is not live Google image validation; no real adapters/transaction owners;
+no Pub/Sub wire normalization or production projection data; shared migration/recovery
+and production verified identity gates unchanged; seconds propagation target unmeasured;
+architecture does not prove <3% CPU. C41/C42 NOT PASS and must rerun unchanged after
+integration along with failure/queue/no-replay/full required regressions.
+
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED. Exact pending cloud
+operations are NOT approval-ready until bindings/dependencies are confirmed; manifest
+lists future topic/DLQ/subscription/service/identity/grant/archive/billing/alert/audit
+categories. Existing upgrade c16f4a8b2d90 remains NOT EXECUTED; any future new schema
+must follow it, no migration authored here. No API/service/billing/pgAudit/IAM/SQL/
+Terraform/external mutation or credential resolution performed.
+Cloud / Database Changes Performed NONE. Ready For GCP Provisioning Review YES
+(planning inventory review only, not deployment authorization/readiness). M16 remains
+INCOMPLETE, M17 UNSTARTED. Ready for Next Milestone NO. STOP.
+
+## 2026-10-11 — Local Phase-1 authoritative pipeline (before implementation)
+
+M16 INCOMPLETE, M17 UNSTARTED. Objective: implement SQL critical audit + atomic
+outbox, leased bounded publisher, local at-least-once fake transport, separate
+projector and GET-only durable projections. Refine operational Pub/Sub to OPTIONAL/
+DISABLED curated subset, never Phase-1 unsampled OTLP replication.
+Specifications: docs README/00/12/14/15/26, privacy09/logging18/accounting20/read25;
+latest explicit local Phase-1 request. Inspected current dirty tree, repository.persist
+(M7 owned run/status/terminal transactions), M10 admission/start/finished/inbox/ledger/
+debt transactions, reader factory/allowlist/security, reconciled graph and test fakes.
+Reuse existing SQLAlchemy async session/UTCDateTime/strict contracts/server capabilities.
+Catalogue will capture only committed canonical states; agent/tool/approval/action
+spans without durable owners cannot become authoritative events. M7 progress remains
+coalesced; run acceptance capture occurs when canonical state is persisted, not
+an invented synchronous session/business transaction or pre-dispatch guarantee.
+Expected files: hybrid contracts/models/repository/workers/transport/read DTOs/process
+entrypoint; optional repository capture injection; additive post-c16 migration and
+Alembic metadata; read-only route/binding; backend tests and new frontend decoder
+contract tests if new DTO; affected docs/manifest/pack/validation and this record.
+Plan: atomic adapters+owner integration; lease/token/CAS+bounded retries; receipt and
+projection atomicity+stale protection; safe failure/debt GETs; SQLite restart/rollback/
+crash/100-duplicate/privacy/E2E/actual FakeRunner turn; focused CPU/wall comparison;
+static migration/offline SQL and regressions; source-aware manifests and receipts.
+Invariants: no cloud/shared DB mutation; no runtime cloud transport; default capture
+OFF with explicit local injection; no agents/models/tools/commands in workers/read
+app; no business replay; no M10-M14 financial duplication; no telemetry authority.
+Validation: scoped pytest contracts/runtime/read/accounting/persistence/migration;
+installed frontend Vitest decoder checks; local disposable SQLite only, no PostgreSQL
+install/start if unavailable; static graph/offline migration, compile, git diff --check.
+Exit: complete local atomic pipeline and honest catalogue/limitations; M16 thresholds
+unchanged. UI: new GET DTOs for real durable activity/debt/freshness; no visual redesign,
+server operational RBAC/environment scope, config read-only, financial truth separate.
+Cloud deployment NOT EXECUTED — USER APPROVAL REQUIRED; exact proposed resources
+are review artifacts only. Next milestone permitted NO.
+
+
+## 2026-10-11 — Local Phase-1 authoritative pipeline (after implementation)
+
+Current milestone M16: INCOMPLETE. M17: UNSTARTED. Local Phase-1 workstream:
+IMPLEMENTED AND LOCALLY VALIDATED. No next milestone is permitted.
+
+Implementation: strict M15-qualified typed seven-event catalogue; optional capture
+in M7 RUNNING/terminal persistence and M10 STARTED/provider-finished/ledger/debt
+transactions; immutable critical audit + outbox in SAME SQL transaction; new
+post-c16 d26a1b7c9e40 six-table/five-index migration + Alembic metadata; bounded
+publisher batch/lease/token/CAS, no SQL lock across transport, exponential capped
+retry/dead debt and expired recovery; replaceable transport protocols + validated
+bounded fake queue/retry; separate local projector ingress/component, atomic receipt
+and projections, conflict/stale guards, safe failures/resolution/deadline/capacity/
+shutdown; GET-only reader activity/debt/failure/freshness with RBAC/environment/query
+bounds; strict matching frontend DTO/client/shared fixture. All wiring explicit and
+capture OFF by default; no normal producer/reader startup creates schemas or cloud
+clients. Canonical run acceptance is only first durable RUNNING snapshot; first
+terminal emits terminal only. Coalesced/unpersisted acceptance stays UNKNOWN.
+
+Catalogue: run.accepted, run.terminal, model.attempt.started/completed,
+model.usage.captured, accounting.debt.created/resolved. Agent/tool/approval/action
+lifecycles evaluated and DEFERRED where no canonical shared-SQL durable transaction
+owner exists. No authority semantics invented. No token/cost ledger duplication,
+no financial recalculation or jobs on GET. Event retry never replays business work.
+
+Actual files changed this pass (the existing wider dirty tree was preserved):
+- .agent/OBSERVABILITY_EXECUTION.md
+- alembic/env.py
+- alembic/versions/d26a1b7c9e40_hybrid_audit_outbox_projections.py
+- backend/api/observability_app.py
+- backend/api/observability_routes.py
+- backend/observability/finops/repository.py
+- backend/observability/hybrid/capture.py
+- backend/observability/hybrid/config.py
+- backend/observability/hybrid/contracts.py
+- backend/observability/hybrid/local.py
+- backend/observability/hybrid/models.py
+- backend/observability/hybrid/ports.py
+- backend/observability/hybrid/projector_app.py
+- backend/observability/hybrid/read.py
+- backend/observability/hybrid/store.py
+- backend/observability/hybrid/transport.py
+- backend/observability/hybrid/workers.py
+- backend/observability/privacy_policy.py
+- backend/observability/read_service.py
+- backend/observability/repository.py
+- backend/tests/_hybrid_phase1_child.py
+- backend/tests/fixtures/hybrid_activity.json
+- backend/tests/test_finops_control_migrations.py
+- backend/tests/test_finops_reconciliation_migrations.py
+- backend/tests/test_finops_unit_economics_migrations.py
+- backend/tests/test_hybrid_phase1_runtime.py
+- backend/tests/test_migration_reconciliation.py
+- backend/tests/test_observability_hybrid.py
+- backend/tests/test_observability_migrations.py
+- docs/Telemetry/00_MASTER_BUILD_CONTRACT.md
+- docs/Telemetry/01_TARGET_ARCHITECTURE.md
+- docs/Telemetry/02_TELEMETRY_DATA_CONTRACT.md
+- docs/Telemetry/03_INSTRUMENTATION_AND_RUNTIME.md
+- docs/Telemetry/05_STORAGE_APIS_AND_UI.md
+- docs/Telemetry/09_SECURITY_PRIVACY_RETENTION_SAMPLING.md
+- docs/Telemetry/13_TEST_VALIDATION_ACCEPTANCE.md
+- docs/Telemetry/16_PRODUCTION_TELEMETRY_BACKEND.md
+- docs/Telemetry/23_TERRAFORM_AND_OBSERVABILITY_AS_CODE.md
+- docs/Telemetry/25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md
+- docs/Telemetry/26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md
+- docs/Telemetry/ALL_IN_ONE.md
+- docs/Telemetry/GCP_HYBRID_OBSERVABILITY_RESOURCE_MANIFEST.md
+- docs/Telemetry/README.md
+- docs/Telemetry/validation/HYBRID_PHASE1_ADDITIVE_MIGRATION.sql
+- docs/Telemetry/validation/HYBRID_PHASE1_LOCAL_MEASUREMENT.json
+- docs/Telemetry/validation/HYBRID_PHASE1_LOCAL_REPORT.md
+- docs/Telemetry/validation/HYBRID_PHASE1_LOCAL_VALIDATION.json
+- infra/observability/collector/README.md
+- infra/observability/collector/hybrid-branch.yaml.example
+- scripts/observability/measure_hybrid_local.py
+- scripts/observability/reconcile_migration_sql.py
+- src/api/observabilityHybrid.test.ts
+- src/api/observabilityHybrid.ts
+
+Validation: 407 unique affected backend tests PASS (405 main + 2 local-loopback);
+33 new runtime tests included; 278 affected frontend tests PASS in 40 files;
+TypeScript/Vite build PASS; scoped imports/compile PASS; graph/offline/postgres DDL
+and disposable SQLite migration parity/upgrade/downgrade PASS; actual historical
+Alembic module import PASS with isolated temporary Python pgvector 0.5.1. No DB
+extension installed. Current graph sole d26a1b7c9e40 head, 18 revisions, direct c16
+parent; recovered historical bytes/merge unchanged. Existing Collector pin/config
+and Google paths not changed by this pass; native pinned validation + sanitized
+pre-tail local nop regression PASS. Docs/pack/link/manifest/diff checks PASS.
+Mermaid manually reviewed; parser/renderer NOT RUN. Git status/diff/untracked
+inspected; unrelated work preserved. Evidence: validation/HYBRID_PHASE1_LOCAL_*
+and additive offline SQL; no credentials/payloads/shared DB contents stored.
+
+Measured isolated M10 STARTED path (200 per arm): baseline wall
+2.737 ms, enabled 4.543 ms,
+added 1.806 ms; baseline process CPU
+2.415 ms, enabled 4.038 ms,
+added 1.623 ms. Async 200-event publisher CPU
+343.7 ms, projector 412.2 ms.
+Fresh occurrence→projection 51.2 ms;
+occurrence→read 57.4 ms, explicit ticks exclude poll delay.
+No propagation SLO, PostgreSQL/network/load or whole-ANOC overhead proof.
+C41/C42 NOT PASS; historical failures not changed/waived.
+
+Failures/repairs: missing fixture turn origin and incorrect retry-before-pending
+assumption fixed; canonical debt resolution uses retained gap reason; warning-free
+serialization prevents rejected values appearing in Pydantic warnings; first-terminal
+capture does not invent acceptance; duplicate processing resolves transient failure
+history; failure-store outage returns RETRY. Two missing-file test invocations
+corrected; default pgvector import gate repaired using temporary local dependency;
+initial sandbox package DNS failure resolved by approved temporary download;
+two loopback bind restrictions resolved by approved local-only tests. No shared
+mutation, historical edit or criterion waiver. Full report retains these attempts.
+
+Exit criteria individually: same-TX run/accounting rollback PASS; committed outbox
+survives actual child-process death PASS; publication-before-confirm crash redelivers
+and projects once PASS; bounded leases/retry/backoff/dead/debt PASS; 1/2/100 duplicate
+projection equivalence/conflict PASS; ordering/terminal precedence PASS; privacy every
+sink and no unsafe serialization warnings PASS; harmless ChatService/FakeRunner
+reality + exact synthetic correlation GET/DTO PASS; GET no work/RBAC/env PASS;
+additive graph/build/affected regressions PASS; focused measurements/doc/resource
+refinement PASS. PostgreSQL/live deployment/performance/recovery/M16 exits NOT PASS.
+No live cloud-dependent criterion is claimed from local tests.
+
+UI impact evaluation: (1) creates run/model-agent activity/freshness and operational
+debt/failure required by existing Resources console; (2) new GET + strict frontend
+DTO/client supports it; (3) visual panel/navigation work belongs to later UI work and
+was not implemented; (4) server operational capability/environment scope applies,
+User denied, no new FinOps content/technical access; (5) effective configuration
+read-only, no IaC bypass. Counts are observed bounded snapshots/page outcomes,
+not complete historical totals. Normal chat/progress/conversation/SSE/rewind untouched.
+
+Known limits: SQLite/fake/explicit ticks only; volatile fake queue not a durable
+broker; test spool only for crash proof; no real provider/Teams/equipment; M7 async
+capture lacks pre-provider acceptance guarantee; deferred durable ownership gaps;
+no cleanup/rebuild/retention/production cost sizing; production Pub/Sub adapter,
+verified ingress, workload/DB identities/network and activation wiring still pending;
+disposable PostgreSQL unavailable. Existing reconciliation backup/PITR and M16
+validation blockers remain. All fixed existing M0–M15 authority/finance/privacy
+contracts preserved.
+
+Cloud deployment status = NOT EXECUTED — USER APPROVAL REQUIRED. Exact pending
+proposed categories/names in GCP_HYBRID_OBSERVABILITY_RESOURCE_MANIFEST.md: reviewed
+API prerequisites if absent; four dedicated SAs and scoped IAM/service-agent grants;
+audit topic + DLQ + push/inspection subscriptions; three separately disabled Cloud
+Run workloads; approved c16 reconciliation prerequisites then d26 additive migration
+and three DB roles/ANOC grants; secure credential/identity/network/UI bindings;
+separately approved activation. Project pr-msn-dev-gl-slopai-01 / development /
+europe-west4 is a PROPOSED sandbox binding, not confirmed approval. Existing SQL
+sloc-anoc-sandbox01/slopanoc/public reuse proposed; no new instance/database. Exact
+mutation commands cannot be approval-ready until actual project number, workload
+bindings/URLs/secret versions/DB identities and recovery are confirmed.
+Operational Pub/Sub OPTIONAL / SCALE-TRIGGERED / DISABLED, curated measured subset
+only; full unsampled OTLP replication is not Phase-1 minimum.
+Cloud / Shared DB Changes Performed NONE. Ready For Phase-1 GCP Provisioning NO.
+M16 INCOMPLETE. M17 UNSTARTED. Ready for Next Milestone NO. STOP.
+
+## Phase-1 production readiness — BEFORE implementation (2026-10-11)
+Current milestone M16 INCOMPLETE; C41/C42 not PASS; M17 UNSTARTED.
+Objective: locally deployable disabled-default canonical capture, Google transport,
+authenticated push projector, independent reader and review-only infrastructure.
+Specifications: README, 00, 12, 14, 15, 09, 13, 18, 20, 23, 25, 26 and latest
+user attachment 6287ce0f (production-readiness scope). Existing architecture inspected:
+ANOC sole lifespan, M7 Repository/Coordinator, M10 Repository/Ledger, HybridConfig,
+Capture, stores, workers, read app and local pipeline; reuse these owners/pools.
+Expected files: app.py, hybrid config/capture/contracts/transport/production/ingress,
+privacy catalogue, owner repositories, production tests, requirements/env example,
+Terraform hybrid module, review SQL, readiness/coverage docs, ALL_IN_ONE.
+Plan: opt-in composition; bounded lazy Google publisher and independent worker;
+OIDC push ingress; real correlation/canonical turn binding; inspect coverage gaps;
+review SQL/DDL, disposable DB availability, focused profiling, mocked failures;
+Terraform authoring/available validation; affected backend/frontend regressions.
+Invariants: no business replay, authority/evidence changes, raw content, invented IDs,
+accounting sampling, default clients, external mutation or shared migration.
+Validation: isolated mocked pytest, migration graph/offline SQL, benchmark, affected
+frontend tests/build, compile/diff, Terraform fmt/validate when tooling available.
+Exit: local requirements individually evaluated; no cloud acceptance claimed.
+Docker daemon unavailable (missing socket); PostgreSQL rehearsal NOT EXECUTED.
+Read-only gcloud instance describe confirmed europe-west4 / existing instance
+sloc-anoc-sandbox01; no database contents accessed. Cloud deployment NOT EXECUTED.
+UI impact: operational DTOs can supply existing console; no redesign/new panels;
+server RBAC/environment unchanged; production settings remain read-only.
+
+## Phase-1 production readiness — AFTER implementation (2026-10-11)
+M16 INCOMPLETE. C41/C42 NOT PASS. M17 UNSTARTED. Local production-readiness code
+IMPLEMENTED AND LOCALLY VALIDATED (PostgreSQL/live gates explicitly outstanding).
+
+Implemented: real ANOC lifespan disabled-default configuration/injection into M7,
+M10 and canonical Case progression CAS; no worker/transport initialized by ANOC.
+Required matching durable owners fail closed on opt-in. Separate production worker
+factories own pools/lifecycle; lazy Google async Pub/Sub publisher bounded by timeout,
+semaphore and retry; request-driven push authenticates Google signature/expiry/issuer,
+exact audience/verified push account on top of planned Cloud Run IAM. Wrapped input
+size/privacy/env/attributes validated; ACK after durable receipt/projection only;
+conflict/permanent/foreign/transient non-2xx deliberate broker DLQ semantics. Auth
+certificate outages retry; cancelled callers cannot release ongoing auth work capacity.
+No business replay. Default disabled workers create no DB/client/ADC. Added real
+turn.bound and governance.progression.recorded revision references; nine canonical
+events. Session/model-attempt references optional, absent when unknown. No raw
+content/arguments/command body or duplicate token/cost truth. Material full-audit
+coverage gaps documented instead of invented ownership or private ADK SQL coupling.
+
+Actual files changed in this pass (existing unrelated edits preserved):
+- .agent/OBSERVABILITY_EXECUTION.md
+- .env.example
+- requirements.txt
+- backend/api/app.py
+- backend/cases/progression_store.py
+- backend/observability/repository.py
+- backend/observability/finops/repository.py
+- backend/observability/privacy_policy.py
+- backend/observability/hybrid/config.py
+- backend/observability/hybrid/contracts.py
+- backend/observability/hybrid/capture.py
+- backend/observability/hybrid/google_transport.py
+- backend/observability/hybrid/production.py
+- backend/observability/hybrid/push_app.py
+- backend/tests/test_hybrid_production.py
+- backend/tests/test_hybrid_phase1_runtime.py
+- backend/tests/test_case_progression_persistence.py
+- scripts/observability/measure_hybrid_production.py
+- infra/observability/terraform/hybrid/main.tf
+- infra/observability/terraform/hybrid/.terraform.lock.hcl
+- infra/observability/terraform/hybrid/README.md
+- docs/Telemetry/AUDIT_COVERAGE_MATRIX.md
+- docs/Telemetry/HYBRID_PHASE1_PRODUCTION_READINESS.md
+- docs/Telemetry/GCP_HYBRID_OBSERVABILITY_RESOURCE_MANIFEST.md
+- docs/Telemetry/26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md
+- docs/Telemetry/02_TELEMETRY_DATA_CONTRACT.md
+- docs/Telemetry/09_SECURITY_PRIVACY_RETENTION_SAMPLING.md
+- docs/Telemetry/23_TERRAFORM_AND_OBSERVABILITY_AS_CODE.md
+- docs/Telemetry/25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md
+- docs/Telemetry/README.md
+- docs/Telemetry/ALL_IN_ONE.md
+- docs/Telemetry/validation/HYBRID_PHASE1_DATABASE_ROLES.sql
+- docs/Telemetry/validation/HYBRID_PHASE1_PRODUCTION_ROLLOUT.sql
+- docs/Telemetry/validation/HYBRID_PHASE1_PRODUCTION_MEASUREMENT.json
+- docs/Telemetry/validation/HYBRID_PHASE1_PRODUCTION_REPORT.md
+- docs/Telemetry/validation/HYBRID_PHASE1_PRODUCTION_VALIDATION.json
+
+Validation: 461 main affected backend PASS +2 separate local loopback/process PASS
+=463 unique; final root/config/doc refinement rerun81 PASS (overlap, not additional).
+30 new production cases included. Frontend278/40files PASS; TypeScript/Vite PASS.
+Actual migration imports/head18/historical hashes, compile, catalogue privacy,
+SQL review/grant table-name parity, pack/name syntax/diff/hygiene PASS. Terraform
+1.14.0 fmt/check/Google7.46.1 signed provider schema validate PASS, backend disabled,
+cache outside repo, no plan/cloud query/apply/import/state. Report/measurement/JSON
+under validation/HYBRID_PHASE1_PRODUCTION_* retain scope/failures/source evidence.
+
+Performance clean isolated M10 STARTED200/arm: baseline/enabled wall2.682/4.408ms,
+added1.726ms(+64.33%); CPU2.342/3.831ms, added1.489ms(+63.58%). Previous added
+1.806wall/1.623CPUms. Profiling: auditSQL/ORM/await0.923ms, outbox0.480ms dominates;
+construction/privacy/serialization smaller. No invented pure ORM estimate or summed
+overlapping profiles. Removed duplicate sink validation and new-row ORM SELECT via
+INSERT RETURNING; duplicate still verifies hash. Same-TX guarantees/privacy intact.
+No production performance/freshness/recovery gate passed; C41/C42 NOT PASS.
+
+Failures/repairs: event expectations updated for real turn binding; legacy SQLite
+progression test targets its actual M7 revision instead of PostgreSQL historical head;
+no historical source edit. Terraform HCL three multiargument block formats corrected;
+registry DNS/provider IPC restrictions resolved via approved local-only initialization/
+validation. Default local socket EPERM and abbreviated test selector repaired with
+exact two isolated tests. Auth cancellation/certificate failure and lifespan capture
+cleanup reviewed/repaired with passing tests. No silent waiver or skipped PG claim.
+
+Exit criteria individually: actual ON/OFF composition PASS; Google mocked adapter
+and bounded failure PASS; push envelope/privacy/env PASS; Google verifier contract,
+forged headers/test adapter isolation/cancellation/cert outages PASS; committed-owner
+publication debt/recovery PASS; existing abrupt publish death/dedup/conflict PASS;
+canonical run/accounting/Case same-TX rollback PASS; GET-only/RBAC/env/unknown data
+PASS; nine actual types/coverage-gap reporting PASS; independent deployment/fmt/
+validate/resource/config/SQL source review PASS; affected backend/frontend/build PASS.
+PostgreSQL historical upgrade/repeat/grants NOT EXECUTED (Docker missing socket);
+live Cloud Run/IAM/PubSub/SQL/deployment/runtime criteria NOT VALIDATED; M16 NOT PASS.
+
+UI evaluation: (1) real canonical revision/turn references and debt support existing
+console; (2) existing hybrid GET/DTO remains suitable for bounded activity, full
+cross-domain drill-down gaps explicit; (3) no frontend redesign/panel/navigation work
+in this scope; (4) existing server capability/env/reader human identity applies,
+machine push identity grants no user role or authority; (5) Terraform/environment
+configuration stays view-only. No fake data/zeroes. Full auditability NOT claimed.
+
+Read-only gcloud confirmed project995771529960 and connection
+pr-msn-dev-gl-slopai-01:europe-west4:sloc-anoc-sandbox01, database slopanoc;
+filtered proposed topic/subscription/service/account names absent. No schema/data
+inspection/copy. Exact locked proposed names are in manifest; no reservation.
+Runtime recommendation publisher Run service instance-based CPU/min=max1; request-
+driven projector min0 and GET reader min0. Current Google worker pools supported
+in europe-west4, optional alternative; no multi-minute scheduler for NRT.
+
+Known limits: local SQLite/mock only; broker DLQ attempt count best effort, requires
+future scoped IAM; partial canonical coverage/ADK shared-transaction gaps; M7
+coalescing/missing acceptance; no automatic hybrid retention/rebuild; no PostgreSQL,
+production identity binding, image/network/cost sizing or live overhead proof.
+Cloud deployment = NOT EXECUTED — USER APPROVAL REQUIRED. Exact pending categories:
+2 audit/DLQ topics +2 push/inspection subs +4 dedicated accounts +3 disabled services
+and scoped IAM; separately approved d3→c16→d26 rollout/NOLOGIN grants/memberships;
+reviewed secure credentials/image/network/projector audience/reader identity and
+policy bindings; separately approved activation. No operational PubSub, billing,
+pgAudit, Collector or extra SQL instance/database required by this minimum.
+Remaining blockers: disposable PG historical upgrade/repeat/grants; backup/PITR;
+reviewed image/logins/secret versions/network/effective schema privileges; exact
+projector origin/audience; reader production identity/authorized caller/origins and
+policy. No cloud-mutation permission by implication; no approval request since user
+explicitly ordered no provisioning.
+Cloud / Shared DB Changes Performed NONE.
+Ready For Phase-1 GCP Provisioning NO.
+Ready for Next Milestone NO. STOP.
+
+## Audit completeness + database rehearsal — BEFORE (2026-10-11)
+Current M16 INCOMPLETE; M17 UNSTARTED; C41/C42 NOT PASS. User attachment30a0a3b2
+is authoritative scope. No GCP/shared SQL/pgAudit mutations. Approved local disposable
+PostgreSQL schema-only rehearsal and local code/docs/tests; no business data copying.
+Specs: README/00/12/14/15 and09/13/18/20/23/25/26, coverage/readiness contracts.
+Inspected owners: ADK1.33 DatabaseSessionService commits public create/append internally;
+ApiSessionService public persistence; ObservedAgent/ADK per-flow dispatch + direct
+Teams execution; KnowledgeRetrievalService read-only; CaseProgressionStore CAS.
+Reuse existing capture/outbox/projection/read plane, canonical progression/ADK owners.
+Plan: inspect immutable authoritative evidence references within Case CAS; add only
+safe same-TX facts with real IDs. Assess session/agent/tool/approval/authorization/
+dispatch boundaries; stop unsafe owner changes and document exact designs/gaps.
+Run disposable local PostgreSQL historical d3→current head, repeat no-op, inspect
+objects/constraints/grants, test least-privilege roles, destroy container. Produce
+review-only recovery and human-IAP capability deployment contracts, exact bindings;
+extend privacy/rollback/correlation/measurement tests and regenerate pack.
+Expected files: Case progression/capture contracts if supported; additive migration
+only if truly needed; focused tests/rehearsal+measurement scripts, coverage, recovery,
+identity/readiness docs, review SQL, evidence receipts, execution record, ALL_IN_ONE.
+Safety: no evidence selection/approval/command semantics from audit; no telemetry as
+business owner; no raw content, fake IDs or PubSub on business request; disabled default.
+Tool durable owner must not silently introduce gating/fail-open capture loss or new
+command retry/idempotency semantics; material change => design STOP, not implementation.
+Validation: local mocks/SQLite, isolated Docker PostgreSQL schema-only, actual Alembic
+history/no-op/grants, privacy/rollback/outbox/projector/reader and authority regressions,
+per-category profiling, affected frontend/build, diff/status/source review.
+Exits: FULL only if no material uncaptured/unwired gaps; PostgreSQL only PASS with
+actual evidence; no C41/C42 or M17 advancement. UI: no redesign, existing read contracts
+and server RBAC; added safe refs only if actual owners supply them; policy read-only.
+
+## Audit completeness + database rehearsal — AFTER (2026-10-11)
+
+M16 INCOMPLETE; M17 UNSTARTED. Full auditability NO. No new business owner/event/
+migration: the user-required material-semantics design stop applies to durable tool/
+dispatch ownership. Nine prior canonical event types remain. Seven material domains
+remain UNWIRED/NOT_CAPTURED; agent/failure coverage remains DERIVABLE. No inferred
+session resume/expiry, invented execution/retrieval IDs, fake selection facts or audit
+command retry. Actual owner/commit inventory and proposed supported ADK journal +
+postcommit reconciler and business tool/dispatch state machine documented in
+AUDIT_OWNERSHIP_GAP_DESIGN.md. Existing Case revision reference remains partial
+provenance, not full evidence-selection capture.
+
+Implementation performed: local-only executable PostgreSQL rehearsal, per-category
+benchmark, 33 audit completeness/privacy/actual-owner correlation tests; coverage
+normalization and design/identity/recovery contracts; read-only recovery metadata;
+readiness/manifest/README/ALL_IN_ONE updated. No production runtime code changed.
+Actual files changed this pass (all pre-existing unrelated work preserved):
+.agent/OBSERVABILITY_EXECUTION.md;
+scripts/observability/rehearse_hybrid_postgres.py;
+scripts/observability/measure_audit_categories.py;
+backend/tests/test_audit_completeness_contract.py;
+docs/Telemetry/AUDIT_COVERAGE_MATRIX.md;
+docs/Telemetry/AUDIT_OWNERSHIP_GAP_DESIGN.md;
+docs/Telemetry/HYBRID_READER_IDENTITY_CONTRACT.md;
+docs/Telemetry/HYBRID_RECOVERY_REQUIREMENTS.md;
+docs/Telemetry/HYBRID_PHASE1_PRODUCTION_READINESS.md;
+docs/Telemetry/GCP_HYBRID_OBSERVABILITY_RESOURCE_MANIFEST.md;
+docs/Telemetry/README.md;
+docs/Telemetry/ALL_IN_ONE.md;
+docs/Telemetry/validation/HYBRID_POSTGRES_REHEARSAL.json;
+docs/Telemetry/validation/HYBRID_RECOVERY_METADATA.json;
+docs/Telemetry/validation/AUDIT_CATEGORY_MEASUREMENT.json;
+docs/Telemetry/validation/AUDIT_COMPLETENESS_VALIDATION.json.
+
+PostgreSQL rehearsal PASS: authorized disposable Docker only, loopback ephemeral
+port, randomly generated throwaway credentials, no business/customer data. Initial
+PG16 successful; read-only Cloud SQL metadata revealed POSTGRES_18, so final rehearsal
+uses pinned pgvector PG18 image digest2358fcba361ed2233a5ed81b5fe4ca779ccb304120ce531a3bf51c0ed7e2bc11,
+PostgreSQL18.6/vector0.8.7. Actual historical base->d3 then all18 revisions to sole
+head d26, repeat no-op with identical schema;49 tables/97 indexes/535 constraints
+(includes PG18 not-null constraints). Every M7-M15 metadata table present, hybrid
+index/FK/CHECK counts compared to model, constraints reject invalid values. Proposed
+NOLOGIN role SQL applied only to disposable DB; role attributes verified, independent
+restricted LOGIN memberships exercise real Capture duplicate+rollback, Outbox claim/
+settle stale token, Projector apply/duplicate/failure, Reader audit+financial reads.
+17 permission denials: no business reads, schema DDL, audit mutations, publisher
+immutable-payload edits, projector outbox update, reader writes. No shared grants.
+Owned container AND anonymous volume removed; receipt confirms cleanup. Cached images
+remain local; no other Docker resources touched. No new migration.
+
+Validation commands/results: PYTHONPATH=/private/tmp/slopanoc-hybrid-phase1-test-deps:.
+.venv/bin/python -m pytest focused 24-file owner/privacy/transport/read/regression suite:
+614 PASS,2 initially FAIL due sandbox loopback bind EPERM. Exactly those2 rerun with
+SLOPANOC_M16_LOCAL_TEST=1 and scripts/observability/guard first in PYTHONPATH under
+local escalation =>2 PASS (external network prohibited). Additional Teams final-egress,
+M10 ledger, M15 archive/sampling/policy/retention, Team Manager and target-authority
+suite117 PASS. New audit contract/correlation suite33 PASS. Total766 unique backend
+checks PASS. New test fixture errors (required run_id, turn_id_origin, finished(identity,
+at), ledger metadata correlation rather than nonexistent columns) repaired before
+final33 PASS; no implementation workaround. Script fixture errors corrected before
+final PG18 PASS (JSON metadata byte normalization, run identity, category aggregate).
+Frontend npm test all74 files1044 tests PASS; npm run build PASS. Py_compile new scripts/
+test PASS. Git diff --check PASS; status/untracked/scoped diff inspected. Existing dirty
+work preserved, no commits/resets or unrelated source changes. Existing deprecation
+warnings remain; no ignored runtime/test defect.
+
+Actual correlation proof: owning M7 SQL commit supplies session/run/turn/trace; owning
+M10 attempt/inbox/materialized ledger commit supplies usage reference to SAME actual
+run/turn + actual attempt ID, finite agent and100 fixture input tokens. Early STARTED
+has run/turn/trace absent, preserved rather than backfilled. Tool/approval/action IDs
+remain absent. Full agent/retrieval/tool/approval/command graph NOT PROVEN. Contract
+checks reject21 unsupported lifecycle events and10 forbidden content categories.
+
+Performance: all9 existing admitted capture categories independently profile event
+construction/validation/hash/audit insert/outbox insert and capture transaction with
+30 fixtures per category. These are capture fixtures, not synthetic claimed business
+transitions; overlapping phase timings not additive. Separate clean real M10 start
+benchmark200 operations/arm: baseline3.513mswall/3.041msCPU, captured5.990mswall/4.808msCPU,
+added2.477mswall/1.767msCPU. SQLite/localfake workers; no production SQL/WAL/network/load
+acceptance. No new capture category/owning transaction overhead introduced. C41/C42
+NOT PASS; do not infer improvement from noisy different baseline timing.
+
+Read-only GCP: project/number/region/connection unchanged; PostgreSQL18 Enterprise,
+automated backups=false/PITR=false, configured7-backupCOUNT and7-day log retention
+are ineffective proof while disabled; backups list returned0. No verified recovery
+point. Recovery contract proposes approved pre-migration standard backup + metadata
+verification and independently approved restore rehearsal,30day minimum retention,
+7daily backups/7day PITR recommendation; enabling PITR restart/cost impact and abort/
+restore/cutover checkpoints documented. No recovery resource/configuration mutated.
+Human reader direct-IAP audience fixed resource string995771529960/europe-west4/reader
+service; ES256/IAP issuer/exact audience/time/sub, bounded keys, trusted server subject/
+group policy, role ceilings/env scopes, failclosed/firstpartyorigin documented. Current
+IAP provider remains deny-only; no implementation/enablement falsely claimed.
+
+Exit evaluation: actual PG18 rehearsal PASS; graph/no-op/grants/privacy/rollback/
+transport/projector/read regressions PASS; human identity contract DOCUMENTED, runtime
+NOT IMPLEMENTED; recovery requirements DOCUMENTED, verified recovery FAIL; full
+cross-domain coverage FAIL; full correlation FAIL; C41/C42 NOT PASS; livecloud/DB/auth
+validation NOT EXECUTED. Milestone incomplete; no progression.
+
+UI impact: existing references support diagnostic/FinOps views; no new data contract,
+panel, navigation or design system. Material gaps require future approved business
+owners before drill-down. Existing server capabilities/env checks stay enforced;
+FinOps content boundaries unchanged. Infrastructure/configuration read-only. No UI
+work from later milestone. Cloud deployment NOT EXECUTED — USER APPROVAL REQUIRED;
+pending exact separately approved operations unchanged in prior resource manifest,
+plus independently approved recovery backup/PITR/restore and reviewed human identity
+configuration only after implementation. None authorized by continue/rehearsal.
+Concrete blockers: seven audit domain journal/dispatch designs and implementation;
+verified recovery point/restore; real IAP verifier and exact subject/group/env policy;
+approved image digest, SQL login/secret versions, effective schema/network privileges,
+firstparty origin; exact generated projector HTTPS audience after disabled creation.
+Cloud / Shared DB Changes NONE. Ready For Phase-1 Provisioning NO.
+Ready for Next Milestone NO. STOP.
+
+## Execution audit journal + controlled egress — BEFORE (2026-10-11)
+M16 INCOMPLETE; M17 UNSTARTED. Attachment889dccf4 explicitly authorizes local
+journal and opt-in controlled egress implementation, additive migration and isolated
+PostgreSQL rehearsal. No external mutation, cloud/shared migration or pgAudit.
+Specs README/00/12/14/15,02/09/13/18/20/25/26 and latest user architecture A/B/C/D.
+Inspected: ADK public session append, Case CAS, M10/M7 same-TX capture, ObservedAgent
+iterator and pinned ADK tool dispatcher, KnowledgeRetrievalService read-only boundary,
+Teams authorize_write/final gateway and direct execution API, read-only query service.
+Reuse accepted hybrid delivery/projection pipeline; extend critical audit as ONE
+journal authority with reference outbox, not duplicate historical truth. New journal
+facts and action/authorization execution records are safe finite contracts. Class A
+same owning transaction; B only actual public durable ADK handoff; C observed activity;
+D durable intent before egress and UNKNOWN after ambiguous outcome. Default disabled.
+Plan: implement typed journal fact + additive tables/constraints/indexes and projection;
+wire supported lifecycle boundaries explicitly; normalized tool/agent/retrieval IDs
+belong to actual execution handles. Controlled Teams egress reuses existing authorization
+and payload, records decision/intent first, never retries remote action; test parity,
+crash/cancel/ack persistence/ambiguous results. Public ADK mechanism must preserve
+model-visible state/history/rewind, document any remaining gap without FULL claim.
+Add bounded ordered audit timeline API/DTO + frontend contract only, existing RBAC.
+Expected changes: execution journal module, safe event schemas/privacy registry,hybrid
+capture/store/outbox/read, source adapters and app binding, additive migration afterd26,
+focused tests/bench/rehearsal/roleSQL, authoritative docs/Mermaid/execution record.
+Invariants: journal never validates approvals/authority/selects evidence; no raw body,
+query/prompt/secret/tool args; outbox retries audit only; no fabricated IDs/correlation;
+no overwrite prior facts, corrections explicit; B/C/D never labeled atomic with domain.
+Validation: actual SQL rollback/dedup/immutable/owner adapters/privacy/egress no-replay/
+UNKNOWN/RBAC/page ordering, existing session/agent/retrieval/approval/Teams regressions,
+full19+revision graph/PG18 restricted-role/no-op/cleanup, per-domain timing, frontend
+contracts/build,diff/status. Exits FULL only zero material gaps; C41/C42 unchanged,
+M16 remains incomplete. UI supports eventual audit timeline, no redesign; operational
+capability/env checks required; FinOps content restricted; all policyview-only.
+
+## Execution audit journal + controlled egress — AFTER (2026-10-11)
+M16 INCOMPLETE; M17 UNSTARTED. Local implementation and focused validation PASS;
+full auditability NO. Cloud deployment NOT EXECUTED — USER APPROVAL REQUIRED.
+Implemented ONE execution journal using existing immutable critical-audit owner,
+24 typed content-free lifecycle event types, atomic journal/reference-outbox append,
+immutable source hydration at publisher, dedup transactional timeline/activity views.
+Public durable ADK event metadata implements B approval/provenance handoff;
+authorized public session reads reconcile idempotently without private DB access.
+Case exact evidence delta is A in successful CAS; session/actual agent/retrieval/tool
+handles are C, bounded fail-open, not business authority. Existing M7/M10 remain
+canonical run/financial state; actual agent execution references added without changing
+legacy digests when absent. Controlled Teams egress D retains existing policy/payload:
+decision receipt+AUTHORIZED intent commit, DISPATCHING attempt commit before network,
+ACKNOWLEDGED/COMPLETED after actual adapter behavior, FAILED pre-egress and UNKNOWN
+post-egress uncertainty; no audit-driven action retry. Persistent DISPATCHING reads
+UNKNOWN outcome when the ack/UNKNOWN storage also fails. Final gateway blocks naked
+write paths in explicit controlled mode. All flags remain disabled by default.
+Read API GET /api/observability/runs/{run_id}/audit is bounded and server-enforced
+operational-capability/environment scoped, ordered by occurrence/event-ID with explicit
+arrival/as-of cursor and PARTIAL coverage. Current bounded action summaries separate
+from historical snapshot events. Frontend DTO/client only; no redesign.
+Actual files changed for this pass are listed and hashed in
+validation/EXECUTION_JOURNAL_VALIDATION.json (pre-existing dirty work preserved).
+Additive e27b2c8d0f51 creates3tables and PostgreSQL immutable journal trigger; historical
+migrations unchanged. Role SQL scopes action-column writes and derived projection grants.
+PostgreSQL18.6/vector0.8.7: historical reconstruction,19revisions,newhead,role positive/
+negative, immutable-owner trigger,index/FK/CHECK parity, second upgradeNO_OP, cleanupPASS.
+No shared database/pgAudit/external mutation. New schema-only receipt replaces no prior receipt.
+Focused journal/egress final41PASS including actual public ADK Runner tool/retrieval/
+agent/ledger identity graph, B source outage/reconcile, C outage/no behavior change,
+A CAS/rollback, denied decision, intent failure before send, unknown after send,
+ack failure/no replay, reader unknown state, pagination/late arrival/RBAC/privacy.
+Frontend75files1050testsPASS; npm buildPASS.42source files compile; diffcheckPASS.
+Initial broad sandbox run2249PASS/20FAIL:12loopback permission failures plus stale
+head/route/network-classifier contract expectations and failing ADK double hook.
+Repairs: hook guards unsupported test double; head expectations19/e27; known request
+exception classifier inventoried; route inventory preserves existing hybrid endpoint;
+exporter-outage fixture uses existing local identity; pack synchronized and classA
+contract replaces misleading universal same-SQL assumption. Final regression summary
+is recorded in the validation receipt with repaired focused reruns distinguished.
+No required milestone acceptance is silently waived.
+Performance receipt:30capturefixtures/domain,8domains; construction/validation/hash/
+journal/outbox phases measured separately, overlapping notadditive.2.14–2.61ms/fact
+SQLite wall; actual empty-corpus retrieval owner +5.51mswall/+4.54msCPU for2facts.
+Other domain arms do not pretend to measure real owner cost; no production WAL/network/
+load proof. C41/C42 NOT PASS. No production qualification from local tests.
+Exit criteria: implementation boundary checks PASS; localPGschema/roles/cleanupPASS;
+privacy/RBAC/noactionreplayPASS; full-domain durability/exhaustive correlation FAIL;
+autonomous B liveness FAIL; production runtime/recovery/load validation NOT EXECUTED.
+Known material gaps: C can lose facts on crash/outage (including sessioncreated after
+ADKcommit); B requires sessionaccess and unboundedhistoricalscan with duplicate probes,
+metadata lists over16unreconciled, no autonomouscheckpointdrainer; actual correlation/
+actor may be absent; journal does not prove subsequent ADK consumecommit or remote
+business/equipment completion; no historical backfill/correction authoring service.
+Sessionclose/resume are absent owner transitions, never fabricated. Superseding facts
+append without rewriting financial/business/journal history.
+UI impact evaluated all5items: creates lifecycle/UNKNOWN information for existing
+Observability Settings/console; scoped API/DTOadded; UI rendering/redesign outside this
+pass; serverRBAC operational only (FinOps no automatic content access); effective config
+view-only. Existing business ownership/provenance/approval/SSE/rewind retained.
+Pending exact cloud operations unchanged in resource manifest: separately approved
+IAM/API/SQLrole/shared19revision rollout/secret binding/three CloudRun images/PubSub
+resources and human identity verification; each requires its own exact safety proposal.
+Independent recovery gate: inspected backups/PITRdisabled,no backupentries; separately
+approved configuration+restore proof absent. No implicit approval from local rehearsal.
+FullAuditabilityNO; ReadyForGCPProvisioningNO; ReadyForSharedDBMigrationNO;
+Exit criteria FAIL overall. Ready for Next Milestone NO. STOP; no M17 progression.
+
+Final regression reconciliation: guarded broad run2267PASS/2FAIL/19warnings in219.95s.
+Both failures were already-collected pre-repair tests (outage fixture missing local
+identity and old universal same-database documentation literal). Final repaired pair
+2PASS in2.50s; focused actual ADK tool journey/egress41PASS in5.43s. Thus every case
+in the2269-case selection has a passing result across the broad run and repaired
+reruns; no claim of one fresh all-green2269-case invocation. No unresolved assertion
+failure. Warnings include upstream deprecations/serializer warnings and an aiosqlite
+fixture thread-loop teardown warning in the broad run, not production qualification.
+Final75frontendfiles1050testsPASS/buildPASS;42sourcecompilePASS;35packdocuments
+match;diffcheckPASS. Existing dirty/untracked files inspected, no unrelated work
+removed, no commit, no generated credentials/customer data. Newreceipt and exact
+scoped changed-file list: validation/EXECUTION_JOURNAL_VALIDATION.json.
+Next milestone/provisioning/shared migration remainNO for recorded material gaps.

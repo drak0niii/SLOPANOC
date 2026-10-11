@@ -10,7 +10,7 @@ import { useObservabilityQuery } from './useObservabilityQuery';
 import { ReadState, cardClass, buttonClass } from './ReadState';
 import { name, timestamp } from './format';
 const percent = (v: number|null) => v===null?'Unavailable':new Intl.NumberFormat(undefined,{style:'percent',maximumFractionDigits:4}).format(v);
-export function FinOpsPanel() {
+export function FinOpsPanel({ runtimeOnly = false }: { runtimeOnly?: boolean }) {
     const [group,setGroup]=useState('model');
     const query=useObservabilityQuery('finops:'+group,async signal=>{
         const [usage,health,completeness]=await Promise.all([getRuntimeUsage(group,signal),getLedgerHealth(signal),getLedgerCompleteness(signal)]);
@@ -33,11 +33,11 @@ export function FinOpsPanel() {
         {(page ? paged.data?.next_cursor : usage.next_cursor) && <button className={buttonClass} disabled={paged.loading} onClick={()=>{const cursor=page?paged.data?.next_cursor:usage.next_cursor;if(cursor)setPage({cursor,start:page?.start??usage.start,end:page?.end??usage.end});}}>Next usage page</button>}
         <p className="mt-3 text-xs text-tertiary">Ledger retention policy: {health.retention_months} months. Retention execution is not activated. Configuration is read-only.</p>
       </>}</ReadState>
-      <FinancialSourcePanel/>
+      {!runtimeOnly && <><FinancialSourcePanel/>
       <ReconciliationPanel/>
       <UnitEconomicsPanel/>
       <BudgetPanel/>
       <ForecastPanel/>
-      <AnomaliesPanel/>
+      <AnomaliesPanel/></>}
     </section>;
 }

@@ -6,6 +6,8 @@ from __future__ import annotations
 import inspect
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("local_application_identity")
 from fastapi.testclient import TestClient
 
 from backend.api.app import app
@@ -15,34 +17,43 @@ from backend.api.session_service import ApiSessionService, get_session_service
 from backend.tests._api_fakes import FakeRunner
 
 
+async def resolve_dev_user(user):
+    from fastapi import FastAPI, Request
+    from backend.observability.authorization import verified_principal_provider, verified_principal
+    headers = [] if user is None else [(b'x-slopanoc-dev-user', user.encode())]
+    request = Request({'type': 'http', 'headers': headers, 'app': FastAPI()})
+    principal = await verified_principal(await verified_principal_provider(request))
+    return await resolve_user_context(principal)
+
+
 @pytest.mark.asyncio
 async def test_dev_header_resolves_to_the_given_user_id() -> None:
-    context = await resolve_user_context(x_slopanoc_dev_user="alice")
+    context = await resolve_dev_user("alice")
     assert context.user_id == "alice"
 
 
 @pytest.mark.asyncio
 async def test_missing_dev_header_resolves_to_a_stable_default() -> None:
-    context = await resolve_user_context(x_slopanoc_dev_user=None)
+    context = await resolve_dev_user(None)
     assert context.user_id  # non-empty
     # Stable across repeated resolution with no header, so unauthenticated
     # local testing behaves consistently rather than getting a fresh
     # identity every call.
-    context2 = await resolve_user_context(x_slopanoc_dev_user=None)
+    context2 = await resolve_dev_user(None)
     assert context.user_id == context2.user_id
 
 
 @pytest.mark.asyncio
 async def test_whitespace_only_header_falls_back_to_the_default() -> None:
-    default_context = await resolve_user_context(x_slopanoc_dev_user=None)
-    whitespace_context = await resolve_user_context(x_slopanoc_dev_user="   ")
+    default_context = await resolve_dev_user(None)
+    whitespace_context = await resolve_dev_user("   ")
     assert whitespace_context.user_id == default_context.user_id
 
 
 @pytest.mark.asyncio
 async def test_distinct_dev_users_resolve_independently() -> None:
-    alice = await resolve_user_context(x_slopanoc_dev_user="alice")
-    bob = await resolve_user_context(x_slopanoc_dev_user="bob")
+    alice = await resolve_dev_user("alice")
+    bob = await resolve_dev_user("bob")
     assert alice.user_id != bob.user_id
 
 
@@ -52,9 +63,9 @@ async def test_same_user_identity_is_stable_across_repeated_resolution() -> None
     call is independent (no session/cookie state in this dev provider),
     but the SAME header value always yields the SAME `user_id`.
     """
-    first = await resolve_user_context(x_slopanoc_dev_user="alice")
-    second = await resolve_user_context(x_slopanoc_dev_user="alice")
-    third = await resolve_user_context(x_slopanoc_dev_user="alice")
+    first = await resolve_dev_user("alice")
+    second = await resolve_dev_user("alice")
+    third = await resolve_dev_user("alice")
     assert first.user_id == second.user_id == third.user_id == "alice"
 
 
@@ -92,16 +103,11 @@ def test_identity_resolution_is_centralized_in_one_dependency() -> None:
     assert found_paths == session_bound_paths
 
 
-def test_resolve_user_context_reads_only_the_dev_header_no_body_no_query() -> None:
-    """Structural guarantee that identity cannot come from anywhere else
-    -- the function's only parameter is the dev header.
-    """
+def test_user_context_consumes_only_the_shared_verified_principal():
+    from backend.observability.authorization import verified_principal
     params = inspect.signature(resolve_user_context).parameters
-    assert list(params) == ["x_slopanoc_dev_user"]
-    param = params["x_slopanoc_dev_user"]
-    # FastAPI's `Header(default=None)` -- optional, falls back to the
-    # default identity when the header is absent.
-    assert param.default.default is None
+    assert list(params) == ['principal']
+    assert params['principal'].default.dependency is verified_principal
 
 
 # --- End-to-end: identity actually drives session ownership over HTTP ---

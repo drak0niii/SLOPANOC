@@ -65,7 +65,7 @@ async def test_actual_alembic_environment_isolated_upgrade_downgrade(tmp_path,mo
     target='sqlite+aiosqlite:///'+str(tmp_path/'alembic.sqlite')
     monkeypatch.setattr('backend.config.settings.get_settings',lambda:Settings({'SLOPANOC_DATABASE_URL':target}))
     cfg=Config();cfg.set_main_option('script_location','alembic')
-    assert ScriptDirectory.from_config(cfg).get_current_head()=='b15e3f7a9c81'
+    assert ScriptDirectory.from_config(cfg).get_current_head()=='e27b2c8d0f51'
     db=Database(target,isolated_test=True)
     try:
         async with db.engine.begin() as c:
@@ -74,7 +74,7 @@ async def test_actual_alembic_environment_isolated_upgrade_downgrade(tmp_path,mo
         # Existing parent uses Postgres-only timestamp ALTER; this isolated fixture
         # stamps the verified parent then applies only the new additive revision.
         await asyncio.to_thread(command.stamp,cfg,'7c4e9a2d1f05')
-        await asyncio.to_thread(command.upgrade,cfg,'head')
+        await asyncio.to_thread(command.upgrade,cfg,'b15e3f7a9c81')
         async with db.engine.connect() as c:
             tables=await c.run_sync(lambda s:inspect(s).get_table_names())
             assert set(Base.metadata.tables)<=set(tables)
@@ -83,7 +83,7 @@ async def test_actual_alembic_environment_isolated_upgrade_downgrade(tmp_path,mo
         async with db.engine.connect() as c:
             assert not set(Base.metadata.tables)&set(await c.run_sync(lambda s:inspect(s).get_table_names()))
             assert (await c.execute(text('SELECT id FROM unrelated'))).scalar_one()==17
-        await asyncio.to_thread(command.upgrade,cfg,'head')
+        await asyncio.to_thread(command.upgrade,cfg,'b15e3f7a9c81')
     finally:await db.close()
 
 
@@ -95,7 +95,7 @@ def test_actual_postgres_migration_chain_offline(monkeypatch):
     # Explicit fake offline target, no Secret Manager/DSN resolution or connection.
     monkeypatch.setattr('backend.config.settings.get_settings',lambda:Settings({'SLOPANOC_DATABASE_URL':'postgresql+asyncpg://unused:unused@127.0.0.1/unused'}))
     buffer=io.StringIO();cfg=Config(output_buffer=buffer);cfg.set_main_option('script_location','alembic')
-    command.upgrade(cfg,'head',sql=True)
+    command.upgrade(cfg,'d3f8b1c6a942:c16f4a8b2d90',sql=True)
     ddl=buffer.getvalue();assert 'CREATE TABLE observability_run_status' in ddl
     assert 'TIMESTAMP WITH TIME ZONE' in ddl
     assert 'DROP TABLE sessions' not in ddl and 'unused:unused' not in ddl

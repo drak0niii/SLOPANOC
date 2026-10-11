@@ -1,12 +1,13 @@
 import { lazy, Suspense } from "react";
 import { RouterProvider, useRouter } from "./lib/router";
-import { APP_ROUTE } from "./lib/routes";
+import { APP_ROUTE, OBSERVABILITY_ROUTE } from "./lib/routes";
 import { NotFoundPage } from "./components/NotFoundPage";
 import { AppStateProvider } from "./state/AppState";
 
 const LandingPage = lazy(() =>
   import("./components/landing/LandingPage").then((module) => ({ default: module.LandingPage })),
 );
+const ObservabilityResourcesPage = lazy(() => import("./components/observability/ObservabilityResourcesPage"));
 const ProductApp = lazy(() => import("./ProductApp"));
 
 function RouteFallback() {
@@ -20,6 +21,7 @@ function RouteFallback() {
 function Routes() {
   const { pathname } = useRouter();
 
+  if (pathname === OBSERVABILITY_ROUTE || pathname.startsWith(`${OBSERVABILITY_ROUTE}/`)) return <ObservabilityResourcesPage />;
   if (pathname === APP_ROUTE || pathname.startsWith(`${APP_ROUTE}/`)) {
     return <ProductApp />;
   }

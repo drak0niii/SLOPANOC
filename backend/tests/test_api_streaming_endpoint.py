@@ -23,6 +23,8 @@ import asyncio
 import json
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("local_application_identity")
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 

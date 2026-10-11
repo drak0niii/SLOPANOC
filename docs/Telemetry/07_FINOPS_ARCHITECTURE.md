@@ -173,3 +173,13 @@ Primary SLOPANOC reporting currency: EUR.
 Retain native provider currency and conversion metadata where conversion is performed.
 
 Accounting durability is defined in `20_FINOPS_ACCOUNTING_DURABILITY.md`.
+
+## Hybrid accounting lineage
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) preserves M10 runtime physical-attempt/token ledger, M11 Detailed Usage Cost
+and Pricing exports, M12 reconciliation/allocation, M13 unit economics and M14
+budgets/forecast/anomalies. Durable reference events trigger downstream projections;
+operational traces/Pub/Sub are not another usage ledger. Jobs run in background and
+publish generations; GET never executes them. Billing is not token authority.
+Near-real-time estimates and delayed actual billing remain separate. Export setup
+is a future specifically approved operation, not performed by this pass.

@@ -125,7 +125,7 @@ APP_NAME = "slopanoc-api"
 # predate per-request identity resolution) -- production route handlers in
 # app.py always pass an explicit, resolved `user_id` and never rely on
 # this default.
-DEFAULT_USER_ID = "api-user"
+from backend.authentication import DEFAULT_DEV_USER_ID as DEFAULT_USER_ID
 
 
 def create_session_service_backend(settings: Optional[Settings] = None) -> BaseSessionService:
@@ -173,6 +173,8 @@ class ApiSessionService:
         # `get_session_service()`'s singleton below.
         self._adk = adk_session_service if adk_session_service is not None else InMemorySessionService()
         self._coordinator = coordinator if coordinator is not None else SessionExecutionCoordinator()
+        from backend.execution_audit.adk_handoff import install_handoff
+        install_handoff(self._adk)
 
     @property
     def adk_session_service(self) -> BaseSessionService:
@@ -206,6 +208,12 @@ class ApiSessionService:
             session_id=session_id,
             state={HAS_VISIBLE_MESSAGE_STATE_KEY: False},
         )
+        from backend.execution_audit.runtime import current
+        from backend.execution_audit.journal import event
+        runtime=current()
+        if runtime:
+            await runtime.observe(event("session.created",runtime.journal.environment,session_id,session_id=session_id,
+                consistency_class="C",outcome="CREATED"))
         return session_id
 
     @operation(Category.SESSION)
@@ -218,6 +226,17 @@ class ApiSessionService:
         session = await self._adk.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
         if session is None:
             raise not_found("No session was found with that id.")
+        from backend.execution_audit.runtime import current
+        from backend.execution_audit.adk_handoff import reconcile
+        runtime=current()
+        if runtime:
+            try:await reconcile(session,runtime.journal)
+            except Exception:runtime.capture_failures+=1
+            from backend.execution_audit.journal import event
+            from backend.execution_audit.runtime import references
+            refs=references();refs['session_id']=session.id
+            await runtime.observe(event('session.accessed',runtime.journal.environment,str(uuid.uuid4()),
+                consistency_class='C',outcome='ACCESSED',safe_target_reference=session.id,**refs))
         return session
 
     async def session_exists(self, session_id: str, user_id: str = DEFAULT_USER_ID) -> bool:

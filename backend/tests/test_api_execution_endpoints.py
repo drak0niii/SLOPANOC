@@ -14,6 +14,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("local_application_identity")
 from fastapi.testclient import TestClient
 
 from backend.api import execution_service

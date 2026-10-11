@@ -83,26 +83,31 @@ export interface TimelinePage {
 }
 export interface HealthView {
     persistence: HealthState;
-    writer_scope: 'process_local';
+    writer_scope: 'process_local' | 'process_local_anoc_unavailable';
     durable_scope: 'authorized_environments';
     as_of: string;
-    pending: number;
-    admitted: number;
-    terminal_pending: number;
+    pending: number | null;
+    admitted: number | null;
+    terminal_pending: number | null;
     stale_records?: number;
     exporter_state: HealthState;
-    collector_configured: boolean;
+    collector_configured: boolean | null;
+    read_plane_state?: HealthState;
+    anoc_state?: HealthState;
+    collector_state?: HealthState;
+    archive_state?: 'unknown';
+    source_freshness?: 'unknown';
     last_success?: string;
-    accepted: number;
-    coalesced: number;
-    attempts: number;
-    persisted: number;
-    failed: number;
-    retries: number;
-    rejected: number;
-    terminal_unpersisted: number;
-    shutdown_incomplete: number;
-    invalid: number;
+    accepted: number | null;
+    coalesced: number | null;
+    attempts: number | null;
+    persisted: number | null;
+    failed: number | null;
+    retries: number | null;
+    rejected: number | null;
+    terminal_unpersisted: number | null;
+    shutdown_incomplete: number | null;
+    invalid: number | null;
 }
 export interface EffectiveConfiguration {
     setting: string;

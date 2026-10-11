@@ -9,6 +9,8 @@ import logging
 from typing import Any
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("local_application_identity")
 from fastapi.testclient import TestClient
 
 from backend.agents.incident_manager.agent import incident_manager

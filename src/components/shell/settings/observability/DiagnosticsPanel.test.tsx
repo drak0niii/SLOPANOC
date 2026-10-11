@@ -13,7 +13,7 @@ it('operator diagnoses stalled Power Automate dependency through list/detail/tim
     expect(screen.getByText(technical.trace_id)).toBeInTheDocument();
     await screen.findByText(/Earlier diagnostic events were truncated/);
     expect(screen.getAllByText(/Power Automate gateway/).length).toBeGreaterThan(0);
-    expect(screen.getByText('Operational timeline')).toBeInTheDocument();
+    expect(screen.getByText('Execution Timeline')).toBeInTheDocument();
     expect(fetcher.mock.calls.some(c => String(c[0]).endsWith('/timeline?limit=25'))).toBe(true);
 });
 it('preserves RUNNING + STALE without synthesizing failure or timeout', async () => {

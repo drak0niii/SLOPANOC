@@ -35,6 +35,8 @@ from typing import Any, Optional
 from google.adk.tools import ToolContext
 
 from backend.approval.policy_gate import authorize_write
+from backend.execution_audit import egress
+from backend.execution_audit.tool_adapter import observed_sync_tool
 from backend.approval.schemas import ApprovalDenialReason, WriteOperation
 from backend.approval.service import consume_proposal
 from backend.gateway.power_automate_client import PowerAutomateClient
@@ -66,6 +68,7 @@ def _denial_result(reason: Optional[ApprovalDenialReason]) -> dict[str, Any]:
     return {"error": SafeError(error_code="authorization_error", user_message=message).to_dict()}
 
 
+@observed_sync_tool
 def teams_create_chat(
     title: str,
     members: list[str],
@@ -95,12 +98,16 @@ def teams_create_chat(
 
     state = tool_context.state if tool_context is not None else {}
     authorization = authorize_write(WriteOperation.TEAMS_CREATE_CHAT.value, payload, state)
+    try:
+        audit_handle=egress.decision('teams.createChat',authorization)
+    except SafeErrorException as exc:
+        return {"error":exc.safe_error.to_dict()}
     if not authorization.authorized:
         return _denial_result(authorization.reason)
 
     client = PowerAutomateClient()
     try:
-        raw = client.create_chat(payload["title"], payload["members"])
+        raw = egress.dispatch(audit_handle,lambda:client.create_chat(payload["title"], payload["members"]))
     except SafeErrorException as exc:
         # A definite gateway failure -- the proposal stays approved
         # (unconsumed) so a legitimate retry of the SAME approved action
@@ -112,9 +119,11 @@ def teams_create_chat(
     result = _parse_create_chat_result(raw)
 
     consume_proposal(authorization.proposal.proposal_id, state)
+    egress.completed(audit_handle)
     return result
 
 
+@observed_sync_tool
 def teams_send_message(
     chat_id: str,
     message: str,
@@ -142,16 +151,21 @@ def teams_send_message(
 
     state = tool_context.state if tool_context is not None else {}
     authorization = authorize_write(WriteOperation.TEAMS_SEND_MESSAGE.value, payload, state)
+    try:
+        audit_handle=egress.decision("teams.sendMessage",authorization)
+    except SafeErrorException as exc:
+        return {"error":exc.safe_error.to_dict()}
     if not authorization.authorized:
         return _denial_result(authorization.reason)
 
     client = PowerAutomateClient()
     try:
-        client.send_message(payload["chatId"], payload["message"])
+        egress.dispatch(audit_handle,lambda:client.send_message(payload["chatId"], payload["message"]))
     except SafeErrorException as exc:
         return {"error": exc.safe_error.to_dict()}
 
     consume_proposal(authorization.proposal.proposal_id, state)
+    egress.completed(audit_handle)
     return {"status": "executed", "chatId": payload["chatId"]}
 
 

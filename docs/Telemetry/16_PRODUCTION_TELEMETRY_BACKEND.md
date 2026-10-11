@@ -241,9 +241,9 @@ Component review: contrib google_cloud_storage exporter v0.160.0 metadata declar
 traces DEVELOPMENT and logs ALPHA, distribution contrib. It has insufficient
 stability to be a mandatory production architecture dependency. Source:
 https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.160.0/exporter/googlecloudstorageexporter/metadata.yaml .
-Community/beta Pub/Sub alternatives are optional evaluations only, requiring pinned
-version, compatibility/failure validation, security review and explicit architecture
-approval. Neither is silently substituted for stable OTLP -> bridge -> GCS.
+The user-approved doc 26 operational Pub/Sub branch is additional to the archive,
+with pinned compatibility/privacy/failure qualification required before activation.
+It is never substituted for stable OTLP -> bridge -> GCS.
 
 ### Bridge assembly, idempotency and completeness
 
@@ -378,3 +378,29 @@ only in that approved production-validation sequence. M15 may be IMPLEMENTED AND
 LOCALLY VALIDATED without it; the full production definition of done still requires
 it. Local IaC bucket/lifecycle/IAM/bridge/routing authoring is allowed only on future
 M15 implementation authorization. No deployment/cloud mutation in this planning repair.
+
+## Independent operational reader deployment target
+
+Doc [25](25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md) adds a separate Observability
+Read API runtime consuming durable/published data and protected archive reads.
+ANOC telemetry producers → OTLP → Collector → Cloud Trace/Monitoring/Logging
+remain unchanged; exceptional archive transport/classification/retention remain
+unchanged. Reader is neither Collector, archive bridge/writer nor accounting worker.
+Collector/exporter/ANOC health must come from confirmed producer sources, not the
+reader process. Independent health/compute and bounded read-only archive access
+are future deployment requirements, not implemented/live-validated resources.
+
+## Approved Collector operational Pub/Sub branch
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) refines Operational Telemetry Pub/Sub to OPTIONAL / SCALE-TRIGGERED, disabled
+and restricted to a curated measured subset; full unsampled OTLP replication is
+not required for Phase 1. The pinned
+Google 0.160.0 manifest includes googlecloudpubsub exporter; pin unchanged. Branch
+is optional target design, not enabled. Native exporter emits OTLP protobuf with
+CloudEvents attributes, not internal JSON envelopes. Future safe projector adapter
+normalizes deterministic record identities; ce-id alone is not rebatching dedup.
+Fan out from the existing environment/scope/redaction gate before cloud/archive
+tail decisions. Independent bounded exporter queue preserves Cloud Trace/archive
+semantics and keeps operational stages from waiting for terminal tail classification.
+The dormant example/local nop composer cannot publish. This does not substitute
+Pub/Sub for stable OTLP -> exceptional archive bridge -> dedicated GCS.

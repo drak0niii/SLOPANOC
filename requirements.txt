@@ -48,6 +48,9 @@ google-adk==1.33.0
 # M3 instance-local physical-attempt adapter compatibility pin.
 google-genai==1.75.0
 google-cloud-secret-manager==2.28.0
+# Hybrid audit: existing compatible Google client cohort, lazy opt-in only.
+google-cloud-pubsub==2.42.0
+google-auth==2.60.0
 # Private GCS storage for durable chat attachment binaries (POST-5.1 B1) --
 # backend/attachments/storage.py. Metadata/reference only reaches Cloud
 # SQL; the binary itself lives here.

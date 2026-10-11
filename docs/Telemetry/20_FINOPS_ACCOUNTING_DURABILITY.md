@@ -137,3 +137,13 @@ Target:
 - effectively 100% usage-ledger coverage.
 
 Any gap is visible.
+
+## Critical audit outbox and accounting recovery are distinct
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) adds same-transaction downstream audit delivery for authoritative accounting
+records. The event outbox does not replace existing M10 provider admission/physical
+attempt/inbox/debt/ledger recovery; it cannot recreate usage never durably captured.
+Append a reference event in the owning critical transaction, never commit + publish.
+Publisher confirmation/replay changes delivery state only, not ledger history.
+Trace/Collector/Pub/Sub sampling or loss cannot sample accounting. Immutable
+corrections/reversals and separate estimated/billed values remain mandatory.

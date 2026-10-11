@@ -10,6 +10,8 @@ this suite.
 from __future__ import annotations
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("local_application_identity")
 from fastapi.testclient import TestClient
 
 from backend.api.app import app

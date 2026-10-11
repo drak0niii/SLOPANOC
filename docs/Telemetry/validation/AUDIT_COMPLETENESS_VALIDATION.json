@@ -1,0 +1,38 @@
+{
+  "scope": "audit completeness and isolated database rehearsal",
+  "date": "2026-10-11",
+  "full_auditability": "NO",
+  "new_business_owners": 0,
+  "new_event_types": 0,
+  "new_migrations": 0,
+  "backend_checks_passed": 766,
+  "frontend_tests_passed": 1044,
+  "frontend_test_files": 74,
+  "frontend_build": "PASS",
+  "postgresql_rehearsal": "PASS",
+  "migration_heads": [
+    "d26a1b7c9e40"
+  ],
+  "M16": "INCOMPLETE",
+  "C41": "NOT PASS",
+  "C42": "NOT PASS",
+  "provisioning": "NO",
+  "cloud_shared_changes": "NONE",
+  "files_sha256": {
+    ".agent/OBSERVABILITY_EXECUTION.md": "5526e101e78a6233bf9b2d04ff6133293bd35d0cf6aebda79a8868a694463b5f",
+    "scripts/observability/rehearse_hybrid_postgres.py": "97914c92c9523bc0b71b94a3a45899ff6d1cb48fcff37c77424f8347ee038068",
+    "scripts/observability/measure_audit_categories.py": "7b6db9ddf56229b1a227c8da67ef77c18d674a884d0ee661a69fda165078c11f",
+    "backend/tests/test_audit_completeness_contract.py": "5b66e8f5694d7cbb72ff0cefb089ca62e471a0af3e2ce6ec655b1d0c5c5b5b79",
+    "docs/Telemetry/AUDIT_COVERAGE_MATRIX.md": "abb87816c5a467fbcecec33374d6026657599afc8e9c01fca0ccd8c0c3d19112",
+    "docs/Telemetry/AUDIT_OWNERSHIP_GAP_DESIGN.md": "f871d71f473c2ad84f062e2facc8c8e713bc87430fe9149e636bc261b519132c",
+    "docs/Telemetry/HYBRID_READER_IDENTITY_CONTRACT.md": "4e9fa3b143c635bb29a96085e2e8f738f0c393fd14ce9abaab1c690b0de7dd35",
+    "docs/Telemetry/HYBRID_RECOVERY_REQUIREMENTS.md": "500672d7c50d665481883a23ec5c486e1e5c6a633bb45af8fdabce6b2ebb8cda",
+    "docs/Telemetry/HYBRID_PHASE1_PRODUCTION_READINESS.md": "92007f04b1023d98f3c57bdec42a6089cfcc609d87213a15a78e69bae8c84ad6",
+    "docs/Telemetry/GCP_HYBRID_OBSERVABILITY_RESOURCE_MANIFEST.md": "ef60834333777181532adf06349e1a5c1f07f2f9bf517c6f6584dac083ffc277",
+    "docs/Telemetry/README.md": "0f49677884109626ecc17421e1e2fca0bb04c6243c3a6e33dca03d8124b090d1",
+    "docs/Telemetry/ALL_IN_ONE.md": "3981e2758a6ac6e4af908d1ad06897e1ec26572829666cba0c815db789fcc2b6",
+    "docs/Telemetry/validation/HYBRID_POSTGRES_REHEARSAL.json": "e2c0b02aaca97e21f585ae85106fbaa1f2136693442ee98e435a57efdaf59b61",
+    "docs/Telemetry/validation/HYBRID_RECOVERY_METADATA.json": "b394c30b4abb0559237bc74f0cc6810cce0d0d588aa061095d08c7d0214a1cf3",
+    "docs/Telemetry/validation/AUDIT_CATEGORY_MEASUREMENT.json": "edc83cf7db1d4b976d8010d5c1eda0c5c7d72969dd95b621280f464ad1fbb888"
+  }
+}

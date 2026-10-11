@@ -241,3 +241,28 @@ The backend generates/validates trusted `run_id` independently.
 
 Pin OpenTelemetry SDK and semantic-convention versions.
 No silent upgrade is permitted.
+
+## Critical durability versus asynchronous observation
+
+Use [26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) to classify boundaries before integrating. Existing asynchronous SDK
+work remains the operational lane; no synchronous ANOC Pub/Sub client. Critical
+run/terminal/provider/usage/approval/action records and required audit delivery must
+use actual owning SQL transaction + outbox. M7 coalesced progress is not sufficient
+for critical audit completeness. No production transaction wiring is added in this
+pass. Publisher failures retry event bytes only, never agents/models/tools/commands.
+
+
+## Local Phase-1 hybrid refinement — 2026-10-11
+
+[Doc 26](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) defines the locally implemented
+authoritative owner transaction → audit/outbox → bounded publisher → fake transport
+→ projector → durable projection → independent GET reader. Additive revision
+`d26a1b7c9e40` descends from `c16f4a8b2d90`; no shared schema was changed.
+`GET /api/observability/hybrid/activity` exposes bounded safe lifecycle/freshness/debt
+DTOs with server RBAC/environment scope; no worker runs on reads. M15 policy applies
+to typed audit fields; projections do not duplicate M10–M14 financial truth.
+Operational Telemetry Pub/Sub is **OPTIONAL / SCALE-TRIGGERED**, disabled, limited
+to a future curated measured subset. Full unsampled OTLP replication is not Phase-1
+minimum. Existing OTLP/cloud/archive pathways remain unchanged. Local SQLite/fake
+validation is not PostgreSQL/Pub/Sub qualification. M16 remains INCOMPLETE; C41/C42
+are not PASS; M17 remains UNSTARTED. No cloud mutation or deployment authorization.

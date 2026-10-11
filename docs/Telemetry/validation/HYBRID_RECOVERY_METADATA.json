@@ -1,0 +1,19 @@
+{
+  "scope": "read-only GCP metadata; no customer data",
+  "inspected_date": "2026-10-11",
+  "project": "pr-msn-dev-gl-slopai-01",
+  "project_number": "995771529960",
+  "instance": "sloc-anoc-sandbox01",
+  "region": "europe-west4",
+  "connection_name": "pr-msn-dev-gl-slopai-01:europe-west4:sloc-anoc-sandbox01",
+  "database_version": "POSTGRES_18",
+  "edition": "ENTERPRISE",
+  "automated_backups_enabled": false,
+  "pitr_enabled": false,
+  "retained_backups_configured": 7,
+  "retention_unit": "COUNT",
+  "transaction_log_retention_days_configured": 7,
+  "backup_metadata_entries_returned": 0,
+  "verified_recovery_point": false,
+  "cloud_changes": "NONE"
+}

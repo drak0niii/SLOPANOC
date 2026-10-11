@@ -302,13 +302,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     behavior closes only M1-owned telemetry after `yield`; the shared
     model client remains owned by its existing lifecycle.
 
+    Shared auth configuration is validated before all lifecycle work.
     POST-A5 refinement (Track A): `validate_runtime_database_
-    configuration` runs FIRST, before warm-up -- unlike warm-up this is
+    configuration` runs before warm-up -- unlike warm-up this is
     NOT best-effort; a `ConfigurationError` here is intentionally allowed
     to propagate and abort startup (see runtime_database_policy.py's own
     docstring). Only a sanitized dialect-name pair is ever logged, never
     a resolved URL/credential.
     """
+    from backend.authentication import validate_identity_configuration
+    app.state.authentication_environment = get_settings().observability_config.otel_environment
+    validate_identity_configuration(app.state.authentication_environment)
     session_backend_name, knowledge_backend_name = validate_runtime_database_configuration(get_settings())
     # M1: use this sole lifecycle, after the existing mandatory DB gate.
     # Lazy runtime import preserves disabled startup and inert contract imports.
@@ -323,16 +327,25 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     from backend.observability.repository import Repository
     projection = database = repository = None
     config = get_settings().observability_config
+    from backend.observability.hybrid.config import HybridConfig
+    from backend.observability.hybrid.production import capture_for
+    hybrid_config = HybridConfig.from_environment()
+    hybrid_capture = capture_for(hybrid_config, config)
+    app.state.hybrid_audit_enabled = hybrid_capture is not None
+    progression_audit_store = None
+    execution_audit_runtime = None
     if config.projection_enabled:
         try:
             # Engine creation only. No create_all, connection or migration here.
             database = Database(get_settings().resolve_database_url())
-            repository = Repository(database.sessions, config)
+            repository = Repository(database.sessions, config, audit_capture=hybrid_capture)
             projection = Coordinator(repository, config)
             install_coordinator(projection)
             projection.start()
             telemetry.runtime.projection = projection
         except Exception:
+            if hybrid_capture is not None:
+                raise ValueError("Required hybrid durable run owner unavailable") from None
             from backend.observability.persistence_metrics import ProjectionHealth
             (projection.health if projection is not None else ProjectionHealth()).add('failed')
     from backend.observability.slo_rollups import Rollups
@@ -352,7 +365,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     accounting_database = accounting_ledger = None
     if config.finops_enabled:
         accounting_database = Database(get_settings().resolve_database_url())
-        accounting_ledger = Ledger(AccountingRepository(accounting_database.sessions),config,telemetry.runtime)
+        accounting_ledger = Ledger(AccountingRepository(accounting_database.sessions, audit_capture=hybrid_capture),config,telemetry.runtime)
         install_ledger(accounting_ledger)
         accounting_ledger.start()
     # M11 server composition may inject reviewed source adapters. No implicit client,
@@ -449,6 +462,19 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.observability_service.slo_provider,
         AccountingSource(accounting_ledger.repository) if accounting_ledger else None)
     try:
+        if hybrid_config.execution_journal_enabled:
+            if database is None or session_backend_name!="database":raise ValueError("Execution journal requires durable database owners")
+            from backend.execution_audit.journal import Journal
+            from backend.execution_audit.runtime import install
+            execution_audit_runtime=install(Journal(database.sessions,hybrid_config.environment),controlled_egress=hybrid_config.controlled_egress_enabled)
+            from backend.execution_audit.read import AuditReadRepository
+            app.state.observability_service.execution_audit_reads=AuditReadRepository(database.sessions)
+        # Existing Case-owned CAS store shares its canonical transaction with audit.
+        if hybrid_capture is not None:
+            from backend.cases.progression_store import get_case_progression_store
+            progression_audit_store = get_case_progression_store()
+            progression_audit_store.audit_capture = hybrid_capture
+            progression_audit_store.audit_environment = hybrid_config.environment
         _logger.info(
             "startup database_backend session=%s knowledge=%s",
             session_backend_name,
@@ -457,6 +483,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await warmup_shared_model()
         yield
     finally:
+        if execution_audit_runtime is not None:
+            from backend.execution_audit.runtime import release
+            release(execution_audit_runtime)
+        if progression_audit_store is not None:
+            progression_audit_store.audit_capture = None
+            progression_audit_store.audit_environment = None
         # close() has its own total deadline and daemon cleanup for exporters
         # lacking a timeout; no telemetry network wait on the event loop.
         import time

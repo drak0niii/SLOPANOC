@@ -16,7 +16,7 @@ it('invoice control changes server query and financial revocation clears money',
  fireEvent.change(screen.getByLabelText('Billing period basis'),{target:{value:'invoice'}});await screen.findByLabelText('Invoice month');
  expect(fetcher.mock.calls.some(c=>String(c[0]).includes('period_basis=invoice'))).toBe(true);
  fetcher.mockImplementation(async()=>new Response('{}',{status:403}));fireEvent.click(within(screen.getByRole('region',{name:'Actual billed amount'})).getByText('Refresh'));
- await screen.findByRole('alert');expect(screen.queryByText('Net including source tax: 0.08 EUR')).not.toBeInTheDocument();
+ expect((await screen.findAllByRole('alert')).length).toBe(3);expect(screen.queryByText('Net including source tax: 0.08 EUR')).not.toBeInTheDocument();
 });
 it('pricing outage does not hide actual billing',async()=>{
  vi.spyOn(globalThis,'fetch').mockImplementation(async input=>String(input).includes('pricing-status')?new Response('{}',{status:503}):new Response(JSON.stringify(String(input).includes('billing-health')?billingSources:{...billingSummary,amounts:[billingAmount]})));

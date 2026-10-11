@@ -1,0 +1,8 @@
+{
+  "command": "PYTHONPATH=. .venv/bin/pytest -q backend/tests/test_migration_reconciliation.py backend/tests/test_observability_migrations.py backend/tests/test_finops_runtime_migrations.py backend/tests/test_finops_billing_migrations.py backend/tests/test_finops_reconciliation_migrations.py backend/tests/test_finops_unit_economics_migrations.py backend/tests/test_finops_control_migrations.py",
+  "passed": 8,
+  "failed": 5,
+  "blocking_cause": "Missing pgvector import in immutable historical a1f3c9e07b21; no installation authorized",
+  "postgres_rehearsal": "NOT EXECUTED",
+  "git_diff_check": "PASS"
+}

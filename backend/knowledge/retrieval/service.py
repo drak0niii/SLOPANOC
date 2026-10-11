@@ -236,6 +236,21 @@ class KnowledgeRetrievalService:
         return [max(-1.0, min(1.0, float(v))) for v in values], "ok"
 
     async def retrieve(self, query: KnowledgeRetrievalQuery) -> KnowledgeRetrievalResult:
+        from backend.execution_audit.runtime import Activity
+        audit=Activity("retrieval",source_namespace="governed_knowledge",retrieval_type="hybrid" if self._dense_provider else "lexical")
+        await audit.start()
+        error=None;result=None
+        try:
+            result=await self._retrieve_observed(query)
+            return result
+        except BaseException as exc:
+            error=exc
+            raise
+        finally:
+            safe={} if result is None else {"candidate_count":result.candidate_count,"selected_count":len(result.items)}
+            await audit.finish(error,**safe)
+
+    async def _retrieve_observed(self, query: KnowledgeRetrievalQuery) -> KnowledgeRetrievalResult:
         # The optional whole-operation observer counts one retrieval, independently
         # of metadata/ranking stages. It cannot alter governed retrieval results.
         from contextlib import nullcontext

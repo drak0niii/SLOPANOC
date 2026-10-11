@@ -147,6 +147,13 @@ export const RESOURCES_MENU: MegaMenuConfig = {
       heading: "Learn",
       items: [
         {
+          id: "observability",
+          label: "Observability",
+          description: "Operational traces, reliability and published financial data.",
+          href: "/resources/observability",
+          icon: BookOpen,
+        },
+        {
           id: "documentation",
           label: "Documentation",
           description: "Guides for setting up projects, skills, and connectors.",

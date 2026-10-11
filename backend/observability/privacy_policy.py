@@ -90,9 +90,23 @@ for field in ('amount','currency','quantity','source_generation','pricing_versio
         frozenset({'accounting','billing','reconciliation','unit_economics','control'}),
         frozenset({Surface.DATABASE,Surface.API,Surface.UI}),'immutable_financial_contract','financial_data')
 
+# Phase-1 audit envelopes share M15 classification. Field registration never
+# admits arbitrary values: hybrid/contracts.py enforces the finite typed schema.
+HYBRID_IDENTITIES=frozenset({'event_id','run_id','turn_id','trace_id','aggregate_id','source_record_id','session_id','model_attempt_id','agent_execution_id','tool_execution_id','approval_id','action_id'})
+HYBRID_FIELDS=frozenset({'schema_version','event_class','event_type','environment','timestamp',
+    'producer','aggregate_type','aggregate_version','source_record_version','capture','status','agent','execution'})|HYBRID_IDENTITIES
+for field in HYBRID_FIELDS:
+    REGISTRY['hybrid_audit.'+field]=FieldPolicy('hybrid_audit.'+field,
+        DataClassification.RESTRICTED if field in HYBRID_IDENTITIES else DataClassification.SAFE,
+        frozenset({'turn','accounting'}),frozenset({Surface.DATABASE,Surface.EVENT}),
+        'versioned_typed_audit_envelope','technical_diagnostics' if field in HYBRID_IDENTITIES else None)
+
 def field_policy(field):
-    return REGISTRY.get(field, FieldPolicy(field, DataClassification.PROHIBITED,
-        frozenset(), frozenset(), 'deny'))
+    policy = REGISTRY.get(field)
+    if policy is not None:
+        return policy
+    return FieldPolicy(field, DataClassification.PROHIBITED,
+        frozenset(), frozenset(), 'deny')
 
 def attributes(values, *, producer, surface, environment):
     """Known typed projections first; unknown producers/environments fail closed.
@@ -109,7 +123,8 @@ def attributes(values, *, producer, surface, environment):
         return {}
     projected=safe_span_attributes(values)
     return {key:value for key,value in projected.items()
-        if producer in field_policy(key).producers and surface in field_policy(key).surfaces}
+        if (policy := REGISTRY.get(key)) is not None
+        and producer in policy.producers and surface in policy.surfaces}
 
 def exception(error, *, code, subsystem, operation):
     """Never accesses error args, str/repr, traceback, URL or SQL attributes."""
@@ -169,3 +184,12 @@ def contract_registry():
                     if cls.__name__=='LogRecord':surfaces=frozenset({Surface.LOG}) if not deny else frozenset()
                     result[key]=FieldPolicy(key,classification,frozenset({producer}),surfaces,key,capability)
     return result
+
+# Nested journal values are strict finite contracts; reference IDs remain restricted.
+from backend.execution_audit.contracts import Fact as _ExecutionFact
+for field in _ExecutionFact.model_fields:
+    restricted=field.endswith(('_id','_reference')) or field=='source_revision'
+    key='execution_audit.'+field
+    REGISTRY[key]=FieldPolicy(key,DataClassification.RESTRICTED if restricted else DataClassification.SAFE,
+        frozenset({'execution'}),frozenset({Surface.DATABASE,Surface.EVENT,Surface.API,Surface.UI}),
+        'finite_execution_fact','operational_metadata' if restricted else None)

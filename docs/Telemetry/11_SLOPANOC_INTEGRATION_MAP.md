@@ -124,3 +124,30 @@ Update frontend API/SSE client to propagate W3C `traceparent` while retaining se
 ## Quality/outcome store
 
 Add outcome persistence/repository integration according to `19_AI_QUALITY_OUTCOMES.md`.
+
+## Console/read-plane workstream integration (planned, not implemented)
+
+See [25](25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md) for the inspected source audit.
+Planned `backend/api/observability_app.py` uses FastAPI with an independent reader
+lifespan, shared GET handlers/security/read facades, and no business app/model
+warmup or producer workers. Split the mixed `observability_routes.py` composition;
+SSE receipts stay on ANOC. Reuse repository reads through read-only dependencies.
+
+Frontend integration points: `src/App.tsx`, `src/lib/routes.ts`, existing
+`AppShell`/`Sidebar` and Resources navigation, shared API transport/config,
+`src/api/observability.ts`, `observabilityPolicy.ts`, `finops.ts`, and existing
+Settings observability panels/contracts/polling. Add the independent read base
+without changing chat/SSE receipt routing or shared conversational state.
+Move operational panels rather than duplicate them; retain configuration in Settings.
+These are future targets, not files changed by this documentation pass.
+
+## Hybrid scaffolding and future transaction integration
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) places inert contracts in `backend/observability/hybrid/`, dormant Collector
+specification in `infra/observability/collector/hybrid-branch.yaml.example` and
+local no-op composer in `scripts/observability/hybrid_collector_config.py`.
+No business request/lifespan imports these modules. Future integration must locate
+actual critical transaction owners (including provider admission/usage and approval/
+dispatch persistence), add atomic outbox writes and use separate publisher/projector
+entrypoints. Existing M7 Coordinator is operational/coalescing, not audit authority.
+Existing GET-only read app/service and UI are reused; no parallel executor/ledger.

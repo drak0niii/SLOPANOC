@@ -13,8 +13,9 @@ CANONICAL = ('status','terminal_at','started_at','error_code','error_stage','ela
 
 
 class Repository:
-    def __init__(self, sessions, config):
+    def __init__(self, sessions, config, *, audit_capture=None):
         self.sessions, self.config = sessions, config
+        self.audit_capture = audit_capture
 
     def insert(self, session, model):
         from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -67,6 +68,9 @@ class Repository:
                     return 'persisted'
             ins = await session.execute(self.insert(session, RunRow).values(**values).on_conflict_do_nothing(index_elements=['run_id']))
             accepted = ins.rowcount == 1
+            new_run = accepted
+            new_turn_binding = accepted and state.turn_id is not None
+            new_terminal = accepted and state.status.value in TERMINALS
             if not accepted:
                 row = (await session.execute(select(RunRow).where(RunRow.run_id==state.run_id).with_for_update())).scalar_one()
                 if row.session_detached:
@@ -92,6 +96,7 @@ class Repository:
                     await session.execute(update(SummaryRow).where(SummaryRow.run_id==state.run_id).values(**changes))
                     accepted = True
                 else:
+                    new_turn_binding = row.turn_id is None and state.turn_id is not None
                     if row.started_at != state.started_at or row.session_id is not None and row.session_id != values['session_id']:
                         return 'identity_conflict'
                     if row.turn_id is not None and (row.turn_id != state.turn_id or row.turn_id_origin != state.turn_id_origin):
@@ -100,6 +105,7 @@ class Repository:
                         RunRow.producer_instance_id==state.producer_instance_id,
                         RunRow.state_version<state.state_version, RunRow.status.not_in(TERMINALS)).values(**values))
                     accepted = result.rowcount == 1
+                    new_terminal = accepted and state.status.value in TERMINALS
             if not accepted:
                 return 'stale'
             if state.status in TERMINAL_STATUSES:
@@ -107,6 +113,21 @@ class Repository:
                 summary['session_detached'] = values.get('session_detached',False)
                 summary['expiry_at'] = expiry(state,self.config)
                 await session.execute(self.insert(session, SummaryRow).values(**summary).on_conflict_do_nothing(index_elements=['run_id']))
+            if self.audit_capture is not None:
+                from .hybrid.capture import make_event
+                if new_run and state.status.value=='RUNNING':
+                    await self.audit_capture.append(session,make_event('run.accepted',state.environment,
+                        'run',state.run_id,1,state.started_at,source_version=state.state_version,
+                        status='RUNNING',run_id=state.run_id,turn_id=state.turn_id,trace_id=state.trace_id,session_id=state.session_id))
+                if new_terminal:
+                    await self.audit_capture.append(session,make_event('run.terminal',state.environment,
+                        'run',state.run_id,2,state.terminal_at,source_version=state.state_version,
+                        status=state.status,run_id=state.run_id,turn_id=state.turn_id,trace_id=state.trace_id,session_id=state.session_id))
+                if new_turn_binding:
+                    await self.audit_capture.append(session,make_event('turn.bound',state.environment,
+                        'run',state.run_id,1,state.last_progress_at,source_version=state.state_version,
+                        run_id=state.run_id,turn_id=state.turn_id,trace_id=state.trace_id,
+                        session_id=state.session_id))
             # Publisher sends a cumulative bounded significant timeline, never raw traces.
             await session.execute(delete(EventRow).where(EventRow.run_id==state.run_id))
             if state.events:

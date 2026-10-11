@@ -15,7 +15,7 @@ async def test_additive_frozen_migration_head_parity_preserves_source_sentinels(
     spec=importlib.util.spec_from_file_location('m13','alembic/versions/f13a7c9d2e61_finops_unit_economics.py')
     m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
     assert m.down_revision=='e12c6d8a4b50'
-    cfg=Config();cfg.set_main_option('script_location','alembic');assert ScriptDirectory.from_config(cfg).get_heads()==['b15e3f7a9c81']
+    cfg=Config();cfg.set_main_option('script_location','alembic');assert ScriptDirectory.from_config(cfg).get_heads()==['e27b2c8d0f51']
     db=Database('sqlite+aiosqlite:///'+str(tmp_path/'m13.db'),isolated_test=True)
     try:
         async with db.engine.begin() as c:

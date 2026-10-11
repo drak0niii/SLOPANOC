@@ -1,0 +1,41 @@
+{
+  "validation_mode": "AST historical metadata + Alembic graph; actual unchanged forward modules and actual offline env",
+  "full_module_import_gate": "BLOCKED: pgvector missing",
+  "two_heads_before_merge": [
+    "d3f8b1c6a942",
+    "b15e3f7a9c81"
+  ],
+  "final_head": "c16f4a8b2d90",
+  "revision_count": 17,
+  "forward_path": [
+    "7c4e9a2d1f05",
+    "9f71c2a64e08",
+    "b37e90a14c62",
+    "c10a8f6e2d41",
+    "d11b4a8c9e32",
+    "e12c6d8a4b50",
+    "f13a7c9d2e61",
+    "a14d2e6f8c70",
+    "b15e3f7a9c81",
+    "c16f4a8b2d90"
+  ],
+  "excluded_history": [
+    "d2081e4fd455",
+    "b85242503972",
+    "3e59584b1012",
+    "9b6df6490c0e",
+    "a1f3c9e07b21",
+    "c7e2a4f9b83d",
+    "d3f8b1c6a942"
+  ],
+  "historical_hashes": {
+    "3e59584b1012": "3eb366bb85f5bb7299a51018cf5263a5b0b36d17d43ce5ec8f06ead04b52b13d",
+    "9b6df6490c0e": "083e55d199cbe536ed75021f60bf603d19114f6e8cd4c8266106ee1dac81b508",
+    "a1f3c9e07b21": "6d2393ff94157bf844948f5710d35f631d84e59b6172e011f6eb155d4940ab15",
+    "b85242503972": "d5bc0d3494886291562af5c2bc43c278176afa039ab3600baf71a987f7a90ea5",
+    "c7e2a4f9b83d": "69a71d1ad83cb64410897b856772fbfa7b2dc26ffc80b9e6a6fd5b0fdd076d9a",
+    "d2081e4fd455": "f249bd46ba1e94ddbe7c34976c73369a9481c49a09b37cf26b18f4dd1189f823",
+    "d3f8b1c6a942": "d9cc49147cc4d38cc357891a6e50808a714599013f6e2e9d0ff073064c45fd67"
+  },
+  "sql_sha256": "6ad8cda0e1b88a25620dd9153eaa23959dde1419dcbea8d1202195f2345e409a"
+}

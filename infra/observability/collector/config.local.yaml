@@ -721,7 +721,7 @@ processors:
       - set(unit, "s") where name == "slopanoc.turn.duration"
       - set(unit, "s") where IsMatch(name, "^(slopanoc[.]accounting[.](admission_duration|capture_duration)|slopanoc[.]finops[.](billing|pricing|focus)[.](ingestion_duration|source_age)|slopanoc[.]finops[.]reconciliation[.](duration_seconds|lag_seconds))$")
   tail_sampling/cloud:
-    decision_wait: ${env:TAIL_DECISION_WAIT:-2s}
+    decision_wait: ${env:TAIL_DECISION_WAIT:-240s}
     num_traces: 256
     expected_new_traces_per_sec: 32
     policies:
@@ -740,7 +740,7 @@ processors:
       probabilistic:
         sampling_percentage: 100  # M15 production reduction is provisional and disabled.
   tail_sampling/archive:
-    decision_wait: ${env:TAIL_DECISION_WAIT:-2s}
+    decision_wait: ${env:TAIL_DECISION_WAIT:-240s}
     num_traces: 256
     expected_new_traces_per_sec: 32
     policies:

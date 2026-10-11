@@ -2,6 +2,7 @@
 from opentelemetry import trace
 from opentelemetry.semconv.schemas import Schemas
 from enum import Enum
+from types import MappingProxyType
 from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor, Event
 from opentelemetry.trace import Status, SpanContext, TraceState
 from opentelemetry.sdk.util.instrumentation import InstrumentationScope
@@ -39,6 +40,8 @@ class Operation(str, Enum):
     PERSISTENCE = 'persistence.final_answer'
     DELIVERY = 'sse.complete'
 
+SPAN_NAMES = frozenset(v.value for enum in (Stage, Operation, OperationalEvent) for v in enum)
+
 # M2 emits only these lifecycle observations. Model/tool/dependency stages are
 # registered M0 vocabulary but are not enabled as events by M2.
 TURN_EVENTS = frozenset({
@@ -70,22 +73,32 @@ EXECUTION_EVENTS = frozenset({Stage.AGENT_STARTED, Stage.AGENT_COMPLETED, Stage.
     Stage.PROCEDURE_ACTION_RESOLVED, Stage.COMMAND_AUTHORITY_COMPLETED})
 
 
+_MODEL_SPANS = frozenset({Operation.MODEL_REQUEST.value, Operation.MODEL_VALIDATION.value})
+_EXECUTION_SPANS = frozenset({Operation.AGENT.value, Operation.TOOL.value})
+_PRODUCERS = MappingProxyType({
+    **dict.fromkeys((*_MODEL_SPANS,Operation.MODEL.value),'model'),
+    Operation.AGENT.value:'agent',Operation.TOOL.value:'tool',
+    **dict.fromkeys((Operation.HTTP.value,Operation.DB.value,Operation.STORAGE.value,
+        Operation.SECRET.value,Operation.CONNECTION.value,Operation.TRANSACTION.value),'dependency')})
+_EVENT_NAMES = (frozenset(v.value for v in TURN_EVENTS),frozenset(v.value for v in MODEL_EVENTS),
+    frozenset(v.value for v in EXECUTION_EVENTS))
+_STAGE_NAMES = MappingProxyType({v.value:v.value for v in Stage})
+
+
 def safe_events(events, *, model=False, execution=False):
+    from .reliability_contract import EVENTS, project
+    allowed=_EVENT_NAMES[1 if model else 2 if execution else 0]
     result = []
     for event in events:
-        from .reliability_contract import EVENTS, project
         if event.name in EVENTS and not model and not execution:
             result.append(Event(event.name, attributes=project(event.attributes or {}), timestamp=event.timestamp))
             continue
-        try:
-            stage = Stage(event.name)
-        except (ValueError, TypeError):
-            continue
-        if stage not in (MODEL_EVENTS if model else EXECUTION_EVENTS if execution else TURN_EVENTS):
-            continue
+        try:name=_STAGE_NAMES.get(event.name)
+        except TypeError:continue
+        if name not in allowed:continue
         attrs = safe_span_attributes(event.attributes)
-        attrs['slopanoc.stage'] = stage.value
-        result.append(Event(stage.value, attributes=attrs, timestamp=event.timestamp))
+        attrs['slopanoc.stage'] = name
+        result.append(Event(name, attributes=attrs, timestamp=event.timestamp))
     return tuple(result)
 
 
@@ -116,6 +129,26 @@ def current_trace_ids():
     return (format(context.trace_id, '032x'), format(context.span_id, '016x')) if context.is_valid else (None, None)
 
 
+def set_final_attributes(span, attributes):
+    """Avoid SDK revalidation of unchanged model correlation fields.
+
+    Use only immediately before ending a span. The complete final span still
+    passes the sink's typed/privacy projection.
+    Foreign/no-op implementations retain their normal set_attributes behavior.
+    """
+    from opentelemetry.sdk.trace import Span
+    if isinstance(span, Span):
+        current = dict(span.attributes or {})
+        # SDK has no public per-span limit accessor. Read the installed SDK's
+        # limit conservatively; missing/changed internals disable optimization.
+        # At capacity, preserve original update order and eviction semantics.
+        limit = getattr(getattr(span, '_limits', None), 'max_span_attributes', 0)
+        if limit is None or len(current.keys() | attributes.keys()) <= limit:
+            attributes = {key:value for key,value in attributes.items()
+                          if key not in current or current[key] != value}
+    span.set_attributes(attributes)
+
+
 class SafeSpanProcessor(SpanProcessor):
     def __init__(self, queue, resource, runtime=None):
         self.queue, self.resource = queue, resource
@@ -127,7 +160,7 @@ class SafeSpanProcessor(SpanProcessor):
     def on_start(self, span, parent_context=None):
         if not span.instrumentation_scope or span.instrumentation_scope.name != SCOPE:
             return
-        if span.name not in {v.value for v in Stage}|{v.value for v in Operation}|{v.value for v in OperationalEvent}:
+        if span.name not in SPAN_NAMES:
             with self._lock:
                 state=self._populations.get(span.context.trace_id)
                 if state is not None:state['overflow']=True
@@ -152,16 +185,14 @@ class SafeSpanProcessor(SpanProcessor):
         if not span.instrumentation_scope or span.instrumentation_scope.name != SCOPE:
             self.queue.health.add('trace', 'filtered')
             return
-        if span.name not in {x.value for x in Stage} | {x.value for x in OperationalEvent} | {x.value for x in Operation}:
+        if span.name not in SPAN_NAMES:
             self.queue.health.add('trace', 'filtered')
             return
         from .privacy_policy import attributes as project_attributes, Surface
-        producer = 'model' if span.name in {Operation.MODEL_REQUEST.value,Operation.MODEL_VALIDATION.value,Operation.MODEL.value} else (
-            'agent' if span.name == Operation.AGENT.value else 'tool' if span.name == Operation.TOOL.value else
-            'dependency' if span.name in {Operation.HTTP.value,Operation.DB.value,Operation.STORAGE.value,Operation.SECRET.value,Operation.CONNECTION.value,Operation.TRANSACTION.value} else 'turn')
+        producer = _PRODUCERS.get(span.name,'turn')
         attributes = project_attributes(span.attributes,producer=producer,surface=Surface.TRACE,
             environment=self.resource.attributes.get('deployment.environment.name'))
-        events = safe_events(span.events, model=span.name in {Operation.MODEL_REQUEST.value, Operation.MODEL_VALIDATION.value}, execution=span.name in {Operation.AGENT.value, Operation.TOOL.value})
+        events = safe_events(span.events, model=span.name in _MODEL_SPANS, execution=span.name in _EXECUTION_SPANS)
         with self._lock:
             state = self._populations.get(span.context.trace_id)
             if state is None and (span.parent is None or span.parent.is_remote or span.name==Operation.TURN.value):
@@ -200,7 +231,7 @@ class SafeSpanProcessor(SpanProcessor):
                     self._populations.pop(span.context.trace_id, None)
         safe = ReadableSpan(name=span.name, context=safe_context(span.context), parent=safe_context(span.parent),
             resource=self.resource, attributes=attributes,
-            events=safe_events(span.events, model=span.name in {Operation.MODEL_REQUEST.value, Operation.MODEL_VALIDATION.value}, execution=span.name in {Operation.AGENT.value, Operation.TOOL.value}), links=(), kind=span.kind,
+            events=events, links=(), kind=span.kind,
             status=Status(span.status.status_code), start_time=span.start_time,
             end_time=span.end_time, instrumentation_scope=safe_scope())
         self.queue.put(safe)

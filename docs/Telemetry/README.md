@@ -42,6 +42,8 @@ The goal is not "more logging". The finished system must answer, for every promp
 23. `22_RELEASE_CONFIG_CORRELATION_CI.md`
 24. `23_TERRAFORM_AND_OBSERVABILITY_AS_CODE.md`
 25. `24_CONTINUOUS_PROFILING.md`
+26. `25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md`
+27. `26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md`
 
 `ALL_IN_ONE.md` is generated from all files for agents that prefer a single context document.
 
@@ -131,3 +133,44 @@ run_id: 7bd...
 ```
 
 FinOps must be able to show per-turn and aggregate cost, including estimated and reconciled values.
+
+## Observability Console + Separate Read Plane — architecture workstream
+
+[25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md](25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md)
+is authoritative for the primary operational route `/resources/observability`,
+configuration-only Settings and an independently deployable GET-only read API.
+It supersedes historical Settings-first dashboard placement; existing M7–M15
+security, telemetry and financial semantics remain authoritative. Introduced after
+the M16 baseline: documentation only, not M17. M16 C41/C42 remain FAIL and final
+CPU/regression acceptance must be rerun after integration.
+
+## Hybrid event-driven architecture — 2026-10-11
+
+Read [26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) for the approved two-lane architecture and authoritative Mermaid.
+Critical audit/accounting remains Cloud SQL durable with same-transaction outbox;
+operational telemetry stays async OTLP -> Collector, including an optional sanitized
+Pub/Sub branch. A separate publisher/projector supplies derived read models; the
+separate GET-only read plane is preserved. No duplicate business/accounting truth.
+The [resource manifest](GCP_HYBRID_OBSERVABILITY_RESOURCE_MANIFEST.md) lists future
+Phase 1/2/optional resources; no provisioning/migration is authorized or executed.
+Local Phase-1 owner-transaction capture, SQL outbox, bounded publisher, fake
+transport, projector, durable projections and GET/DTO contracts are implemented
+and locally validated. Production adapter/verified ingress and PostgreSQL/cloud
+validation remain pending. Operational Telemetry Pub/Sub is OPTIONAL / SCALE-TRIGGERED,
+disabled and curated only after measured need. M16 INCOMPLETE,
+C41/C42 not PASS, M17 UNSTARTED. Doc 26 supersedes synchronous ANOC read assumptions.
+
+## Phase-1 production-readiness update — 2026-10-11
+
+Production-readiness local implementation now adds real opt-in ANOC/Case composition, lazy Google Pub/Sub transport, authenticated push, and review-only Terraform/SQL. Read [coverage](AUDIT_COVERAGE_MATRIX.md) and [production readiness](HYBRID_PHASE1_PRODUCTION_READINESS.md). No deployment/shared migration; PostgreSQL rehearsal unavailable; full auditability and M16 acceptance remain incomplete.
+
+Audit completeness/rehearsal follow-up: [owner gap design](AUDIT_OWNERSHIP_GAP_DESIGN.md),
+[human reader identity contract](HYBRID_READER_IDENTITY_CONTRACT.md),
+[recovery requirements](HYBRID_RECOVERY_REQUIREMENTS.md),
+[PostgreSQL 18 rehearsal evidence](validation/HYBRID_POSTGRES_REHEARSAL.json).
+Full auditability NO; no new owners/events because material business semantics require
+design resolution; local PostgreSQL PASS; M16 INCOMPLETE; provisioning NO.
+
+## Execution journal status — 2026-10-11
+
+Read document 27 for the locally implemented Execution Audit Journal and Controlled Action Egress. Current coverage and ownership-gap documents supersede earlier design-only stop classifications. Full auditability NO; M16 INCOMPLETE; no external changes. See [implementation](27_EXECUTION_AUDIT_JOURNAL_AND_CONTROLLED_EGRESS.md), [coverage](AUDIT_COVERAGE_MATRIX.md) and [remaining gaps](AUDIT_OWNERSHIP_GAP_DESIGN.md).

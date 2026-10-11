@@ -1,0 +1,23 @@
+{
+  "databaseVersion": "POSTGRES_18",
+  "name": "sloc-anoc-sandbox01",
+  "region": "europe-west4",
+  "settings": {
+    "availabilityType": "ZONAL",
+    "backupConfiguration": {
+      "backupRetentionSettings": {
+        "retainedBackups": 7,
+        "retentionUnit": "COUNT"
+      },
+      "backupTier": "STANDARD",
+      "enabled": false,
+      "kind": "sql#backupConfiguration",
+      "pointInTimeRecoveryEnabled": false,
+      "replicationLogArchivingEnabled": false,
+      "startTime": "10:00",
+      "transactionLogRetentionDays": 7,
+      "transactionalLogStorageState": "TRANSACTIONAL_LOG_STORAGE_STATE_UNSPECIFIED"
+    }
+  },
+  "state": "RUNNABLE"
+}

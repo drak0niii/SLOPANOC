@@ -20,7 +20,7 @@ async def slos(service,principal,environment=None,slo_id=None,*,clock=now_utc):
                 else: snapshot=await provider.snapshot(environment,key,now)
                 if snapshot.environment!=environment: raise ValueError('Provider environment mismatch')
                 result=evaluate(key,snapshot,now=now)
-                if environment==service.config.otel_environment:
+                if environment==service.config.otel_environment and not getattr(service,'read_only',False):
                     from .slo_metrics import publish_result
                     publish_result(service.runtime,result)
                 values.append(SLOView.model_validate(result))

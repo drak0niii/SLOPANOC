@@ -1,4 +1,5 @@
-import { getJson, ApiError } from './client';
+import { getObservabilityJson } from './observabilityClient';
+import { ApiError } from './client';
 import { ContractError } from '../components/shell/settings/observability/contract';
 import { decodeSLOPage } from './sloContract';
 import type { SLOView } from './sloTypes';
@@ -6,7 +7,7 @@ export const quantities = ['input_tokens','output_tokens','candidate_tokens','ca
 export type Quantity = typeof quantities[number];
 export interface UsageGroup { dimension: string; attempts: number; captured_attempts: number; quantity_coverage: number|null; quantity_known: number; quantity_partial: number; quantities: Record<Quantity,{observed:number|null;known:number;unknown:number}> }
 export interface UsagePage { environment: string; start: string; end: string; group: string; items: UsageGroup[]; next_cursor: string|null }
-export interface LedgerHealth { environment:string;state:'HEALTHY'|'DEGRADED'|'STALE_DATA'|'DATA_SOURCE_UNAVAILABLE';pending:number;debt:number;conflicts:number;exhausted:number;admissions_failed:number;updated_at:string|null;last_observation:string|null;last_persistence:string|null;oldest_pending_at:string|null;oldest_debt_at:string|null;coverage_start:string|null;retention_months:number;retention_execution:'NOT_ACTIVATED' }
+export interface LedgerHealth { environment:string;state:'HEALTHY'|'DEGRADED'|'STALE_DATA'|'DATA_SOURCE_UNAVAILABLE';pending:number;debt:number;conflicts:number;exhausted:number;admissions_failed:number|null;updated_at:string|null;last_observation:string|null;last_persistence:string|null;oldest_pending_at:string|null;oldest_debt_at:string|null;coverage_start:string|null;retention_months:number;retention_execution:'NOT_ACTIVATED' }
 function object(v:unknown):Record<string,unknown> { if (!v || typeof v !== 'object' || Array.isArray(v)) throw new ContractError();return v as Record<string,unknown>; }
 function integer(v:unknown,signed=false):number { if (typeof v!=='number' || !Number.isSafeInteger(v) || (!signed && v<0)) throw new ContractError();return v; }
 function text(v:unknown):string { if (typeof v!=='string' || !/^[A-Za-z0-9_.-]{1,128}$/.test(v)) throw new ContractError();return v; }
@@ -28,12 +29,12 @@ export function decodeUsage(v:unknown):UsagePage {
 export function decodeLedgerHealth(v:unknown):LedgerHealth {
     const r=object(v);version(r);const state=text(r.state);
     if(!['HEALTHY','DEGRADED','STALE_DATA','DATA_SOURCE_UNAVAILABLE'].includes(state)||r.retention_execution!=='NOT_ACTIVATED')throw new ContractError();
-    const result={environment:env(r.environment),state,pending:integer(r.pending),debt:integer(r.debt),conflicts:integer(r.conflicts),exhausted:integer(r.exhausted),admissions_failed:integer(r.admissions_failed),retention_months:integer(r.retention_months),retention_execution:'NOT_ACTIVATED'} as LedgerHealth;
+    const result={environment:env(r.environment),state,pending:integer(r.pending),debt:integer(r.debt),conflicts:integer(r.conflicts),exhausted:integer(r.exhausted),admissions_failed:r.admissions_failed===null?null:integer(r.admissions_failed),retention_months:integer(r.retention_months),retention_execution:'NOT_ACTIVATED'} as LedgerHealth;
     for(const k of ['updated_at','last_observation','last_persistence','oldest_pending_at','oldest_debt_at','coverage_start'] as const)result[k]=r[k]==null?null:date(r[k]);
     return result;
 }
 async function read<T>(path:string,decode:(v:unknown)=>T,signal?:AbortSignal) {
-    try{return decode(await getJson<unknown>('/api/observability/finops/'+path,signal));}
+    try{return decode(await getObservabilityJson<unknown>('/api/observability/finops/'+path,signal));}
     catch(e){if(e instanceof ApiError)throw new ApiError('Runtime usage is unavailable.',e.status);if(e instanceof SyntaxError)throw new ContractError();throw e;}
 }
 export const getRuntimeUsage=(group='model',signal?:AbortSignal,start?:string,end?:string,cursor?:string)=>{

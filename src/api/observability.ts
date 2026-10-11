@@ -1,4 +1,5 @@
-import { ApiError, getJson } from './client';
+import { getObservabilityJson } from './observabilityClient';
+import { ApiError } from './client';
 import type { PageQuery, RunQuery } from './observabilityTypes';
 import { ContractError, decodeConfig, decodeHealth, decodeRun, decodeRuns, decodeTimeline, isRunId } from '../components/shell/settings/observability/contract';
 const base = '/api/observability';
@@ -13,7 +14,7 @@ function query(q: RunQuery = {}): string {
 }
 async function read<T>(path: string, decode: (v: unknown) => T, signal?: AbortSignal): Promise<T> {
     try {
-        return decode(await getJson<unknown>(base + path, signal));
+        return decode(await getObservabilityJson<unknown>(base + path, signal));
     }
     catch (e) {
         if (e instanceof ApiError)

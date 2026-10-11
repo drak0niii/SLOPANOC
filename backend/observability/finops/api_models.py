@@ -35,7 +35,7 @@ class LedgerHealth(Contract):
     debt: Count
     conflicts: Count
     exhausted: Count
-    admissions_failed: Count
+    admissions_failed: Count | None
     oldest_pending_at: AwareDatetime | None
     oldest_debt_at: AwareDatetime | None
     updated_at: AwareDatetime | None
@@ -44,3 +44,4 @@ class LedgerHealth(Contract):
     last_persistence: AwareDatetime | None
     retention_months: int = Field(ge=24,le=120)
     retention_execution: Literal['NOT_ACTIVATED'] = 'NOT_ACTIVATED'
+    admission_scope: Literal['process_local','process_local_anoc_unavailable'] = 'process_local'

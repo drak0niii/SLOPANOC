@@ -1,3 +1,4 @@
+import { ArchiveTrace } from '../../../observability/ArchiveTrace';
 import { useEffect, useRef } from 'react';
 import { getRunRetention } from '../../../../api/observabilityPolicy';
 import { getRun } from '../../../../api/observability';
@@ -15,7 +16,7 @@ export function RunDetail({ runId, poll = false }: {
     const query = useObservabilityQuery(`run:${runId}`, s => getRun(runId, s), poll ? activeRun : undefined);
     const heading = useRef<HTMLHeadingElement>(null);
     useEffect(() => { heading.current?.focus(); }, [runId]);
-    return <section><h3 ref={heading} tabIndex={-1} className="mb-3 break-all text-base font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50">Run {runId}</h3>
+    return <section className="obs-run-detail"><h3 ref={heading} tabIndex={-1} className="mb-3 break-all text-base font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50">Run {runId}</h3>
  <ReadState query={query}>{r => <>
  <StatusBadge status={r.status} classification={r.classification}/>
  {r.classification === 'STALE' && <p className="mt-2 text-sm text-warning">Stale diagnostic record. Canonical status remains {r.status}; the outcome is unknown.</p>}
@@ -29,6 +30,7 @@ export function RunDetail({ runId, poll = false }: {
  {r.technical ? <Fields title="Deployment & trace correlation" values={{ 'Trace ID': r.technical.trace_id ?? 'Not reported', 'Service version': r.technical.service_version ?? 'Not reported', Release: r.technical.release_id ?? 'Not reported', Revision: r.technical.revision ?? 'Not reported', 'Schema version': String(r.technical.telemetry_schema_version), 'Config version': r.technical.config_version ?? 'Not reported' }}/> : <p className="mt-3 text-sm text-tertiary">Technical metadata is not available with this response.</p>}
  <RetentionState runId={r.run_id}/>
  <Timeline runId={r.run_id}/>
+ {r.technical?.trace_id && <ArchiveTrace traceId={r.technical.trace_id} />}
  </>}</ReadState></section>;
 }
 function Fields({ title, values }: {

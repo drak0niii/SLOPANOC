@@ -20,7 +20,8 @@ from backend.tests.test_observability_dependency_knowledge import Repo, query
 
 def summary(values):
     ordered=sorted(values)
-    return {'median_ms':statistics.median(values),'p95_ms':ordered[int(.95*(len(ordered)-1))], 'p99_ms':ordered[int(.99*(len(ordered)-1))]}
+    return {'median_ms':statistics.median(values),'p95_ms':ordered[int(.95*(len(ordered)-1))],
+            'p99_ms':ordered[int(.99*(len(ordered)-1))] if len(ordered)>=1000 else None}
 
 @pytest.mark.asyncio
 async def test_local_dependency_overhead(tmp_path):
@@ -63,6 +64,11 @@ async def test_local_dependency_overhead(tmp_path):
             results[name]={m:summary(samples[m])|{'cpu_median_ms':statistics.median(cpu[m])} for m in modes}
             paired=[a-b for a,b in zip(samples['local'],samples['baseline'])]
             results[name]['paired_local_minus_baseline']=summary(paired)
+            print('M16_DEPENDENCY_OVERHEAD '+json.dumps({'subsystem':name,
+                'samples':len(paired),'paired':{**results[name]['paired_local_minus_baseline'],
+                    'p99_ms':None if len(paired)<1000 else results[name]['paired_local_minus_baseline']['p99_ms']},
+                'cpu_baseline_median_ms':statistics.median(cpu['baseline']),
+                'cpu_local_median_ms':statistics.median(cpu['local'])},sort_keys=True))
             assert results[name]['paired_local_minus_baseline']['p95_ms']<10
         for r in runtimes.values():assert r.flush()
         import tracemalloc

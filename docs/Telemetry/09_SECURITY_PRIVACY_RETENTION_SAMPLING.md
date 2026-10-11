@@ -181,3 +181,40 @@ Do not impose artificial 13-month deletion or claim 13-month exact-minute histor
 from M9's 35-day working set. Public provider reference:
 https://docs.cloud.google.com/monitoring/quotas (checked 2026-10-09).
 Archive schema/transport/local-vs-live validation: doc 16.
+
+## Hybrid event and database-audit privacy
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) applies this classification to outbox, Pub/Sub, projector receipts/failures,
+DLQs and read models. Strict allowlisted payloads prohibit arbitrary dictionaries,
+raw prompts/responses/Teams/tool/SQL/command bodies/secrets/hidden reasoning. IDs
+remain restricted and never metric labels. Separate workload DB roles and service
+identities constrain writes/reads; none is created. Broker access does not imply
+UI capability; FinOps gains no content access. Unpublished/debt rows cannot expire
+silently; published/dedup/retention/replay horizons require joint approval. M15
+exceptional-only sanitized dedicated GCS 90-day target remains independent.
+pgAudit parameters must stay off; SQL literal masking must be reviewed and tested
+before activation because parameter-off alone does not suppress embedded values.
+
+
+## Local Phase-1 hybrid refinement — 2026-10-11
+
+[Doc 26](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) defines the locally implemented
+authoritative owner transaction → audit/outbox → bounded publisher → fake transport
+→ projector → durable projection → independent GET reader. Additive revision
+`d26a1b7c9e40` descends from `c16f4a8b2d90`; no shared schema was changed.
+`GET /api/observability/hybrid/activity` exposes bounded safe lifecycle/freshness/debt
+DTOs with server RBAC/environment scope; no worker runs on reads. M15 policy applies
+to typed audit fields; projections do not duplicate M10–M14 financial truth.
+Operational Telemetry Pub/Sub is **OPTIONAL / SCALE-TRIGGERED**, disabled, limited
+to a future curated measured subset. Full unsampled OTLP replication is not Phase-1
+minimum. Existing OTLP/cloud/archive pathways remain unchanged. Local SQLite/fake
+validation is not PostgreSQL/Pub/Sub qualification. M16 remains INCOMPLETE; C41/C42
+are not PASS; M17 remains UNSTARTED. No cloud mutation or deployment authorization.
+
+## Phase-1 production-readiness update — 2026-10-11
+
+Production audit push uses restricted Cloud Run IAM plus Google signature/audience/verified-service-account checks; no browser/role/header trust. See HYBRID_PHASE1_PRODUCTION_READINESS.md. Optional identifiers follow the M15 EVENT/DATABASE registry; unknown remains absent. Reader human identity remains a separate pre-existing production gate.
+
+## Execution journal status — 2026-10-11
+
+Execution facts exclude raw tool arguments/results, retrieval queries/documents, prompts/responses, Teams bodies and hidden reasoning. Actor/target/source references are restricted, server RBAC and environment scoped. FinOps gains no raw operational content access. See [implementation](27_EXECUTION_AUDIT_JOURNAL_AND_CONTROLLED_EGRESS.md), [coverage](AUDIT_COVERAGE_MATRIX.md) and [remaining gaps](AUDIT_OWNERSHIP_GAP_DESIGN.md).

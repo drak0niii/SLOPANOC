@@ -69,7 +69,7 @@ def test_sdk_sample_travels_through_actual_local_collector(tmp_path, sample_kind
         collector_stderr=(tmp_path/'collector-stderr.log').open('w+')
         process=subprocess.Popen([binary(),'--config='+str(COLLECTOR/'config.local.yaml')],
             env=collector_env(OTLP_PORT=str(port),HEALTH_PORT=str(health_port),
-                SELF_METRICS_PORT=str(metric_port),LOCAL_SINK_ENDPOINT=sink.endpoint),
+                SELF_METRICS_PORT=str(metric_port),LOCAL_SINK_ENDPOINT=sink.endpoint,TAIL_DECISION_WAIT='1s'),
             stdout=subprocess.DEVNULL,stderr=collector_stderr,text=True)
         r=None
         try:

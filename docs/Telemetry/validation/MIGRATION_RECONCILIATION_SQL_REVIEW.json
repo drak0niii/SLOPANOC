@@ -1,0 +1,1603 @@
+{
+  "sql_sha256": "6ad8cda0e1b88a25620dd9153eaa23959dde1419dcbea8d1202195f2345e409a",
+  "revision_safety": [
+    {
+      "revision": "7c4e9a2d1f05",
+      "tables": [
+        "slopanoc_case_troubleshooting_progressions"
+      ],
+      "indexes": [],
+      "classification": "CREATE_ONLY",
+      "existing_business_table_touched": false,
+      "risk": "FK references existing cases; validation requires lock on parent"
+    },
+    {
+      "revision": "9f71c2a64e08",
+      "tables": [
+        "observability_run_event",
+        "observability_run_status",
+        "observability_turn"
+      ],
+      "indexes": [
+        "ix_observability_active",
+        "ix_observability_session",
+        "ix_observability_status_expiry",
+        "ix_observability_recent",
+        "ix_observability_summary_expiry",
+        "ix_observability_summary_session",
+        "ix_observability_terminal"
+      ],
+      "classification": "CREATE_ONLY + INDEX_ONLY",
+      "existing_business_table_touched": false,
+      "risk": "New empty tables/indexes only"
+    },
+    {
+      "revision": "b37e90a14c62",
+      "tables": [
+        "observability_sre_receipt",
+        "observability_sre_bucket",
+        "observability_sre_source"
+      ],
+      "indexes": [
+        "ix_sre_due"
+      ],
+      "classification": "CREATE_ONLY + INDEX_ONLY",
+      "existing_business_table_touched": false,
+      "risk": "New empty tables/indexes only"
+    },
+    {
+      "revision": "c10a8f6e2d41",
+      "tables": [
+        "finops_accounting_source",
+        "finops_runtime_attempt",
+        "finops_usage_bucket",
+        "ai_usage_ledger",
+        "finops_usage_inbox"
+      ],
+      "indexes": [
+        "ix_finops_attempt_debt",
+        "ix_finops_bucket_time",
+        "ix_finops_ledger_time",
+        "ux_finops_base_attempt",
+        "ix_finops_inbox_pending"
+      ],
+      "classification": "CREATE_ONLY + INDEX_ONLY",
+      "existing_business_table_touched": false,
+      "risk": "New empty tables/indexes only"
+    },
+    {
+      "revision": "d11b4a8c9e32",
+      "tables": [
+        "finops_billing_publication",
+        "finops_billing_ingest_state",
+        "finops_billing_projection_cache"
+      ],
+      "indexes": [
+        "ix_billing_publication_history",
+        "ix_billing_state_scope"
+      ],
+      "classification": "CREATE_ONLY + INDEX_ONLY",
+      "existing_business_table_touched": false,
+      "risk": "New empty tables/indexes only"
+    },
+    {
+      "revision": "e12c6d8a4b50",
+      "tables": [
+        "finops_reconciliation_input",
+        "finops_reconciliation_registry",
+        "finops_reconciliation_generation",
+        "finops_reconciliation_state"
+      ],
+      "indexes": [
+        "ix_reconciliation_inputs",
+        "ux_reconciliation_registry_version",
+        "ux_reconciliation_period"
+      ],
+      "classification": "CREATE_ONLY + INDEX_ONLY",
+      "existing_business_table_touched": false,
+      "risk": "New empty tables/indexes only"
+    },
+    {
+      "revision": "f13a7c9d2e61",
+      "tables": [
+        "finops_unit_definition_version",
+        "finops_unit_denominator_snapshot",
+        "finops_unit_driver_version",
+        "finops_unit_economics_generation",
+        "finops_unit_economics_publication"
+      ],
+      "indexes": [
+        "ix_unit_snapshot_period",
+        "ux_unit_driver_version",
+        "ux_unit_publication"
+      ],
+      "classification": "CREATE_ONLY + INDEX_ONLY",
+      "existing_business_table_touched": false,
+      "risk": "New empty tables/indexes only"
+    },
+    {
+      "revision": "a14d2e6f8c70",
+      "tables": [
+        "finops_budget_definition_version",
+        "finops_control_input",
+        "finops_forecast_backtest_generation",
+        "finops_control_generation",
+        "finops_anomaly_transition",
+        "finops_control_publication"
+      ],
+      "indexes": [
+        "ix_control_input_asof",
+        "ix_control_backtest_asof",
+        "ix_control_history",
+        "ix_control_anomaly_history",
+        "ux_control_publication"
+      ],
+      "classification": "CREATE_ONLY + INDEX_ONLY",
+      "existing_business_table_touched": false,
+      "risk": "New empty tables/indexes only"
+    },
+    {
+      "revision": "b15e3f7a9c81",
+      "tables": [
+        "observability_retention_checkpoint",
+        "observability_archive_receipt"
+      ],
+      "indexes": [
+        "ix_archive_receipt_environment_terminal",
+        "ix_m15_run_retention",
+        "ix_m15_summary_retention"
+      ],
+      "classification": "CREATE_ONLY + INDEX_ONLY",
+      "existing_business_table_touched": false,
+      "risk": "Indexes on M7 tables created in this rollout"
+    },
+    {
+      "revision": "c16f4a8b2d90",
+      "tables": [],
+      "indexes": [],
+      "classification": "NO_SCHEMA_MUTATION",
+      "existing_business_table_touched": false,
+      "risk": "New empty tables/indexes only"
+    }
+  ],
+  "tables": [
+    "slopanoc_case_troubleshooting_progressions",
+    "observability_run_event",
+    "observability_run_status",
+    "observability_turn",
+    "observability_sre_receipt",
+    "observability_sre_bucket",
+    "observability_sre_source",
+    "finops_accounting_source",
+    "finops_runtime_attempt",
+    "finops_usage_bucket",
+    "ai_usage_ledger",
+    "finops_usage_inbox",
+    "finops_billing_publication",
+    "finops_billing_ingest_state",
+    "finops_billing_projection_cache",
+    "finops_reconciliation_input",
+    "finops_reconciliation_registry",
+    "finops_reconciliation_generation",
+    "finops_reconciliation_state",
+    "finops_unit_definition_version",
+    "finops_unit_denominator_snapshot",
+    "finops_unit_driver_version",
+    "finops_unit_economics_generation",
+    "finops_unit_economics_publication",
+    "finops_budget_definition_version",
+    "finops_control_input",
+    "finops_forecast_backtest_generation",
+    "finops_control_generation",
+    "finops_anomaly_transition",
+    "finops_control_publication",
+    "observability_retention_checkpoint",
+    "observability_archive_receipt"
+  ],
+  "secondary_indexes": [
+    {
+      "revision": "9f71c2a64e08",
+      "name": "ix_observability_active",
+      "table": "observability_run_status",
+      "unique": false,
+      "definition": "(environment, status, heartbeat_at, run_id)"
+    },
+    {
+      "revision": "9f71c2a64e08",
+      "name": "ix_observability_session",
+      "table": "observability_run_status",
+      "unique": false,
+      "definition": "(session_id, started_at, run_id)"
+    },
+    {
+      "revision": "9f71c2a64e08",
+      "name": "ix_observability_status_expiry",
+      "table": "observability_run_status",
+      "unique": false,
+      "definition": "(expiry_at, run_id)"
+    },
+    {
+      "revision": "9f71c2a64e08",
+      "name": "ix_observability_recent",
+      "table": "observability_turn",
+      "unique": false,
+      "definition": "(environment, started_at, run_id)"
+    },
+    {
+      "revision": "9f71c2a64e08",
+      "name": "ix_observability_summary_expiry",
+      "table": "observability_turn",
+      "unique": false,
+      "definition": "(expiry_at, run_id)"
+    },
+    {
+      "revision": "9f71c2a64e08",
+      "name": "ix_observability_summary_session",
+      "table": "observability_turn",
+      "unique": false,
+      "definition": "(session_id, started_at, run_id)"
+    },
+    {
+      "revision": "9f71c2a64e08",
+      "name": "ix_observability_terminal",
+      "table": "observability_turn",
+      "unique": false,
+      "definition": "(environment, terminal_at, run_id)"
+    },
+    {
+      "revision": "b37e90a14c62",
+      "name": "ix_sre_due",
+      "table": "observability_sre_receipt",
+      "unique": false,
+      "definition": "(settled, due_at)"
+    },
+    {
+      "revision": "c10a8f6e2d41",
+      "name": "ix_finops_attempt_debt",
+      "table": "finops_runtime_attempt",
+      "unique": false,
+      "definition": "(environment, state, deadline_at)"
+    },
+    {
+      "revision": "c10a8f6e2d41",
+      "name": "ix_finops_bucket_time",
+      "table": "finops_usage_bucket",
+      "unique": false,
+      "definition": "(environment, at)"
+    },
+    {
+      "revision": "c10a8f6e2d41",
+      "name": "ix_finops_ledger_time",
+      "table": "ai_usage_ledger",
+      "unique": false,
+      "definition": "(environment, observed_at, event_id)"
+    },
+    {
+      "revision": "c10a8f6e2d41",
+      "name": "ux_finops_base_attempt",
+      "table": "ai_usage_ledger",
+      "unique": true,
+      "definition": "(environment, attempt_id) WHERE record_kind = 'BASE'"
+    },
+    {
+      "revision": "c10a8f6e2d41",
+      "name": "ix_finops_inbox_pending",
+      "table": "finops_usage_inbox",
+      "unique": false,
+      "definition": "(delivered, exhausted, next_attempt_at)"
+    },
+    {
+      "revision": "d11b4a8c9e32",
+      "name": "ix_billing_publication_history",
+      "table": "finops_billing_publication",
+      "unique": false,
+      "definition": "(state_key, published_at)"
+    },
+    {
+      "revision": "d11b4a8c9e32",
+      "name": "ix_billing_state_scope",
+      "table": "finops_billing_ingest_state",
+      "unique": true,
+      "definition": "(environment, source, scope, partition)"
+    },
+    {
+      "revision": "e12c6d8a4b50",
+      "name": "ix_reconciliation_inputs",
+      "table": "finops_reconciliation_input",
+      "unique": false,
+      "definition": "(environment, scope, period, kind, source_generation)"
+    },
+    {
+      "revision": "e12c6d8a4b50",
+      "name": "ux_reconciliation_registry_version",
+      "table": "finops_reconciliation_registry",
+      "unique": true,
+      "definition": "(environment, version, ownership_version)"
+    },
+    {
+      "revision": "e12c6d8a4b50",
+      "name": "ux_reconciliation_period",
+      "table": "finops_reconciliation_state",
+      "unique": true,
+      "definition": "(environment, scope, period)"
+    },
+    {
+      "revision": "f13a7c9d2e61",
+      "name": "ix_unit_snapshot_period",
+      "table": "finops_unit_denominator_snapshot",
+      "unique": false,
+      "definition": "(environment, period, source)"
+    },
+    {
+      "revision": "f13a7c9d2e61",
+      "name": "ux_unit_driver_version",
+      "table": "finops_unit_driver_version",
+      "unique": true,
+      "definition": "(environment, scope, version)"
+    },
+    {
+      "revision": "f13a7c9d2e61",
+      "name": "ux_unit_publication",
+      "table": "finops_unit_economics_publication",
+      "unique": true,
+      "definition": "(environment, scope, period, kind)"
+    },
+    {
+      "revision": "a14d2e6f8c70",
+      "name": "ix_control_input_asof",
+      "table": "finops_control_input",
+      "unique": false,
+      "definition": "(environment, scope, month, cutoff)"
+    },
+    {
+      "revision": "a14d2e6f8c70",
+      "name": "ix_control_backtest_asof",
+      "table": "finops_forecast_backtest_generation",
+      "unique": false,
+      "definition": "(environment, scope, known_at)"
+    },
+    {
+      "revision": "a14d2e6f8c70",
+      "name": "ix_control_history",
+      "table": "finops_control_generation",
+      "unique": false,
+      "definition": "(environment, scope, month, kind, issue)"
+    },
+    {
+      "revision": "a14d2e6f8c70",
+      "name": "ix_control_anomaly_history",
+      "table": "finops_anomaly_transition",
+      "unique": false,
+      "definition": "(anomaly, at)"
+    },
+    {
+      "revision": "a14d2e6f8c70",
+      "name": "ux_control_publication",
+      "table": "finops_control_publication",
+      "unique": true,
+      "definition": "(environment, scope, month, kind, selection)"
+    },
+    {
+      "revision": "b15e3f7a9c81",
+      "name": "ix_archive_receipt_environment_terminal",
+      "table": "observability_archive_receipt",
+      "unique": false,
+      "definition": "(environment, terminal_at)"
+    },
+    {
+      "revision": "b15e3f7a9c81",
+      "name": "ix_m15_run_retention",
+      "table": "observability_run_status",
+      "unique": false,
+      "definition": "(environment, expiry_at, run_id)"
+    },
+    {
+      "revision": "b15e3f7a9c81",
+      "name": "ix_m15_summary_retention",
+      "table": "observability_turn",
+      "unique": false,
+      "definition": "(environment, expiry_at, run_id)"
+    }
+  ],
+  "constraints": [
+    {
+      "table": "slopanoc_case_troubleshooting_progressions",
+      "revision": "7c4e9a2d1f05",
+      "definition": "PRIMARY KEY (case_id)"
+    },
+    {
+      "table": "slopanoc_case_troubleshooting_progressions",
+      "revision": "7c4e9a2d1f05",
+      "definition": "FOREIGN KEY(case_id) REFERENCES slopanoc_cases (case_id)"
+    },
+    {
+      "table": "slopanoc_case_troubleshooting_progressions",
+      "revision": "7c4e9a2d1f05",
+      "definition": "CONSTRAINT ck_slopanoc_case_troubleshooting_progressions_version_positive CHECK (version >= 1)"
+    },
+    {
+      "table": "observability_run_event",
+      "revision": "9f71c2a64e08",
+      "definition": "PRIMARY KEY (run_id, event_seq)"
+    },
+    {
+      "table": "observability_run_event",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (event_seq >= 0 AND state_version >= 0 AND elapsed_ms >= 0)"
+    },
+    {
+      "table": "observability_run_event",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (event_type IN ('started','stage','agent','tool','dependency','stalled','resumed','terminal','cleanup','delivery','identity','deadline'))"
+    },
+    {
+      "table": "observability_run_event",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (stage IN ('request.received','request.validated','session.load.started','session.load.completed','attachments.started','attachments.completed','planning.started','planning.model.started','planning.model.completed','planning.completed','planning.failed','thread.resolve.started','thread.resolve.completed','pending_interaction.resolve.started','pending_interaction.resolve.completed','source_requirements.completed','context.selection.started','context.selection.completed','context.item.selected','context.item.excluded','agent.started','agent.completed','agent.failed','agent.team_manager','agent.technical_authority','agent.incident_manager','agent.problem_manager','agent.automated_operations','model.request.started','model.first_token','model.request.completed','model.request.failed','model.request.timeout','tool.started','tool.completed','tool.failed','tool.timeout','knowledge.search.started','knowledge.search.completed','teams.list_chats.started','teams.list_chats.completed','teams.read_messages.started','teams.read_messages.completed','database.query.started','database.query.completed','storage.operation.started','storage.operation.completed','knowledge.selection.completed','procedure_action.resolved','command_authority.completed','approval.requested','approval.completed','authority.selected','provenance.completed','command_egress.completed','synthesis.started','synthesis.completed','persistence.started','persistence.completed','sse.started','sse.completed','turn.completed','turn.failed','turn.timeout','turn.cancelled','run.stalled','heartbeat'))"
+    },
+    {
+      "table": "observability_run_event",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (status IN ('PENDING','RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','STALLED'))"
+    },
+    {
+      "table": "observability_run_status",
+      "revision": "9f71c2a64e08",
+      "definition": "PRIMARY KEY (run_id)"
+    },
+    {
+      "table": "observability_run_status",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK ((status IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED') AND terminal_at IS NOT NULL) OR (status IN ('PENDING','RUNNING','STALLED') AND terminal_at IS NULL))"
+    },
+    {
+      "table": "observability_run_status",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (cleanup_status IN ('pending','running','completed','failed','timeout'))"
+    },
+    {
+      "table": "observability_run_status",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (current_stage IN ('request.received','request.validated','session.load.started','session.load.completed','attachments.started','attachments.completed','planning.started','planning.model.started','planning.model.completed','planning.completed','planning.failed','thread.resolve.started','thread.resolve.completed','pending_interaction.resolve.started','pending_interaction.resolve.completed','source_requirements.completed','context.selection.started','context.selection.completed','context.item.selected','context.item.excluded','agent.started','agent.completed','agent.failed','agent.team_manager','agent.technical_authority','agent.incident_manager','agent.problem_manager','agent.automated_operations','model.request.started','model.first_token','model.request.completed','model.request.failed','model.request.timeout','tool.started','tool.completed','tool.failed','tool.timeout','knowledge.search.started','knowledge.search.completed','teams.list_chats.started','teams.list_chats.completed','teams.read_messages.started','teams.read_messages.completed','database.query.started','database.query.completed','storage.operation.started','storage.operation.completed','knowledge.selection.completed','procedure_action.resolved','command_authority.completed','approval.requested','approval.completed','authority.selected','provenance.completed','command_egress.completed','synthesis.started','synthesis.completed','persistence.started','persistence.completed','sse.started','sse.completed','turn.completed','turn.failed','turn.timeout','turn.cancelled','run.stalled','heartbeat'))"
+    },
+    {
+      "table": "observability_run_status",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (delivery_status IN ('pending','relayed','disconnected'))"
+    },
+    {
+      "table": "observability_run_status",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (retention_class IN ('normal','exceptional'))"
+    },
+    {
+      "table": "observability_run_status",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (state_version >= 0 AND elapsed_ms >= 0 AND timeline_truncated_count >= 0)"
+    },
+    {
+      "table": "observability_run_status",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (status IN ('PENDING','RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','STALLED'))"
+    },
+    {
+      "table": "observability_run_status",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (status NOT IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED') OR (current_agent IS NULL AND current_tool IS NULL))"
+    },
+    {
+      "table": "observability_run_status",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (telemetry_schema_version = 1 AND projection_schema_version = 1)"
+    },
+    {
+      "table": "observability_turn",
+      "revision": "9f71c2a64e08",
+      "definition": "PRIMARY KEY (run_id)"
+    },
+    {
+      "table": "observability_turn",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK ((status IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED') AND terminal_at IS NOT NULL) OR (status IN ('PENDING','RUNNING','STALLED') AND terminal_at IS NULL))"
+    },
+    {
+      "table": "observability_turn",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (cleanup_status IN ('pending','running','completed','failed','timeout'))"
+    },
+    {
+      "table": "observability_turn",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (current_stage IN ('request.received','request.validated','session.load.started','session.load.completed','attachments.started','attachments.completed','planning.started','planning.model.started','planning.model.completed','planning.completed','planning.failed','thread.resolve.started','thread.resolve.completed','pending_interaction.resolve.started','pending_interaction.resolve.completed','source_requirements.completed','context.selection.started','context.selection.completed','context.item.selected','context.item.excluded','agent.started','agent.completed','agent.failed','agent.team_manager','agent.technical_authority','agent.incident_manager','agent.problem_manager','agent.automated_operations','model.request.started','model.first_token','model.request.completed','model.request.failed','model.request.timeout','tool.started','tool.completed','tool.failed','tool.timeout','knowledge.search.started','knowledge.search.completed','teams.list_chats.started','teams.list_chats.completed','teams.read_messages.started','teams.read_messages.completed','database.query.started','database.query.completed','storage.operation.started','storage.operation.completed','knowledge.selection.completed','procedure_action.resolved','command_authority.completed','approval.requested','approval.completed','authority.selected','provenance.completed','command_egress.completed','synthesis.started','synthesis.completed','persistence.started','persistence.completed','sse.started','sse.completed','turn.completed','turn.failed','turn.timeout','turn.cancelled','run.stalled','heartbeat'))"
+    },
+    {
+      "table": "observability_turn",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (delivery_status IN ('pending','relayed','disconnected'))"
+    },
+    {
+      "table": "observability_turn",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (retention_class IN ('normal','exceptional'))"
+    },
+    {
+      "table": "observability_turn",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (state_version >= 0 AND elapsed_ms >= 0 AND timeline_truncated_count >= 0)"
+    },
+    {
+      "table": "observability_turn",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (status IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED'))"
+    },
+    {
+      "table": "observability_turn",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (status IN ('PENDING','RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','STALLED'))"
+    },
+    {
+      "table": "observability_turn",
+      "revision": "9f71c2a64e08",
+      "definition": "CHECK (telemetry_schema_version = 1 AND projection_schema_version = 1)"
+    },
+    {
+      "table": "observability_sre_receipt",
+      "revision": "b37e90a14c62",
+      "definition": "PRIMARY KEY (run_id)"
+    },
+    {
+      "table": "observability_sre_bucket",
+      "revision": "b37e90a14c62",
+      "definition": "PRIMARY KEY (environment, slo_id, at)"
+    },
+    {
+      "table": "observability_sre_source",
+      "revision": "b37e90a14c62",
+      "definition": "PRIMARY KEY (environment)"
+    },
+    {
+      "table": "finops_accounting_source",
+      "revision": "c10a8f6e2d41",
+      "definition": "PRIMARY KEY (environment)"
+    },
+    {
+      "table": "finops_runtime_attempt",
+      "revision": "c10a8f6e2d41",
+      "definition": "PRIMARY KEY (environment, attempt_id)"
+    },
+    {
+      "table": "finops_runtime_attempt",
+      "revision": "c10a8f6e2d41",
+      "definition": "CHECK (environment IN ('local','development','staging','production'))"
+    },
+    {
+      "table": "finops_runtime_attempt",
+      "revision": "c10a8f6e2d41",
+      "definition": "CHECK (state IN ('ADMITTED','STARTED','PROVIDER_FINISHED','USAGE_CAPTURED','NOT_STARTED','FINAL_CAPTURE_PENDING','FINAL_CAPTURE_FAILED','OUTCOME_UNKNOWN','CONFLICT'))"
+    },
+    {
+      "table": "finops_usage_bucket",
+      "revision": "c10a8f6e2d41",
+      "definition": "PRIMARY KEY (environment, at, provider, model, agent, workload, operation, operation_type)"
+    },
+    {
+      "table": "finops_usage_bucket",
+      "revision": "c10a8f6e2d41",
+      "definition": "CHECK (good >= 0 AND bad >= 0 AND quantity_known >= 0 AND quantity_partial >= 0)"
+    },
+    {
+      "table": "ai_usage_ledger",
+      "revision": "c10a8f6e2d41",
+      "definition": "PRIMARY KEY (event_id)"
+    },
+    {
+      "table": "ai_usage_ledger",
+      "revision": "c10a8f6e2d41",
+      "definition": "CHECK (record_kind IN ('BASE','ADJUSTMENT'))"
+    },
+    {
+      "table": "ai_usage_ledger",
+      "revision": "c10a8f6e2d41",
+      "definition": "CHECK (environment IN ('local','development','staging','production'))"
+    },
+    {
+      "table": "ai_usage_ledger",
+      "revision": "c10a8f6e2d41",
+      "definition": "CHECK (record_kind = 'ADJUSTMENT' OR input_tokens IS NULL OR input_tokens >= 0)"
+    },
+    {
+      "table": "ai_usage_ledger",
+      "revision": "c10a8f6e2d41",
+      "definition": "CHECK ((record_kind = 'BASE' AND original_event_id IS NULL) OR (record_kind = 'ADJUSTMENT' AND original_event_id IS NOT NULL))"
+    },
+    {
+      "table": "ai_usage_ledger",
+      "revision": "c10a8f6e2d41",
+      "definition": "CHECK (record_kind = 'ADJUSTMENT' OR output_tokens IS NULL OR output_tokens >= 0)"
+    },
+    {
+      "table": "ai_usage_ledger",
+      "revision": "c10a8f6e2d41",
+      "definition": "CHECK (record_kind = 'ADJUSTMENT' OR candidate_tokens IS NULL OR candidate_tokens >= 0)"
+    },
+    {
+      "table": "ai_usage_ledger",
+      "revision": "c10a8f6e2d41",
+      "definition": "CHECK (record_kind = 'ADJUSTMENT' OR cached_tokens IS NULL OR cached_tokens >= 0)"
+    },
+    {
+      "table": "ai_usage_ledger",
+      "revision": "c10a8f6e2d41",
+      "definition": "CHECK (record_kind = 'ADJUSTMENT' OR total_tokens IS NULL OR total_tokens >= 0)"
+    },
+    {
+      "table": "ai_usage_ledger",
+      "revision": "c10a8f6e2d41",
+      "definition": "CHECK (record_kind = 'ADJUSTMENT' OR tool_input_tokens IS NULL OR tool_input_tokens >= 0)"
+    },
+    {
+      "table": "ai_usage_ledger",
+      "revision": "c10a8f6e2d41",
+      "definition": "CHECK (record_kind = 'ADJUSTMENT' OR thought_tokens IS NULL OR thought_tokens >= 0)"
+    },
+    {
+      "table": "ai_usage_ledger",
+      "revision": "c10a8f6e2d41",
+      "definition": "CHECK (record_kind = 'ADJUSTMENT' OR billable_characters IS NULL OR billable_characters >= 0)"
+    },
+    {
+      "table": "ai_usage_ledger",
+      "revision": "c10a8f6e2d41",
+      "definition": "FOREIGN KEY(environment, attempt_id) REFERENCES finops_runtime_attempt (environment, attempt_id)"
+    },
+    {
+      "table": "ai_usage_ledger",
+      "revision": "c10a8f6e2d41",
+      "definition": "FOREIGN KEY(original_event_id) REFERENCES ai_usage_ledger (event_id)"
+    },
+    {
+      "table": "finops_usage_inbox",
+      "revision": "c10a8f6e2d41",
+      "definition": "PRIMARY KEY (event_id)"
+    },
+    {
+      "table": "finops_usage_inbox",
+      "revision": "c10a8f6e2d41",
+      "definition": "CHECK (attempts >= 0)"
+    },
+    {
+      "table": "finops_usage_inbox",
+      "revision": "c10a8f6e2d41",
+      "definition": "FOREIGN KEY(environment, attempt_id) REFERENCES finops_runtime_attempt (environment, attempt_id)"
+    },
+    {
+      "table": "finops_billing_publication",
+      "revision": "d11b4a8c9e32",
+      "definition": "PRIMARY KEY (generation)"
+    },
+    {
+      "table": "finops_billing_publication",
+      "revision": "d11b4a8c9e32",
+      "definition": "CHECK (status = 'PUBLISHED')"
+    },
+    {
+      "table": "finops_billing_publication",
+      "revision": "d11b4a8c9e32",
+      "definition": "CHECK (row_count >= 0 AND late_rows >= 0 AND correction_rows >= 0 AND unmapped_rows >= 0)"
+    },
+    {
+      "table": "finops_billing_publication",
+      "revision": "d11b4a8c9e32",
+      "definition": "CHECK (schema_version = 1)"
+    },
+    {
+      "table": "finops_billing_ingest_state",
+      "revision": "d11b4a8c9e32",
+      "definition": "PRIMARY KEY (key)"
+    },
+    {
+      "table": "finops_billing_ingest_state",
+      "revision": "d11b4a8c9e32",
+      "definition": "CHECK (environment IN ('local','development','staging','production'))"
+    },
+    {
+      "table": "finops_billing_ingest_state",
+      "revision": "d11b4a8c9e32",
+      "definition": "CHECK (revision >= 0)"
+    },
+    {
+      "table": "finops_billing_ingest_state",
+      "revision": "d11b4a8c9e32",
+      "definition": "CHECK (mode IN ('TEST_FIXTURE','BIGQUERY'))"
+    },
+    {
+      "table": "finops_billing_ingest_state",
+      "revision": "d11b4a8c9e32",
+      "definition": "CHECK (source IN ('DETAILED_BILLING','PRICING_EXPORT','FOCUS'))"
+    },
+    {
+      "table": "finops_billing_ingest_state",
+      "revision": "d11b4a8c9e32",
+      "definition": "FOREIGN KEY(generation) REFERENCES finops_billing_publication (generation)"
+    },
+    {
+      "table": "finops_billing_projection_cache",
+      "revision": "d11b4a8c9e32",
+      "definition": "PRIMARY KEY (generation)"
+    },
+    {
+      "table": "finops_billing_projection_cache",
+      "revision": "d11b4a8c9e32",
+      "definition": "FOREIGN KEY(generation) REFERENCES finops_billing_publication (generation)"
+    },
+    {
+      "table": "finops_reconciliation_input",
+      "revision": "e12c6d8a4b50",
+      "definition": "PRIMARY KEY (identity)"
+    },
+    {
+      "table": "finops_reconciliation_input",
+      "revision": "e12c6d8a4b50",
+      "definition": "CHECK (environment IN ('local','development','staging','production'))"
+    },
+    {
+      "table": "finops_reconciliation_input",
+      "revision": "e12c6d8a4b50",
+      "definition": "CHECK (kind IN ('BILLING','RUNTIME','PRICING'))"
+    },
+    {
+      "table": "finops_reconciliation_registry",
+      "revision": "e12c6d8a4b50",
+      "definition": "PRIMARY KEY (identity)"
+    },
+    {
+      "table": "finops_reconciliation_registry",
+      "revision": "e12c6d8a4b50",
+      "definition": "CHECK (environment IN ('local','development','staging','production'))"
+    },
+    {
+      "table": "finops_reconciliation_generation",
+      "revision": "e12c6d8a4b50",
+      "definition": "PRIMARY KEY (identity)"
+    },
+    {
+      "table": "finops_reconciliation_generation",
+      "revision": "e12c6d8a4b50",
+      "definition": "FOREIGN KEY(registry) REFERENCES finops_reconciliation_registry (identity)"
+    },
+    {
+      "table": "finops_reconciliation_generation",
+      "revision": "e12c6d8a4b50",
+      "definition": "FOREIGN KEY(billing_input) REFERENCES finops_reconciliation_input (identity)"
+    },
+    {
+      "table": "finops_reconciliation_generation",
+      "revision": "e12c6d8a4b50",
+      "definition": "FOREIGN KEY(pricing_input) REFERENCES finops_reconciliation_input (identity)"
+    },
+    {
+      "table": "finops_reconciliation_generation",
+      "revision": "e12c6d8a4b50",
+      "definition": "FOREIGN KEY(runtime_input) REFERENCES finops_reconciliation_input (identity)"
+    },
+    {
+      "table": "finops_reconciliation_state",
+      "revision": "e12c6d8a4b50",
+      "definition": "PRIMARY KEY (key)"
+    },
+    {
+      "table": "finops_reconciliation_state",
+      "revision": "e12c6d8a4b50",
+      "definition": "CHECK (environment IN ('local','development','staging','production'))"
+    },
+    {
+      "table": "finops_reconciliation_state",
+      "revision": "e12c6d8a4b50",
+      "definition": "CHECK (revision >= 0)"
+    },
+    {
+      "table": "finops_reconciliation_state",
+      "revision": "e12c6d8a4b50",
+      "definition": "FOREIGN KEY(generation) REFERENCES finops_reconciliation_generation (identity)"
+    },
+    {
+      "table": "finops_unit_definition_version",
+      "revision": "f13a7c9d2e61",
+      "definition": "PRIMARY KEY (identity)"
+    },
+    {
+      "table": "finops_unit_definition_version",
+      "revision": "f13a7c9d2e61",
+      "definition": "UNIQUE (version)"
+    },
+    {
+      "table": "finops_unit_denominator_snapshot",
+      "revision": "f13a7c9d2e61",
+      "definition": "PRIMARY KEY (identity)"
+    },
+    {
+      "table": "finops_unit_denominator_snapshot",
+      "revision": "f13a7c9d2e61",
+      "definition": "CHECK (source IN ('M9','M10'))"
+    },
+    {
+      "table": "finops_unit_driver_version",
+      "revision": "f13a7c9d2e61",
+      "definition": "PRIMARY KEY (identity)"
+    },
+    {
+      "table": "finops_unit_economics_generation",
+      "revision": "f13a7c9d2e61",
+      "definition": "PRIMARY KEY (identity)"
+    },
+    {
+      "table": "finops_unit_economics_generation",
+      "revision": "f13a7c9d2e61",
+      "definition": "FOREIGN KEY(definitions) REFERENCES finops_unit_definition_version (identity)"
+    },
+    {
+      "table": "finops_unit_economics_generation",
+      "revision": "f13a7c9d2e61",
+      "definition": "FOREIGN KEY(drivers) REFERENCES finops_unit_driver_version (identity)"
+    },
+    {
+      "table": "finops_unit_economics_generation",
+      "revision": "f13a7c9d2e61",
+      "definition": "FOREIGN KEY(model_snapshot) REFERENCES finops_unit_denominator_snapshot (identity)"
+    },
+    {
+      "table": "finops_unit_economics_generation",
+      "revision": "f13a7c9d2e61",
+      "definition": "FOREIGN KEY(turn_snapshot) REFERENCES finops_unit_denominator_snapshot (identity)"
+    },
+    {
+      "table": "finops_unit_economics_publication",
+      "revision": "f13a7c9d2e61",
+      "definition": "PRIMARY KEY (key)"
+    },
+    {
+      "table": "finops_unit_economics_publication",
+      "revision": "f13a7c9d2e61",
+      "definition": "CHECK (kind IN ('M9','M10','ECONOMICS'))"
+    },
+    {
+      "table": "finops_unit_economics_publication",
+      "revision": "f13a7c9d2e61",
+      "definition": "CHECK (revision >= 0)"
+    },
+    {
+      "table": "finops_unit_economics_publication",
+      "revision": "f13a7c9d2e61",
+      "definition": "FOREIGN KEY(generation) REFERENCES finops_unit_economics_generation (identity)"
+    },
+    {
+      "table": "finops_unit_economics_publication",
+      "revision": "f13a7c9d2e61",
+      "definition": "FOREIGN KEY(snapshot) REFERENCES finops_unit_denominator_snapshot (identity)"
+    },
+    {
+      "table": "finops_budget_definition_version",
+      "revision": "a14d2e6f8c70",
+      "definition": "PRIMARY KEY (identity)"
+    },
+    {
+      "table": "finops_budget_definition_version",
+      "revision": "a14d2e6f8c70",
+      "definition": "UNIQUE (version)"
+    },
+    {
+      "table": "finops_control_input",
+      "revision": "a14d2e6f8c70",
+      "definition": "PRIMARY KEY (identity)"
+    },
+    {
+      "table": "finops_forecast_backtest_generation",
+      "revision": "a14d2e6f8c70",
+      "definition": "PRIMARY KEY (identity)"
+    },
+    {
+      "table": "finops_control_generation",
+      "revision": "a14d2e6f8c70",
+      "definition": "PRIMARY KEY (identity)"
+    },
+    {
+      "table": "finops_control_generation",
+      "revision": "a14d2e6f8c70",
+      "definition": "CHECK (kind IN ('BUDGET','FORECAST','ANOMALY'))"
+    },
+    {
+      "table": "finops_control_generation",
+      "revision": "a14d2e6f8c70",
+      "definition": "FOREIGN KEY(definitions) REFERENCES finops_budget_definition_version (identity)"
+    },
+    {
+      "table": "finops_control_generation",
+      "revision": "a14d2e6f8c70",
+      "definition": "FOREIGN KEY(inputs) REFERENCES finops_control_input (identity)"
+    },
+    {
+      "table": "finops_anomaly_transition",
+      "revision": "a14d2e6f8c70",
+      "definition": "PRIMARY KEY (identity)"
+    },
+    {
+      "table": "finops_anomaly_transition",
+      "revision": "a14d2e6f8c70",
+      "definition": "CHECK (state IN ('OBSERVED','ACTIVE','RESOLVED'))"
+    },
+    {
+      "table": "finops_anomaly_transition",
+      "revision": "a14d2e6f8c70",
+      "definition": "FOREIGN KEY(generation) REFERENCES finops_control_generation (identity)"
+    },
+    {
+      "table": "finops_control_publication",
+      "revision": "a14d2e6f8c70",
+      "definition": "PRIMARY KEY (key)"
+    },
+    {
+      "table": "finops_control_publication",
+      "revision": "a14d2e6f8c70",
+      "definition": "CHECK (environment IN ('local','development','staging','production'))"
+    },
+    {
+      "table": "finops_control_publication",
+      "revision": "a14d2e6f8c70",
+      "definition": "CHECK (kind IN ('BUDGET','FORECAST','ANOMALY'))"
+    },
+    {
+      "table": "finops_control_publication",
+      "revision": "a14d2e6f8c70",
+      "definition": "CHECK (revision >= 0)"
+    },
+    {
+      "table": "finops_control_publication",
+      "revision": "a14d2e6f8c70",
+      "definition": "FOREIGN KEY(generation) REFERENCES finops_control_generation (identity)"
+    },
+    {
+      "table": "observability_retention_checkpoint",
+      "revision": "b15e3f7a9c81",
+      "definition": "PRIMARY KEY (environment, dataset)"
+    },
+    {
+      "table": "observability_retention_checkpoint",
+      "revision": "b15e3f7a9c81",
+      "definition": "CHECK (generation >= 0)"
+    },
+    {
+      "table": "observability_archive_receipt",
+      "revision": "b15e3f7a9c81",
+      "definition": "PRIMARY KEY (environment, trace_id)"
+    },
+    {
+      "table": "observability_archive_receipt",
+      "revision": "b15e3f7a9c81",
+      "definition": "CHECK (expected_spans >= 0 AND expected_spans <= 10000)"
+    }
+  ],
+  "features": {
+    "slopanoc_case_troubleshooting_progressions": {
+      "revision": "7c4e9a2d1f05",
+      "definition": "\n    case_id VARCHAR NOT NULL, \n    version INTEGER NOT NULL, \n    schema_version TEXT NOT NULL, \n    progression JSON NOT NULL, \n    created_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    updated_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    updated_by_session_id TEXT, \n    PRIMARY KEY (case_id), \n    FOREIGN KEY(case_id) REFERENCES slopanoc_cases (case_id), \n    CONSTRAINT ck_slopanoc_case_troubleshooting_progressions_version_positive CHECK (version >= 1)",
+      "not_null_columns": [
+        "case_id",
+        "version",
+        "schema_version",
+        "progression",
+        "created_at",
+        "updated_at"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "observability_run_event": {
+      "revision": "9f71c2a64e08",
+      "definition": "\n    run_id VARCHAR(36) NOT NULL, \n    event_seq BIGINT NOT NULL, \n    state_version BIGINT NOT NULL, \n    event_type VARCHAR(16) NOT NULL, \n    timestamp TIMESTAMP WITH TIME ZONE NOT NULL, \n    elapsed_ms FLOAT NOT NULL, \n    stage VARCHAR(64) NOT NULL, \n    status VARCHAR(16) NOT NULL, \n    agent VARCHAR(64), \n    tool VARCHAR(64), \n    dependency VARCHAR(64), \n    error_code VARCHAR(64), \n    PRIMARY KEY (run_id, event_seq), \n    CHECK (event_seq >= 0 AND state_version >= 0 AND elapsed_ms >= 0), \n    CHECK (event_type IN ('started','stage','agent','tool','dependency','stalled','resumed','terminal','cleanup','delivery','identity','deadline')), \n    CHECK (stage IN ('request.received','request.validated','session.load.started','session.load.completed','attachments.started','attachments.completed','planning.started','planning.model.started','planning.model.completed','planning.completed','planning.failed','thread.resolve.started','thread.resolve.completed','pending_interaction.resolve.started','pending_interaction.resolve.completed','source_requirements.completed','context.selection.started','context.selection.completed','context.item.selected','context.item.excluded','agent.started','agent.completed','agent.failed','agent.team_manager','agent.technical_authority','agent.incident_manager','agent.problem_manager','agent.automated_operations','model.request.started','model.first_token','model.request.completed','model.request.failed','model.request.timeout','tool.started','tool.completed','tool.failed','tool.timeout','knowledge.search.started','knowledge.search.completed','teams.list_chats.started','teams.list_chats.completed','teams.read_messages.started','teams.read_messages.completed','database.query.started','database.query.completed','storage.operation.started','storage.operation.completed','knowledge.selection.completed','procedure_action.resolved','command_authority.completed','approval.requested','approval.completed','authority.selected','provenance.completed','command_egress.completed','synthesis.started','synthesis.completed','persistence.started','persistence.completed','sse.started','sse.completed','turn.completed','turn.failed','turn.timeout','turn.cancelled','run.stalled','heartbeat')), \n    CHECK (status IN ('PENDING','RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','STALLED'))",
+      "not_null_columns": [
+        "run_id",
+        "event_seq",
+        "state_version",
+        "event_type",
+        "timestamp",
+        "elapsed_ms",
+        "stage",
+        "status"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "observability_run_status": {
+      "revision": "9f71c2a64e08",
+      "definition": "\n    current_span_id VARCHAR(16), \n    current_agent VARCHAR(64), \n    current_tool VARCHAR(64), \n    dependencies JSON NOT NULL, \n    stage_started_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    last_progress_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    heartbeat_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    observed_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    work_deadline_at TIMESTAMP WITH TIME ZONE, \n    total_deadline_at TIMESTAMP WITH TIME ZONE, \n    stalled BOOLEAN NOT NULL, \n    stalled_at TIMESTAMP WITH TIME ZONE, \n    run_id VARCHAR(36) NOT NULL, \n    producer_instance_id VARCHAR(36) NOT NULL, \n    state_version BIGINT NOT NULL, \n    session_detached BOOLEAN DEFAULT false NOT NULL, \n    session_id VARCHAR(128), \n    turn_id VARCHAR(128), \n    turn_id_origin VARCHAR(16), \n    trace_id VARCHAR(32), \n    root_span_id VARCHAR(16), \n    environment VARCHAR(64) NOT NULL, \n    status VARCHAR(16) NOT NULL, \n    current_stage VARCHAR(64) NOT NULL, \n    started_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    terminal_at TIMESTAMP WITH TIME ZONE, \n    elapsed_ms FLOAT NOT NULL, \n    error_code VARCHAR(64), \n    error_stage VARCHAR(64), \n    cleanup_status VARCHAR(16) NOT NULL, \n    delivery_status VARCHAR(16) NOT NULL, \n    service_version VARCHAR(64), \n    git_sha VARCHAR(64), \n    release_id VARCHAR(64), \n    revision VARCHAR(64), \n    region VARCHAR(64), \n    config_version VARCHAR(16), \n    telemetry_schema_version INTEGER NOT NULL, \n    projection_schema_version INTEGER NOT NULL, \n    retention_class VARCHAR(16) NOT NULL, \n    ever_stalled BOOLEAN NOT NULL, \n    timeline_truncated_count BIGINT NOT NULL, \n    expiry_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    PRIMARY KEY (run_id), \n    CHECK ((status IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED') AND terminal_at IS NOT NULL) OR (status IN ('PENDING','RUNNING','STALLED') AND terminal_at IS NULL)), \n    CHECK (cleanup_status IN ('pending','running','completed','failed','timeout')), \n    CHECK (current_stage IN ('request.received','request.validated','session.load.started','session.load.completed','attachments.started','attachments.completed','planning.started','planning.model.started','planning.model.completed','planning.completed','planning.failed','thread.resolve.started','thread.resolve.completed','pending_interaction.resolve.started','pending_interaction.resolve.completed','source_requirements.completed','context.selection.started','context.selection.completed','context.item.selected','context.item.excluded','agent.started','agent.completed','agent.failed','agent.team_manager','agent.technical_authority','agent.incident_manager','agent.problem_manager','agent.automated_operations','model.request.started','model.first_token','model.request.completed','model.request.failed','model.request.timeout','tool.started','tool.completed','tool.failed','tool.timeout','knowledge.search.started','knowledge.search.completed','teams.list_chats.started','teams.list_chats.completed','teams.read_messages.started','teams.read_messages.completed','database.query.started','database.query.completed','storage.operation.started','storage.operation.completed','knowledge.selection.completed','procedure_action.resolved','command_authority.completed','approval.requested','approval.completed','authority.selected','provenance.completed','command_egress.completed','synthesis.started','synthesis.completed','persistence.started','persistence.completed','sse.started','sse.completed','turn.completed','turn.failed','turn.timeout','turn.cancelled','run.stalled','heartbeat')), \n    CHECK (delivery_status IN ('pending','relayed','disconnected')), \n    CHECK (retention_class IN ('normal','exceptional')), \n    CHECK (state_version >= 0 AND elapsed_ms >= 0 AND timeline_truncated_count >= 0), \n    CHECK (status IN ('PENDING','RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','STALLED')), \n    CHECK (status NOT IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED') OR (current_agent IS NULL AND current_tool IS NULL)), \n    CHECK (telemetry_schema_version = 1 AND projection_schema_version = 1)",
+      "not_null_columns": [
+        "dependencies",
+        "stage_started_at",
+        "last_progress_at",
+        "heartbeat_at",
+        "observed_at",
+        "stalled",
+        "run_id",
+        "producer_instance_id",
+        "state_version",
+        "session_detached",
+        "environment",
+        "status",
+        "current_stage",
+        "started_at",
+        "elapsed_ms",
+        "cleanup_status",
+        "delivery_status",
+        "telemetry_schema_version",
+        "projection_schema_version",
+        "retention_class",
+        "ever_stalled",
+        "timeline_truncated_count",
+        "expiry_at",
+        "CHECK"
+      ],
+      "defaults": [
+        "session_detached BOOLEAN DEFAULT false NOT NULL"
+      ],
+      "generated": []
+    },
+    "observability_turn": {
+      "revision": "9f71c2a64e08",
+      "definition": "\n    run_id VARCHAR(36) NOT NULL, \n    producer_instance_id VARCHAR(36) NOT NULL, \n    state_version BIGINT NOT NULL, \n    session_detached BOOLEAN DEFAULT false NOT NULL, \n    session_id VARCHAR(128), \n    turn_id VARCHAR(128), \n    turn_id_origin VARCHAR(16), \n    trace_id VARCHAR(32), \n    root_span_id VARCHAR(16), \n    environment VARCHAR(64) NOT NULL, \n    status VARCHAR(16) NOT NULL, \n    current_stage VARCHAR(64) NOT NULL, \n    started_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    terminal_at TIMESTAMP WITH TIME ZONE, \n    elapsed_ms FLOAT NOT NULL, \n    error_code VARCHAR(64), \n    error_stage VARCHAR(64), \n    cleanup_status VARCHAR(16) NOT NULL, \n    delivery_status VARCHAR(16) NOT NULL, \n    service_version VARCHAR(64), \n    git_sha VARCHAR(64), \n    release_id VARCHAR(64), \n    revision VARCHAR(64), \n    region VARCHAR(64), \n    config_version VARCHAR(16), \n    telemetry_schema_version INTEGER NOT NULL, \n    projection_schema_version INTEGER NOT NULL, \n    retention_class VARCHAR(16) NOT NULL, \n    ever_stalled BOOLEAN NOT NULL, \n    timeline_truncated_count BIGINT NOT NULL, \n    expiry_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    PRIMARY KEY (run_id), \n    CHECK ((status IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED') AND terminal_at IS NOT NULL) OR (status IN ('PENDING','RUNNING','STALLED') AND terminal_at IS NULL)), \n    CHECK (cleanup_status IN ('pending','running','completed','failed','timeout')), \n    CHECK (current_stage IN ('request.received','request.validated','session.load.started','session.load.completed','attachments.started','attachments.completed','planning.started','planning.model.started','planning.model.completed','planning.completed','planning.failed','thread.resolve.started','thread.resolve.completed','pending_interaction.resolve.started','pending_interaction.resolve.completed','source_requirements.completed','context.selection.started','context.selection.completed','context.item.selected','context.item.excluded','agent.started','agent.completed','agent.failed','agent.team_manager','agent.technical_authority','agent.incident_manager','agent.problem_manager','agent.automated_operations','model.request.started','model.first_token','model.request.completed','model.request.failed','model.request.timeout','tool.started','tool.completed','tool.failed','tool.timeout','knowledge.search.started','knowledge.search.completed','teams.list_chats.started','teams.list_chats.completed','teams.read_messages.started','teams.read_messages.completed','database.query.started','database.query.completed','storage.operation.started','storage.operation.completed','knowledge.selection.completed','procedure_action.resolved','command_authority.completed','approval.requested','approval.completed','authority.selected','provenance.completed','command_egress.completed','synthesis.started','synthesis.completed','persistence.started','persistence.completed','sse.started','sse.completed','turn.completed','turn.failed','turn.timeout','turn.cancelled','run.stalled','heartbeat')), \n    CHECK (delivery_status IN ('pending','relayed','disconnected')), \n    CHECK (retention_class IN ('normal','exceptional')), \n    CHECK (state_version >= 0 AND elapsed_ms >= 0 AND timeline_truncated_count >= 0), \n    CHECK (status IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED')), \n    CHECK (status IN ('PENDING','RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','STALLED')), \n    CHECK (telemetry_schema_version = 1 AND projection_schema_version = 1)",
+      "not_null_columns": [
+        "run_id",
+        "producer_instance_id",
+        "state_version",
+        "session_detached",
+        "environment",
+        "status",
+        "current_stage",
+        "started_at",
+        "elapsed_ms",
+        "cleanup_status",
+        "delivery_status",
+        "telemetry_schema_version",
+        "projection_schema_version",
+        "retention_class",
+        "ever_stalled",
+        "timeline_truncated_count",
+        "expiry_at",
+        "CHECK"
+      ],
+      "defaults": [
+        "session_detached BOOLEAN DEFAULT false NOT NULL"
+      ],
+      "generated": []
+    },
+    "observability_sre_receipt": {
+      "revision": "b37e90a14c62",
+      "definition": "\n    run_id VARCHAR(36) NOT NULL, \n    environment VARCHAR(16) NOT NULL, \n    due_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    payload JSON NOT NULL, \n    contribution JSON NOT NULL, \n    settled BOOLEAN NOT NULL, \n    PRIMARY KEY (run_id)",
+      "not_null_columns": [
+        "run_id",
+        "environment",
+        "due_at",
+        "payload",
+        "contribution",
+        "settled"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "observability_sre_bucket": {
+      "revision": "b37e90a14c62",
+      "definition": "\n    environment VARCHAR(16) NOT NULL, \n    slo_id VARCHAR(64) NOT NULL, \n    at TIMESTAMP WITH TIME ZONE NOT NULL, \n    good BIGINT NOT NULL, \n    bad BIGINT NOT NULL, \n    unknown BIGINT NOT NULL, \n    excluded BIGINT NOT NULL, \n    PRIMARY KEY (environment, slo_id, at)",
+      "not_null_columns": [
+        "environment",
+        "slo_id",
+        "at",
+        "good",
+        "bad",
+        "unknown",
+        "excluded"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "observability_sre_source": {
+      "revision": "b37e90a14c62",
+      "definition": "\n    environment VARCHAR(16) NOT NULL, \n    coverage_start TIMESTAMP WITH TIME ZONE NOT NULL, \n    updated_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    capture_complete BOOLEAN NOT NULL, \n    PRIMARY KEY (environment)",
+      "not_null_columns": [
+        "environment",
+        "coverage_start",
+        "updated_at",
+        "capture_complete"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_accounting_source": {
+      "revision": "c10a8f6e2d41",
+      "definition": "\n    environment VARCHAR(16) NOT NULL, \n    coverage_start TIMESTAMP WITH TIME ZONE NOT NULL, \n    updated_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    last_observation TIMESTAMP WITH TIME ZONE, \n    last_persistence TIMESTAMP WITH TIME ZONE, \n    admission_failures BIGINT NOT NULL, \n    PRIMARY KEY (environment)",
+      "not_null_columns": [
+        "environment",
+        "coverage_start",
+        "updated_at",
+        "admission_failures"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_runtime_attempt": {
+      "revision": "c10a8f6e2d41",
+      "definition": "\n    environment VARCHAR(16) NOT NULL, \n    attempt_id VARCHAR(36) NOT NULL, \n    identity JSON NOT NULL, \n    state VARCHAR(32) NOT NULL, \n    admitted_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    started_at TIMESTAMP WITH TIME ZONE, \n    provider_finished_at TIMESTAMP WITH TIME ZONE, \n    deadline_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    captured_at TIMESTAMP WITH TIME ZONE, \n    gap_reason VARCHAR(32), \n    PRIMARY KEY (environment, attempt_id), \n    CHECK (environment IN ('local','development','staging','production')), \n    CHECK (state IN ('ADMITTED','STARTED','PROVIDER_FINISHED','USAGE_CAPTURED','NOT_STARTED','FINAL_CAPTURE_PENDING','FINAL_CAPTURE_FAILED','OUTCOME_UNKNOWN','CONFLICT'))",
+      "not_null_columns": [
+        "environment",
+        "attempt_id",
+        "identity",
+        "state",
+        "admitted_at",
+        "deadline_at"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_usage_bucket": {
+      "revision": "c10a8f6e2d41",
+      "definition": "\n    environment VARCHAR(16) NOT NULL, \n    at TIMESTAMP WITH TIME ZONE NOT NULL, \n    provider VARCHAR(32) NOT NULL, \n    model VARCHAR(128) NOT NULL, \n    agent VARCHAR(64) NOT NULL, \n    workload VARCHAR(32) NOT NULL, \n    operation VARCHAR(64) NOT NULL, \n    operation_type VARCHAR(16) NOT NULL, \n    good BIGINT NOT NULL, \n    bad BIGINT NOT NULL, \n    quantity_known BIGINT NOT NULL, \n    quantity_partial BIGINT NOT NULL, \n    input_tokens BIGINT NOT NULL, \n    input_tokens_known BIGINT NOT NULL, \n    output_tokens BIGINT NOT NULL, \n    output_tokens_known BIGINT NOT NULL, \n    candidate_tokens BIGINT NOT NULL, \n    candidate_tokens_known BIGINT NOT NULL, \n    cached_tokens BIGINT NOT NULL, \n    cached_tokens_known BIGINT NOT NULL, \n    total_tokens BIGINT NOT NULL, \n    total_tokens_known BIGINT NOT NULL, \n    thought_tokens BIGINT NOT NULL, \n    thought_tokens_known BIGINT NOT NULL, \n    tool_input_tokens BIGINT NOT NULL, \n    tool_input_tokens_known BIGINT NOT NULL, \n    billable_characters BIGINT NOT NULL, \n    billable_characters_known BIGINT NOT NULL, \n    PRIMARY KEY (environment, at, provider, model, agent, workload, operation, operation_type), \n    CHECK (good >= 0 AND bad >= 0 AND quantity_known >= 0 AND quantity_partial >= 0)",
+      "not_null_columns": [
+        "environment",
+        "at",
+        "provider",
+        "model",
+        "agent",
+        "workload",
+        "operation",
+        "operation_type",
+        "good",
+        "bad",
+        "quantity_known",
+        "quantity_partial",
+        "input_tokens",
+        "input_tokens_known",
+        "output_tokens",
+        "output_tokens_known",
+        "candidate_tokens",
+        "candidate_tokens_known",
+        "cached_tokens",
+        "cached_tokens_known",
+        "total_tokens",
+        "total_tokens_known",
+        "thought_tokens",
+        "thought_tokens_known",
+        "tool_input_tokens",
+        "tool_input_tokens_known",
+        "billable_characters",
+        "billable_characters_known"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "ai_usage_ledger": {
+      "revision": "c10a8f6e2d41",
+      "definition": "\n    event_id VARCHAR(36) NOT NULL, \n    environment VARCHAR(16) NOT NULL, \n    attempt_id VARCHAR(36) NOT NULL, \n    payload_hash VARCHAR(64) NOT NULL, \n    record_kind VARCHAR(16) NOT NULL, \n    original_event_id VARCHAR(36), \n    correction_reason VARCHAR(32), \n    correction_process VARCHAR(32), \n    metadata_safe JSON NOT NULL, \n    observed_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    created_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    input_tokens BIGINT, \n    output_tokens BIGINT, \n    candidate_tokens BIGINT, \n    cached_tokens BIGINT, \n    total_tokens BIGINT, \n    thought_tokens BIGINT, \n    tool_input_tokens BIGINT, \n    billable_characters BIGINT, \n    PRIMARY KEY (event_id), \n    CHECK (record_kind IN ('BASE','ADJUSTMENT')), \n    CHECK (environment IN ('local','development','staging','production')), \n    CHECK (record_kind = 'ADJUSTMENT' OR input_tokens IS NULL OR input_tokens >= 0), \n    CHECK ((record_kind = 'BASE' AND original_event_id IS NULL) OR (record_kind = 'ADJUSTMENT' AND original_event_id IS NOT NULL)), \n    CHECK (record_kind = 'ADJUSTMENT' OR output_tokens IS NULL OR output_tokens >= 0), \n    CHECK (record_kind = 'ADJUSTMENT' OR candidate_tokens IS NULL OR candidate_tokens >= 0), \n    CHECK (record_kind = 'ADJUSTMENT' OR cached_tokens IS NULL OR cached_tokens >= 0), \n    CHECK (record_kind = 'ADJUSTMENT' OR total_tokens IS NULL OR total_tokens >= 0), \n    CHECK (record_kind = 'ADJUSTMENT' OR tool_input_tokens IS NULL OR tool_input_tokens >= 0), \n    CHECK (record_kind = 'ADJUSTMENT' OR thought_tokens IS NULL OR thought_tokens >= 0), \n    CHECK (record_kind = 'ADJUSTMENT' OR billable_characters IS NULL OR billable_characters >= 0), \n    FOREIGN KEY(environment, attempt_id) REFERENCES finops_runtime_attempt (environment, attempt_id), \n    FOREIGN KEY(original_event_id) REFERENCES ai_usage_ledger (event_id)",
+      "not_null_columns": [
+        "event_id",
+        "environment",
+        "attempt_id",
+        "payload_hash",
+        "record_kind",
+        "metadata_safe",
+        "observed_at",
+        "created_at",
+        "CHECK"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_usage_inbox": {
+      "revision": "c10a8f6e2d41",
+      "definition": "\n    event_id VARCHAR(36) NOT NULL, \n    environment VARCHAR(16) NOT NULL, \n    attempt_id VARCHAR(36) NOT NULL, \n    payload JSON NOT NULL, \n    payload_hash VARCHAR(64) NOT NULL, \n    delivered BOOLEAN NOT NULL, \n    attempts BIGINT NOT NULL, \n    next_attempt_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    created_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    delivered_at TIMESTAMP WITH TIME ZONE, \n    exhausted BOOLEAN NOT NULL, \n    PRIMARY KEY (event_id), \n    CHECK (attempts >= 0), \n    FOREIGN KEY(environment, attempt_id) REFERENCES finops_runtime_attempt (environment, attempt_id)",
+      "not_null_columns": [
+        "event_id",
+        "environment",
+        "attempt_id",
+        "payload",
+        "payload_hash",
+        "delivered",
+        "attempts",
+        "next_attempt_at",
+        "created_at",
+        "exhausted"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_billing_publication": {
+      "revision": "d11b4a8c9e32",
+      "definition": "\n    generation VARCHAR(64) NOT NULL, \n    state_key VARCHAR(64) NOT NULL, \n    fingerprint VARCHAR(64) NOT NULL, \n    schema_version BIGINT NOT NULL, \n    mapping_version VARCHAR(32) NOT NULL, \n    window_start TIMESTAMP WITH TIME ZONE NOT NULL, \n    window_end TIMESTAMP WITH TIME ZONE NOT NULL, \n    extracted_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    export_time TIMESTAMP WITH TIME ZONE, \n    price_from TIMESTAMP WITH TIME ZONE, \n    price_to TIMESTAMP WITH TIME ZONE, \n    row_count BIGINT NOT NULL, \n    late_rows BIGINT NOT NULL, \n    correction_rows BIGINT NOT NULL, \n    unmapped_rows BIGINT NOT NULL, \n    evidence_rows BIGINT NOT NULL, \n    controls JSON NOT NULL, \n    published_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    status VARCHAR(16) NOT NULL, \n    PRIMARY KEY (generation), \n    CHECK (status = 'PUBLISHED'), \n    CHECK (row_count >= 0 AND late_rows >= 0 AND correction_rows >= 0 AND unmapped_rows >= 0), \n    CHECK (schema_version = 1)",
+      "not_null_columns": [
+        "generation",
+        "state_key",
+        "fingerprint",
+        "schema_version",
+        "mapping_version",
+        "window_start",
+        "window_end",
+        "extracted_at",
+        "row_count",
+        "late_rows",
+        "correction_rows",
+        "unmapped_rows",
+        "evidence_rows",
+        "controls",
+        "published_at",
+        "status"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_billing_ingest_state": {
+      "revision": "d11b4a8c9e32",
+      "definition": "\n    key VARCHAR(64) NOT NULL, \n    environment VARCHAR(16) NOT NULL, \n    source VARCHAR(32) NOT NULL, \n    scope VARCHAR(64) NOT NULL, \n    partition VARCHAR(10) NOT NULL, \n    mode VARCHAR(16) NOT NULL, \n    revision BIGINT NOT NULL, \n    generation VARCHAR(64), \n    last_success TIMESTAMP WITH TIME ZONE, \n    last_attempt TIMESTAMP WITH TIME ZONE, \n    error VARCHAR(32), \n    PRIMARY KEY (key), \n    CHECK (environment IN ('local','development','staging','production')), \n    CHECK (revision >= 0), \n    CHECK (mode IN ('TEST_FIXTURE','BIGQUERY')), \n    CHECK (source IN ('DETAILED_BILLING','PRICING_EXPORT','FOCUS')), \n    FOREIGN KEY(generation) REFERENCES finops_billing_publication (generation)",
+      "not_null_columns": [
+        "key",
+        "environment",
+        "source",
+        "scope",
+        "partition",
+        "mode",
+        "revision"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_billing_projection_cache": {
+      "revision": "d11b4a8c9e32",
+      "definition": "\n    generation VARCHAR(64) NOT NULL, \n    summaries JSON NOT NULL, \n    prices JSON NOT NULL, \n    PRIMARY KEY (generation), \n    FOREIGN KEY(generation) REFERENCES finops_billing_publication (generation)",
+      "not_null_columns": [
+        "generation",
+        "summaries",
+        "prices"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_reconciliation_input": {
+      "revision": "e12c6d8a4b50",
+      "definition": "\n    identity VARCHAR(64) NOT NULL, \n    environment VARCHAR(16) NOT NULL, \n    scope VARCHAR(64) NOT NULL, \n    period VARCHAR(10) NOT NULL, \n    kind VARCHAR(16) NOT NULL, \n    source_generation VARCHAR(64), \n    body JSON NOT NULL, \n    PRIMARY KEY (identity), \n    CHECK (environment IN ('local','development','staging','production')), \n    CHECK (kind IN ('BILLING','RUNTIME','PRICING'))",
+      "not_null_columns": [
+        "identity",
+        "environment",
+        "scope",
+        "period",
+        "kind",
+        "body"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_reconciliation_registry": {
+      "revision": "e12c6d8a4b50",
+      "definition": "\n    identity VARCHAR(64) NOT NULL, \n    environment VARCHAR(16) NOT NULL, \n    version VARCHAR(32) NOT NULL, \n    ownership_version VARCHAR(32) NOT NULL, \n    body JSON NOT NULL, \n    PRIMARY KEY (identity), \n    CHECK (environment IN ('local','development','staging','production'))",
+      "not_null_columns": [
+        "identity",
+        "environment",
+        "version",
+        "ownership_version",
+        "body"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_reconciliation_generation": {
+      "revision": "e12c6d8a4b50",
+      "definition": "\n    identity VARCHAR(64) NOT NULL, \n    registry VARCHAR(64) NOT NULL, \n    runtime_input VARCHAR(64) NOT NULL, \n    billing_input VARCHAR(64) NOT NULL, \n    pricing_input VARCHAR(64) NOT NULL, \n    body JSON NOT NULL, \n    published_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    PRIMARY KEY (identity), \n    FOREIGN KEY(registry) REFERENCES finops_reconciliation_registry (identity), \n    FOREIGN KEY(billing_input) REFERENCES finops_reconciliation_input (identity), \n    FOREIGN KEY(pricing_input) REFERENCES finops_reconciliation_input (identity), \n    FOREIGN KEY(runtime_input) REFERENCES finops_reconciliation_input (identity)",
+      "not_null_columns": [
+        "identity",
+        "registry",
+        "runtime_input",
+        "billing_input",
+        "pricing_input",
+        "body",
+        "published_at"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_reconciliation_state": {
+      "revision": "e12c6d8a4b50",
+      "definition": "\n    key VARCHAR(64) NOT NULL, \n    environment VARCHAR(16) NOT NULL, \n    scope VARCHAR(64) NOT NULL, \n    period VARCHAR(10) NOT NULL, \n    revision BIGINT NOT NULL, \n    generation VARCHAR(64), \n    last_attempt TIMESTAMP WITH TIME ZONE, \n    last_success TIMESTAMP WITH TIME ZONE, \n    error VARCHAR(32), \n    PRIMARY KEY (key), \n    CHECK (environment IN ('local','development','staging','production')), \n    CHECK (revision >= 0), \n    FOREIGN KEY(generation) REFERENCES finops_reconciliation_generation (identity)",
+      "not_null_columns": [
+        "key",
+        "environment",
+        "scope",
+        "period",
+        "revision"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_unit_definition_version": {
+      "revision": "f13a7c9d2e61",
+      "definition": "\n    identity VARCHAR(64) NOT NULL, \n    version VARCHAR(32) NOT NULL, \n    body JSON NOT NULL, \n    PRIMARY KEY (identity), \n    UNIQUE (version)",
+      "not_null_columns": [
+        "identity",
+        "version",
+        "body"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_unit_denominator_snapshot": {
+      "revision": "f13a7c9d2e61",
+      "definition": "\n    identity VARCHAR(64) NOT NULL, \n    environment VARCHAR(16) NOT NULL, \n    period VARCHAR(10) NOT NULL, \n    source VARCHAR(8) NOT NULL, \n    body JSON NOT NULL, \n    captured_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    PRIMARY KEY (identity), \n    CHECK (source IN ('M9','M10'))",
+      "not_null_columns": [
+        "identity",
+        "environment",
+        "period",
+        "source",
+        "body",
+        "captured_at"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_unit_driver_version": {
+      "revision": "f13a7c9d2e61",
+      "definition": "\n    identity VARCHAR(64) NOT NULL, \n    environment VARCHAR(16) NOT NULL, \n    scope VARCHAR(64) NOT NULL, \n    version VARCHAR(32) NOT NULL, \n    body JSON NOT NULL, \n    PRIMARY KEY (identity)",
+      "not_null_columns": [
+        "identity",
+        "environment",
+        "scope",
+        "version",
+        "body"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_unit_economics_generation": {
+      "revision": "f13a7c9d2e61",
+      "definition": "\n    identity VARCHAR(64) NOT NULL, \n    definitions VARCHAR(64) NOT NULL, \n    drivers VARCHAR(64) NOT NULL, \n    reconciliation VARCHAR(64) NOT NULL, \n    turn_snapshot VARCHAR(64), \n    model_snapshot VARCHAR(64), \n    body JSON NOT NULL, \n    published_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    PRIMARY KEY (identity), \n    FOREIGN KEY(definitions) REFERENCES finops_unit_definition_version (identity), \n    FOREIGN KEY(drivers) REFERENCES finops_unit_driver_version (identity), \n    FOREIGN KEY(model_snapshot) REFERENCES finops_unit_denominator_snapshot (identity), \n    FOREIGN KEY(turn_snapshot) REFERENCES finops_unit_denominator_snapshot (identity)",
+      "not_null_columns": [
+        "identity",
+        "definitions",
+        "drivers",
+        "reconciliation",
+        "body",
+        "published_at"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_unit_economics_publication": {
+      "revision": "f13a7c9d2e61",
+      "definition": "\n    key VARCHAR(64) NOT NULL, \n    environment VARCHAR(16) NOT NULL, \n    scope VARCHAR(64) NOT NULL, \n    period VARCHAR(10) NOT NULL, \n    kind VARCHAR(16) NOT NULL, \n    revision BIGINT NOT NULL, \n    snapshot VARCHAR(64), \n    generation VARCHAR(64), \n    last_attempt TIMESTAMP WITH TIME ZONE, \n    last_success TIMESTAMP WITH TIME ZONE, \n    error VARCHAR(32), \n    PRIMARY KEY (key), \n    CHECK (kind IN ('M9','M10','ECONOMICS')), \n    CHECK (revision >= 0), \n    FOREIGN KEY(generation) REFERENCES finops_unit_economics_generation (identity), \n    FOREIGN KEY(snapshot) REFERENCES finops_unit_denominator_snapshot (identity)",
+      "not_null_columns": [
+        "key",
+        "environment",
+        "scope",
+        "period",
+        "kind",
+        "revision"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_budget_definition_version": {
+      "revision": "a14d2e6f8c70",
+      "definition": "\n    identity VARCHAR(64) NOT NULL, \n    version VARCHAR(32) NOT NULL, \n    body JSON NOT NULL, \n    recorded_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    PRIMARY KEY (identity), \n    UNIQUE (version)",
+      "not_null_columns": [
+        "identity",
+        "version",
+        "body",
+        "recorded_at"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_control_input": {
+      "revision": "a14d2e6f8c70",
+      "definition": "\n    identity VARCHAR(64) NOT NULL, \n    environment VARCHAR(16) NOT NULL, \n    scope VARCHAR(64) NOT NULL, \n    month VARCHAR(7) NOT NULL, \n    cutoff TIMESTAMP WITH TIME ZONE NOT NULL, \n    body JSON NOT NULL, \n    PRIMARY KEY (identity)",
+      "not_null_columns": [
+        "identity",
+        "environment",
+        "scope",
+        "month",
+        "cutoff",
+        "body"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_forecast_backtest_generation": {
+      "revision": "a14d2e6f8c70",
+      "definition": "\n    identity VARCHAR(64) NOT NULL, \n    environment VARCHAR(16) NOT NULL, \n    scope VARCHAR(64) NOT NULL, \n    forecast VARCHAR(64) NOT NULL, \n    truth VARCHAR(64) NOT NULL, \n    scoring_version VARCHAR(32) NOT NULL, \n    known_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    body JSON NOT NULL, \n    PRIMARY KEY (identity)",
+      "not_null_columns": [
+        "identity",
+        "environment",
+        "scope",
+        "forecast",
+        "truth",
+        "scoring_version",
+        "known_at",
+        "body"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_control_generation": {
+      "revision": "a14d2e6f8c70",
+      "definition": "\n    identity VARCHAR(64) NOT NULL, \n    definitions VARCHAR(64) NOT NULL, \n    inputs VARCHAR(64) NOT NULL, \n    environment VARCHAR(16) NOT NULL, \n    scope VARCHAR(64) NOT NULL, \n    month VARCHAR(7) NOT NULL, \n    kind VARCHAR(16) NOT NULL, \n    issue TIMESTAMP WITH TIME ZONE NOT NULL, \n    body JSON NOT NULL, \n    published_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    PRIMARY KEY (identity), \n    CHECK (kind IN ('BUDGET','FORECAST','ANOMALY')), \n    FOREIGN KEY(definitions) REFERENCES finops_budget_definition_version (identity), \n    FOREIGN KEY(inputs) REFERENCES finops_control_input (identity)",
+      "not_null_columns": [
+        "identity",
+        "definitions",
+        "inputs",
+        "environment",
+        "scope",
+        "month",
+        "kind",
+        "issue",
+        "body",
+        "published_at"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_anomaly_transition": {
+      "revision": "a14d2e6f8c70",
+      "definition": "\n    identity VARCHAR(64) NOT NULL, \n    anomaly VARCHAR(64) NOT NULL, \n    generation VARCHAR(64) NOT NULL, \n    previous VARCHAR(64), \n    state VARCHAR(16) NOT NULL, \n    at TIMESTAMP WITH TIME ZONE NOT NULL, \n    PRIMARY KEY (identity), \n    CHECK (state IN ('OBSERVED','ACTIVE','RESOLVED')), \n    FOREIGN KEY(generation) REFERENCES finops_control_generation (identity)",
+      "not_null_columns": [
+        "identity",
+        "anomaly",
+        "generation",
+        "state",
+        "at"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "finops_control_publication": {
+      "revision": "a14d2e6f8c70",
+      "definition": "\n    key VARCHAR(64) NOT NULL, \n    environment VARCHAR(16) NOT NULL, \n    scope VARCHAR(64) NOT NULL, \n    month VARCHAR(7) NOT NULL, \n    kind VARCHAR(16) NOT NULL, \n    selection VARCHAR(128) NOT NULL, \n    revision BIGINT NOT NULL, \n    generation VARCHAR(64), \n    last_attempt TIMESTAMP WITH TIME ZONE, \n    last_success TIMESTAMP WITH TIME ZONE, \n    error VARCHAR(32), \n    PRIMARY KEY (key), \n    CHECK (environment IN ('local','development','staging','production')), \n    CHECK (kind IN ('BUDGET','FORECAST','ANOMALY')), \n    CHECK (revision >= 0), \n    FOREIGN KEY(generation) REFERENCES finops_control_generation (identity)",
+      "not_null_columns": [
+        "key",
+        "environment",
+        "scope",
+        "month",
+        "kind",
+        "selection",
+        "revision"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "observability_retention_checkpoint": {
+      "revision": "b15e3f7a9c81",
+      "definition": "\n    environment VARCHAR(16) NOT NULL, \n    dataset VARCHAR(64) NOT NULL, \n    policy_version VARCHAR(32) NOT NULL, \n    cutoff TIMESTAMP WITH TIME ZONE NOT NULL, \n    cursor VARCHAR(1024), \n    generation BIGINT NOT NULL, \n    complete BOOLEAN NOT NULL, \n    PRIMARY KEY (environment, dataset), \n    CHECK (generation >= 0)",
+      "not_null_columns": [
+        "environment",
+        "dataset",
+        "policy_version",
+        "cutoff",
+        "generation",
+        "complete"
+      ],
+      "defaults": [],
+      "generated": []
+    },
+    "observability_archive_receipt": {
+      "revision": "b15e3f7a9c81",
+      "definition": "\n    environment VARCHAR(16) NOT NULL, \n    trace_id VARCHAR(32) NOT NULL, \n    trace_class VARCHAR(16) NOT NULL, \n    expected_spans INTEGER NOT NULL, \n    population_digest VARCHAR(64), \n    terminal_at TIMESTAMP WITH TIME ZONE NOT NULL, \n    population_closed BOOLEAN NOT NULL, \n    policy_version VARCHAR(32) NOT NULL, \n    confirmed_digest VARCHAR(64), \n    confirmed_at TIMESTAMP WITH TIME ZONE, \n    PRIMARY KEY (environment, trace_id), \n    CHECK (expected_spans >= 0 AND expected_spans <= 10000)",
+      "not_null_columns": [
+        "environment",
+        "trace_id",
+        "trace_class",
+        "expected_spans",
+        "terminal_at",
+        "population_closed",
+        "policy_version"
+      ],
+      "defaults": [],
+      "generated": []
+    }
+  },
+  "constraint_backing_indexes": [
+    "slopanoc_case_troubleshooting_progressions_pkey",
+    "observability_run_event_pkey",
+    "observability_run_status_pkey",
+    "observability_turn_pkey",
+    "observability_sre_receipt_pkey",
+    "observability_sre_bucket_pkey",
+    "observability_sre_source_pkey",
+    "finops_accounting_source_pkey",
+    "finops_runtime_attempt_pkey",
+    "finops_usage_bucket_pkey",
+    "ai_usage_ledger_pkey",
+    "finops_usage_inbox_pkey",
+    "finops_billing_publication_pkey",
+    "finops_billing_ingest_state_pkey",
+    "finops_billing_projection_cache_pkey",
+    "finops_reconciliation_input_pkey",
+    "finops_reconciliation_registry_pkey",
+    "finops_reconciliation_generation_pkey",
+    "finops_reconciliation_state_pkey",
+    "finops_unit_definition_version_pkey",
+    "finops_unit_definition_version_version_key",
+    "finops_unit_denominator_snapshot_pkey",
+    "finops_unit_driver_version_pkey",
+    "finops_unit_economics_generation_pkey",
+    "finops_unit_economics_publication_pkey",
+    "finops_budget_definition_version_pkey",
+    "finops_budget_definition_version_version_key",
+    "finops_control_input_pkey",
+    "finops_forecast_backtest_generation_pkey",
+    "finops_control_generation_pkey",
+    "finops_anomaly_transition_pkey",
+    "finops_control_publication_pkey",
+    "observability_retention_checkpoint_pkey",
+    "observability_archive_receipt_pkey"
+  ],
+  "counts": {
+    "tables": 32,
+    "observability_tables": 31,
+    "business_progression_tables": 1,
+    "secondary_indexes": 29,
+    "primary_keys": 32,
+    "foreign_keys": 21,
+    "unique_constraints": 2,
+    "checks": 60,
+    "not_null_columns": 258,
+    "defaults": 2,
+    "generated": 0,
+    "alembic_dml_statements": 11,
+    "new_columns": 340,
+    "constraint_backing_indexes": 34
+  },
+  "alembic_dml": [
+    "INSERT INTO alembic_version (version_num) VALUES ('7c4e9a2d1f05') RETURNING alembic_version.version_num",
+    "UPDATE alembic_version SET version_num='9f71c2a64e08' WHERE alembic_version.version_num = '7c4e9a2d1f05'",
+    "UPDATE alembic_version SET version_num='b37e90a14c62' WHERE alembic_version.version_num = '9f71c2a64e08'",
+    "UPDATE alembic_version SET version_num='c10a8f6e2d41' WHERE alembic_version.version_num = 'b37e90a14c62'",
+    "UPDATE alembic_version SET version_num='d11b4a8c9e32' WHERE alembic_version.version_num = 'c10a8f6e2d41'",
+    "UPDATE alembic_version SET version_num='e12c6d8a4b50' WHERE alembic_version.version_num = 'd11b4a8c9e32'",
+    "UPDATE alembic_version SET version_num='f13a7c9d2e61' WHERE alembic_version.version_num = 'e12c6d8a4b50'",
+    "UPDATE alembic_version SET version_num='a14d2e6f8c70' WHERE alembic_version.version_num = 'f13a7c9d2e61'",
+    "UPDATE alembic_version SET version_num='b15e3f7a9c81' WHERE alembic_version.version_num = 'a14d2e6f8c70'",
+    "DELETE FROM alembic_version WHERE alembic_version.version_num = 'd3f8b1c6a942'",
+    "UPDATE alembic_version SET version_num='c16f4a8b2d90' WHERE alembic_version.version_num = 'b15e3f7a9c81'"
+  ],
+  "drop_truncate_alter_rename": [],
+  "identifier_truncation": [],
+  "prior_snapshot_collisions": {
+    "evidence": "prior 2026-10-11 read-only snapshot only; fresh live check BLOCKED (binding unavailable)",
+    "tables": [],
+    "indexes_including_constraint_backing": [],
+    "constraint_scope": "Constraints are table-scoped. All 32 target tables absent; duplicate names on unrelated tables are legal.",
+    "namespace_limit": "Prior public tables/indexes only; fresh pg_class all-relkind/pg_type namespace checks required"
+  },
+  "business_prerequisite_prior_snapshot": {
+    "case_id": [
+      {
+        "schema": "public",
+        "table": "slopanoc_cases",
+        "name": "case_id",
+        "position": 1,
+        "data_type": "character varying",
+        "udt_name": "varchar",
+        "is_nullable": "NO",
+        "column_default": null
+      }
+    ],
+    "pk": [
+      {
+        "schema": "public",
+        "table": "slopanoc_cases",
+        "name": "slopanoc_cases_pkey",
+        "type": "p",
+        "definition": "PRIMARY KEY (case_id)"
+      }
+    ]
+  },
+  "transaction": "Actual env defaults transaction_per_migration=False; PostgreSQL transactional_ddl=True; exact offline SQL has one BEGIN and one COMMIT around entire path. No concurrently/nontransactional DDL.",
+  "expected_public_totals_from_prior_snapshot": {
+    "tables": 48,
+    "columns": 465,
+    "indexes": 92,
+    "constraints_including_pg18_not_null": 492
+  }
+}

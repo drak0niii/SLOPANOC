@@ -236,3 +236,44 @@ command authority, business persistence or a second application event store.
 The transport-independent contract, safe OTLP schema and local sink are in
 `16_PRODUCTION_TELEMETRY_BACKEND.md`. No cloud mutation is required for M15 local
 validation; deployment/IAM/GCS lifecycle/live validation remain separately approved.
+
+## Independent operational read runtime
+
+[25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md](25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md)
+extends this topology: ANOC producers → durable/published observability data →
+independent protected GET-only read API → `/resources/observability` within the
+existing product shell. Console polling must not consume ANOC workers in production.
+Independent compute/pools/health and bounded shared-data access are required;
+reader failure never becomes a synchronous business dependency. Telemetry export,
+financial workers and governance ownership are preserved. No deployment is implied.
+
+## Hybrid topology precedence
+
+The overview above describes logical capabilities, not synchronous ANOC coupling.
+The authoritative service/dataflow Mermaid is in [26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md): critical records/outbox
+commit atomically in SQL; operational OTLP fans out after Collector privacy to
+Google destinations, exceptional archive and optional telemetry Pub/Sub. Separate
+publisher/projector, read API and background FinOps jobs isolate work. SQL canonical
+active-run/terminal state remains authority; projected operational views disclose
+source version/freshness/coverage. GCP Cloud Audit Logs and pgAudit complement
+application audit; none changes conversation/business governance.
+
+
+## Local Phase-1 hybrid refinement — 2026-10-11
+
+[Doc 26](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) defines the locally implemented
+authoritative owner transaction → audit/outbox → bounded publisher → fake transport
+→ projector → durable projection → independent GET reader. Additive revision
+`d26a1b7c9e40` descends from `c16f4a8b2d90`; no shared schema was changed.
+`GET /api/observability/hybrid/activity` exposes bounded safe lifecycle/freshness/debt
+DTOs with server RBAC/environment scope; no worker runs on reads. M15 policy applies
+to typed audit fields; projections do not duplicate M10–M14 financial truth.
+Operational Telemetry Pub/Sub is **OPTIONAL / SCALE-TRIGGERED**, disabled, limited
+to a future curated measured subset. Full unsampled OTLP replication is not Phase-1
+minimum. Existing OTLP/cloud/archive pathways remain unchanged. Local SQLite/fake
+validation is not PostgreSQL/Pub/Sub qualification. M16 remains INCOMPLETE; C41/C42
+are not PASS; M17 remains UNSTARTED. No cloud mutation or deployment authorization.
+
+## Execution journal status — 2026-10-11
+
+Execution journal is authoritative only for recorded lifecycle facts; business owners retain authority. A/B/C/D boundaries and controlled egress are implemented locally; full auditability NO. See [implementation](27_EXECUTION_AUDIT_JOURNAL_AND_CONTROLLED_EGRESS.md), [coverage](AUDIT_COVERAGE_MATRIX.md) and [remaining gaps](AUDIT_OWNERSHIP_GAP_DESIGN.md).

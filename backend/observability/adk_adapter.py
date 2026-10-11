@@ -68,26 +68,32 @@ def observe_event_result(scope, event):
 
 
 async def call_tool(tool, *, args, tool_context):
+    from backend.execution_audit.runtime import Activity
+    audit=Activity("tool",tool_name=tool.name)
+    await audit.start()
+    audit_error=None
     scope = active_execution()
     if scope:
         scope.executed = True
     try:
-        if tool.name in {'teams_list_chats','teams_get_messages','get_resolved_chat_messages',
-                'teams_get_hosted_content','teams_get_all_hosted_content','teams_get_members',
-                'teams_create_chat','teams_send_message'} and hasattr(tool,'func') and not inspect.iscoroutinefunction(tool.func):
-            from copy import copy
-            from functools import wraps
-            from .blocking_work import isolated_call
-            original = tool.func
-            @wraps(original)
-            async def invoke(*positional, **keyword):
-                return await isolated_call(original,*positional,**keyword)
-            isolated = copy(tool)
-            isolated.func = invoke
-            result = await functions.__call_tool_async(isolated,args=args,tool_context=tool_context)
-        else:
-            result = await functions.__call_tool_async(tool, args=args, tool_context=tool_context)
-    except Exception as exc:
+        with audit.attached():
+            if tool.name in {'teams_list_chats','teams_get_messages','get_resolved_chat_messages',
+                    'teams_get_hosted_content','teams_get_all_hosted_content','teams_get_members',
+                    'teams_create_chat','teams_send_message'} and hasattr(tool,'func') and not inspect.iscoroutinefunction(tool.func):
+                from copy import copy
+                from functools import wraps
+                from .blocking_work import isolated_call
+                original = tool.func
+                @wraps(original)
+                async def invoke(*positional, **keyword):
+                    return await isolated_call(original,*positional,**keyword)
+                isolated = copy(tool)
+                isolated.func = invoke
+                result = await functions.__call_tool_async(isolated,args=args,tool_context=tool_context)
+            else:
+                result = await functions.__call_tool_async(tool, args=args, tool_context=tool_context)
+    except BaseException as exc:
+        audit_error=exc
         if scope:
             # An ADK error callback may convert the exception to a safe result.
             scope.result_category = 'error'
@@ -95,6 +101,10 @@ async def call_tool(tool, *, args, tool_context):
             from .errors import ErrorCode
             scope.status, scope.error = (RunStatus.TIMEOUT, ErrorCode.TOOL_TIMEOUT) if isinstance(exc, TimeoutError) else (RunStatus.FAILED, ErrorCode.TOOL_ERROR)
         raise
+    finally:
+        if audit_error is None and isinstance(locals().get("result"),dict) and "error" in result:
+            audit_error=RuntimeError("safe tool failure classification")
+        await audit.finish(audit_error)
     return observe_result(scope, result)
 
 
@@ -161,14 +171,23 @@ class ObservedAgent(Agent):
 
     async def run_async(self, parent_context):
         protect_content()
+        from backend.execution_audit.runtime import Activity
+        audit=Activity("agent",actor_type="agent",actor_reference=self.name)
+        if audit.runtime:
+            session=getattr(parent_context,"session",None)
+            if session is not None:audit.refs["session_id"]=session.id
+            invocation=getattr(parent_context,"invocation_id",None)
+            if invocation:audit.refs["turn_id"]=invocation
+        await audit.start()
         scope = guarded(runtime_for_execution(), start_agent, self)
+        if scope is not None:scope.audit_execution_id=audit.identity
         iterator = super().run_async(parent_context)
         error = None
         budget = child_budget(Category.AGENT)
         try:
             while True:
                 try:
-                    with attached_scope(scope):
+                    with attached_scope(scope),audit.attached():
                         async with enforce(budget):
                             event = await iterator.__anext__()
                 except StopAsyncIteration:
@@ -184,5 +203,6 @@ class ObservedAgent(Agent):
                 with attached_scope(scope):
                     await close_iterator(iterator)
             finally:
+                await audit.finish(error)
                 if scope:
                     finish_scope(scope, error)

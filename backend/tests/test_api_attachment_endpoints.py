@@ -9,6 +9,8 @@ from __future__ import annotations
 import io
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("local_application_identity")
 from fastapi.testclient import TestClient
 from PIL import Image
 

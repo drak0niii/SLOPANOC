@@ -217,3 +217,45 @@ manual modification, deletion or reclassification endpoint/UI. Existing Diagnost
 may show independently confirmed Cloud Trace and archive states, or unavailable;
 absence of retained trace is not execution failure. No large archive browser is required.
 Archive expiry never deletes operational or financial derived records.
+
+## Console route and read API composition — updated placement
+
+Doc [25](25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md) is authoritative for operational
+UI placement: `/resources/observability` in the existing shell, with Overview, Traces,
+Agents, Reliability, SLOs, FinOps, Alerts and Diagnostics. Settings contains only
+effective configuration/policy and an Open Observability Console link. Earlier
+Settings-first placement is superseded; normal chat progress remains unchanged.
+
+Existing protected GET contracts are reused by an independent FastAPI read app.
+The current router includes POST SSE receipts; split read composition and retain
+that write exclusively on ANOC. Preserve capabilities/environment/cursors/privacy
+and archive bounds. Planned independent read API/DB/origin settings are specified
+in doc 25; no code/config is implemented by this architecture pass. Financial GETs
+read published truth, never start calculations/jobs. Writer-local health must not
+be relabeled as remote producer health; missing observations remain unavailable.
+
+## Hybrid storage and read contracts
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) distinguishes authoritative SQL audit/accounting from derived projection
+tables. Future outbox/projection migrations must follow c16f4a8b2d90; none is authored
+or applied here. Reader GETs query authorized durable records/published financial
+generations/projections/archives with bounded scans. No projector/FinOps jobs on GET,
+ANOC polling fallback or duplicate business truth. Future DTOs need source/capture
+classification/watermark/freshness/coverage/debt; UI work is deferred. UNKNOWN is not
+zero. Current canonical active-run SQL persistence remains required.
+
+
+## Local Phase-1 hybrid refinement — 2026-10-11
+
+[Doc 26](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) defines the locally implemented
+authoritative owner transaction → audit/outbox → bounded publisher → fake transport
+→ projector → durable projection → independent GET reader. Additive revision
+`d26a1b7c9e40` descends from `c16f4a8b2d90`; no shared schema was changed.
+`GET /api/observability/hybrid/activity` exposes bounded safe lifecycle/freshness/debt
+DTOs with server RBAC/environment scope; no worker runs on reads. M15 policy applies
+to typed audit fields; projections do not duplicate M10–M14 financial truth.
+Operational Telemetry Pub/Sub is **OPTIONAL / SCALE-TRIGGERED**, disabled, limited
+to a future curated measured subset. Full unsampled OTLP replication is not Phase-1
+minimum. Existing OTLP/cloud/archive pathways remain unchanged. Local SQLite/fake
+validation is not PostgreSQL/Pub/Sub qualification. M16 remains INCOMPLETE; C41/C42
+are not PASS; M17 remains UNSTARTED. No cloud mutation or deployment authorization.

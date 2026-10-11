@@ -1,0 +1,1880 @@
+{
+  "heads": [
+    "b15e3f7a9c81"
+  ],
+  "roots": [
+    "d2081e4fd455"
+  ],
+  "missing_parents": [],
+  "revisions": [
+    {
+      "filename": "alembic/versions/3e59584b1012_chat_attachments_table.py",
+      "purpose": "chat attachments table",
+      "sha256": "3eb366bb85f5bb7299a51018cf5263a5b0b36d17d43ce5ec8f06ead04b52b13d",
+      "upgrade": [
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'slopanoc_chat_attachments'",
+            "sa.Column('attachment_id', sa.String(), nullable=False)",
+            "sa.Column('owner_user_id', sa.Text(), nullable=False)",
+            "sa.Column('session_id', sa.Text(), nullable=False)",
+            "sa.Column('message_id', sa.Text(), nullable=True)",
+            "sa.Column('original_filename', sa.Text(), nullable=False)",
+            "sa.Column('mime_type', sa.Text(), nullable=False)",
+            "sa.Column('size_bytes', sa.Integer(), nullable=False)",
+            "sa.Column('sha256', sa.Text(), nullable=False)",
+            "sa.Column('storage_object_name', sa.Text(), nullable=False)",
+            "sa.Column('status', sa.Text(), nullable=False)",
+            "sa.Column('created_at', sa.DateTime(timezone=True), nullable=False)",
+            "sa.Column('linked_at', sa.DateTime(timezone=True), nullable=True)",
+            "sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True)",
+            "sa.CheckConstraint('length(mime_type) > 0', name='ck_slopanoc_chat_attachments_mime_type_nonempty')",
+            "sa.CheckConstraint('length(original_filename) > 0', name='ck_slopanoc_chat_attachments_filename_nonempty')",
+            "sa.CheckConstraint('length(sha256) > 0', name='ck_slopanoc_chat_attachments_sha256_nonempty')",
+            "sa.CheckConstraint('length(storage_object_name) > 0', name='ck_slopanoc_chat_attachments_storage_object_name_nonempty')",
+            "sa.CheckConstraint('size_bytes > 0', name='ck_slopanoc_chat_attachments_size_bytes_positive')",
+            "sa.PrimaryKeyConstraint('attachment_id')"
+          ],
+          "keywords": {},
+          "line": 25
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_slopanoc_chat_attachments_owner_session'",
+            "'slopanoc_chat_attachments'",
+            "['owner_user_id', 'session_id']"
+          ],
+          "keywords": {
+            "unique": "False"
+          },
+          "line": 46
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_slopanoc_chat_attachments_session_message'",
+            "'slopanoc_chat_attachments'",
+            "['session_id', 'message_id']"
+          ],
+          "keywords": {
+            "unique": "False"
+          },
+          "line": 47
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_slopanoc_chat_attachments_status_created'",
+            "'slopanoc_chat_attachments'",
+            "['status', 'created_at']"
+          ],
+          "keywords": {
+            "unique": "False"
+          },
+          "line": 48
+        }
+      ],
+      "downgrade": [
+        {
+          "operation": "drop_index",
+          "arguments": [
+            "'ix_slopanoc_chat_attachments_status_created'"
+          ],
+          "keywords": {
+            "table_name": "'slopanoc_chat_attachments'"
+          },
+          "line": 54
+        },
+        {
+          "operation": "drop_index",
+          "arguments": [
+            "'ix_slopanoc_chat_attachments_session_message'"
+          ],
+          "keywords": {
+            "table_name": "'slopanoc_chat_attachments'"
+          },
+          "line": 55
+        },
+        {
+          "operation": "drop_index",
+          "arguments": [
+            "'ix_slopanoc_chat_attachments_owner_session'"
+          ],
+          "keywords": {
+            "table_name": "'slopanoc_chat_attachments'"
+          },
+          "line": 56
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'slopanoc_chat_attachments'"
+          ],
+          "keywords": {},
+          "line": 57
+        }
+      ],
+      "revision": "3e59584b1012",
+      "down_revision": "b85242503972",
+      "branch_labels": null,
+      "depends_on": null,
+      "milestone": "Business prerequisite",
+      "safety_classification": "CREATE_ONLY",
+      "index_operations": "INDEX_ONLY"
+    },
+    {
+      "filename": "alembic/versions/7c4e9a2d1f05_case_troubleshooting_progression.py",
+      "purpose": "case troubleshooting progression (authoritative, versioned)",
+      "sha256": "79ed0f2b09357e08a7c4ffee4186dea0b065467d876c67de98428fdf6151be0f",
+      "upgrade": [
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'slopanoc_case_troubleshooting_progressions'",
+            "sa.Column('case_id', sa.String(), nullable=False)",
+            "sa.Column('version', sa.Integer(), nullable=False)",
+            "sa.Column('schema_version', sa.Text(), nullable=False)",
+            "sa.Column('progression', sa.JSON(), nullable=False)",
+            "sa.Column('created_at', sa.DateTime(timezone=True), nullable=False)",
+            "sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False)",
+            "sa.Column('updated_by_session_id', sa.Text(), nullable=True)",
+            "sa.ForeignKeyConstraint(['case_id'], ['slopanoc_cases.case_id'])",
+            "sa.PrimaryKeyConstraint('case_id')",
+            "sa.CheckConstraint('version >= 1', name='ck_slopanoc_case_troubleshooting_progressions_version_positive')"
+          ],
+          "keywords": {},
+          "line": 24
+        }
+      ],
+      "downgrade": [
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'slopanoc_case_troubleshooting_progressions'"
+          ],
+          "keywords": {},
+          "line": 39
+        }
+      ],
+      "revision": "7c4e9a2d1f05",
+      "down_revision": "3e59584b1012",
+      "branch_labels": null,
+      "depends_on": null,
+      "milestone": "Business prerequisite",
+      "safety_classification": "CREATE_ONLY",
+      "index_operations": null
+    },
+    {
+      "filename": "alembic/versions/9f71c2a64e08_observability_storage.py",
+      "purpose": "Add bounded operational observability storage; never ADK schema.",
+      "sha256": "b36bb3025ec031376d1134571d9677b50d33eb776a110917bd63a8b33f5e1d93",
+      "upgrade": [
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'observability_run_event'",
+            "sa.Column('run_id', sa.String(36), nullable=False, primary_key=True)",
+            "sa.Column('event_seq', sa.BigInteger(), nullable=False, primary_key=True)",
+            "sa.Column('state_version', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('event_type', sa.String(16), nullable=False, primary_key=False)",
+            "sa.Column('timestamp', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('elapsed_ms', sa.Float(), nullable=False, primary_key=False)",
+            "sa.Column('stage', sa.String(64), nullable=False, primary_key=False)",
+            "sa.Column('status', sa.String(16), nullable=False, primary_key=False)",
+            "sa.Column('agent', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('tool', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('dependency', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('error_code', sa.String(64), nullable=True, primary_key=False)",
+            "sa.CheckConstraint('event_seq >= 0 AND state_version >= 0 AND elapsed_ms >= 0')",
+            "sa.CheckConstraint(\"event_type IN ('started','stage','agent','tool','dependency','stalled','resumed','terminal','cleanup','delivery','identity','deadline')\")",
+            "sa.CheckConstraint(\"stage IN ('request.received','request.validated','session.load.started','session.load.completed','attachments.started','attachments.completed','planning.started','planning.model.started','planning.model.completed','planning.completed','planning.failed','thread.resolve.started','thread.resolve.completed','pending_interaction.resolve.started','pending_interaction.resolve.completed','source_requirements.completed','context.selection.started','context.selection.completed','context.item.selected','context.item.excluded','agent.started','agent.completed','agent.failed','agent.team_manager','agent.technical_authority','agent.incident_manager','agent.problem_manager','agent.automated_operations','model.request.started','model.first_token','model.request.completed','model.request.failed','model.request.timeout','tool.started','tool.completed','tool.failed','tool.timeout','knowledge.search.started','knowledge.search.completed','teams.list_chats.started','teams.list_chats.completed','teams.read_messages.started','teams.read_messages.completed','database.query.started','database.query.completed','storage.operation.started','storage.operation.completed','knowledge.selection.completed','procedure_action.resolved','command_authority.completed','approval.requested','approval.completed','authority.selected','provenance.completed','command_egress.completed','synthesis.started','synthesis.completed','persistence.started','persistence.completed','sse.started','sse.completed','turn.completed','turn.failed','turn.timeout','turn.cancelled','run.stalled','heartbeat')\")",
+            "sa.CheckConstraint(\"status IN ('PENDING','RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','STALLED')\")"
+          ],
+          "keywords": {},
+          "line": 10
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'observability_run_status'",
+            "sa.Column('current_span_id', sa.String(16), nullable=True, primary_key=False)",
+            "sa.Column('current_agent', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('current_tool', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('dependencies', sa.JSON(), nullable=False, primary_key=False)",
+            "sa.Column('stage_started_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('last_progress_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('heartbeat_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('observed_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('work_deadline_at', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('total_deadline_at', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('stalled', sa.Boolean(), nullable=False, primary_key=False)",
+            "sa.Column('stalled_at', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('run_id', sa.String(36), nullable=False, primary_key=True)",
+            "sa.Column('producer_instance_id', sa.String(36), nullable=False, primary_key=False)",
+            "sa.Column('state_version', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('session_detached', sa.Boolean(), nullable=False, server_default=sa.false())",
+            "sa.Column('session_id', sa.String(128), nullable=True, primary_key=False)",
+            "sa.Column('turn_id', sa.String(128), nullable=True, primary_key=False)",
+            "sa.Column('turn_id_origin', sa.String(16), nullable=True, primary_key=False)",
+            "sa.Column('trace_id', sa.String(32), nullable=True, primary_key=False)",
+            "sa.Column('root_span_id', sa.String(16), nullable=True, primary_key=False)",
+            "sa.Column('environment', sa.String(64), nullable=False, primary_key=False)",
+            "sa.Column('status', sa.String(16), nullable=False, primary_key=False)",
+            "sa.Column('current_stage', sa.String(64), nullable=False, primary_key=False)",
+            "sa.Column('started_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('terminal_at', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('elapsed_ms', sa.Float(), nullable=False, primary_key=False)",
+            "sa.Column('error_code', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('error_stage', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('cleanup_status', sa.String(16), nullable=False, primary_key=False)",
+            "sa.Column('delivery_status', sa.String(16), nullable=False, primary_key=False)",
+            "sa.Column('service_version', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('git_sha', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('release_id', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('revision', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('region', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('config_version', sa.String(16), nullable=True, primary_key=False)",
+            "sa.Column('telemetry_schema_version', sa.Integer(), nullable=False, primary_key=False)",
+            "sa.Column('projection_schema_version', sa.Integer(), nullable=False, primary_key=False)",
+            "sa.Column('retention_class', sa.String(16), nullable=False, primary_key=False)",
+            "sa.Column('ever_stalled', sa.Boolean(), nullable=False, primary_key=False)",
+            "sa.Column('timeline_truncated_count', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('expiry_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.CheckConstraint(\"(status IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED') AND terminal_at IS NOT NULL) OR (status IN ('PENDING','RUNNING','STALLED') AND terminal_at IS NULL)\")",
+            "sa.CheckConstraint(\"cleanup_status IN ('pending','running','completed','failed','timeout')\")",
+            "sa.CheckConstraint(\"current_stage IN ('request.received','request.validated','session.load.started','session.load.completed','attachments.started','attachments.completed','planning.started','planning.model.started','planning.model.completed','planning.completed','planning.failed','thread.resolve.started','thread.resolve.completed','pending_interaction.resolve.started','pending_interaction.resolve.completed','source_requirements.completed','context.selection.started','context.selection.completed','context.item.selected','context.item.excluded','agent.started','agent.completed','agent.failed','agent.team_manager','agent.technical_authority','agent.incident_manager','agent.problem_manager','agent.automated_operations','model.request.started','model.first_token','model.request.completed','model.request.failed','model.request.timeout','tool.started','tool.completed','tool.failed','tool.timeout','knowledge.search.started','knowledge.search.completed','teams.list_chats.started','teams.list_chats.completed','teams.read_messages.started','teams.read_messages.completed','database.query.started','database.query.completed','storage.operation.started','storage.operation.completed','knowledge.selection.completed','procedure_action.resolved','command_authority.completed','approval.requested','approval.completed','authority.selected','provenance.completed','command_egress.completed','synthesis.started','synthesis.completed','persistence.started','persistence.completed','sse.started','sse.completed','turn.completed','turn.failed','turn.timeout','turn.cancelled','run.stalled','heartbeat')\")",
+            "sa.CheckConstraint(\"delivery_status IN ('pending','relayed','disconnected')\")",
+            "sa.CheckConstraint(\"retention_class IN ('normal','exceptional')\")",
+            "sa.CheckConstraint('state_version >= 0 AND elapsed_ms >= 0 AND timeline_truncated_count >= 0')",
+            "sa.CheckConstraint(\"status IN ('PENDING','RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','STALLED')\")",
+            "sa.CheckConstraint(\"status NOT IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED') OR (current_agent IS NULL AND current_tool IS NULL)\")",
+            "sa.CheckConstraint('telemetry_schema_version = 1 AND projection_schema_version = 1')"
+          ],
+          "keywords": {},
+          "line": 28
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_observability_active'",
+            "'observability_run_status'",
+            "['environment', 'status', 'heartbeat_at', 'run_id']"
+          ],
+          "keywords": {},
+          "line": 82
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_observability_session'",
+            "'observability_run_status'",
+            "['session_id', 'started_at', 'run_id']"
+          ],
+          "keywords": {},
+          "line": 83
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_observability_status_expiry'",
+            "'observability_run_status'",
+            "['expiry_at', 'run_id']"
+          ],
+          "keywords": {},
+          "line": 84
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'observability_turn'",
+            "sa.Column('run_id', sa.String(36), nullable=False, primary_key=True)",
+            "sa.Column('producer_instance_id', sa.String(36), nullable=False, primary_key=False)",
+            "sa.Column('state_version', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('session_detached', sa.Boolean(), nullable=False, server_default=sa.false())",
+            "sa.Column('session_id', sa.String(128), nullable=True, primary_key=False)",
+            "sa.Column('turn_id', sa.String(128), nullable=True, primary_key=False)",
+            "sa.Column('turn_id_origin', sa.String(16), nullable=True, primary_key=False)",
+            "sa.Column('trace_id', sa.String(32), nullable=True, primary_key=False)",
+            "sa.Column('root_span_id', sa.String(16), nullable=True, primary_key=False)",
+            "sa.Column('environment', sa.String(64), nullable=False, primary_key=False)",
+            "sa.Column('status', sa.String(16), nullable=False, primary_key=False)",
+            "sa.Column('current_stage', sa.String(64), nullable=False, primary_key=False)",
+            "sa.Column('started_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('terminal_at', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('elapsed_ms', sa.Float(), nullable=False, primary_key=False)",
+            "sa.Column('error_code', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('error_stage', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('cleanup_status', sa.String(16), nullable=False, primary_key=False)",
+            "sa.Column('delivery_status', sa.String(16), nullable=False, primary_key=False)",
+            "sa.Column('service_version', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('git_sha', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('release_id', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('revision', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('region', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('config_version', sa.String(16), nullable=True, primary_key=False)",
+            "sa.Column('telemetry_schema_version', sa.Integer(), nullable=False, primary_key=False)",
+            "sa.Column('projection_schema_version', sa.Integer(), nullable=False, primary_key=False)",
+            "sa.Column('retention_class', sa.String(16), nullable=False, primary_key=False)",
+            "sa.Column('ever_stalled', sa.Boolean(), nullable=False, primary_key=False)",
+            "sa.Column('timeline_truncated_count', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('expiry_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.CheckConstraint(\"(status IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED') AND terminal_at IS NOT NULL) OR (status IN ('PENDING','RUNNING','STALLED') AND terminal_at IS NULL)\")",
+            "sa.CheckConstraint(\"cleanup_status IN ('pending','running','completed','failed','timeout')\")",
+            "sa.CheckConstraint(\"current_stage IN ('request.received','request.validated','session.load.started','session.load.completed','attachments.started','attachments.completed','planning.started','planning.model.started','planning.model.completed','planning.completed','planning.failed','thread.resolve.started','thread.resolve.completed','pending_interaction.resolve.started','pending_interaction.resolve.completed','source_requirements.completed','context.selection.started','context.selection.completed','context.item.selected','context.item.excluded','agent.started','agent.completed','agent.failed','agent.team_manager','agent.technical_authority','agent.incident_manager','agent.problem_manager','agent.automated_operations','model.request.started','model.first_token','model.request.completed','model.request.failed','model.request.timeout','tool.started','tool.completed','tool.failed','tool.timeout','knowledge.search.started','knowledge.search.completed','teams.list_chats.started','teams.list_chats.completed','teams.read_messages.started','teams.read_messages.completed','database.query.started','database.query.completed','storage.operation.started','storage.operation.completed','knowledge.selection.completed','procedure_action.resolved','command_authority.completed','approval.requested','approval.completed','authority.selected','provenance.completed','command_egress.completed','synthesis.started','synthesis.completed','persistence.started','persistence.completed','sse.started','sse.completed','turn.completed','turn.failed','turn.timeout','turn.cancelled','run.stalled','heartbeat')\")",
+            "sa.CheckConstraint(\"delivery_status IN ('pending','relayed','disconnected')\")",
+            "sa.CheckConstraint(\"retention_class IN ('normal','exceptional')\")",
+            "sa.CheckConstraint('state_version >= 0 AND elapsed_ms >= 0 AND timeline_truncated_count >= 0')",
+            "sa.CheckConstraint(\"status IN ('COMPLETED','FAILED','TIMEOUT','CANCELLED')\")",
+            "sa.CheckConstraint(\"status IN ('PENDING','RUNNING','COMPLETED','FAILED','TIMEOUT','CANCELLED','STALLED')\")",
+            "sa.CheckConstraint('telemetry_schema_version = 1 AND projection_schema_version = 1')"
+          ],
+          "keywords": {},
+          "line": 85
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_observability_recent'",
+            "'observability_turn'",
+            "['environment', 'started_at', 'run_id']"
+          ],
+          "keywords": {},
+          "line": 127
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_observability_summary_expiry'",
+            "'observability_turn'",
+            "['expiry_at', 'run_id']"
+          ],
+          "keywords": {},
+          "line": 128
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_observability_summary_session'",
+            "'observability_turn'",
+            "['session_id', 'started_at', 'run_id']"
+          ],
+          "keywords": {},
+          "line": 129
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_observability_terminal'",
+            "'observability_turn'",
+            "['environment', 'terminal_at', 'run_id']"
+          ],
+          "keywords": {},
+          "line": 130
+        }
+      ],
+      "downgrade": [
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'observability_turn'"
+          ],
+          "keywords": {},
+          "line": 133
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'observability_run_status'"
+          ],
+          "keywords": {},
+          "line": 134
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'observability_run_event'"
+          ],
+          "keywords": {},
+          "line": 135
+        }
+      ],
+      "revision": "9f71c2a64e08",
+      "down_revision": "7c4e9a2d1f05",
+      "branch_labels": null,
+      "depends_on": null,
+      "milestone": "M7",
+      "safety_classification": "CREATE_ONLY",
+      "index_operations": "INDEX_ONLY"
+    },
+    {
+      "filename": "alembic/versions/a14d2e6f8c70_finops_controls.py",
+      "purpose": "M14 financial controls; additive, source schemas untouched.",
+      "sha256": "04d9dc5e8c2b7b3f542ce3f36f6ef44de65246a6ff92b45ed172029ffd121e29",
+      "upgrade": [
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_budget_definition_version'",
+            "sa.Column('identity', sa.String(64), primary_key=True, nullable=False)",
+            "sa.Column('version', sa.String(32), primary_key=False, nullable=False, unique=True)",
+            "sa.Column('body', sa.JSON(), primary_key=False, nullable=False)",
+            "sa.Column('recorded_at', sa.DateTime(timezone=True), primary_key=False, nullable=False)"
+          ],
+          "keywords": {},
+          "line": 10
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_control_input'",
+            "sa.Column('identity', sa.String(64), primary_key=True, nullable=False)",
+            "sa.Column('environment', sa.String(16), primary_key=False, nullable=False)",
+            "sa.Column('scope', sa.String(64), primary_key=False, nullable=False)",
+            "sa.Column('month', sa.String(7), primary_key=False, nullable=False)",
+            "sa.Column('cutoff', sa.DateTime(timezone=True), primary_key=False, nullable=False)",
+            "sa.Column('body', sa.JSON(), primary_key=False, nullable=False)"
+          ],
+          "keywords": {},
+          "line": 16
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_control_input_asof'",
+            "'finops_control_input'",
+            "['environment', 'scope', 'month', 'cutoff']"
+          ],
+          "keywords": {
+            "unique": "False"
+          },
+          "line": 24
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_forecast_backtest_generation'",
+            "sa.Column('identity', sa.String(64), primary_key=True, nullable=False)",
+            "sa.Column('environment', sa.String(16), primary_key=False, nullable=False)",
+            "sa.Column('scope', sa.String(64), primary_key=False, nullable=False)",
+            "sa.Column('forecast', sa.String(64), primary_key=False, nullable=False)",
+            "sa.Column('truth', sa.String(64), primary_key=False, nullable=False)",
+            "sa.Column('scoring_version', sa.String(32), primary_key=False, nullable=False)",
+            "sa.Column('known_at', sa.DateTime(timezone=True), primary_key=False, nullable=False)",
+            "sa.Column('body', sa.JSON(), primary_key=False, nullable=False)"
+          ],
+          "keywords": {},
+          "line": 25
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_control_backtest_asof'",
+            "'finops_forecast_backtest_generation'",
+            "['environment', 'scope', 'known_at']"
+          ],
+          "keywords": {
+            "unique": "False"
+          },
+          "line": 35
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_control_generation'",
+            "sa.Column('identity', sa.String(64), primary_key=True, nullable=False)",
+            "sa.Column('definitions', sa.String(64), sa.ForeignKey('finops_budget_definition_version.identity'), primary_key=False, nullable=False)",
+            "sa.Column('inputs', sa.String(64), sa.ForeignKey('finops_control_input.identity'), primary_key=False, nullable=False)",
+            "sa.Column('environment', sa.String(16), primary_key=False, nullable=False)",
+            "sa.Column('scope', sa.String(64), primary_key=False, nullable=False)",
+            "sa.Column('month', sa.String(7), primary_key=False, nullable=False)",
+            "sa.Column('kind', sa.String(16), primary_key=False, nullable=False)",
+            "sa.Column('issue', sa.DateTime(timezone=True), primary_key=False, nullable=False)",
+            "sa.Column('body', sa.JSON(), primary_key=False, nullable=False)",
+            "sa.Column('published_at', sa.DateTime(timezone=True), primary_key=False, nullable=False)",
+            "sa.CheckConstraint(\"kind IN ('BUDGET','FORECAST','ANOMALY')\")"
+          ],
+          "keywords": {},
+          "line": 36
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_control_history'",
+            "'finops_control_generation'",
+            "['environment', 'scope', 'month', 'kind', 'issue']"
+          ],
+          "keywords": {
+            "unique": "False"
+          },
+          "line": 49
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_anomaly_transition'",
+            "sa.Column('identity', sa.String(64), primary_key=True, nullable=False)",
+            "sa.Column('anomaly', sa.String(64), primary_key=False, nullable=False)",
+            "sa.Column('generation', sa.String(64), sa.ForeignKey('finops_control_generation.identity'), primary_key=False, nullable=False)",
+            "sa.Column('previous', sa.String(64), primary_key=False, nullable=True)",
+            "sa.Column('state', sa.String(16), primary_key=False, nullable=False)",
+            "sa.Column('at', sa.DateTime(timezone=True), primary_key=False, nullable=False)",
+            "sa.CheckConstraint(\"state IN ('OBSERVED','ACTIVE','RESOLVED')\")"
+          ],
+          "keywords": {},
+          "line": 50
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_control_anomaly_history'",
+            "'finops_anomaly_transition'",
+            "['anomaly', 'at']"
+          ],
+          "keywords": {
+            "unique": "False"
+          },
+          "line": 59
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_control_publication'",
+            "sa.Column('key', sa.String(64), primary_key=True, nullable=False)",
+            "sa.Column('environment', sa.String(16), primary_key=False, nullable=False)",
+            "sa.Column('scope', sa.String(64), primary_key=False, nullable=False)",
+            "sa.Column('month', sa.String(7), primary_key=False, nullable=False)",
+            "sa.Column('kind', sa.String(16), primary_key=False, nullable=False)",
+            "sa.Column('selection', sa.String(128), primary_key=False, nullable=False)",
+            "sa.Column('revision', sa.BigInteger(), primary_key=False, nullable=False)",
+            "sa.Column('generation', sa.String(64), sa.ForeignKey('finops_control_generation.identity'), primary_key=False, nullable=True)",
+            "sa.Column('last_attempt', sa.DateTime(timezone=True), primary_key=False, nullable=True)",
+            "sa.Column('last_success', sa.DateTime(timezone=True), primary_key=False, nullable=True)",
+            "sa.Column('error', sa.String(32), primary_key=False, nullable=True)",
+            "sa.CheckConstraint(\"environment IN ('local','development','staging','production')\")",
+            "sa.CheckConstraint(\"kind IN ('BUDGET','FORECAST','ANOMALY')\")",
+            "sa.CheckConstraint('revision >= 0')"
+          ],
+          "keywords": {},
+          "line": 60
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ux_control_publication'",
+            "'finops_control_publication'",
+            "['environment', 'scope', 'month', 'kind', 'selection']"
+          ],
+          "keywords": {
+            "unique": "True"
+          },
+          "line": 76
+        }
+      ],
+      "downgrade": [
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_control_publication'"
+          ],
+          "keywords": {},
+          "line": 79
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_anomaly_transition'"
+          ],
+          "keywords": {},
+          "line": 80
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_control_generation'"
+          ],
+          "keywords": {},
+          "line": 81
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_forecast_backtest_generation'"
+          ],
+          "keywords": {},
+          "line": 82
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_control_input'"
+          ],
+          "keywords": {},
+          "line": 83
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_budget_definition_version'"
+          ],
+          "keywords": {},
+          "line": 84
+        }
+      ],
+      "revision": "a14d2e6f8c70",
+      "down_revision": "f13a7c9d2e61",
+      "branch_labels": null,
+      "depends_on": null,
+      "milestone": "M14",
+      "safety_classification": "CREATE_ONLY",
+      "index_operations": "INDEX_ONLY"
+    },
+    {
+      "filename": "alembic/versions/b15e3f7a9c81_observability_policy.py",
+      "purpose": "M15 retention checkpoints and archive receipts; no full trace database blobs.",
+      "sha256": "8027e2d3db9506a5f8f7e38142bd1f6c65665dc571eced0a64aaaa5efc460b0f",
+      "upgrade": [
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'observability_retention_checkpoint'",
+            "sa.Column('environment', sa.String(16), primary_key=True)",
+            "sa.Column('dataset', sa.String(64), primary_key=True)",
+            "sa.Column('policy_version', sa.String(32), nullable=False)",
+            "sa.Column('cutoff', sa.DateTime(timezone=True), nullable=False)",
+            "sa.Column('cursor', sa.String(1024), nullable=True)",
+            "sa.Column('generation', sa.BigInteger(), nullable=False)",
+            "sa.Column('complete', sa.Boolean(), nullable=False)",
+            "sa.CheckConstraint('generation >= 0')"
+          ],
+          "keywords": {},
+          "line": 10
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'observability_archive_receipt'",
+            "sa.Column('environment', sa.String(16), primary_key=True)",
+            "sa.Column('trace_id', sa.String(32), primary_key=True)",
+            "sa.Column('trace_class', sa.String(16), nullable=False)",
+            "sa.Column('expected_spans', sa.Integer(), nullable=False)",
+            "sa.Column('population_digest', sa.String(64), nullable=True)",
+            "sa.Column('terminal_at', sa.DateTime(timezone=True), nullable=False)",
+            "sa.Column('population_closed', sa.Boolean(), nullable=False)",
+            "sa.Column('policy_version', sa.String(32), nullable=False)",
+            "sa.Column('confirmed_digest', sa.String(64), nullable=True)",
+            "sa.Column('confirmed_at', sa.DateTime(timezone=True), nullable=True)",
+            "sa.CheckConstraint('expected_spans >= 0 AND expected_spans <= 10000')"
+          ],
+          "keywords": {},
+          "line": 19
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_archive_receipt_environment_terminal'",
+            "'observability_archive_receipt'",
+            "['environment', 'terminal_at']"
+          ],
+          "keywords": {},
+          "line": 31
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_m15_run_retention'",
+            "'observability_run_status'",
+            "['environment', 'expiry_at', 'run_id']"
+          ],
+          "keywords": {},
+          "line": 32
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_m15_summary_retention'",
+            "'observability_turn'",
+            "['environment', 'expiry_at', 'run_id']"
+          ],
+          "keywords": {},
+          "line": 33
+        }
+      ],
+      "downgrade": [
+        {
+          "operation": "drop_index",
+          "arguments": [
+            "'ix_m15_summary_retention'"
+          ],
+          "keywords": {
+            "table_name": "'observability_turn'"
+          },
+          "line": 36
+        },
+        {
+          "operation": "drop_index",
+          "arguments": [
+            "'ix_m15_run_retention'"
+          ],
+          "keywords": {
+            "table_name": "'observability_run_status'"
+          },
+          "line": 37
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'observability_archive_receipt'"
+          ],
+          "keywords": {},
+          "line": 38
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'observability_retention_checkpoint'"
+          ],
+          "keywords": {},
+          "line": 39
+        }
+      ],
+      "revision": "b15e3f7a9c81",
+      "down_revision": "a14d2e6f8c70",
+      "branch_labels": null,
+      "depends_on": null,
+      "milestone": "M15",
+      "safety_classification": "CREATE_ONLY",
+      "index_operations": "INDEX_ONLY"
+    },
+    {
+      "filename": "alembic/versions/b37e90a14c62_sre_operational_rollups.py",
+      "purpose": "M9 compact SRE receipts/rollups, no accounting schema; local authoring only.",
+      "sha256": "a7e3d6c0dce35aa85e61d6a421b7bb838df015092bc6869cd1586dad17fc544b",
+      "upgrade": [
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'observability_sre_receipt'",
+            "sa.Column('run_id', sa.String(36), primary_key=True)",
+            "sa.Column('environment', sa.String(16), nullable=False)",
+            "sa.Column('due_at', sa.DateTime(timezone=True), nullable=False)",
+            "sa.Column('payload', sa.JSON(), nullable=False)",
+            "sa.Column('contribution', sa.JSON(), nullable=False)",
+            "sa.Column('settled', sa.Boolean(), nullable=False)"
+          ],
+          "keywords": {},
+          "line": 10
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_sre_due'",
+            "'observability_sre_receipt'",
+            "['settled', 'due_at']"
+          ],
+          "keywords": {},
+          "line": 16
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'observability_sre_bucket'",
+            "sa.Column('environment', sa.String(16), primary_key=True)",
+            "sa.Column('slo_id', sa.String(64), primary_key=True)",
+            "sa.Column('at', sa.DateTime(timezone=True), primary_key=True)",
+            "*[sa.Column(k, sa.BigInteger(), nullable=False) for k in ('good', 'bad', 'unknown', 'excluded')]"
+          ],
+          "keywords": {},
+          "line": 17
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'observability_sre_source'",
+            "sa.Column('environment', sa.String(16), primary_key=True)",
+            "sa.Column('coverage_start', sa.DateTime(timezone=True), nullable=False)",
+            "sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False)",
+            "sa.Column('capture_complete', sa.Boolean(), nullable=False)"
+          ],
+          "keywords": {},
+          "line": 21
+        }
+      ],
+      "downgrade": [
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'observability_sre_source'"
+          ],
+          "keywords": {},
+          "line": 28
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'observability_sre_bucket'"
+          ],
+          "keywords": {},
+          "line": 28
+        },
+        {
+          "operation": "drop_index",
+          "arguments": [
+            "'ix_sre_due'"
+          ],
+          "keywords": {
+            "table_name": "'observability_sre_receipt'"
+          },
+          "line": 29
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'observability_sre_receipt'"
+          ],
+          "keywords": {},
+          "line": 29
+        }
+      ],
+      "revision": "b37e90a14c62",
+      "down_revision": "9f71c2a64e08",
+      "branch_labels": null,
+      "depends_on": null,
+      "milestone": "M9",
+      "safety_classification": "CREATE_ONLY",
+      "index_operations": "INDEX_ONLY"
+    },
+    {
+      "filename": "alembic/versions/b85242503972_case_timestamps_use_timezone_aware_.py",
+      "purpose": "case timestamps use timezone-aware columns",
+      "sha256": "d5bc0d3494886291562af5c2bc43c278176afa039ab3600baf71a987f7a90ea5",
+      "upgrade": [
+        {
+          "operation": "alter_column",
+          "arguments": [
+            "'slopanoc_case_context_items'",
+            "'source_timestamp'"
+          ],
+          "keywords": {
+            "existing_type": "postgresql.TIMESTAMP()",
+            "type_": "sa.DateTime(timezone=True)",
+            "existing_nullable": "True"
+          },
+          "line": 40
+        },
+        {
+          "operation": "alter_column",
+          "arguments": [
+            "'slopanoc_case_context_items'",
+            "'created_at'"
+          ],
+          "keywords": {
+            "existing_type": "postgresql.TIMESTAMP()",
+            "type_": "sa.DateTime(timezone=True)",
+            "existing_nullable": "False"
+          },
+          "line": 44
+        },
+        {
+          "operation": "alter_column",
+          "arguments": [
+            "'slopanoc_case_memberships'",
+            "'created_at'"
+          ],
+          "keywords": {
+            "existing_type": "postgresql.TIMESTAMP()",
+            "type_": "sa.DateTime(timezone=True)",
+            "existing_nullable": "False"
+          },
+          "line": 48
+        },
+        {
+          "operation": "alter_column",
+          "arguments": [
+            "'slopanoc_case_session_links'",
+            "'linked_at'"
+          ],
+          "keywords": {
+            "existing_type": "postgresql.TIMESTAMP()",
+            "type_": "sa.DateTime(timezone=True)",
+            "existing_nullable": "False"
+          },
+          "line": 52
+        },
+        {
+          "operation": "alter_column",
+          "arguments": [
+            "'slopanoc_cases'",
+            "'created_at'"
+          ],
+          "keywords": {
+            "existing_type": "postgresql.TIMESTAMP()",
+            "type_": "sa.DateTime(timezone=True)",
+            "existing_nullable": "False"
+          },
+          "line": 56
+        },
+        {
+          "operation": "alter_column",
+          "arguments": [
+            "'slopanoc_cases'",
+            "'updated_at'"
+          ],
+          "keywords": {
+            "existing_type": "postgresql.TIMESTAMP()",
+            "type_": "sa.DateTime(timezone=True)",
+            "existing_nullable": "False"
+          },
+          "line": 60
+        }
+      ],
+      "downgrade": [
+        {
+          "operation": "alter_column",
+          "arguments": [
+            "'slopanoc_cases'",
+            "'updated_at'"
+          ],
+          "keywords": {
+            "existing_type": "sa.DateTime(timezone=True)",
+            "type_": "postgresql.TIMESTAMP()",
+            "existing_nullable": "False"
+          },
+          "line": 67
+        },
+        {
+          "operation": "alter_column",
+          "arguments": [
+            "'slopanoc_cases'",
+            "'created_at'"
+          ],
+          "keywords": {
+            "existing_type": "sa.DateTime(timezone=True)",
+            "type_": "postgresql.TIMESTAMP()",
+            "existing_nullable": "False"
+          },
+          "line": 71
+        },
+        {
+          "operation": "alter_column",
+          "arguments": [
+            "'slopanoc_case_session_links'",
+            "'linked_at'"
+          ],
+          "keywords": {
+            "existing_type": "sa.DateTime(timezone=True)",
+            "type_": "postgresql.TIMESTAMP()",
+            "existing_nullable": "False"
+          },
+          "line": 75
+        },
+        {
+          "operation": "alter_column",
+          "arguments": [
+            "'slopanoc_case_memberships'",
+            "'created_at'"
+          ],
+          "keywords": {
+            "existing_type": "sa.DateTime(timezone=True)",
+            "type_": "postgresql.TIMESTAMP()",
+            "existing_nullable": "False"
+          },
+          "line": 79
+        },
+        {
+          "operation": "alter_column",
+          "arguments": [
+            "'slopanoc_case_context_items'",
+            "'created_at'"
+          ],
+          "keywords": {
+            "existing_type": "sa.DateTime(timezone=True)",
+            "type_": "postgresql.TIMESTAMP()",
+            "existing_nullable": "False"
+          },
+          "line": 83
+        },
+        {
+          "operation": "alter_column",
+          "arguments": [
+            "'slopanoc_case_context_items'",
+            "'source_timestamp'"
+          ],
+          "keywords": {
+            "existing_type": "sa.DateTime(timezone=True)",
+            "type_": "postgresql.TIMESTAMP()",
+            "existing_nullable": "True"
+          },
+          "line": 87
+        }
+      ],
+      "revision": "b85242503972",
+      "down_revision": "d2081e4fd455",
+      "branch_labels": null,
+      "depends_on": null,
+      "milestone": "Business prerequisite",
+      "safety_classification": "ALTER_EXISTING",
+      "index_operations": null
+    },
+    {
+      "filename": "alembic/versions/c10a8f6e2d41_finops_runtime_usage.py",
+      "purpose": "M10 dedicated runtime usage accounting; no shared database application.",
+      "sha256": "2e34bb050b63133dfb915874a551eafc09c566c9363973ba74ae18a61b72ca59",
+      "upgrade": [
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_accounting_source'",
+            "sa.Column('environment', sa.String(length=16), nullable=False, primary_key=True)",
+            "sa.Column('coverage_start', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('last_observation', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('last_persistence', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('admission_failures', sa.BigInteger(), nullable=False, primary_key=False)"
+          ],
+          "keywords": {},
+          "line": 10
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_runtime_attempt'",
+            "sa.Column('environment', sa.String(length=16), nullable=False, primary_key=True)",
+            "sa.Column('attempt_id', sa.String(length=36), nullable=False, primary_key=True)",
+            "sa.Column('identity', sa.JSON(), nullable=False, primary_key=False)",
+            "sa.Column('state', sa.String(length=32), nullable=False, primary_key=False)",
+            "sa.Column('admitted_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('started_at', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('provider_finished_at', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('deadline_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('captured_at', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('gap_reason', sa.String(length=32), nullable=True, primary_key=False)",
+            "sa.CheckConstraint(\"environment IN ('local','development','staging','production')\")",
+            "sa.CheckConstraint(\"state IN ('ADMITTED','STARTED','PROVIDER_FINISHED','USAGE_CAPTURED','NOT_STARTED','FINAL_CAPTURE_PENDING','FINAL_CAPTURE_FAILED','OUTCOME_UNKNOWN','CONFLICT')\")"
+          ],
+          "keywords": {},
+          "line": 18
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_finops_attempt_debt'",
+            "'finops_runtime_attempt'",
+            "['environment', 'state', 'deadline_at']"
+          ],
+          "keywords": {
+            "unique": "False"
+          },
+          "line": 32
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_usage_bucket'",
+            "sa.Column('environment', sa.String(length=16), nullable=False, primary_key=True)",
+            "sa.Column('at', sa.DateTime(timezone=True), nullable=False, primary_key=True)",
+            "sa.Column('provider', sa.String(length=32), nullable=False, primary_key=True)",
+            "sa.Column('model', sa.String(length=128), nullable=False, primary_key=True)",
+            "sa.Column('agent', sa.String(length=64), nullable=False, primary_key=True)",
+            "sa.Column('workload', sa.String(length=32), nullable=False, primary_key=True)",
+            "sa.Column('operation', sa.String(length=64), nullable=False, primary_key=True)",
+            "sa.Column('operation_type', sa.String(length=16), nullable=False, primary_key=True)",
+            "sa.Column('good', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('bad', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('quantity_known', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('quantity_partial', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('input_tokens', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('input_tokens_known', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('output_tokens', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('output_tokens_known', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('candidate_tokens', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('candidate_tokens_known', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('cached_tokens', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('cached_tokens_known', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('total_tokens', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('total_tokens_known', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('thought_tokens', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('thought_tokens_known', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('tool_input_tokens', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('tool_input_tokens_known', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('billable_characters', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('billable_characters_known', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.CheckConstraint('good >= 0 AND bad >= 0 AND quantity_known >= 0 AND quantity_partial >= 0')"
+          ],
+          "keywords": {},
+          "line": 33
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_finops_bucket_time'",
+            "'finops_usage_bucket'",
+            "['environment', 'at']"
+          ],
+          "keywords": {
+            "unique": "False"
+          },
+          "line": 64
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'ai_usage_ledger'",
+            "sa.Column('event_id', sa.String(length=36), nullable=False, primary_key=True)",
+            "sa.Column('environment', sa.String(length=16), nullable=False, primary_key=False)",
+            "sa.Column('attempt_id', sa.String(length=36), nullable=False, primary_key=False)",
+            "sa.Column('payload_hash', sa.String(length=64), nullable=False, primary_key=False)",
+            "sa.Column('record_kind', sa.String(length=16), nullable=False, primary_key=False)",
+            "sa.Column('original_event_id', sa.String(length=36), nullable=True, primary_key=False)",
+            "sa.Column('correction_reason', sa.String(length=32), nullable=True, primary_key=False)",
+            "sa.Column('correction_process', sa.String(length=32), nullable=True, primary_key=False)",
+            "sa.Column('metadata_safe', sa.JSON(), nullable=False, primary_key=False)",
+            "sa.Column('observed_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('input_tokens', sa.BigInteger(), nullable=True, primary_key=False)",
+            "sa.Column('output_tokens', sa.BigInteger(), nullable=True, primary_key=False)",
+            "sa.Column('candidate_tokens', sa.BigInteger(), nullable=True, primary_key=False)",
+            "sa.Column('cached_tokens', sa.BigInteger(), nullable=True, primary_key=False)",
+            "sa.Column('total_tokens', sa.BigInteger(), nullable=True, primary_key=False)",
+            "sa.Column('thought_tokens', sa.BigInteger(), nullable=True, primary_key=False)",
+            "sa.Column('tool_input_tokens', sa.BigInteger(), nullable=True, primary_key=False)",
+            "sa.Column('billable_characters', sa.BigInteger(), nullable=True, primary_key=False)",
+            "sa.CheckConstraint(\"record_kind IN ('BASE','ADJUSTMENT')\")",
+            "sa.CheckConstraint(\"environment IN ('local','development','staging','production')\")",
+            "sa.CheckConstraint(\"record_kind = 'ADJUSTMENT' OR input_tokens IS NULL OR input_tokens >= 0\")",
+            "sa.CheckConstraint(\"(record_kind = 'BASE' AND original_event_id IS NULL) OR (record_kind = 'ADJUSTMENT' AND original_event_id IS NOT NULL)\")",
+            "sa.CheckConstraint(\"record_kind = 'ADJUSTMENT' OR output_tokens IS NULL OR output_tokens >= 0\")",
+            "sa.CheckConstraint(\"record_kind = 'ADJUSTMENT' OR candidate_tokens IS NULL OR candidate_tokens >= 0\")",
+            "sa.CheckConstraint(\"record_kind = 'ADJUSTMENT' OR cached_tokens IS NULL OR cached_tokens >= 0\")",
+            "sa.CheckConstraint(\"record_kind = 'ADJUSTMENT' OR total_tokens IS NULL OR total_tokens >= 0\")",
+            "sa.CheckConstraint(\"record_kind = 'ADJUSTMENT' OR tool_input_tokens IS NULL OR tool_input_tokens >= 0\")",
+            "sa.CheckConstraint(\"record_kind = 'ADJUSTMENT' OR thought_tokens IS NULL OR thought_tokens >= 0\")",
+            "sa.CheckConstraint(\"record_kind = 'ADJUSTMENT' OR billable_characters IS NULL OR billable_characters >= 0\")",
+            "sa.ForeignKeyConstraint(['environment', 'attempt_id'], ['finops_runtime_attempt.environment', 'finops_runtime_attempt.attempt_id'])",
+            "sa.ForeignKeyConstraint(['original_event_id'], ['ai_usage_ledger.event_id'])"
+          ],
+          "keywords": {},
+          "line": 65
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_finops_ledger_time'",
+            "'ai_usage_ledger'",
+            "['environment', 'observed_at', 'event_id']"
+          ],
+          "keywords": {
+            "unique": "False"
+          },
+          "line": 99
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ux_finops_base_attempt'",
+            "'ai_usage_ledger'",
+            "['environment', 'attempt_id']"
+          ],
+          "keywords": {
+            "unique": "True",
+            "postgresql_where": "sa.text(\"record_kind = 'BASE'\")",
+            "sqlite_where": "sa.text(\"record_kind = 'BASE'\")"
+          },
+          "line": 100
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_usage_inbox'",
+            "sa.Column('event_id', sa.String(length=36), nullable=False, primary_key=True)",
+            "sa.Column('environment', sa.String(length=16), nullable=False, primary_key=False)",
+            "sa.Column('attempt_id', sa.String(length=36), nullable=False, primary_key=False)",
+            "sa.Column('payload', sa.JSON(), nullable=False, primary_key=False)",
+            "sa.Column('payload_hash', sa.String(length=64), nullable=False, primary_key=False)",
+            "sa.Column('delivered', sa.Boolean(), nullable=False, primary_key=False)",
+            "sa.Column('attempts', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('next_attempt_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('delivered_at', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('exhausted', sa.Boolean(), nullable=False, primary_key=False)",
+            "sa.CheckConstraint('attempts >= 0')",
+            "sa.ForeignKeyConstraint(['environment', 'attempt_id'], ['finops_runtime_attempt.environment', 'finops_runtime_attempt.attempt_id'])"
+          ],
+          "keywords": {},
+          "line": 101
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_finops_inbox_pending'",
+            "'finops_usage_inbox'",
+            "['delivered', 'exhausted', 'next_attempt_at']"
+          ],
+          "keywords": {
+            "unique": "False"
+          },
+          "line": 116
+        }
+      ],
+      "downgrade": [
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_usage_inbox'"
+          ],
+          "keywords": {},
+          "line": 119
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'ai_usage_ledger'"
+          ],
+          "keywords": {},
+          "line": 120
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_usage_bucket'"
+          ],
+          "keywords": {},
+          "line": 121
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_runtime_attempt'"
+          ],
+          "keywords": {},
+          "line": 122
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_accounting_source'"
+          ],
+          "keywords": {},
+          "line": 123
+        }
+      ],
+      "revision": "c10a8f6e2d41",
+      "down_revision": "b37e90a14c62",
+      "branch_labels": null,
+      "depends_on": null,
+      "milestone": "M10",
+      "safety_classification": "CREATE_ONLY",
+      "index_operations": "INDEX_ONLY"
+    },
+    {
+      "filename": "alembic/versions/d11b4a8c9e32_billing_source_state.py",
+      "purpose": "M11 operational financial state only; no billing warehouse or shared application.",
+      "sha256": "205d5e4f3dad8c891f526f661f99713b2d7db31812da093be1e18cc798ec3479",
+      "upgrade": [
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_billing_publication'",
+            "sa.Column('generation', sa.String(length=64), nullable=False, primary_key=True)",
+            "sa.Column('state_key', sa.String(length=64), nullable=False, primary_key=False)",
+            "sa.Column('fingerprint', sa.String(length=64), nullable=False, primary_key=False)",
+            "sa.Column('schema_version', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('mapping_version', sa.String(length=32), nullable=False, primary_key=False)",
+            "sa.Column('window_start', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('window_end', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('extracted_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('export_time', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('price_from', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('price_to', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('row_count', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('late_rows', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('correction_rows', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('unmapped_rows', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('evidence_rows', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('controls', sa.JSON(), nullable=False, primary_key=False)",
+            "sa.Column('published_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.Column('status', sa.String(length=16), nullable=False, primary_key=False)",
+            "sa.CheckConstraint(\"status = 'PUBLISHED'\")",
+            "sa.CheckConstraint('row_count >= 0 AND late_rows >= 0 AND correction_rows >= 0 AND unmapped_rows >= 0')",
+            "sa.CheckConstraint('schema_version = 1')"
+          ],
+          "keywords": {},
+          "line": 10
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_billing_publication_history'",
+            "'finops_billing_publication'",
+            "['state_key', 'published_at']"
+          ],
+          "keywords": {
+            "unique": "False"
+          },
+          "line": 34
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_billing_ingest_state'",
+            "sa.Column('key', sa.String(length=64), nullable=False, primary_key=True)",
+            "sa.Column('environment', sa.String(length=16), nullable=False, primary_key=False)",
+            "sa.Column('source', sa.String(length=32), nullable=False, primary_key=False)",
+            "sa.Column('scope', sa.String(length=64), nullable=False, primary_key=False)",
+            "sa.Column('partition', sa.String(length=10), nullable=False, primary_key=False)",
+            "sa.Column('mode', sa.String(length=16), nullable=False, primary_key=False)",
+            "sa.Column('revision', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('generation', sa.String(length=64), nullable=True, primary_key=False)",
+            "sa.Column('last_success', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('last_attempt', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('error', sa.String(length=32), nullable=True, primary_key=False)",
+            "sa.CheckConstraint(\"environment IN ('local','development','staging','production')\")",
+            "sa.CheckConstraint('revision >= 0')",
+            "sa.CheckConstraint(\"mode IN ('TEST_FIXTURE','BIGQUERY')\")",
+            "sa.CheckConstraint(\"source IN ('DETAILED_BILLING','PRICING_EXPORT','FOCUS')\")",
+            "sa.ForeignKeyConstraint(['generation'], ['finops_billing_publication.generation'])"
+          ],
+          "keywords": {},
+          "line": 35
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_billing_state_scope'",
+            "'finops_billing_ingest_state'",
+            "['environment', 'source', 'scope', 'partition']"
+          ],
+          "keywords": {
+            "unique": "True"
+          },
+          "line": 53
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_billing_projection_cache'",
+            "sa.Column('generation', sa.String(length=64), nullable=False, primary_key=True)",
+            "sa.Column('summaries', sa.JSON(), nullable=False, primary_key=False)",
+            "sa.Column('prices', sa.JSON(), nullable=False, primary_key=False)",
+            "sa.ForeignKeyConstraint(['generation'], ['finops_billing_publication.generation'])"
+          ],
+          "keywords": {},
+          "line": 54
+        }
+      ],
+      "downgrade": [
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_billing_projection_cache'"
+          ],
+          "keywords": {},
+          "line": 62
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_billing_ingest_state'"
+          ],
+          "keywords": {},
+          "line": 63
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_billing_publication'"
+          ],
+          "keywords": {},
+          "line": 64
+        }
+      ],
+      "revision": "d11b4a8c9e32",
+      "down_revision": "c10a8f6e2d41",
+      "branch_labels": null,
+      "depends_on": null,
+      "milestone": "M11",
+      "safety_classification": "CREATE_ONLY",
+      "index_operations": "INDEX_ONLY"
+    },
+    {
+      "filename": "alembic/versions/d2081e4fd455_baseline_slopanoc_cases_and_knowledge_.py",
+      "purpose": "baseline slopanoc cases and knowledge schema",
+      "sha256": "f249bd46ba1e94ddbe7c34976c73369a9481c49a09b37cf26b18f4dd1189f823",
+      "upgrade": [
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'slopanoc_cases'",
+            "sa.Column('case_id', sa.String(), nullable=False)",
+            "sa.Column('title', sa.Text(), nullable=False)",
+            "sa.Column('problem_statement', sa.Text(), nullable=False)",
+            "sa.Column('external_reference', sa.Text(), nullable=True)",
+            "sa.Column('status', sa.String(), nullable=False)",
+            "sa.Column('created_by_user_id', sa.String(), nullable=False)",
+            "sa.Column('created_at', sa.DateTime(), nullable=False)",
+            "sa.Column('updated_at', sa.DateTime(), nullable=False)",
+            "sa.PrimaryKeyConstraint('case_id')"
+          ],
+          "keywords": {},
+          "line": 25
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'slopanoc_case_context_items'",
+            "sa.Column('item_id', sa.String(), nullable=False)",
+            "sa.Column('case_id', sa.String(), nullable=False)",
+            "sa.Column('kind', sa.String(), nullable=False)",
+            "sa.Column('content', sa.Text(), nullable=False)",
+            "sa.Column('source_type', sa.String(), nullable=False)",
+            "sa.Column('source_ref', sa.Text(), nullable=True)",
+            "sa.Column('source_timestamp', sa.DateTime(), nullable=True)",
+            "sa.Column('source_author', sa.String(), nullable=True)",
+            "sa.Column('confidence', sa.Float(), nullable=True)",
+            "sa.Column('created_by_user_id', sa.String(), nullable=True)",
+            "sa.Column('created_by_agent', sa.String(), nullable=True)",
+            "sa.Column('created_at', sa.DateTime(), nullable=False)",
+            "sa.Column('supporting_item_ids', sa.JSON(), nullable=False)",
+            "sa.ForeignKeyConstraint(['case_id'], ['slopanoc_cases.case_id'])",
+            "sa.PrimaryKeyConstraint('item_id')"
+          ],
+          "keywords": {},
+          "line": 36
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'slopanoc_case_memberships'",
+            "sa.Column('case_id', sa.String(), nullable=False)",
+            "sa.Column('user_id', sa.String(), nullable=False)",
+            "sa.Column('role', sa.String(), nullable=False)",
+            "sa.Column('created_at', sa.DateTime(), nullable=False)",
+            "sa.ForeignKeyConstraint(['case_id'], ['slopanoc_cases.case_id'])",
+            "sa.PrimaryKeyConstraint('case_id', 'user_id')"
+          ],
+          "keywords": {},
+          "line": 53
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'slopanoc_case_session_links'",
+            "sa.Column('session_id', sa.String(), nullable=False)",
+            "sa.Column('case_id', sa.String(), nullable=False)",
+            "sa.Column('session_user_id', sa.String(), nullable=False)",
+            "sa.Column('linked_at', sa.DateTime(), nullable=False)",
+            "sa.Column('linked_by_user_id', sa.String(), nullable=False)",
+            "sa.ForeignKeyConstraint(['case_id'], ['slopanoc_cases.case_id'])",
+            "sa.PrimaryKeyConstraint('session_id')"
+          ],
+          "keywords": {},
+          "line": 61
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'slopanoc_knowledge_objects'",
+            "sa.Column('knowledge_id', sa.String(), nullable=False)",
+            "sa.Column('version_label', sa.String(), nullable=False)",
+            "sa.Column('payload', sa.Text(), nullable=False)",
+            "sa.PrimaryKeyConstraint('knowledge_id', 'version_label')"
+          ],
+          "keywords": {},
+          "line": 70
+        }
+      ],
+      "downgrade": [
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'slopanoc_knowledge_objects'"
+          ],
+          "keywords": {},
+          "line": 81
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'slopanoc_case_session_links'"
+          ],
+          "keywords": {},
+          "line": 82
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'slopanoc_case_memberships'"
+          ],
+          "keywords": {},
+          "line": 83
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'slopanoc_case_context_items'"
+          ],
+          "keywords": {},
+          "line": 84
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'slopanoc_cases'"
+          ],
+          "keywords": {},
+          "line": 85
+        }
+      ],
+      "revision": "d2081e4fd455",
+      "down_revision": null,
+      "branch_labels": null,
+      "depends_on": null,
+      "milestone": "Business prerequisite",
+      "safety_classification": "CREATE_ONLY",
+      "index_operations": null
+    },
+    {
+      "filename": "alembic/versions/e12c6d8a4b50_finops_reconciliation.py",
+      "purpose": "M12 additive derived reconciliation state; frozen application-only schema.",
+      "sha256": "333509083b98b956e2f350df2cfde87b896ef4f8993403928cd5361ee13dfadb",
+      "upgrade": [
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_reconciliation_input'",
+            "sa.Column('identity', sa.String(64), nullable=False, primary_key=True)",
+            "sa.Column('environment', sa.String(16), nullable=False, primary_key=False)",
+            "sa.CheckConstraint(\"environment IN ('local','development','staging','production')\")",
+            "sa.Column('scope', sa.String(64), nullable=False, primary_key=False)",
+            "sa.Column('period', sa.String(10), nullable=False, primary_key=False)",
+            "sa.Column('kind', sa.String(16), nullable=False, primary_key=False)",
+            "sa.Column('source_generation', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('body', sa.JSON(), nullable=False, primary_key=False)",
+            "sa.CheckConstraint(\"kind IN ('BILLING','RUNTIME','PRICING')\")"
+          ],
+          "keywords": {},
+          "line": 10
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_reconciliation_inputs'",
+            "'finops_reconciliation_input'",
+            "['environment', 'scope', 'period', 'kind', 'source_generation']"
+          ],
+          "keywords": {
+            "unique": "False"
+          },
+          "line": 21
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_reconciliation_registry'",
+            "sa.Column('identity', sa.String(64), nullable=False, primary_key=True)",
+            "sa.Column('environment', sa.String(16), nullable=False, primary_key=False)",
+            "sa.CheckConstraint(\"environment IN ('local','development','staging','production')\")",
+            "sa.Column('version', sa.String(32), nullable=False, primary_key=False)",
+            "sa.Column('ownership_version', sa.String(32), nullable=False, primary_key=False)",
+            "sa.Column('body', sa.JSON(), nullable=False, primary_key=False)"
+          ],
+          "keywords": {},
+          "line": 22
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ux_reconciliation_registry_version'",
+            "'finops_reconciliation_registry'",
+            "['environment', 'version', 'ownership_version']"
+          ],
+          "keywords": {
+            "unique": "True"
+          },
+          "line": 30
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_reconciliation_generation'",
+            "sa.Column('identity', sa.String(64), nullable=False, primary_key=True)",
+            "sa.Column('registry', sa.String(64), nullable=False, primary_key=False)",
+            "sa.Column('runtime_input', sa.String(64), nullable=False, primary_key=False)",
+            "sa.Column('billing_input', sa.String(64), nullable=False, primary_key=False)",
+            "sa.Column('pricing_input', sa.String(64), nullable=False, primary_key=False)",
+            "sa.Column('body', sa.JSON(), nullable=False, primary_key=False)",
+            "sa.Column('published_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.ForeignKeyConstraint(['registry'], ['finops_reconciliation_registry.identity'])",
+            "sa.ForeignKeyConstraint(['billing_input'], ['finops_reconciliation_input.identity'])",
+            "sa.ForeignKeyConstraint(['pricing_input'], ['finops_reconciliation_input.identity'])",
+            "sa.ForeignKeyConstraint(['runtime_input'], ['finops_reconciliation_input.identity'])"
+          ],
+          "keywords": {},
+          "line": 31
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_reconciliation_state'",
+            "sa.Column('key', sa.String(64), nullable=False, primary_key=True)",
+            "sa.Column('environment', sa.String(16), nullable=False, primary_key=False)",
+            "sa.CheckConstraint(\"environment IN ('local','development','staging','production')\")",
+            "sa.Column('scope', sa.String(64), nullable=False, primary_key=False)",
+            "sa.Column('period', sa.String(10), nullable=False, primary_key=False)",
+            "sa.Column('revision', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('generation', sa.String(64), nullable=True, primary_key=False)",
+            "sa.Column('last_attempt', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('last_success', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('error', sa.String(32), nullable=True, primary_key=False)",
+            "sa.CheckConstraint('revision >= 0')",
+            "sa.ForeignKeyConstraint(['generation'], ['finops_reconciliation_generation.identity'])"
+          ],
+          "keywords": {},
+          "line": 44
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ux_reconciliation_period'",
+            "'finops_reconciliation_state'",
+            "['environment', 'scope', 'period']"
+          ],
+          "keywords": {
+            "unique": "True"
+          },
+          "line": 58
+        }
+      ],
+      "downgrade": [
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_reconciliation_state'"
+          ],
+          "keywords": {},
+          "line": 61
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_reconciliation_generation'"
+          ],
+          "keywords": {},
+          "line": 62
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_reconciliation_registry'"
+          ],
+          "keywords": {},
+          "line": 63
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_reconciliation_input'"
+          ],
+          "keywords": {},
+          "line": 64
+        }
+      ],
+      "revision": "e12c6d8a4b50",
+      "down_revision": "d11b4a8c9e32",
+      "branch_labels": null,
+      "depends_on": null,
+      "milestone": "M12",
+      "safety_classification": "CREATE_ONLY",
+      "index_operations": "INDEX_ONLY"
+    },
+    {
+      "filename": "alembic/versions/f13a7c9d2e61_finops_unit_economics.py",
+      "purpose": "M13 frozen additive application-owned analytical persistence.",
+      "sha256": "19853859632f3d4ccb3a9320b4911cac56487144d4895dd11929ee297c6fec6e",
+      "upgrade": [
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_unit_definition_version'",
+            "sa.Column('identity', sa.String(length=64), nullable=False, primary_key=True)",
+            "sa.Column('version', sa.String(length=32), nullable=False, primary_key=False)",
+            "sa.Column('body', sa.JSON(), nullable=False, primary_key=False)",
+            "sa.UniqueConstraint(*['version'])"
+          ],
+          "keywords": {},
+          "line": 10
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_unit_denominator_snapshot'",
+            "sa.Column('identity', sa.String(length=64), nullable=False, primary_key=True)",
+            "sa.Column('environment', sa.String(length=16), nullable=False, primary_key=False)",
+            "sa.Column('period', sa.String(length=10), nullable=False, primary_key=False)",
+            "sa.Column('source', sa.String(length=8), nullable=False, primary_key=False)",
+            "sa.Column('body', sa.JSON(), nullable=False, primary_key=False)",
+            "sa.Column('captured_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.CheckConstraint(\"source IN ('M9','M10')\")"
+          ],
+          "keywords": {},
+          "line": 16
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ix_unit_snapshot_period'",
+            "'finops_unit_denominator_snapshot'",
+            "['environment', 'period', 'source']"
+          ],
+          "keywords": {
+            "unique": "False"
+          },
+          "line": 25
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_unit_driver_version'",
+            "sa.Column('identity', sa.String(length=64), nullable=False, primary_key=True)",
+            "sa.Column('environment', sa.String(length=16), nullable=False, primary_key=False)",
+            "sa.Column('scope', sa.String(length=64), nullable=False, primary_key=False)",
+            "sa.Column('version', sa.String(length=32), nullable=False, primary_key=False)",
+            "sa.Column('body', sa.JSON(), nullable=False, primary_key=False)"
+          ],
+          "keywords": {},
+          "line": 26
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ux_unit_driver_version'",
+            "'finops_unit_driver_version'",
+            "['environment', 'scope', 'version']"
+          ],
+          "keywords": {
+            "unique": "True"
+          },
+          "line": 33
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_unit_economics_generation'",
+            "sa.Column('identity', sa.String(length=64), nullable=False, primary_key=True)",
+            "sa.Column('definitions', sa.String(length=64), nullable=False, primary_key=False)",
+            "sa.Column('drivers', sa.String(length=64), nullable=False, primary_key=False)",
+            "sa.Column('reconciliation', sa.String(length=64), nullable=False, primary_key=False)",
+            "sa.Column('turn_snapshot', sa.String(length=64), nullable=True, primary_key=False)",
+            "sa.Column('model_snapshot', sa.String(length=64), nullable=True, primary_key=False)",
+            "sa.Column('body', sa.JSON(), nullable=False, primary_key=False)",
+            "sa.Column('published_at', sa.DateTime(timezone=True), nullable=False, primary_key=False)",
+            "sa.ForeignKeyConstraint(['definitions'], ['finops_unit_definition_version.identity'])",
+            "sa.ForeignKeyConstraint(['drivers'], ['finops_unit_driver_version.identity'])",
+            "sa.ForeignKeyConstraint(['model_snapshot'], ['finops_unit_denominator_snapshot.identity'])",
+            "sa.ForeignKeyConstraint(['turn_snapshot'], ['finops_unit_denominator_snapshot.identity'])"
+          ],
+          "keywords": {},
+          "line": 34
+        },
+        {
+          "operation": "create_table",
+          "arguments": [
+            "'finops_unit_economics_publication'",
+            "sa.Column('key', sa.String(length=64), nullable=False, primary_key=True)",
+            "sa.Column('environment', sa.String(length=16), nullable=False, primary_key=False)",
+            "sa.Column('scope', sa.String(length=64), nullable=False, primary_key=False)",
+            "sa.Column('period', sa.String(length=10), nullable=False, primary_key=False)",
+            "sa.Column('kind', sa.String(length=16), nullable=False, primary_key=False)",
+            "sa.Column('revision', sa.BigInteger(), nullable=False, primary_key=False)",
+            "sa.Column('snapshot', sa.String(length=64), nullable=True, primary_key=False)",
+            "sa.Column('generation', sa.String(length=64), nullable=True, primary_key=False)",
+            "sa.Column('last_attempt', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('last_success', sa.DateTime(timezone=True), nullable=True, primary_key=False)",
+            "sa.Column('error', sa.String(length=32), nullable=True, primary_key=False)",
+            "sa.CheckConstraint(\"kind IN ('M9','M10','ECONOMICS')\")",
+            "sa.CheckConstraint('revision >= 0')",
+            "sa.ForeignKeyConstraint(['generation'], ['finops_unit_economics_generation.identity'])",
+            "sa.ForeignKeyConstraint(['snapshot'], ['finops_unit_denominator_snapshot.identity'])"
+          ],
+          "keywords": {},
+          "line": 48
+        },
+        {
+          "operation": "create_index",
+          "arguments": [
+            "'ux_unit_publication'",
+            "'finops_unit_economics_publication'",
+            "['environment', 'scope', 'period', 'kind']"
+          ],
+          "keywords": {
+            "unique": "True"
+          },
+          "line": 65
+        }
+      ],
+      "downgrade": [
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_unit_economics_publication'"
+          ],
+          "keywords": {},
+          "line": 68
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_unit_economics_generation'"
+          ],
+          "keywords": {},
+          "line": 69
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_unit_driver_version'"
+          ],
+          "keywords": {},
+          "line": 70
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_unit_denominator_snapshot'"
+          ],
+          "keywords": {},
+          "line": 71
+        },
+        {
+          "operation": "drop_table",
+          "arguments": [
+            "'finops_unit_definition_version'"
+          ],
+          "keywords": {},
+          "line": 72
+        }
+      ],
+      "revision": "f13a7c9d2e61",
+      "down_revision": "e12c6d8a4b50",
+      "branch_labels": null,
+      "depends_on": null,
+      "milestone": "M13",
+      "safety_classification": "CREATE_ONLY",
+      "index_operations": "INDEX_ONLY"
+    }
+  ],
+  "git_search": {
+    "blobs_scanned": 2319,
+    "matching_blobs": [
+      {
+        "blob": "a460fff456f56b6b6be260e1f39d3c027736041c",
+        "size": 1318386,
+        "historical_migration": false
+      }
+    ]
+  },
+  "local_head_commit": "56effc90540d6d3e7e8e5add0086a5cf85d5607d",
+  "database_revision": "d3f8b1c6a942",
+  "exact_database_upgrade_path": null
+}

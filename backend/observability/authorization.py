@@ -1,7 +1,7 @@
-"""Default-denied identity seam. No header/environment can create a verified principal."""
+"""Shared validated principal gate; browser roles/capabilities never confer authority."""
 from dataclasses import dataclass
 import re
-from fastapi import Depends
+from fastapi import Depends, Request
 from backend.gateway.safe_error import SafeError, SafeErrorException
 from .schemas import Role, Permission, ROLE_PERMISSIONS
 
@@ -28,9 +28,10 @@ class Principal:
             all(e in {'local','development','test','staging','production'} for e in self.environments))
 
 
-async def verified_principal_provider():
-    """Future verified server integration goes here. Development identity is ignored."""
-    return None
+async def verified_principal_provider(request: Request):
+    """One provider for ANOC and reader; explicit server policy or default denial."""
+    from backend.authentication import resolve_application_identity
+    return await resolve_application_identity(request)
 
 
 async def verified_principal(value=Depends(verified_principal_provider)):

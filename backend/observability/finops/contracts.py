@@ -4,7 +4,7 @@ from enum import Enum
 from hashlib import sha256
 from typing import Literal
 from uuid import UUID, uuid5
-from pydantic import AwareDatetime, Field, StrictInt, field_validator
+from pydantic import AwareDatetime, Field, StrictInt, field_validator,model_serializer
 from ..schemas import Contract, Count, Identifier, TraceId, SpanId
 from ..model_context import ModelAgent, ModelPurpose
 from ..model_usage import ModelUsage, ModelUsageObservation
@@ -49,6 +49,13 @@ class Identity(Contract):
         return str(uuid5(NAMESPACE, f'v1:{self.environment}:{self.attempt_id}:{self.operation_type}'))
 
 class Payload(Contract):
+    agent_execution_id: UUID | None = None
+    @model_serializer(mode='wrap')
+    def execution_reference(self,handler):
+        result=handler(self)
+        if result.get('agent_execution_id') is None:result.pop('agent_execution_id',None)
+        return result
+
     ledger_schema_version: Literal[1] = 1
     quantity_semantics_version: Literal[1] = 1
     idempotency_key_version: Literal[1] = 1
@@ -117,7 +124,7 @@ def payload_for(identity, observation: ModelUsageObservation, config):
         raise ValueError('Accounting observation identity mismatch')
     return Payload(identity=identity, observed_at=datetime.now(timezone.utc),
         provider_finished_at=observation.completed_at, usage=observation.usage,
-        status=observation.status.value, run_id=observation.run_id,
+        status=observation.status.value, agent_execution_id=observation.agent_execution_id,run_id=observation.run_id,
         turn_id=observation.turn_id, trace_id=observation.trace_id, span_id=observation.span_id,
         release_id=config.otel_release_id, revision=config.otel_cloud_run_revision,
         git_sha=config.otel_git_sha, region=config.otel_region,

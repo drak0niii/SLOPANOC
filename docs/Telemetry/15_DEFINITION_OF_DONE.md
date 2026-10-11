@@ -213,3 +213,35 @@ The design qualifies as a 9.5+ production implementation only when it provides:
 - [ ] memory profiling enabled where platform-safe.
 - [ ] profile data correlates with release.
 - [ ] profiling overhead measured and accepted.
+
+## Console/read-plane production acceptance additions
+
+Doc [25](25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md) adds the following production
+requirements; these unchecked items do not alter historical milestone results.
+
+- [ ] Primary console `/resources/observability` uses the existing shell and preserves conversational state.
+- [ ] Effective policy/configuration uses the current doc 25 Resources Configuration placement, read-only and without duplicate operational dashboards.
+- [ ] Independent read app exposes only reviewed protected GETs and transport preflight; SSE receipts remain on ANOC.
+- [ ] Reader startup/requests invoke no models, agents, tools, commands, financial jobs, retention jobs or business mutations.
+- [ ] Independent API base/origin/auth/read DB bindings validated; existing verified capabilities/environment/cursor/privacy enforcement preserved.
+- [ ] Reader outage/overload does not consume ANOC workers or trigger business replay; shared DB/resource contention is bounded.
+- [ ] Producer health/effective policy, financial generations and trace retention remain truthful, scoped and source-backed; missing values are unavailable.
+- [ ] Final unchanged M16 CPU and regression acceptance rerun after integration; C41/C42 not waived.
+- [ ] Exact-operation-approved live isolation/read-privilege validation completed before production readiness is claimed.
+
+## Hybrid production acceptance additions
+
+See [26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md). These remain unvalidated production requirements:
+
+- [ ] Critical records + outbox proven atomic under actual SQL rollback/crash.
+- [ ] Separate audit/operational lanes, retry/DLQ/capacity and debt/loss visible.
+- [ ] Publisher claim/lease/ack crash recovery idempotent; no business replay.
+- [ ] Projector writes only approved projections; receipt/update atomic and conflict-safe.
+- [ ] Pinned Collector privacy-before-Pub/Sub and bounded OTLP normalization proven.
+- [ ] Historical capture/unknown/source generations/freshness truthful.
+- [ ] Complementary application/pgAudit/GCP audit privacy and maintenance validated.
+- [ ] Background FinOps generations preserve M10–M14 authority; GET starts no job.
+- [ ] Final unchanged C41/C42 and integrated failure/load qualification PASS.
+- [ ] Exact approved resource/schema/role activation and live validation completed.
+
+These checkboxes grant no mutation permission and mark no milestone complete.

@@ -108,6 +108,13 @@ export async function postJson<T>(path: string, body?: unknown): Promise<T> {
  * Plain GET helper (POST-5.1 B4C). Shares `throwForFailedResponse` with
  * `postJson`/`postForm` — one error-mapping implementation for every verb.
  */
+/** Shared GET parsing/error policy for an explicitly selected read service. */
+export async function getJsonAtBase<T>(base: string, path: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(`${base}${path}`, { signal });
+  if (!response.ok) return throwForFailedResponse(path, response);
+  return (await response.json()) as T;
+}
+
 export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await apiFetch(path, signal ? { signal } : undefined);
   if (!response.ok) return throwForFailedResponse(path, response);

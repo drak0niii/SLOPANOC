@@ -12,6 +12,7 @@ from .model_usage import ModelUsage, ModelUsageObservation, extract_usage
 from .stages import RunStatus, Stage
 from .errors import ErrorCode
 from .turn_trace import current_turn, degraded
+from .tracing import set_final_attributes
 
 _active = ContextVar('slopanoc_model_operation', default=None)
 from .model_context import FINISH_REASONS
@@ -133,7 +134,7 @@ class ModelOperation:
             'slopanoc.duration_ms': (self.clock()-self.started)*1000}
         if error:
             attrs['slopanoc.error_code'] = error.value
-        guarded(self.runtime, self.span.set_attributes, attrs)
+        guarded(self.runtime, set_final_attributes, self.span, attrs)
         guarded(self.runtime, self.span.set_status, Status(StatusCode.ERROR if status in (RunStatus.FAILED, RunStatus.TIMEOUT) else StatusCode.UNSET))
         guarded(self.runtime, self.span.end)
 
@@ -228,7 +229,7 @@ class ModelAttempt:
             attrs['gen_ai.response.finish_reasons'] = self.finish_reasons
         if error:
             attrs.update({'slopanoc.error_code':error.value, 'error.type':error.value})
-        guarded(r, self.span.set_attributes, attrs)
+        guarded(r, set_final_attributes, self.span, attrs)
         event = Stage.MODEL_REQUEST_COMPLETED if status == RunStatus.COMPLETED else Stage.MODEL_REQUEST_TIMEOUT if status == RunStatus.TIMEOUT else Stage.MODEL_REQUEST_FAILED
         guarded(r, self.span.add_event, event.value, attrs)
         guarded(r, self.span.set_status, Status(StatusCode.ERROR if status in (RunStatus.FAILED,RunStatus.TIMEOUT) else StatusCode.UNSET))
@@ -237,6 +238,7 @@ class ModelAttempt:
             trace_id, span_id = native_ids(self.span)
             value = ModelUsageObservation(observation_id=self.id, logical_call_id=op.id,
                 provider_request_id=self.request_id, attempt_id=self.id, attempt=self.number, provider=op.provider, model=op.model,
+                agent_execution_id=getattr(op.attribution.execution,"audit_execution_id",None),
                 response_model=self.response_model, agent=op.attribution.agent, operation=op.attribution.operation,
                 workload=op.workload, streaming=op.streaming, run_id=op.turn.run_id if op.turn else None,
                 session_id=op.turn.session_id if op.turn else None, turn_id=op.turn.turn_id if op.turn else None,

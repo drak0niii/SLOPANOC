@@ -44,12 +44,14 @@ async def ledger_health(service,principal,environment=None):
     try:
         async with asyncio.timeout(2),service.reads:health=await ledger.repository.health(env)
     except Exception:raise denied('connector_unavailable','Runtime accounting is unavailable.') from None
+    admissions=ledger.health_counts['admissions_failed'] if ledger.health_counts is not None else None
     updated=health['updated_at'];state='HEALTHY'
     if updated is None:state='DATA_SOURCE_UNAVAILABLE'
     elif (utcnow()-updated).total_seconds()>300:state='STALE_DATA'
-    elif health['debt'] or health['pending'] or health['conflicts'] or ledger.health_counts['admissions_failed']:state='DEGRADED'
+    elif health['debt'] or health['pending'] or health['conflicts'] or admissions:state='DEGRADED'
     return LedgerHealth(environment=env,state=state,**health,
-        admissions_failed=ledger.health_counts['admissions_failed'],retention_months=ledger.config.finops_retention_months)
+        admissions_failed=admissions,retention_months=ledger.config.finops_retention_months,
+        admission_scope='process_local' if admissions is not None else 'process_local_anoc_unavailable')
 
 async def completeness(service,principal,environment=None):
     ledger,env=ledger_for(service,principal,environment);now=utcnow()

@@ -172,11 +172,14 @@ class FilesystemArchive:
     safe and content addressed; complete payload/manifest are immutable. Bounds
     include durable staging capacity; excess is explicit failure, never success.
     """
-    def __init__(self, root, environment, *, clock=None, max_pending=256, max_spool_bytes=256*1024*1024,runtime=None, staging_seconds=360):
+    def __init__(self, root, environment, *, clock=None, max_pending=256, max_spool_bytes=256*1024*1024,runtime=None, staging_seconds=360, read_only=False):
         if environment not in ENVIRONMENTS: raise ArchiveError('Invalid archive environment')
         self.root=Path(root).absolute()
         if self.root.is_symlink(): raise ArchiveError('Archive root may not be a symlink')
-        self.root.mkdir(parents=True,exist_ok=True,mode=0o700)
+        if read_only:
+            if not self.root.is_dir(): raise ArchiveError('Archive read root unavailable')
+        else:
+            self.root.mkdir(parents=True,exist_ok=True,mode=0o700)
         self.root=self.root.resolve();self.environment=environment
         self.clock=clock or (lambda: datetime.now(timezone.utc))
         self.max_pending=max_pending;self.max_spool_bytes=max_spool_bytes

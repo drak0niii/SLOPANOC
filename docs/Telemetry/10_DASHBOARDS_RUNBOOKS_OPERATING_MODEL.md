@@ -152,3 +152,20 @@ Mandatory infrastructure panels are defined in `17_INFRASTRUCTURE_OBSERVABILITY.
 ## Continuous profiling dashboard
 
 Include release-correlated CPU/memory profile comparisons from `24_CONTINUOUS_PROFILING.md`.
+
+## Product placement and operations boundary
+
+Dashboards belong in `/resources/observability` under doc
+[25](25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md); Settings retains effective policy.
+Only source-backed values are displayed. Operational/financial alert states keep
+their separate server capabilities. Runbook actions remain governed external
+operations; the console/read API provides no retry/terminate/remediation mutation.
+Missing trend, aggregate or alert-history sources render unavailable.
+
+## Source-aware event operations
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) adds truthful transport debt/lag/DLQ/freshness/coverage and capture classification
+to future console contracts. Backend reactive alerts remain governed read-only
+presentation; no remediation controls. Outbox/DLQ replay runbooks replay retained
+safe event bytes with original IDs, never provider/tool/command execution. Owners
+must review audit debt independently of disposable operational backlog.

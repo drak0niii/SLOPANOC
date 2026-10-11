@@ -1,4 +1,5 @@
-import { getJson, ApiError } from './client';
+import { getObservabilityJson } from './observabilityClient';
+import { ApiError } from './client';
 import { ContractError } from '../components/shell/settings/observability/contract';
 export const unitIds=['PROVIDER_ATTEMPT','MODEL_OPERATION','ACCEPTED_TURN','AVAILABLE_TURN','TIMELY_TERMINAL_TURN','GENERAL_TURN','TEAMS_LOOKUP_TURN','GOVERNED_TROUBLESHOOTING_TURN','COMPLEX_MULTI_AGENT_TURN','RESOLVED_INCIDENT','FIRST_TIME_CORRECT','ACCEPTED_RECOMMENDATION','SUCCESSFUL_REMEDIATION','AUTOMATION_ARTIFACT','GOVERNED_ANSWER','TICKET','TROUBLESHOOTING_CASE','AGENT_INVOCATION','TOOL_INVOCATION','KNOWLEDGE_RETRIEVAL'];
 const states=['AVAILABLE','PARTIAL','INSUFFICIENT_DATA','FINANCIAL_SCOPE_UNAVAILABLE','DENOMINATOR_UNAVAILABLE','RECONCILIATION_INCOMPLETE','SOURCE_STALE','DRIVER_UNAVAILABLE','CURRENCY_UNAVAILABLE','DEFINED_NOT_AVAILABLE'];
@@ -42,6 +43,6 @@ export function decodeUnitEconomics(value:unknown):UnitPage {
 export async function getUnitEconomics(signal?:AbortSignal,period?:string,unit?:string):Promise<UnitPage>{
  const params=new URLSearchParams();if(period){day(period);params.set('start',period);const end=new Date(period);end.setUTCDate(end.getUTCDate()+1);params.set('end',end.toISOString().slice(0,10));}
  if(unit&&!unitIds.includes(unit))throw new ContractError();
- try{return decodeUnitEconomics(await getJson('/api/observability/finops/unit-economics'+(unit?'/'+unit:'')+'?'+params,signal));}
+ try{return decodeUnitEconomics(await getObservabilityJson('/api/observability/finops/unit-economics'+(unit?'/'+unit:'')+'?'+params,signal));}
  catch(e){if(e instanceof ApiError)throw new ApiError('Unit economics is unavailable.',e.status);if(e instanceof SyntaxError)throw new ContractError();throw e;}
 }

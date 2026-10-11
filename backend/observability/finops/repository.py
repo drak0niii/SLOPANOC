@@ -18,7 +18,20 @@ def insert_for(session, table):
     return insert(table)
 
 class Repository:
-    def __init__(self, sessions): self.sessions = sessions
+    def __init__(self, sessions, *, audit_capture=None):
+        self.sessions = sessions
+        self.audit_capture = audit_capture
+
+    async def audit(self,s,identity,kind,at,*,version=1,payload=None):
+        if self.audit_capture is None:return
+        from ..hybrid.capture import make_event
+        await self.audit_capture.append(s,make_event(kind,identity.environment,
+            "usage" if kind=="model.usage.captured" else "provider_attempt",
+            identity.event_id if kind=="model.usage.captured" else str(identity.attempt_id),version,at,
+            agent=identity.agent,run_id=payload.run_id if payload else None,
+            turn_id=payload.turn_id if payload else None,trace_id=payload.trace_id if payload else None,
+            status=payload.status if payload else None,model_attempt_id=identity.attempt_id,
+            agent_execution_id=payload.agent_execution_id if payload else None))
 
     async def source(self, s, env, now):
         stmt = insert_for(s, SourceRow).values(environment=env, coverage_start=minute(now), updated_at=now, admission_failures=0)
@@ -54,6 +67,7 @@ class Repository:
             row = await s.get(AttemptRow,(identity.environment,str(identity.attempt_id)),with_for_update=True)
             if row is None or row.state != 'ADMITTED': raise ValueError('Attempt cannot start')
             row.state='STARTED';row.started_at=now
+            await self.audit(s,identity,'model.attempt.started',now)
             await self.bucket(s,identity,now,{'bad':1})
             await s.execute(update(SourceRow).where(SourceRow.environment==identity.environment).values(updated_at=now,last_observation=now))
 
@@ -64,15 +78,17 @@ class Repository:
 
     async def finished(self, identity, at):
         async with self.sessions() as s, s.begin():
-            await s.execute(update(AttemptRow).where(AttemptRow.environment==identity.environment,
+            result=await s.execute(update(AttemptRow).where(AttemptRow.environment==identity.environment,
                 AttemptRow.attempt_id==str(identity.attempt_id),AttemptRow.state=='STARTED')
                 .values(state='PROVIDER_FINISHED',provider_finished_at=at))
+            if result.rowcount: await self.audit(s,identity,'model.attempt.completed',at)
 
     async def failed_capture(self, identity):
         async with self.sessions() as s, s.begin():
-            await s.execute(update(AttemptRow).where(AttemptRow.environment==identity.environment,
+            result=await s.execute(update(AttemptRow).where(AttemptRow.environment==identity.environment,
                 AttemptRow.attempt_id==str(identity.attempt_id),AttemptRow.state.in_(('STARTED','PROVIDER_FINISHED')))
                 .values(state='FINAL_CAPTURE_FAILED',gap_reason='CAPTURE_FAILED'))
+            if result.rowcount:await self.audit(s,identity,'accounting.debt.created',utcnow())
 
     async def capture(self, payload):
         payload = Payload.model_validate(payload.model_dump())
@@ -123,6 +139,9 @@ class Repository:
             if ledger.payload_hash!=payload.digest():
                 row.state='CONFLICT';row.gap_reason='IDENTITY_CONFLICT';return 'CONFLICT'
             if result.rowcount:
+                await self.audit(s,i,'model.usage.captured',now,payload=payload)
+                if inbox.exhausted or row.gap_reason in ('CAPTURE_FAILED','FINAL_OBSERVATION_MISSING'):
+                    await self.audit(s,i,'accounting.debt.resolved',now,payload=payload)
                 delta={'good':1,'bad':-1,'quantity_known':int(payload.usage.availability=='KNOWN'),
                     'quantity_partial':int(payload.usage.availability=='PARTIAL')}
                 for q in QUANTITIES:
@@ -146,7 +165,11 @@ class Repository:
         async with self.sessions() as s, s.begin():
             row=await s.get(InboxRow,event_id,with_for_update=True)
             if row is None or row.delivered:return
+            was_exhausted=row.exhausted
             row.attempts+=1;row.exhausted=row.attempts>=maximum
+            if row.exhausted and not was_exhausted:
+                payload=Payload.model_validate(row.payload)
+                await self.audit(s,payload.identity,'accounting.debt.created',utcnow(),version=2,payload=payload)
             row.next_attempt_at=utcnow()+timedelta(seconds=min(60,2**min(row.attempts,6)))
 
     async def checkpoint(self, env, now=None, limit=100):
@@ -160,6 +183,8 @@ class Repository:
                 # STARTED is required before dispatch, so expired ADMITTED never dispatched.
                 row.state='NOT_STARTED' if row.started_at is None else 'OUTCOME_UNKNOWN'
                 row.gap_reason=None if row.started_at is None else 'FINAL_OBSERVATION_MISSING'
+                if row.started_at is not None:
+                    await self.audit(s,Identity.model_validate(row.identity),'accounting.debt.created',now)
             await s.execute(update(SourceRow).where(SourceRow.environment==env).values(updated_at=now))
 
     async def adjust(self, value):

@@ -15,7 +15,7 @@ it('uses all seven GET routes, validated DTOs, no auth headers and cancellation'
     await getSessionRuns('session:one', { limit: 25 }, signal);
     await getObservabilityHealth(signal);
     await getObservabilityConfig(signal);
-    expect(fetcher.mock.calls.map(c => c[0])).toEqual(['/api/observability/active?limit=25&status=STALLED', '/api/observability/runs', `/api/observability/runs/${runId}`, `/api/observability/runs/${runId}/timeline?cursor=YWJj%3D%3D`, '/api/observability/sessions/session%3Aone/runs?limit=25', '/api/observability/health', '/api/observability/config']);
+    expect(fetcher.mock.calls.map(c => c[0])).toEqual(['/api/observability/active?limit=25&status=STALLED', '/api/observability/runs', `/api/observability/runs/${runId}`, `/api/observability/runs/${runId}/timeline?cursor=YWJj%3D%3D`, '/api/observability/sessions/session%3Aone/runs?limit=25', '/api/observability/health', '/api/observability/config'].map(path => 'http://127.0.0.1:8001' + path));
     fetcher.mock.calls.forEach(c => expect(c[1]).toEqual({ signal }));
 });
 it.each([401, 403, 404, 500, 503])('normalizes %i without response content or diagnostic console output', async (status) => {

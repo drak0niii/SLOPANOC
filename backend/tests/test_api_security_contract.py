@@ -14,6 +14,9 @@ approval-framework layers remain completely untouched by this milestone.
 from __future__ import annotations
 
 import inspect
+import pytest
+
+pytestmark = pytest.mark.usefixtures("local_application_identity")
 
 from fastapi.testclient import TestClient
 
@@ -184,6 +187,7 @@ def test_only_the_expected_routes_exist() -> None:
         '/api/observability/archive/{trace_id}', '/api/observability/runs/{run_id}/retention',
         '/api/observability/slos', '/api/observability/slos/{slo_id}',
         '/api/observability/sse-receipts',
+        '/api/observability/hybrid/activity',
         '/api/observability/finops/runtime-usage', '/api/observability/finops/ledger-health',
         '/api/observability/finops/ledger-completeness',
         '/api/observability/finops/billing-health', '/api/observability/finops/billing-summary',

@@ -100,6 +100,7 @@ def test_returned_failure_and_http_retry_bounds():
         assert len(sink.snapshot()) < 10
 
 
+@pytest.mark.usefixtures("local_application_identity")
 def test_actual_app_outage_preserves_fake_sync_and_sse_turns(monkeypatch):
     import backend.api.app as app_module
     import backend.observability.runtime as runtime_module

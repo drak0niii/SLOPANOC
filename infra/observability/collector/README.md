@@ -121,3 +121,53 @@ transport deadlines and separate pipelines bound local failure propagation. Thes
 source bounds and local outage tests do not qualify production affinity, memory,
 late-span capacity or sustained throughput. Those remain recorded M16 targets;
 production rollout, identities and endpoint binding remain unexecuted M17 work.
+
+M16 local failure validation found that the previous local two-second default
+could drop early children before the canonical root classified a late failure.
+Both source defaults now use 240 seconds. For the default 180-second total turn
+budget, the local planning allowance is 212 seconds: 180 + 5 seconds SDK batch
+interval + (ceil(2048/256)+1)*2 seconds exporter residence + 9 seconds transport,
+Collector batching, retry and timer allowance. This is conditional on admitted
+queue population and measured transport bounds, not a guarantee during loss.
+`scripts/observability/m16_sampling_preflight.py` rejects unsafe proposed deadline,
+window or population combinations without contacting a service. It is a local
+planning check; deployment has not been performed or qualified.
+
+At 0.5 new traces/second plus a 64-trace burst, a 240-second residence with 25%
+headroom requires 230 entries per independent branch. The existing 256 entries
+fit that planning envelope. They do not support the configured expected-new-traces
+hint of 32/second for 240 seconds. That field sizes implementation structures;
+it is not a throughput guarantee. Larger workloads require measured sizing and
+explicit deployment approval. Native local tests cover 128/256 exceptional bursts,
+late terminal evidence and an intentionally overflowing 16-entry fixture. Pressure
+loss is reported explicitly; no accounting or business invocation is retried.
+
+Pinned default decision caches are disabled. Enabling sampled/non-sampled LRU
+caches does not revise an earlier drop when a later span exposes a failure.
+All spans of a trace must reach the same sampler instance. Restart loses volatile
+pending decisions; a later root alone cannot certify a complete archive. The
+harness retries telemetry bytes to recover durable chunks; it never restarts a
+turn, model, tool, gateway or command. Production multi-instance affinity, memory,
+service latency, GCS, and Google exporters remain NOT LIVE-VALIDATED.
+
+## Hybrid branch — optional dormant local design
+
+Doc 26 verifies the pinned Google 0.160.0 manifest includes googlecloudpubsubexporter.
+No image pin or active config changed. hybrid-branch.yaml.example is never loaded
+by existing launchers. Native exporter wire is OTLP protobuf with CloudEvents;
+a future projector adapter must normalize safe deterministic record identities.
+The local helper composes an additional post-redaction pre-tail nop branch:
+
+```sh
+.venv/bin/python scripts/observability/hybrid_collector_config.py --output /private/tmp/slopanoc-hybrid-local.yaml
+```
+
+It accepts only the isolated local baseline and never enables cloud publication.
+Validate the result with the installed pinned binary and dummy loopback env as in
+test_observability_hybrid.py. Operational Telemetry Pub/Sub is OPTIONAL / SCALE-TRIGGERED, disabled and not a
+Phase-1 requirement. Full unsampled OTLP replication is not approved. Before any
+activation, demonstrate a measured use case, implement a curated subset filter and
+safe adapter, then separately approve exporter activation. Retain common privacy
+enforcement and independently bound
+queues, verify concrete topic/IAM bindings and run wire/privacy/failure/load tests.
+Unused future exporter definitions are omitted from local output; no ADC resolution.

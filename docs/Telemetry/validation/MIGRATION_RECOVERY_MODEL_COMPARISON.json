@@ -1,0 +1,1028 @@
+{
+  "historical": {
+    "slopanoc_cases": {
+      "source": "backend/cases/models.py",
+      "columns": {
+        "case_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "title": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "problem_statement": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "external_reference": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "status": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "created_by_user_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "updated_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": []
+    },
+    "slopanoc_case_memberships": {
+      "source": "backend/cases/models.py",
+      "columns": {
+        "case_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "user_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "role": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": []
+    },
+    "slopanoc_case_session_links": {
+      "source": "backend/cases/models.py",
+      "columns": {
+        "session_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "case_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "session_user_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "linked_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "linked_by_user_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": []
+    },
+    "slopanoc_case_context_items": {
+      "source": "backend/cases/models.py",
+      "columns": {
+        "item_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "case_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "kind": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "content": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "source_type": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "source_ref": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "source_timestamp": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        "source_author": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "confidence": {
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null
+        },
+        "created_by_user_id": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "created_by_agent": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "supporting_item_ids": {
+          "type": "JSON",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": []
+    },
+    "slopanoc_chat_attachments": {
+      "source": "backend/attachments/models.py",
+      "columns": {
+        "attachment_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "owner_user_id": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "session_id": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "message_id": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "original_filename": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "mime_type": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "size_bytes": {
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null
+        },
+        "sha256": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "storage_object_name": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "status": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "linked_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        "deleted_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": []
+    },
+    "slopanoc_telco_context_profiles": {
+      "source": "backend/context/sqlalchemy/models.py",
+      "columns": {
+        "profile_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "owner_kind": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "owner_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "created_by_user_id": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "updated_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": [
+        {
+          "column": "created_at",
+          "model": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "default": null
+          },
+          "migration": {
+            "type": "TIMESTAMP WITHOUT TIME ZONE",
+            "nullable": false,
+            "default": null
+          }
+        },
+        {
+          "column": "updated_at",
+          "model": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "default": null
+          },
+          "migration": {
+            "type": "TIMESTAMP WITHOUT TIME ZONE",
+            "nullable": false,
+            "default": null
+          }
+        }
+      ]
+    },
+    "slopanoc_telco_context_assertions": {
+      "source": "backend/context/sqlalchemy/models.py",
+      "columns": {
+        "assertion_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "profile_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "dimension": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "kind": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "raw_value": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "canonical_value": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "origin": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "source_reference": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "asserted_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": [
+        {
+          "column": "asserted_at",
+          "model": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "default": null
+          },
+          "migration": {
+            "type": "TIMESTAMP WITHOUT TIME ZONE",
+            "nullable": true,
+            "default": null
+          }
+        },
+        {
+          "column": "created_at",
+          "model": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "default": null
+          },
+          "migration": {
+            "type": "TIMESTAMP WITHOUT TIME ZONE",
+            "nullable": false,
+            "default": null
+          }
+        }
+      ]
+    },
+    "slopanoc_experience_records": {
+      "source": "backend/experience_memory/sqlalchemy/models.py",
+      "columns": {
+        "experience_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "experience_schema_version": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "experience_type": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "lifecycle": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "owner_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "source_origin": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "source_namespace": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "source_reference": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "source_event_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "source_event_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        "case_id": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "session_id": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "context_fingerprint": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "skill_id": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "skill_version": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "skill_fingerprint": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "evidence_references_json": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "observed_facts_json": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "outcome_summary": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "metadata_json": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "content_fingerprint": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "recorded_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "invalidated_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        "invalidation_reason": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": []
+    },
+    "slopanoc_knowledge_objects": {
+      "source": "backend/knowledge/repository/sqlalchemy.py",
+      "columns": {
+        "knowledge_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "version_label": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "payload": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": []
+    },
+    "slopanoc_knowledge_evidence_index": {
+      "source": "backend/knowledge/hybrid_retrieval/repository.py",
+      "columns": {
+        "evidence_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "knowledge_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "version_label": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "section_id": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "artifact_id": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "is_derived": {
+          "type": "BOOLEAN",
+          "nullable": false,
+          "default": null
+        },
+        "indexable_text": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "content_hash": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "embedding": {
+          "type": "VECTOR(768)",
+          "nullable": true,
+          "default": null
+        },
+        "embedding_model": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "embedding_model_version": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "embedding_dimensions": {
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null
+        },
+        "embedding_generated_at": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        "text_search_vector": {
+          "type": "TSVECTOR",
+          "nullable": true,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "updated_at": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": [
+        {
+          "column": "evidence_id",
+          "model": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "default": null
+          },
+          "migration": {
+            "type": "TEXT",
+            "nullable": false,
+            "default": null
+          }
+        },
+        {
+          "column": "knowledge_id",
+          "model": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "default": null
+          },
+          "migration": {
+            "type": "TEXT",
+            "nullable": false,
+            "default": null
+          }
+        }
+      ]
+    }
+  },
+  "current": {
+    "slopanoc_cases": {
+      "source": "backend/cases/models.py",
+      "columns": {
+        "case_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "title": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "problem_statement": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "external_reference": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "status": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "created_by_user_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "updated_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": []
+    },
+    "slopanoc_case_memberships": {
+      "source": "backend/cases/models.py",
+      "columns": {
+        "case_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "user_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "role": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": []
+    },
+    "slopanoc_case_session_links": {
+      "source": "backend/cases/models.py",
+      "columns": {
+        "session_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "case_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "session_user_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "linked_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "linked_by_user_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": []
+    },
+    "slopanoc_case_context_items": {
+      "source": "backend/cases/models.py",
+      "columns": {
+        "item_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "case_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "kind": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "content": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "source_type": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "source_ref": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "source_timestamp": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        "source_author": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "confidence": {
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null
+        },
+        "created_by_user_id": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "created_by_agent": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "supporting_item_ids": {
+          "type": "JSON",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": []
+    },
+    "slopanoc_case_troubleshooting_progressions": {
+      "source": "backend/cases/models.py",
+      "columns": {
+        "case_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "version": {
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null
+        },
+        "schema_version": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "progression": {
+          "type": "JSON",
+          "nullable": false,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "updated_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "updated_by_session_id": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": [
+        {
+          "column": "case_id",
+          "model": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "default": null
+          },
+          "migration": null
+        },
+        {
+          "column": "version",
+          "model": {
+            "type": "INTEGER",
+            "nullable": false,
+            "default": null
+          },
+          "migration": null
+        },
+        {
+          "column": "schema_version",
+          "model": {
+            "type": "TEXT",
+            "nullable": false,
+            "default": null
+          },
+          "migration": null
+        },
+        {
+          "column": "progression",
+          "model": {
+            "type": "JSON",
+            "nullable": false,
+            "default": null
+          },
+          "migration": null
+        },
+        {
+          "column": "created_at",
+          "model": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "default": null
+          },
+          "migration": null
+        },
+        {
+          "column": "updated_at",
+          "model": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "default": null
+          },
+          "migration": null
+        },
+        {
+          "column": "updated_by_session_id",
+          "model": {
+            "type": "TEXT",
+            "nullable": true,
+            "default": null
+          },
+          "migration": null
+        }
+      ]
+    },
+    "slopanoc_chat_attachments": {
+      "source": "backend/attachments/models.py",
+      "columns": {
+        "attachment_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "owner_user_id": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "session_id": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "message_id": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "original_filename": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "mime_type": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "size_bytes": {
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null
+        },
+        "sha256": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "storage_object_name": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "status": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "linked_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        "deleted_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": []
+    },
+    "slopanoc_knowledge_objects": {
+      "source": "backend/knowledge/repository/sqlalchemy.py",
+      "columns": {
+        "knowledge_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "version_label": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "payload": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "differences_from_recovered_migrations": []
+    }
+  }
+}

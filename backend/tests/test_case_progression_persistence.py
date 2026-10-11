@@ -403,7 +403,7 @@ def test_alembic_migration_creates_and_drops_the_versioned_progression_table(tmp
     AttachmentBase.metadata.create_all(engine)
     url = f"sqlite+aiosqlite:///{path}"
     assert _alembic(url, "stamp", "3e59584b1012").returncode == 0
-    upgrade = _alembic(url, "upgrade", "head")
+    upgrade = _alembic(url, "upgrade", "7c4e9a2d1f05")
     assert upgrade.returncode == 0, upgrade.stderr[-2000:]
     columns = {c["name"]: c for c in inspect(engine).get_columns(table)}
     assert set(columns) == {"case_id", "version", "schema_version", "progression", "created_at", "updated_at", "updated_by_session_id"}

@@ -200,3 +200,31 @@ Compare profiling on/off:
 - memory,
 - p95 latency,
 - throughput.
+
+## Hybrid acceptance additions
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) requires strict version/environment/type/size/privacy tests; same-transaction
+critical-record/outbox rollback; publish-before-confirm crash and expired lease race;
+idempotent duplicate/conflict receipt + projection atomicity; stale/out-of-order
+terminal protection; bounded OTLP/CloudEvents normalization and signal temporality;
+independent lane outage/starvation/DLQ/replay; capture/freshness/debt unknown semantics;
+read-only role enforcement and no business replay. Pure ports/fake tests do not
+prove Cloud SQL adapters. Native Collector validates source configuration only;
+production image/runtime/identity require approved live qualification. Rerun unchanged
+C41/C42 after integration; no new CPU/SLO threshold replaces them.
+
+
+## Local Phase-1 hybrid refinement — 2026-10-11
+
+[Doc 26](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) defines the locally implemented
+authoritative owner transaction → audit/outbox → bounded publisher → fake transport
+→ projector → durable projection → independent GET reader. Additive revision
+`d26a1b7c9e40` descends from `c16f4a8b2d90`; no shared schema was changed.
+`GET /api/observability/hybrid/activity` exposes bounded safe lifecycle/freshness/debt
+DTOs with server RBAC/environment scope; no worker runs on reads. M15 policy applies
+to typed audit fields; projections do not duplicate M10–M14 financial truth.
+Operational Telemetry Pub/Sub is **OPTIONAL / SCALE-TRIGGERED**, disabled, limited
+to a future curated measured subset. Full unsampled OTLP replication is not Phase-1
+minimum. Existing OTLP/cloud/archive pathways remain unchanged. Local SQLite/fake
+validation is not PostgreSQL/Pub/Sub qualification. M16 remains INCOMPLETE; C41/C42
+are not PASS; M17 remains UNSTARTED. No cloud mutation or deployment authorization.

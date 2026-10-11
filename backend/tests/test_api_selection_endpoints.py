@@ -8,6 +8,8 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("local_application_identity")
 from fastapi.testclient import TestClient
 
 from backend.api import selection_service

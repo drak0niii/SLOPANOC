@@ -89,3 +89,32 @@ contract. Native Terraform validation remains NOT EXECUTED while CLI unavailable
 static inspection is not native PASS. Doc 16 defines archive retention eligibility,
 asynchronous deletion, transport independence and M16/M17 handoff. No unsupported
 Cloud Trace 90-day setting or artificial Monitoring 13-month TTL may be authored.
+
+## Separate read service — future reviewed infrastructure scope
+
+Doc [25](25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md) defines an independently
+deployable Observability Read API: separate Cloud Run entrypoint/compute/scaling/
+health/service identity; least-privilege observability DB and archive/telemetry
+reads; explicit frontend API base/origins and verified authentication bindings.
+Shared database connections/scans must be bounded across reader replicas.
+Production settings show effective read-only configuration and never bypass IaC.
+This pass authors architecture documentation only, no Terraform/config files.
+Future IAM/users/secrets/service/DNS deployment, shared migration, apply/import/
+state mutation require exact-operation approval; environment/project bindings
+are unresolved. Independent service and read privileges are not live-validated.
+
+## Hybrid future resource scope
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) and [resource manifest](GCP_HYBRID_OBSERVABILITY_RESOURCE_MANIFEST.md) add
+Phase-1 audit Pub/Sub topic/subscription/DLQ/authenticated push, publisher/projector/
+reader services, least-privilege identities/DB roles, audit configuration, dedicated
+archive and billing/pricing export dependencies. Phase 1/2/optional classification
+is planning only. Operational Telemetry Pub/Sub is OPTIONAL / SCALE-TRIGGERED,
+disabled, curated only after measured need; it is not Phase-1 minimum. Terraform stays system of record where supported; manual-only
+bootstrap requires source-controlled runbook/drift review. No apply/import/state
+operation, API enablement, IAM/grant, pgAudit restart, billing setup, resource creation
+or shared migration is authorized by this pass. Confirm exact bindings before approval.
+
+## Phase-1 production-readiness update — 2026-10-11
+
+Review-only hybrid module under infra/observability/terraform/hybrid represents minimum audit resources and three disabled-default services. Backend-disabled local init and fmt/validate only; no plan/apply/import/state/cloud mutation. See HYBRID_PHASE1_PRODUCTION_READINESS.md for required reviewed inputs.

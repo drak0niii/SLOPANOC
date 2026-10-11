@@ -1,0 +1,10 @@
+{
+  "default_subject": "api-user",
+  "users": {
+    "api-user": {
+      "role": "Developer / SRE",
+      "capabilities": ["operational_metadata", "technical_diagnostics"],
+      "environments": ["development"]
+    }
+  }
+}

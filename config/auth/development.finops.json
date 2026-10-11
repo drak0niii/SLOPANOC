@@ -1,0 +1,10 @@
+{
+  "default_subject": "api-user",
+  "users": {
+    "api-user": {
+      "role": "FinOps",
+      "capabilities": ["financial_data"],
+      "environments": ["development"]
+    }
+  }
+}

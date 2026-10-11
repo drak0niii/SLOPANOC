@@ -1,3 +1,5 @@
+import { useRouter } from './lib/router';
+import { APP_ROUTE } from './lib/routes';
 import { useEffect } from "react";
 import { useAppState } from "./state/AppState";
 import { TooltipProvider } from "./components/ui/Tooltip";
@@ -13,8 +15,10 @@ import { DRAFT_HANDOFF_KEY } from "./lib/routes";
  */
 function DraftHandoff() {
   const { setDraftText } = useAppState();
+  const { pathname } = useRouter();
 
   useEffect(() => {
+    if (!pathname.startsWith(APP_ROUTE)) return;
     const pending = sessionStorage.getItem(DRAFT_HANDOFF_KEY);
     if (!pending) return;
     sessionStorage.removeItem(DRAFT_HANDOFF_KEY);
@@ -25,7 +29,7 @@ function DraftHandoff() {
       composer?.focus();
       composer?.setSelectionRange(composer.value.length, composer.value.length);
     });
-  }, [setDraftText]);
+  }, [setDraftText, pathname]);
 
   return null;
 }

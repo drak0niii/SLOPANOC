@@ -244,3 +244,12 @@ Do not implement pricing solely as fixed input/output columns. Use a component/t
 - storage/compute.
 
 Quality/value joins use `19_AI_QUALITY_OUTCOMES.md`.
+
+## Projection provenance and historical gaps
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) requires every projected financial view to retain authoritative generation,
+source window/environment, coverage/freshness and capture classification. CAPTURED,
+RECONSTRUCTED (source/method/version) and UNKNOWN/NOT CAPTURED stay distinct. Never
+turn missing historical tokens/cost/outcomes into zero. Audit payloads carry source
+references; SQL M10–M14 remains the sole accounting lineage. Projector does not
+calculate replacement reconciliation/allocation or edit published generations.

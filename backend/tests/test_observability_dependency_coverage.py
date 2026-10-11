@@ -5,7 +5,7 @@ from backend.observability.dependency_instrumentation import CLIENT_OWNERS
 ROOT=Path(__file__).resolve().parents[2]
 NETWORK_IMPORTS=('requests','httpx','aiohttp','google.cloud','msal','azure','boto3','redis','pinecone','qdrant_client','weaviate','chromadb','elasticsearch','google.genai')
 # Exception classifier imports/types are not transport sinks.
-CLASSIFIERS={'backend/observability/model_instrumentation.py','backend/observability/dependency_instrumentation.py'}
+CLASSIFIERS={'backend/observability/hybrid/push_app.py','backend/observability/model_instrumentation.py','backend/observability/dependency_instrumentation.py'}
 TYPE_ONLY={'backend/agents/incident_manager/evidence.py','backend/agents/incident_manager/provenance_compliance.py',
  'backend/agents/team_manager/direct_read_fast_path.py','backend/agents/team_manager/governed_knowledge_completion.py',
  'backend/agents/team_manager/multimodal_agent_tool.py','backend/agents/team_manager/operational_routing.py',

@@ -1,0 +1,78 @@
+{
+  "scope": "isolated SQLite M10 Repository.start transaction; no provider/OTLP/cloud",
+  "operations_per_arm": 200,
+  "sample_batches_per_arm": 4,
+  "baseline": {
+    "wall_ms_per_operation": 2.736623357050121,
+    "process_cpu_ms_per_operation": 2.414719999999986
+  },
+  "outbox_enabled": {
+    "wall_ms_per_operation": 4.5428842038381845,
+    "process_cpu_ms_per_operation": 4.038174999999992
+  },
+  "added": {
+    "wall_ms_per_operation": 1.8062608467880636,
+    "process_cpu_ms_per_operation": 1.6234550000000056
+  },
+  "samples": {
+    "baseline": [
+      {
+        "wall_ms_per_operation": 2.7651842404156923,
+        "process_cpu_ms_per_operation": 2.4558400000000016
+      },
+      {
+        "wall_ms_per_operation": 2.864678273908794,
+        "process_cpu_ms_per_operation": 2.531399999999997
+      },
+      {
+        "wall_ms_per_operation": 2.7315158117562532,
+        "process_cpu_ms_per_operation": 2.4111399999999827
+      },
+      {
+        "wall_ms_per_operation": 2.585115102119744,
+        "process_cpu_ms_per_operation": 2.260499999999963
+      }
+    ],
+    "enabled": [
+      {
+        "wall_ms_per_operation": 4.753548372536898,
+        "process_cpu_ms_per_operation": 4.179099999999998
+      },
+      {
+        "wall_ms_per_operation": 4.918654998764396,
+        "process_cpu_ms_per_operation": 4.41787999999999
+      },
+      {
+        "wall_ms_per_operation": 4.321610010229051,
+        "process_cpu_ms_per_operation": 3.8312200000000063
+      },
+      {
+        "wall_ms_per_operation": 4.177723433822393,
+        "process_cpu_ms_per_operation": 3.724499999999975
+      }
+    ]
+  },
+  "async_workers": {
+    "publisher": {
+      "events": 200,
+      "wall_ms": 400.44291596859694,
+      "process_cpu_ms": 343.67300000000034
+    },
+    "projector": {
+      "events": 200,
+      "wall_ms": 465.2300411835313,
+      "process_cpu_ms": 412.15000000000043
+    }
+  },
+  "freshness": {
+    "projection_lag_seconds": 0.0512,
+    "event_to_read_wall_ms": 57.360125007107854,
+    "includes": "SQL owner commit, explicit worker ticks, SQL projection commit, read repository",
+    "worker_poll_interval_excluded": true,
+    "propagation_slo": "NOT CLAIMED"
+  },
+  "M16_C41": "NOT PASS",
+  "M16_C42": "NOT PASS",
+  "limits": "single process; SQLite; fake transport; explicit ticks; no PostgreSQL/WAL/network/load proof",
+  "cloud_changes": "NONE"
+}

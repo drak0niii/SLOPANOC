@@ -1,0 +1,252 @@
+{
+  "date": "2026-10-11",
+  "scope": "complete LOCAL Phase-1 authoritative event pipeline",
+  "local_status": "IMPLEMENTED AND LOCALLY VALIDATED",
+  "M16": "INCOMPLETE",
+  "M17": "UNSTARTED",
+  "C41": "NOT PASS",
+  "C42": "NOT PASS",
+  "cloud_shared_db_changes": "NONE",
+  "ready_for_gcp_provisioning": "NO",
+  "ready_for_next_milestone": "NO",
+  "backend_tests": {
+    "main_pass": 405,
+    "local_loopback_pass": 2,
+    "unique_affected_pass": 407,
+    "new_phase1_tests": 33,
+    "failures_remaining": 0
+  },
+  "frontend_tests": {
+    "pass": 278,
+    "files": 40,
+    "build": "PASS"
+  },
+  "migration": {
+    "head": "d26a1b7c9e40",
+    "parent": "c16f4a8b2d90",
+    "revisions": 18,
+    "new_tables": 6,
+    "new_indexes": 5,
+    "full_import_gate": "PASS with isolated temporary Python pgvector 0.5.1",
+    "default_dependency_gate": "pgvector absent in default venv; manifests unchanged",
+    "disposable_postgresql": "UNAVAILABLE",
+    "sqlite_parity_upgrade_downgrade": "PASS",
+    "postgresql_offline_DDL": "PASS",
+    "remote_apply": "NONE"
+  },
+  "checks": {
+    "privacy": "PASS",
+    "crashes": "PASS (actual abrupt child death)",
+    "duplicates": "PASS 1/2/100",
+    "no_business_replay": "PASS",
+    "read_only_RBAC_environment": "PASS",
+    "contracts": "PASS",
+    "historical_hashes": "PASS",
+    "git_diff_check": "PASS",
+    "compile": "PASS",
+    "frontend_build": "PASS",
+    "mermaid": "MANUAL REVIEW ONLY; parser/renderer NOT RUN"
+  },
+  "focused_measurement": {
+    "scope": "isolated SQLite M10 Repository.start transaction; no provider/OTLP/cloud",
+    "operations_per_arm": 200,
+    "sample_batches_per_arm": 4,
+    "baseline": {
+      "wall_ms_per_operation": 2.736623357050121,
+      "process_cpu_ms_per_operation": 2.414719999999986
+    },
+    "outbox_enabled": {
+      "wall_ms_per_operation": 4.5428842038381845,
+      "process_cpu_ms_per_operation": 4.038174999999992
+    },
+    "added": {
+      "wall_ms_per_operation": 1.8062608467880636,
+      "process_cpu_ms_per_operation": 1.6234550000000056
+    },
+    "samples": {
+      "baseline": [
+        {
+          "wall_ms_per_operation": 2.7651842404156923,
+          "process_cpu_ms_per_operation": 2.4558400000000016
+        },
+        {
+          "wall_ms_per_operation": 2.864678273908794,
+          "process_cpu_ms_per_operation": 2.531399999999997
+        },
+        {
+          "wall_ms_per_operation": 2.7315158117562532,
+          "process_cpu_ms_per_operation": 2.4111399999999827
+        },
+        {
+          "wall_ms_per_operation": 2.585115102119744,
+          "process_cpu_ms_per_operation": 2.260499999999963
+        }
+      ],
+      "enabled": [
+        {
+          "wall_ms_per_operation": 4.753548372536898,
+          "process_cpu_ms_per_operation": 4.179099999999998
+        },
+        {
+          "wall_ms_per_operation": 4.918654998764396,
+          "process_cpu_ms_per_operation": 4.41787999999999
+        },
+        {
+          "wall_ms_per_operation": 4.321610010229051,
+          "process_cpu_ms_per_operation": 3.8312200000000063
+        },
+        {
+          "wall_ms_per_operation": 4.177723433822393,
+          "process_cpu_ms_per_operation": 3.724499999999975
+        }
+      ]
+    },
+    "async_workers": {
+      "publisher": {
+        "events": 200,
+        "wall_ms": 400.44291596859694,
+        "process_cpu_ms": 343.67300000000034
+      },
+      "projector": {
+        "events": 200,
+        "wall_ms": 465.2300411835313,
+        "process_cpu_ms": 412.15000000000043
+      }
+    },
+    "freshness": {
+      "projection_lag_seconds": 0.0512,
+      "event_to_read_wall_ms": 57.360125007107854,
+      "includes": "SQL owner commit, explicit worker ticks, SQL projection commit, read repository",
+      "worker_poll_interval_excluded": true,
+      "propagation_slo": "NOT CLAIMED"
+    },
+    "M16_C41": "NOT PASS",
+    "M16_C42": "NOT PASS",
+    "limits": "single process; SQLite; fake transport; explicit ticks; no PostgreSQL/WAL/network/load proof",
+    "cloud_changes": "NONE"
+  },
+  "actual_files_changed_this_pass": [
+    ".agent/OBSERVABILITY_EXECUTION.md",
+    "alembic/env.py",
+    "alembic/versions/d26a1b7c9e40_hybrid_audit_outbox_projections.py",
+    "backend/api/observability_app.py",
+    "backend/api/observability_routes.py",
+    "backend/observability/finops/repository.py",
+    "backend/observability/hybrid/capture.py",
+    "backend/observability/hybrid/config.py",
+    "backend/observability/hybrid/contracts.py",
+    "backend/observability/hybrid/local.py",
+    "backend/observability/hybrid/models.py",
+    "backend/observability/hybrid/ports.py",
+    "backend/observability/hybrid/projector_app.py",
+    "backend/observability/hybrid/read.py",
+    "backend/observability/hybrid/store.py",
+    "backend/observability/hybrid/transport.py",
+    "backend/observability/hybrid/workers.py",
+    "backend/observability/privacy_policy.py",
+    "backend/observability/read_service.py",
+    "backend/observability/repository.py",
+    "backend/tests/_hybrid_phase1_child.py",
+    "backend/tests/fixtures/hybrid_activity.json",
+    "backend/tests/test_finops_control_migrations.py",
+    "backend/tests/test_finops_reconciliation_migrations.py",
+    "backend/tests/test_finops_unit_economics_migrations.py",
+    "backend/tests/test_hybrid_phase1_runtime.py",
+    "backend/tests/test_migration_reconciliation.py",
+    "backend/tests/test_observability_hybrid.py",
+    "backend/tests/test_observability_migrations.py",
+    "docs/Telemetry/00_MASTER_BUILD_CONTRACT.md",
+    "docs/Telemetry/01_TARGET_ARCHITECTURE.md",
+    "docs/Telemetry/02_TELEMETRY_DATA_CONTRACT.md",
+    "docs/Telemetry/03_INSTRUMENTATION_AND_RUNTIME.md",
+    "docs/Telemetry/05_STORAGE_APIS_AND_UI.md",
+    "docs/Telemetry/09_SECURITY_PRIVACY_RETENTION_SAMPLING.md",
+    "docs/Telemetry/13_TEST_VALIDATION_ACCEPTANCE.md",
+    "docs/Telemetry/16_PRODUCTION_TELEMETRY_BACKEND.md",
+    "docs/Telemetry/23_TERRAFORM_AND_OBSERVABILITY_AS_CODE.md",
+    "docs/Telemetry/25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md",
+    "docs/Telemetry/26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md",
+    "docs/Telemetry/ALL_IN_ONE.md",
+    "docs/Telemetry/GCP_HYBRID_OBSERVABILITY_RESOURCE_MANIFEST.md",
+    "docs/Telemetry/README.md",
+    "docs/Telemetry/validation/HYBRID_PHASE1_ADDITIVE_MIGRATION.sql",
+    "docs/Telemetry/validation/HYBRID_PHASE1_LOCAL_MEASUREMENT.json",
+    "docs/Telemetry/validation/HYBRID_PHASE1_LOCAL_REPORT.md",
+    "docs/Telemetry/validation/HYBRID_PHASE1_LOCAL_VALIDATION.json",
+    "infra/observability/collector/README.md",
+    "infra/observability/collector/hybrid-branch.yaml.example",
+    "scripts/observability/measure_hybrid_local.py",
+    "scripts/observability/reconcile_migration_sql.py",
+    "src/api/observabilityHybrid.test.ts",
+    "src/api/observabilityHybrid.ts"
+  ],
+  "file_sha256": {
+    ".agent/OBSERVABILITY_EXECUTION.md": "1806d1224e60b49217f7a314dcd180d36a3f939d3a29b7b86386211d02769219",
+    "alembic/env.py": "64d5d170de34756a7ce5a4398ab6ed9ee3ceb2fb9406174fbd078b12079d2eaf",
+    "alembic/versions/d26a1b7c9e40_hybrid_audit_outbox_projections.py": "0cd79f9770ff024c9147143f5e07026a3c2967f839d64c0661b761afa69bf294",
+    "backend/api/observability_app.py": "e652b694290d5742c8e470369075ce71b9cfcea60a74f0d2c945d9bcf70cfb08",
+    "backend/api/observability_routes.py": "f6954d43b3fd502f14e84499ba938dd5bd2583cb1297124afc6c234f9d65337a",
+    "backend/observability/finops/repository.py": "3d9866034de1a7c6cb525f11a09190c96b42a391adbdef8e38d34d111fa2f271",
+    "backend/observability/hybrid/capture.py": "07bb94866b090978158346ce564d386639c8c66e789fc6c3a2139b478d0903ff",
+    "backend/observability/hybrid/config.py": "07f158593b631329c7f0aad2988931c30b5f065c1b7ea5bbb208e0fe3cb95317",
+    "backend/observability/hybrid/contracts.py": "6cabc1013946963cf10a7f2d86ae6676934dfb6616bd041f9428eefc9e262251",
+    "backend/observability/hybrid/local.py": "57865cefe78871a07517c50669496e62cf2a56b6b42c47f953f8b7956d342e39",
+    "backend/observability/hybrid/models.py": "af0c38c2adb8659e6310baf21e574aa3af22fec0c91ff287942002b2d7f0f91b",
+    "backend/observability/hybrid/ports.py": "bf25c5e33e2b5f0b55e72328f8d2a73392e33d4bd0c187e279354353dc656eba",
+    "backend/observability/hybrid/projector_app.py": "988f242f61a1809cf95389956ada89048d565525ae641cc9286366da9cea0d46",
+    "backend/observability/hybrid/read.py": "1248b2efc3ce8cf7d0e5286f645ce20aec793323be0e7725c01fcb5c3fbab5de",
+    "backend/observability/hybrid/store.py": "1bdda14f192d4cb994d19b3da62b398262048ecd3555120aae3b8e72f1ba43ee",
+    "backend/observability/hybrid/transport.py": "8a3d52b37ba820e0b68c57c92e057fabee758a1c6ade884b2e6ab1855c6d9dab",
+    "backend/observability/hybrid/workers.py": "8bf60521ac41940685032572436758efc328a3f323412ecd16342790c8b5eb51",
+    "backend/observability/privacy_policy.py": "1bcf4880911388b2292d358dec6637b6c05a60be4b117a80757697f59b8a6d92",
+    "backend/observability/read_service.py": "370ceef94874e50493a4c60530d4fe0dfd05f68339d63f58dac486ddc83fc72b",
+    "backend/observability/repository.py": "69d31f7b4e227ff905cccdbf21ad7c42dd791b352c8e3bf8bec6a5348676e1fd",
+    "backend/tests/_hybrid_phase1_child.py": "db01090efec30c8e9727173dffddb86294002f1c330e41e971c0ea2d7b943296",
+    "backend/tests/fixtures/hybrid_activity.json": "4a80faaee80dc9a5718d5d37bc082e74fb9fc9947bddf204a89e6b0a8acc273b",
+    "backend/tests/test_finops_control_migrations.py": "e21ed9541ce1db0abde3cbefd39448e000067d72e9789eb4358d42a2b40a2093",
+    "backend/tests/test_finops_reconciliation_migrations.py": "ccc4de12737cf4bc06634563fff9721d7d88ed2eb427720fa636922228387937",
+    "backend/tests/test_finops_unit_economics_migrations.py": "0732f4c2ffe974f2ebfc85d24eca3e5682626e8c8905b9bf7cf85c6758eeaa4f",
+    "backend/tests/test_hybrid_phase1_runtime.py": "b167436e13cd4518270c175fe3f710515d9edd1e0f9133828991f4f34bd9d93d",
+    "backend/tests/test_migration_reconciliation.py": "b447d745e6e0f1878e1e7fcd68eb80e86f6a42992f0901ed68668f5bb02c9881",
+    "backend/tests/test_observability_hybrid.py": "8136f9e4c5bb083a3b8e20cbed33c2a197ea45c9b251050d9709f79e18eb40ba",
+    "backend/tests/test_observability_migrations.py": "384a6ab21f57055b4f2af3c242ed984e79b69df9412acf91daf7ff5852149099",
+    "docs/Telemetry/00_MASTER_BUILD_CONTRACT.md": "518e52a60e02aa67f4c1061e52f35dc95f3b0376496b009d9d1fe6c7e30dfb66",
+    "docs/Telemetry/01_TARGET_ARCHITECTURE.md": "ff135f67a40edf7120fbb36df6a623f9442b8788f67a13ff59158450af3f14f2",
+    "docs/Telemetry/02_TELEMETRY_DATA_CONTRACT.md": "0ea04e5d7a8adf772d6f468ed8297ddd91d07be669122d0898345cda183785a5",
+    "docs/Telemetry/03_INSTRUMENTATION_AND_RUNTIME.md": "fa4ea5cd25049a124aef6630de036ddb42c01656d05f541a343f3af423e62b02",
+    "docs/Telemetry/05_STORAGE_APIS_AND_UI.md": "5321d6c1b43070b6756823186a0e2c534295d7f7456528b7abd2ee6bc12e9512",
+    "docs/Telemetry/09_SECURITY_PRIVACY_RETENTION_SAMPLING.md": "39a7469ccbf3b7ac0ef93de320a29882cb7253ff49a31ba2c3e714ede30e5716",
+    "docs/Telemetry/13_TEST_VALIDATION_ACCEPTANCE.md": "5567d04d566b63c997abd895ee353b8eae5ce2ddeb51f80d96a7d24ae637ffc6",
+    "docs/Telemetry/16_PRODUCTION_TELEMETRY_BACKEND.md": "c9cafcf6a9328da28f36b7ee6846d3345777045b6afb159b878dcfb277b82c29",
+    "docs/Telemetry/23_TERRAFORM_AND_OBSERVABILITY_AS_CODE.md": "e1a81bdac659e1fa735906450a0380986941ed22cda3ef88b3c114c06d937af9",
+    "docs/Telemetry/25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md": "bb36914fa27e142413370d072e4dd9403e049e60a964b8b66fb07f6673bf5872",
+    "docs/Telemetry/26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md": "1abf57a9e60010d6bbdda8a3e3cfe87a1b00cb3f12603eb541145d67f7c8b9e2",
+    "docs/Telemetry/ALL_IN_ONE.md": "77601d1d277be603fd48dd5069ffafdd9496576edaa37dd5fe05593da0869896",
+    "docs/Telemetry/GCP_HYBRID_OBSERVABILITY_RESOURCE_MANIFEST.md": "13e6874e57b03b1b933716617577c8c63563420baa5aafbd7eb11c6a58542307",
+    "docs/Telemetry/README.md": "8c9c6ce8462daf9698afc8277c193e7bae285be88697c1c3e3e0d75b8fc4aebb",
+    "docs/Telemetry/validation/HYBRID_PHASE1_ADDITIVE_MIGRATION.sql": "864bd962b009a91ac482c30a53d338d97e34b2279c354b1ba478ac0c50f8b12e",
+    "docs/Telemetry/validation/HYBRID_PHASE1_LOCAL_MEASUREMENT.json": "4ef4ece7e5ff1bea52effc4174480c2f07b1254083b6d91d2539359c40952d21",
+    "docs/Telemetry/validation/HYBRID_PHASE1_LOCAL_REPORT.md": "a40927d7240076b1d57168e2b2c3ac8b552ab994b85be30c03e18fbb1c091006",
+    "infra/observability/collector/README.md": "c0c74bdd9e9eef486832f243eda4e300a98814668262040033899d1fe7382756",
+    "infra/observability/collector/hybrid-branch.yaml.example": "b11f91b7525a462187143f2946e14fd6d5b1a0bef724e3aea4ff7911bc9419ea",
+    "scripts/observability/measure_hybrid_local.py": "18bf6e610cc77ed2538ee2e734f6e36c14181fed5eb5498ed6b16433867a67a0",
+    "scripts/observability/reconcile_migration_sql.py": "07486c96e77f912405c7763a2728ab5f03b6d260dfdfc2ecc137e0e8bb73f513",
+    "src/api/observabilityHybrid.test.ts": "c42e1423b620c2bde8cf11eb485f633ed30c7ad44f6dda122767a4d962a08210",
+    "src/api/observabilityHybrid.ts": "976fdd33fda33875d9545a84e8cd8a9d689c4824bcb89a4150c877eddcff7db2"
+  },
+  "limits": [
+    "SQLite/fake only; no production broker durability",
+    "production Pub/Sub adapter/verified ingress pending",
+    "actual ChatService reality test uses FakeRunner",
+    "M7 coalesced persistence; no pre-provider acceptance guarantee",
+    "deferred unowned agent/tool/approval/action events",
+    "no financial truth duplication",
+    "no full M16 acceptance claim",
+    "unconfirmed cloud bindings, PostgreSQL/live migration/recovery/cost/load pending"
+  ],
+  "active_collector_configuration_sha256": {
+    "infra/observability/collector/config.yaml": "eab572ccb0f55a209db62d524b2e1a4d14304dbe2486522fde03ab8ec47ad4af",
+    "infra/observability/collector/config.local.yaml": "877b187dac692519c48ca8463a31cd94c3e4e0afe0454fd5723744072b4957bd"
+  },
+  "resource_IAM_source_check": "PASS primary Google Cloud docs 2026-10-11; conditional project Cloud SQL client / scoped push / DLQ; no grants"
+}

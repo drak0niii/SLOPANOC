@@ -21,6 +21,7 @@ class ModelUsage(Contract):
 
 
 class ModelUsageObservation(Contract):
+    agent_execution_id: Identifier | None = None
     telemetry_schema_version: Literal[1] = 1
     observation_id: Identifier
     logical_call_id: Identifier

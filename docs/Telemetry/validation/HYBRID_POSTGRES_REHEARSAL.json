@@ -1,0 +1,3840 @@
+{
+  "scope": "LOCAL DISPOSABLE SCHEMA ONLY; fabricated test references; no customer data",
+  "image": "pgvector/pgvector@sha256:2358fcba361ed2233a5ed81b5fe4ca779ccb304120ce531a3bf51c0ed7e2bc11",
+  "started_at": "2026-10-11T15:24:55Z",
+  "status": "PASS",
+  "historical_reconstruction": "d3f8b1c6a942",
+  "postgresql_version": "18.6 (Debian 18.6-1.pgdg12+2)",
+  "vector_version": "0.8.7",
+  "hybrid_index_fk_check_comparison": "PASS",
+  "head": "d26a1b7c9e40",
+  "revision_count": 18,
+  "schema": {
+    "tables": [
+      "ai_usage_ledger",
+      "alembic_version",
+      "finops_accounting_source",
+      "finops_anomaly_transition",
+      "finops_billing_ingest_state",
+      "finops_billing_projection_cache",
+      "finops_billing_publication",
+      "finops_budget_definition_version",
+      "finops_control_generation",
+      "finops_control_input",
+      "finops_control_publication",
+      "finops_forecast_backtest_generation",
+      "finops_reconciliation_generation",
+      "finops_reconciliation_input",
+      "finops_reconciliation_registry",
+      "finops_reconciliation_state",
+      "finops_runtime_attempt",
+      "finops_unit_definition_version",
+      "finops_unit_denominator_snapshot",
+      "finops_unit_driver_version",
+      "finops_unit_economics_generation",
+      "finops_unit_economics_publication",
+      "finops_usage_bucket",
+      "finops_usage_inbox",
+      "observability_agent_projection",
+      "observability_archive_receipt",
+      "observability_audit_outbox",
+      "observability_critical_audit",
+      "observability_projection_failure",
+      "observability_projection_receipt",
+      "observability_retention_checkpoint",
+      "observability_run_event",
+      "observability_run_projection",
+      "observability_run_status",
+      "observability_sre_bucket",
+      "observability_sre_receipt",
+      "observability_sre_source",
+      "observability_turn",
+      "slopanoc_case_context_items",
+      "slopanoc_case_memberships",
+      "slopanoc_case_session_links",
+      "slopanoc_case_troubleshooting_progressions",
+      "slopanoc_cases",
+      "slopanoc_chat_attachments",
+      "slopanoc_experience_records",
+      "slopanoc_knowledge_evidence_index",
+      "slopanoc_knowledge_objects",
+      "slopanoc_telco_context_assertions",
+      "slopanoc_telco_context_profiles"
+    ],
+    "indexes": [
+      {
+        "indexname": "ai_usage_ledger_pkey",
+        "indexdef": "CREATE UNIQUE INDEX ai_usage_ledger_pkey ON public.ai_usage_ledger USING btree (event_id)"
+      },
+      {
+        "indexname": "alembic_version_pkc",
+        "indexdef": "CREATE UNIQUE INDEX alembic_version_pkc ON public.alembic_version USING btree (version_num)"
+      },
+      {
+        "indexname": "finops_accounting_source_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_accounting_source_pkey ON public.finops_accounting_source USING btree (environment)"
+      },
+      {
+        "indexname": "finops_anomaly_transition_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_anomaly_transition_pkey ON public.finops_anomaly_transition USING btree (identity)"
+      },
+      {
+        "indexname": "finops_billing_ingest_state_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_billing_ingest_state_pkey ON public.finops_billing_ingest_state USING btree (key)"
+      },
+      {
+        "indexname": "finops_billing_projection_cache_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_billing_projection_cache_pkey ON public.finops_billing_projection_cache USING btree (generation)"
+      },
+      {
+        "indexname": "finops_billing_publication_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_billing_publication_pkey ON public.finops_billing_publication USING btree (generation)"
+      },
+      {
+        "indexname": "finops_budget_definition_version_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_budget_definition_version_pkey ON public.finops_budget_definition_version USING btree (identity)"
+      },
+      {
+        "indexname": "finops_budget_definition_version_version_key",
+        "indexdef": "CREATE UNIQUE INDEX finops_budget_definition_version_version_key ON public.finops_budget_definition_version USING btree (version)"
+      },
+      {
+        "indexname": "finops_control_generation_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_control_generation_pkey ON public.finops_control_generation USING btree (identity)"
+      },
+      {
+        "indexname": "finops_control_input_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_control_input_pkey ON public.finops_control_input USING btree (identity)"
+      },
+      {
+        "indexname": "finops_control_publication_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_control_publication_pkey ON public.finops_control_publication USING btree (key)"
+      },
+      {
+        "indexname": "finops_forecast_backtest_generation_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_forecast_backtest_generation_pkey ON public.finops_forecast_backtest_generation USING btree (identity)"
+      },
+      {
+        "indexname": "finops_reconciliation_generation_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_reconciliation_generation_pkey ON public.finops_reconciliation_generation USING btree (identity)"
+      },
+      {
+        "indexname": "finops_reconciliation_input_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_reconciliation_input_pkey ON public.finops_reconciliation_input USING btree (identity)"
+      },
+      {
+        "indexname": "finops_reconciliation_registry_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_reconciliation_registry_pkey ON public.finops_reconciliation_registry USING btree (identity)"
+      },
+      {
+        "indexname": "finops_reconciliation_state_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_reconciliation_state_pkey ON public.finops_reconciliation_state USING btree (key)"
+      },
+      {
+        "indexname": "finops_runtime_attempt_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_runtime_attempt_pkey ON public.finops_runtime_attempt USING btree (environment, attempt_id)"
+      },
+      {
+        "indexname": "finops_unit_definition_version_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_unit_definition_version_pkey ON public.finops_unit_definition_version USING btree (identity)"
+      },
+      {
+        "indexname": "finops_unit_definition_version_version_key",
+        "indexdef": "CREATE UNIQUE INDEX finops_unit_definition_version_version_key ON public.finops_unit_definition_version USING btree (version)"
+      },
+      {
+        "indexname": "finops_unit_denominator_snapshot_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_unit_denominator_snapshot_pkey ON public.finops_unit_denominator_snapshot USING btree (identity)"
+      },
+      {
+        "indexname": "finops_unit_driver_version_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_unit_driver_version_pkey ON public.finops_unit_driver_version USING btree (identity)"
+      },
+      {
+        "indexname": "finops_unit_economics_generation_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_unit_economics_generation_pkey ON public.finops_unit_economics_generation USING btree (identity)"
+      },
+      {
+        "indexname": "finops_unit_economics_publication_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_unit_economics_publication_pkey ON public.finops_unit_economics_publication USING btree (key)"
+      },
+      {
+        "indexname": "finops_usage_bucket_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_usage_bucket_pkey ON public.finops_usage_bucket USING btree (environment, at, provider, model, agent, workload, operation, operation_type)"
+      },
+      {
+        "indexname": "finops_usage_inbox_pkey",
+        "indexdef": "CREATE UNIQUE INDEX finops_usage_inbox_pkey ON public.finops_usage_inbox USING btree (event_id)"
+      },
+      {
+        "indexname": "ix_archive_receipt_environment_terminal",
+        "indexdef": "CREATE INDEX ix_archive_receipt_environment_terminal ON public.observability_archive_receipt USING btree (environment, terminal_at)"
+      },
+      {
+        "indexname": "ix_billing_publication_history",
+        "indexdef": "CREATE INDEX ix_billing_publication_history ON public.finops_billing_publication USING btree (state_key, published_at)"
+      },
+      {
+        "indexname": "ix_billing_state_scope",
+        "indexdef": "CREATE UNIQUE INDEX ix_billing_state_scope ON public.finops_billing_ingest_state USING btree (environment, source, scope, partition)"
+      },
+      {
+        "indexname": "ix_control_anomaly_history",
+        "indexdef": "CREATE INDEX ix_control_anomaly_history ON public.finops_anomaly_transition USING btree (anomaly, at)"
+      },
+      {
+        "indexname": "ix_control_backtest_asof",
+        "indexdef": "CREATE INDEX ix_control_backtest_asof ON public.finops_forecast_backtest_generation USING btree (environment, scope, known_at)"
+      },
+      {
+        "indexname": "ix_control_history",
+        "indexdef": "CREATE INDEX ix_control_history ON public.finops_control_generation USING btree (environment, scope, month, kind, issue)"
+      },
+      {
+        "indexname": "ix_control_input_asof",
+        "indexdef": "CREATE INDEX ix_control_input_asof ON public.finops_control_input USING btree (environment, scope, month, cutoff)"
+      },
+      {
+        "indexname": "ix_evidence_index_content_hash",
+        "indexdef": "CREATE INDEX ix_evidence_index_content_hash ON public.slopanoc_knowledge_evidence_index USING btree (content_hash)"
+      },
+      {
+        "indexname": "ix_evidence_index_knowledge_id",
+        "indexdef": "CREATE INDEX ix_evidence_index_knowledge_id ON public.slopanoc_knowledge_evidence_index USING btree (knowledge_id)"
+      },
+      {
+        "indexname": "ix_evidence_index_text_search_vector",
+        "indexdef": "CREATE INDEX ix_evidence_index_text_search_vector ON public.slopanoc_knowledge_evidence_index USING gin (text_search_vector)"
+      },
+      {
+        "indexname": "ix_experience_owner",
+        "indexdef": "CREATE INDEX ix_experience_owner ON public.slopanoc_experience_records USING btree (owner_id)"
+      },
+      {
+        "indexname": "ix_experience_owner_case",
+        "indexdef": "CREATE INDEX ix_experience_owner_case ON public.slopanoc_experience_records USING btree (owner_id, case_id)"
+      },
+      {
+        "indexname": "ix_experience_owner_recorded_at",
+        "indexdef": "CREATE INDEX ix_experience_owner_recorded_at ON public.slopanoc_experience_records USING btree (owner_id, recorded_at)"
+      },
+      {
+        "indexname": "ix_experience_owner_skill",
+        "indexdef": "CREATE INDEX ix_experience_owner_skill ON public.slopanoc_experience_records USING btree (owner_id, skill_id)"
+      },
+      {
+        "indexname": "ix_experience_owner_type",
+        "indexdef": "CREATE INDEX ix_experience_owner_type ON public.slopanoc_experience_records USING btree (owner_id, experience_type)"
+      },
+      {
+        "indexname": "ix_finops_attempt_debt",
+        "indexdef": "CREATE INDEX ix_finops_attempt_debt ON public.finops_runtime_attempt USING btree (environment, state, deadline_at)"
+      },
+      {
+        "indexname": "ix_finops_bucket_time",
+        "indexdef": "CREATE INDEX ix_finops_bucket_time ON public.finops_usage_bucket USING btree (environment, at)"
+      },
+      {
+        "indexname": "ix_finops_inbox_pending",
+        "indexdef": "CREATE INDEX ix_finops_inbox_pending ON public.finops_usage_inbox USING btree (delivered, exhausted, next_attempt_at)"
+      },
+      {
+        "indexname": "ix_finops_ledger_time",
+        "indexdef": "CREATE INDEX ix_finops_ledger_time ON public.ai_usage_ledger USING btree (environment, observed_at, event_id)"
+      },
+      {
+        "indexname": "ix_hybrid_audit_aggregate",
+        "indexdef": "CREATE INDEX ix_hybrid_audit_aggregate ON public.observability_critical_audit USING btree (environment, aggregate_type, aggregate_id, aggregate_version)"
+      },
+      {
+        "indexname": "ix_hybrid_outbox_available",
+        "indexdef": "CREATE INDEX ix_hybrid_outbox_available ON public.observability_audit_outbox USING btree (environment, publication_state, available_at, event_id)"
+      },
+      {
+        "indexname": "ix_hybrid_outbox_oldest",
+        "indexdef": "CREATE INDEX ix_hybrid_outbox_oldest ON public.observability_audit_outbox USING btree (environment, created_at, publication_state)"
+      },
+      {
+        "indexname": "ix_hybrid_receipt_recent",
+        "indexdef": "CREATE INDEX ix_hybrid_receipt_recent ON public.observability_projection_receipt USING btree (environment, processed_at)"
+      },
+      {
+        "indexname": "ix_hybrid_run_recent",
+        "indexdef": "CREATE INDEX ix_hybrid_run_recent ON public.observability_run_projection USING btree (environment, latest_event_occurred_at, run_id)"
+      },
+      {
+        "indexname": "ix_m15_run_retention",
+        "indexdef": "CREATE INDEX ix_m15_run_retention ON public.observability_run_status USING btree (environment, expiry_at, run_id)"
+      },
+      {
+        "indexname": "ix_m15_summary_retention",
+        "indexdef": "CREATE INDEX ix_m15_summary_retention ON public.observability_turn USING btree (environment, expiry_at, run_id)"
+      },
+      {
+        "indexname": "ix_observability_active",
+        "indexdef": "CREATE INDEX ix_observability_active ON public.observability_run_status USING btree (environment, status, heartbeat_at, run_id)"
+      },
+      {
+        "indexname": "ix_observability_recent",
+        "indexdef": "CREATE INDEX ix_observability_recent ON public.observability_turn USING btree (environment, started_at, run_id)"
+      },
+      {
+        "indexname": "ix_observability_session",
+        "indexdef": "CREATE INDEX ix_observability_session ON public.observability_run_status USING btree (session_id, started_at, run_id)"
+      },
+      {
+        "indexname": "ix_observability_status_expiry",
+        "indexdef": "CREATE INDEX ix_observability_status_expiry ON public.observability_run_status USING btree (expiry_at, run_id)"
+      },
+      {
+        "indexname": "ix_observability_summary_expiry",
+        "indexdef": "CREATE INDEX ix_observability_summary_expiry ON public.observability_turn USING btree (expiry_at, run_id)"
+      },
+      {
+        "indexname": "ix_observability_summary_session",
+        "indexdef": "CREATE INDEX ix_observability_summary_session ON public.observability_turn USING btree (session_id, started_at, run_id)"
+      },
+      {
+        "indexname": "ix_observability_terminal",
+        "indexdef": "CREATE INDEX ix_observability_terminal ON public.observability_turn USING btree (environment, terminal_at, run_id)"
+      },
+      {
+        "indexname": "ix_reconciliation_inputs",
+        "indexdef": "CREATE INDEX ix_reconciliation_inputs ON public.finops_reconciliation_input USING btree (environment, scope, period, kind, source_generation)"
+      },
+      {
+        "indexname": "ix_slopanoc_chat_attachments_owner_session",
+        "indexdef": "CREATE INDEX ix_slopanoc_chat_attachments_owner_session ON public.slopanoc_chat_attachments USING btree (owner_user_id, session_id)"
+      },
+      {
+        "indexname": "ix_slopanoc_chat_attachments_session_message",
+        "indexdef": "CREATE INDEX ix_slopanoc_chat_attachments_session_message ON public.slopanoc_chat_attachments USING btree (session_id, message_id)"
+      },
+      {
+        "indexname": "ix_slopanoc_chat_attachments_status_created",
+        "indexdef": "CREATE INDEX ix_slopanoc_chat_attachments_status_created ON public.slopanoc_chat_attachments USING btree (status, created_at)"
+      },
+      {
+        "indexname": "ix_sre_due",
+        "indexdef": "CREATE INDEX ix_sre_due ON public.observability_sre_receipt USING btree (settled, due_at)"
+      },
+      {
+        "indexname": "ix_unit_snapshot_period",
+        "indexdef": "CREATE INDEX ix_unit_snapshot_period ON public.finops_unit_denominator_snapshot USING btree (environment, period, source)"
+      },
+      {
+        "indexname": "observability_agent_projection_pkey",
+        "indexdef": "CREATE UNIQUE INDEX observability_agent_projection_pkey ON public.observability_agent_projection USING btree (environment, agent)"
+      },
+      {
+        "indexname": "observability_archive_receipt_pkey",
+        "indexdef": "CREATE UNIQUE INDEX observability_archive_receipt_pkey ON public.observability_archive_receipt USING btree (environment, trace_id)"
+      },
+      {
+        "indexname": "observability_audit_outbox_pkey",
+        "indexdef": "CREATE UNIQUE INDEX observability_audit_outbox_pkey ON public.observability_audit_outbox USING btree (event_id)"
+      },
+      {
+        "indexname": "observability_critical_audit_pkey",
+        "indexdef": "CREATE UNIQUE INDEX observability_critical_audit_pkey ON public.observability_critical_audit USING btree (event_id)"
+      },
+      {
+        "indexname": "observability_projection_failure_pkey",
+        "indexdef": "CREATE UNIQUE INDEX observability_projection_failure_pkey ON public.observability_projection_failure USING btree (environment, failure_key)"
+      },
+      {
+        "indexname": "observability_projection_receipt_pkey",
+        "indexdef": "CREATE UNIQUE INDEX observability_projection_receipt_pkey ON public.observability_projection_receipt USING btree (environment, event_id)"
+      },
+      {
+        "indexname": "observability_retention_checkpoint_pkey",
+        "indexdef": "CREATE UNIQUE INDEX observability_retention_checkpoint_pkey ON public.observability_retention_checkpoint USING btree (environment, dataset)"
+      },
+      {
+        "indexname": "observability_run_event_pkey",
+        "indexdef": "CREATE UNIQUE INDEX observability_run_event_pkey ON public.observability_run_event USING btree (run_id, event_seq)"
+      },
+      {
+        "indexname": "observability_run_projection_pkey",
+        "indexdef": "CREATE UNIQUE INDEX observability_run_projection_pkey ON public.observability_run_projection USING btree (environment, run_id)"
+      },
+      {
+        "indexname": "observability_run_status_pkey",
+        "indexdef": "CREATE UNIQUE INDEX observability_run_status_pkey ON public.observability_run_status USING btree (run_id)"
+      },
+      {
+        "indexname": "observability_sre_bucket_pkey",
+        "indexdef": "CREATE UNIQUE INDEX observability_sre_bucket_pkey ON public.observability_sre_bucket USING btree (environment, slo_id, at)"
+      },
+      {
+        "indexname": "observability_sre_receipt_pkey",
+        "indexdef": "CREATE UNIQUE INDEX observability_sre_receipt_pkey ON public.observability_sre_receipt USING btree (run_id)"
+      },
+      {
+        "indexname": "observability_sre_source_pkey",
+        "indexdef": "CREATE UNIQUE INDEX observability_sre_source_pkey ON public.observability_sre_source USING btree (environment)"
+      },
+      {
+        "indexname": "observability_turn_pkey",
+        "indexdef": "CREATE UNIQUE INDEX observability_turn_pkey ON public.observability_turn USING btree (run_id)"
+      },
+      {
+        "indexname": "slopanoc_case_context_items_pkey",
+        "indexdef": "CREATE UNIQUE INDEX slopanoc_case_context_items_pkey ON public.slopanoc_case_context_items USING btree (item_id)"
+      },
+      {
+        "indexname": "slopanoc_case_memberships_pkey",
+        "indexdef": "CREATE UNIQUE INDEX slopanoc_case_memberships_pkey ON public.slopanoc_case_memberships USING btree (case_id, user_id)"
+      },
+      {
+        "indexname": "slopanoc_case_session_links_pkey",
+        "indexdef": "CREATE UNIQUE INDEX slopanoc_case_session_links_pkey ON public.slopanoc_case_session_links USING btree (session_id)"
+      },
+      {
+        "indexname": "slopanoc_case_troubleshooting_progressions_pkey",
+        "indexdef": "CREATE UNIQUE INDEX slopanoc_case_troubleshooting_progressions_pkey ON public.slopanoc_case_troubleshooting_progressions USING btree (case_id)"
+      },
+      {
+        "indexname": "slopanoc_cases_pkey",
+        "indexdef": "CREATE UNIQUE INDEX slopanoc_cases_pkey ON public.slopanoc_cases USING btree (case_id)"
+      },
+      {
+        "indexname": "slopanoc_chat_attachments_pkey",
+        "indexdef": "CREATE UNIQUE INDEX slopanoc_chat_attachments_pkey ON public.slopanoc_chat_attachments USING btree (attachment_id)"
+      },
+      {
+        "indexname": "slopanoc_experience_records_pkey",
+        "indexdef": "CREATE UNIQUE INDEX slopanoc_experience_records_pkey ON public.slopanoc_experience_records USING btree (experience_id)"
+      },
+      {
+        "indexname": "slopanoc_knowledge_evidence_index_pkey",
+        "indexdef": "CREATE UNIQUE INDEX slopanoc_knowledge_evidence_index_pkey ON public.slopanoc_knowledge_evidence_index USING btree (evidence_id)"
+      },
+      {
+        "indexname": "slopanoc_knowledge_objects_pkey",
+        "indexdef": "CREATE UNIQUE INDEX slopanoc_knowledge_objects_pkey ON public.slopanoc_knowledge_objects USING btree (knowledge_id, version_label)"
+      },
+      {
+        "indexname": "slopanoc_telco_context_assertions_pkey",
+        "indexdef": "CREATE UNIQUE INDEX slopanoc_telco_context_assertions_pkey ON public.slopanoc_telco_context_assertions USING btree (assertion_id)"
+      },
+      {
+        "indexname": "slopanoc_telco_context_profiles_pkey",
+        "indexdef": "CREATE UNIQUE INDEX slopanoc_telco_context_profiles_pkey ON public.slopanoc_telco_context_profiles USING btree (profile_id)"
+      },
+      {
+        "indexname": "uq_telco_context_profile_owner",
+        "indexdef": "CREATE UNIQUE INDEX uq_telco_context_profile_owner ON public.slopanoc_telco_context_profiles USING btree (owner_kind, owner_id)"
+      },
+      {
+        "indexname": "ux_control_publication",
+        "indexdef": "CREATE UNIQUE INDEX ux_control_publication ON public.finops_control_publication USING btree (environment, scope, month, kind, selection)"
+      },
+      {
+        "indexname": "ux_finops_base_attempt",
+        "indexdef": "CREATE UNIQUE INDEX ux_finops_base_attempt ON public.ai_usage_ledger USING btree (environment, attempt_id) WHERE ((record_kind)::text = 'BASE'::text)"
+      },
+      {
+        "indexname": "ux_reconciliation_period",
+        "indexdef": "CREATE UNIQUE INDEX ux_reconciliation_period ON public.finops_reconciliation_state USING btree (environment, scope, period)"
+      },
+      {
+        "indexname": "ux_reconciliation_registry_version",
+        "indexdef": "CREATE UNIQUE INDEX ux_reconciliation_registry_version ON public.finops_reconciliation_registry USING btree (environment, version, ownership_version)"
+      },
+      {
+        "indexname": "ux_unit_driver_version",
+        "indexdef": "CREATE UNIQUE INDEX ux_unit_driver_version ON public.finops_unit_driver_version USING btree (environment, scope, version)"
+      },
+      {
+        "indexname": "ux_unit_publication",
+        "indexdef": "CREATE UNIQUE INDEX ux_unit_publication ON public.finops_unit_economics_publication USING btree (environment, scope, period, kind)"
+      }
+    ],
+    "constraints": [
+      {
+        "conname": "ai_usage_ledger_attempt_id_not_null",
+        "contype": "n",
+        "table_name": "ai_usage_ledger",
+        "definition": "NOT NULL attempt_id"
+      },
+      {
+        "conname": "ai_usage_ledger_check",
+        "contype": "c",
+        "table_name": "ai_usage_ledger",
+        "definition": "CHECK ((((record_kind)::text = 'ADJUSTMENT'::text) OR (input_tokens IS NULL) OR (input_tokens >= 0)))"
+      },
+      {
+        "conname": "ai_usage_ledger_check1",
+        "contype": "c",
+        "table_name": "ai_usage_ledger",
+        "definition": "CHECK (((((record_kind)::text = 'BASE'::text) AND (original_event_id IS NULL)) OR (((record_kind)::text = 'ADJUSTMENT'::text) AND (original_event_id IS NOT NULL))))"
+      },
+      {
+        "conname": "ai_usage_ledger_check2",
+        "contype": "c",
+        "table_name": "ai_usage_ledger",
+        "definition": "CHECK ((((record_kind)::text = 'ADJUSTMENT'::text) OR (output_tokens IS NULL) OR (output_tokens >= 0)))"
+      },
+      {
+        "conname": "ai_usage_ledger_check3",
+        "contype": "c",
+        "table_name": "ai_usage_ledger",
+        "definition": "CHECK ((((record_kind)::text = 'ADJUSTMENT'::text) OR (candidate_tokens IS NULL) OR (candidate_tokens >= 0)))"
+      },
+      {
+        "conname": "ai_usage_ledger_check4",
+        "contype": "c",
+        "table_name": "ai_usage_ledger",
+        "definition": "CHECK ((((record_kind)::text = 'ADJUSTMENT'::text) OR (cached_tokens IS NULL) OR (cached_tokens >= 0)))"
+      },
+      {
+        "conname": "ai_usage_ledger_check5",
+        "contype": "c",
+        "table_name": "ai_usage_ledger",
+        "definition": "CHECK ((((record_kind)::text = 'ADJUSTMENT'::text) OR (total_tokens IS NULL) OR (total_tokens >= 0)))"
+      },
+      {
+        "conname": "ai_usage_ledger_check6",
+        "contype": "c",
+        "table_name": "ai_usage_ledger",
+        "definition": "CHECK ((((record_kind)::text = 'ADJUSTMENT'::text) OR (tool_input_tokens IS NULL) OR (tool_input_tokens >= 0)))"
+      },
+      {
+        "conname": "ai_usage_ledger_check7",
+        "contype": "c",
+        "table_name": "ai_usage_ledger",
+        "definition": "CHECK ((((record_kind)::text = 'ADJUSTMENT'::text) OR (thought_tokens IS NULL) OR (thought_tokens >= 0)))"
+      },
+      {
+        "conname": "ai_usage_ledger_check8",
+        "contype": "c",
+        "table_name": "ai_usage_ledger",
+        "definition": "CHECK ((((record_kind)::text = 'ADJUSTMENT'::text) OR (billable_characters IS NULL) OR (billable_characters >= 0)))"
+      },
+      {
+        "conname": "ai_usage_ledger_created_at_not_null",
+        "contype": "n",
+        "table_name": "ai_usage_ledger",
+        "definition": "NOT NULL created_at"
+      },
+      {
+        "conname": "ai_usage_ledger_environment_attempt_id_fkey",
+        "contype": "f",
+        "table_name": "ai_usage_ledger",
+        "definition": "FOREIGN KEY (environment, attempt_id) REFERENCES finops_runtime_attempt(environment, attempt_id)"
+      },
+      {
+        "conname": "ai_usage_ledger_environment_check",
+        "contype": "c",
+        "table_name": "ai_usage_ledger",
+        "definition": "CHECK (((environment)::text = ANY ((ARRAY['local'::character varying, 'development'::character varying, 'staging'::character varying, 'production'::character varying])::text[])))"
+      },
+      {
+        "conname": "ai_usage_ledger_environment_not_null",
+        "contype": "n",
+        "table_name": "ai_usage_ledger",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "ai_usage_ledger_event_id_not_null",
+        "contype": "n",
+        "table_name": "ai_usage_ledger",
+        "definition": "NOT NULL event_id"
+      },
+      {
+        "conname": "ai_usage_ledger_metadata_safe_not_null",
+        "contype": "n",
+        "table_name": "ai_usage_ledger",
+        "definition": "NOT NULL metadata_safe"
+      },
+      {
+        "conname": "ai_usage_ledger_observed_at_not_null",
+        "contype": "n",
+        "table_name": "ai_usage_ledger",
+        "definition": "NOT NULL observed_at"
+      },
+      {
+        "conname": "ai_usage_ledger_original_event_id_fkey",
+        "contype": "f",
+        "table_name": "ai_usage_ledger",
+        "definition": "FOREIGN KEY (original_event_id) REFERENCES ai_usage_ledger(event_id)"
+      },
+      {
+        "conname": "ai_usage_ledger_payload_hash_not_null",
+        "contype": "n",
+        "table_name": "ai_usage_ledger",
+        "definition": "NOT NULL payload_hash"
+      },
+      {
+        "conname": "ai_usage_ledger_pkey",
+        "contype": "p",
+        "table_name": "ai_usage_ledger",
+        "definition": "PRIMARY KEY (event_id)"
+      },
+      {
+        "conname": "ai_usage_ledger_record_kind_check",
+        "contype": "c",
+        "table_name": "ai_usage_ledger",
+        "definition": "CHECK (((record_kind)::text = ANY ((ARRAY['BASE'::character varying, 'ADJUSTMENT'::character varying])::text[])))"
+      },
+      {
+        "conname": "ai_usage_ledger_record_kind_not_null",
+        "contype": "n",
+        "table_name": "ai_usage_ledger",
+        "definition": "NOT NULL record_kind"
+      },
+      {
+        "conname": "alembic_version_pkc",
+        "contype": "p",
+        "table_name": "alembic_version",
+        "definition": "PRIMARY KEY (version_num)"
+      },
+      {
+        "conname": "alembic_version_version_num_not_null",
+        "contype": "n",
+        "table_name": "alembic_version",
+        "definition": "NOT NULL version_num"
+      },
+      {
+        "conname": "ck_slopanoc_case_troubleshooting_progressions_version_positive",
+        "contype": "c",
+        "table_name": "slopanoc_case_troubleshooting_progressions",
+        "definition": "CHECK ((version >= 1))"
+      },
+      {
+        "conname": "ck_slopanoc_chat_attachments_filename_nonempty",
+        "contype": "c",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "CHECK ((length(original_filename) > 0))"
+      },
+      {
+        "conname": "ck_slopanoc_chat_attachments_mime_type_nonempty",
+        "contype": "c",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "CHECK ((length(mime_type) > 0))"
+      },
+      {
+        "conname": "ck_slopanoc_chat_attachments_sha256_nonempty",
+        "contype": "c",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "CHECK ((length(sha256) > 0))"
+      },
+      {
+        "conname": "ck_slopanoc_chat_attachments_size_bytes_positive",
+        "contype": "c",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "CHECK ((size_bytes > 0))"
+      },
+      {
+        "conname": "ck_slopanoc_chat_attachments_storage_object_name_nonempty",
+        "contype": "c",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "CHECK ((length(storage_object_name) > 0))"
+      },
+      {
+        "conname": "finops_accounting_source_admission_failures_not_null",
+        "contype": "n",
+        "table_name": "finops_accounting_source",
+        "definition": "NOT NULL admission_failures"
+      },
+      {
+        "conname": "finops_accounting_source_coverage_start_not_null",
+        "contype": "n",
+        "table_name": "finops_accounting_source",
+        "definition": "NOT NULL coverage_start"
+      },
+      {
+        "conname": "finops_accounting_source_environment_not_null",
+        "contype": "n",
+        "table_name": "finops_accounting_source",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "finops_accounting_source_pkey",
+        "contype": "p",
+        "table_name": "finops_accounting_source",
+        "definition": "PRIMARY KEY (environment)"
+      },
+      {
+        "conname": "finops_accounting_source_updated_at_not_null",
+        "contype": "n",
+        "table_name": "finops_accounting_source",
+        "definition": "NOT NULL updated_at"
+      },
+      {
+        "conname": "finops_anomaly_transition_anomaly_not_null",
+        "contype": "n",
+        "table_name": "finops_anomaly_transition",
+        "definition": "NOT NULL anomaly"
+      },
+      {
+        "conname": "finops_anomaly_transition_at_not_null",
+        "contype": "n",
+        "table_name": "finops_anomaly_transition",
+        "definition": "NOT NULL at"
+      },
+      {
+        "conname": "finops_anomaly_transition_generation_fkey",
+        "contype": "f",
+        "table_name": "finops_anomaly_transition",
+        "definition": "FOREIGN KEY (generation) REFERENCES finops_control_generation(identity)"
+      },
+      {
+        "conname": "finops_anomaly_transition_generation_not_null",
+        "contype": "n",
+        "table_name": "finops_anomaly_transition",
+        "definition": "NOT NULL generation"
+      },
+      {
+        "conname": "finops_anomaly_transition_identity_not_null",
+        "contype": "n",
+        "table_name": "finops_anomaly_transition",
+        "definition": "NOT NULL identity"
+      },
+      {
+        "conname": "finops_anomaly_transition_pkey",
+        "contype": "p",
+        "table_name": "finops_anomaly_transition",
+        "definition": "PRIMARY KEY (identity)"
+      },
+      {
+        "conname": "finops_anomaly_transition_state_check",
+        "contype": "c",
+        "table_name": "finops_anomaly_transition",
+        "definition": "CHECK (((state)::text = ANY ((ARRAY['OBSERVED'::character varying, 'ACTIVE'::character varying, 'RESOLVED'::character varying])::text[])))"
+      },
+      {
+        "conname": "finops_anomaly_transition_state_not_null",
+        "contype": "n",
+        "table_name": "finops_anomaly_transition",
+        "definition": "NOT NULL state"
+      },
+      {
+        "conname": "finops_billing_ingest_state_environment_check",
+        "contype": "c",
+        "table_name": "finops_billing_ingest_state",
+        "definition": "CHECK (((environment)::text = ANY ((ARRAY['local'::character varying, 'development'::character varying, 'staging'::character varying, 'production'::character varying])::text[])))"
+      },
+      {
+        "conname": "finops_billing_ingest_state_environment_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_ingest_state",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "finops_billing_ingest_state_generation_fkey",
+        "contype": "f",
+        "table_name": "finops_billing_ingest_state",
+        "definition": "FOREIGN KEY (generation) REFERENCES finops_billing_publication(generation)"
+      },
+      {
+        "conname": "finops_billing_ingest_state_key_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_ingest_state",
+        "definition": "NOT NULL key"
+      },
+      {
+        "conname": "finops_billing_ingest_state_mode_check",
+        "contype": "c",
+        "table_name": "finops_billing_ingest_state",
+        "definition": "CHECK (((mode)::text = ANY ((ARRAY['TEST_FIXTURE'::character varying, 'BIGQUERY'::character varying])::text[])))"
+      },
+      {
+        "conname": "finops_billing_ingest_state_mode_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_ingest_state",
+        "definition": "NOT NULL mode"
+      },
+      {
+        "conname": "finops_billing_ingest_state_partition_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_ingest_state",
+        "definition": "NOT NULL partition"
+      },
+      {
+        "conname": "finops_billing_ingest_state_pkey",
+        "contype": "p",
+        "table_name": "finops_billing_ingest_state",
+        "definition": "PRIMARY KEY (key)"
+      },
+      {
+        "conname": "finops_billing_ingest_state_revision_check",
+        "contype": "c",
+        "table_name": "finops_billing_ingest_state",
+        "definition": "CHECK ((revision >= 0))"
+      },
+      {
+        "conname": "finops_billing_ingest_state_revision_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_ingest_state",
+        "definition": "NOT NULL revision"
+      },
+      {
+        "conname": "finops_billing_ingest_state_scope_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_ingest_state",
+        "definition": "NOT NULL scope"
+      },
+      {
+        "conname": "finops_billing_ingest_state_source_check",
+        "contype": "c",
+        "table_name": "finops_billing_ingest_state",
+        "definition": "CHECK (((source)::text = ANY ((ARRAY['DETAILED_BILLING'::character varying, 'PRICING_EXPORT'::character varying, 'FOCUS'::character varying])::text[])))"
+      },
+      {
+        "conname": "finops_billing_ingest_state_source_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_ingest_state",
+        "definition": "NOT NULL source"
+      },
+      {
+        "conname": "finops_billing_projection_cache_generation_fkey",
+        "contype": "f",
+        "table_name": "finops_billing_projection_cache",
+        "definition": "FOREIGN KEY (generation) REFERENCES finops_billing_publication(generation)"
+      },
+      {
+        "conname": "finops_billing_projection_cache_generation_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_projection_cache",
+        "definition": "NOT NULL generation"
+      },
+      {
+        "conname": "finops_billing_projection_cache_pkey",
+        "contype": "p",
+        "table_name": "finops_billing_projection_cache",
+        "definition": "PRIMARY KEY (generation)"
+      },
+      {
+        "conname": "finops_billing_projection_cache_prices_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_projection_cache",
+        "definition": "NOT NULL prices"
+      },
+      {
+        "conname": "finops_billing_projection_cache_summaries_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_projection_cache",
+        "definition": "NOT NULL summaries"
+      },
+      {
+        "conname": "finops_billing_publication_check",
+        "contype": "c",
+        "table_name": "finops_billing_publication",
+        "definition": "CHECK (((row_count >= 0) AND (late_rows >= 0) AND (correction_rows >= 0) AND (unmapped_rows >= 0)))"
+      },
+      {
+        "conname": "finops_billing_publication_controls_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL controls"
+      },
+      {
+        "conname": "finops_billing_publication_correction_rows_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL correction_rows"
+      },
+      {
+        "conname": "finops_billing_publication_evidence_rows_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL evidence_rows"
+      },
+      {
+        "conname": "finops_billing_publication_extracted_at_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL extracted_at"
+      },
+      {
+        "conname": "finops_billing_publication_fingerprint_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL fingerprint"
+      },
+      {
+        "conname": "finops_billing_publication_generation_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL generation"
+      },
+      {
+        "conname": "finops_billing_publication_late_rows_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL late_rows"
+      },
+      {
+        "conname": "finops_billing_publication_mapping_version_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL mapping_version"
+      },
+      {
+        "conname": "finops_billing_publication_pkey",
+        "contype": "p",
+        "table_name": "finops_billing_publication",
+        "definition": "PRIMARY KEY (generation)"
+      },
+      {
+        "conname": "finops_billing_publication_published_at_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL published_at"
+      },
+      {
+        "conname": "finops_billing_publication_row_count_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL row_count"
+      },
+      {
+        "conname": "finops_billing_publication_schema_version_check",
+        "contype": "c",
+        "table_name": "finops_billing_publication",
+        "definition": "CHECK ((schema_version = 1))"
+      },
+      {
+        "conname": "finops_billing_publication_schema_version_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL schema_version"
+      },
+      {
+        "conname": "finops_billing_publication_state_key_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL state_key"
+      },
+      {
+        "conname": "finops_billing_publication_status_check",
+        "contype": "c",
+        "table_name": "finops_billing_publication",
+        "definition": "CHECK (((status)::text = 'PUBLISHED'::text))"
+      },
+      {
+        "conname": "finops_billing_publication_status_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL status"
+      },
+      {
+        "conname": "finops_billing_publication_unmapped_rows_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL unmapped_rows"
+      },
+      {
+        "conname": "finops_billing_publication_window_end_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL window_end"
+      },
+      {
+        "conname": "finops_billing_publication_window_start_not_null",
+        "contype": "n",
+        "table_name": "finops_billing_publication",
+        "definition": "NOT NULL window_start"
+      },
+      {
+        "conname": "finops_budget_definition_version_body_not_null",
+        "contype": "n",
+        "table_name": "finops_budget_definition_version",
+        "definition": "NOT NULL body"
+      },
+      {
+        "conname": "finops_budget_definition_version_identity_not_null",
+        "contype": "n",
+        "table_name": "finops_budget_definition_version",
+        "definition": "NOT NULL identity"
+      },
+      {
+        "conname": "finops_budget_definition_version_pkey",
+        "contype": "p",
+        "table_name": "finops_budget_definition_version",
+        "definition": "PRIMARY KEY (identity)"
+      },
+      {
+        "conname": "finops_budget_definition_version_recorded_at_not_null",
+        "contype": "n",
+        "table_name": "finops_budget_definition_version",
+        "definition": "NOT NULL recorded_at"
+      },
+      {
+        "conname": "finops_budget_definition_version_version_key",
+        "contype": "u",
+        "table_name": "finops_budget_definition_version",
+        "definition": "UNIQUE (version)"
+      },
+      {
+        "conname": "finops_budget_definition_version_version_not_null",
+        "contype": "n",
+        "table_name": "finops_budget_definition_version",
+        "definition": "NOT NULL version"
+      },
+      {
+        "conname": "finops_control_generation_body_not_null",
+        "contype": "n",
+        "table_name": "finops_control_generation",
+        "definition": "NOT NULL body"
+      },
+      {
+        "conname": "finops_control_generation_definitions_fkey",
+        "contype": "f",
+        "table_name": "finops_control_generation",
+        "definition": "FOREIGN KEY (definitions) REFERENCES finops_budget_definition_version(identity)"
+      },
+      {
+        "conname": "finops_control_generation_definitions_not_null",
+        "contype": "n",
+        "table_name": "finops_control_generation",
+        "definition": "NOT NULL definitions"
+      },
+      {
+        "conname": "finops_control_generation_environment_not_null",
+        "contype": "n",
+        "table_name": "finops_control_generation",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "finops_control_generation_identity_not_null",
+        "contype": "n",
+        "table_name": "finops_control_generation",
+        "definition": "NOT NULL identity"
+      },
+      {
+        "conname": "finops_control_generation_inputs_fkey",
+        "contype": "f",
+        "table_name": "finops_control_generation",
+        "definition": "FOREIGN KEY (inputs) REFERENCES finops_control_input(identity)"
+      },
+      {
+        "conname": "finops_control_generation_inputs_not_null",
+        "contype": "n",
+        "table_name": "finops_control_generation",
+        "definition": "NOT NULL inputs"
+      },
+      {
+        "conname": "finops_control_generation_issue_not_null",
+        "contype": "n",
+        "table_name": "finops_control_generation",
+        "definition": "NOT NULL issue"
+      },
+      {
+        "conname": "finops_control_generation_kind_check",
+        "contype": "c",
+        "table_name": "finops_control_generation",
+        "definition": "CHECK (((kind)::text = ANY ((ARRAY['BUDGET'::character varying, 'FORECAST'::character varying, 'ANOMALY'::character varying])::text[])))"
+      },
+      {
+        "conname": "finops_control_generation_kind_not_null",
+        "contype": "n",
+        "table_name": "finops_control_generation",
+        "definition": "NOT NULL kind"
+      },
+      {
+        "conname": "finops_control_generation_month_not_null",
+        "contype": "n",
+        "table_name": "finops_control_generation",
+        "definition": "NOT NULL month"
+      },
+      {
+        "conname": "finops_control_generation_pkey",
+        "contype": "p",
+        "table_name": "finops_control_generation",
+        "definition": "PRIMARY KEY (identity)"
+      },
+      {
+        "conname": "finops_control_generation_published_at_not_null",
+        "contype": "n",
+        "table_name": "finops_control_generation",
+        "definition": "NOT NULL published_at"
+      },
+      {
+        "conname": "finops_control_generation_scope_not_null",
+        "contype": "n",
+        "table_name": "finops_control_generation",
+        "definition": "NOT NULL scope"
+      },
+      {
+        "conname": "finops_control_input_body_not_null",
+        "contype": "n",
+        "table_name": "finops_control_input",
+        "definition": "NOT NULL body"
+      },
+      {
+        "conname": "finops_control_input_cutoff_not_null",
+        "contype": "n",
+        "table_name": "finops_control_input",
+        "definition": "NOT NULL cutoff"
+      },
+      {
+        "conname": "finops_control_input_environment_not_null",
+        "contype": "n",
+        "table_name": "finops_control_input",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "finops_control_input_identity_not_null",
+        "contype": "n",
+        "table_name": "finops_control_input",
+        "definition": "NOT NULL identity"
+      },
+      {
+        "conname": "finops_control_input_month_not_null",
+        "contype": "n",
+        "table_name": "finops_control_input",
+        "definition": "NOT NULL month"
+      },
+      {
+        "conname": "finops_control_input_pkey",
+        "contype": "p",
+        "table_name": "finops_control_input",
+        "definition": "PRIMARY KEY (identity)"
+      },
+      {
+        "conname": "finops_control_input_scope_not_null",
+        "contype": "n",
+        "table_name": "finops_control_input",
+        "definition": "NOT NULL scope"
+      },
+      {
+        "conname": "finops_control_publication_environment_check",
+        "contype": "c",
+        "table_name": "finops_control_publication",
+        "definition": "CHECK (((environment)::text = ANY ((ARRAY['local'::character varying, 'development'::character varying, 'staging'::character varying, 'production'::character varying])::text[])))"
+      },
+      {
+        "conname": "finops_control_publication_environment_not_null",
+        "contype": "n",
+        "table_name": "finops_control_publication",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "finops_control_publication_generation_fkey",
+        "contype": "f",
+        "table_name": "finops_control_publication",
+        "definition": "FOREIGN KEY (generation) REFERENCES finops_control_generation(identity)"
+      },
+      {
+        "conname": "finops_control_publication_key_not_null",
+        "contype": "n",
+        "table_name": "finops_control_publication",
+        "definition": "NOT NULL key"
+      },
+      {
+        "conname": "finops_control_publication_kind_check",
+        "contype": "c",
+        "table_name": "finops_control_publication",
+        "definition": "CHECK (((kind)::text = ANY ((ARRAY['BUDGET'::character varying, 'FORECAST'::character varying, 'ANOMALY'::character varying])::text[])))"
+      },
+      {
+        "conname": "finops_control_publication_kind_not_null",
+        "contype": "n",
+        "table_name": "finops_control_publication",
+        "definition": "NOT NULL kind"
+      },
+      {
+        "conname": "finops_control_publication_month_not_null",
+        "contype": "n",
+        "table_name": "finops_control_publication",
+        "definition": "NOT NULL month"
+      },
+      {
+        "conname": "finops_control_publication_pkey",
+        "contype": "p",
+        "table_name": "finops_control_publication",
+        "definition": "PRIMARY KEY (key)"
+      },
+      {
+        "conname": "finops_control_publication_revision_check",
+        "contype": "c",
+        "table_name": "finops_control_publication",
+        "definition": "CHECK ((revision >= 0))"
+      },
+      {
+        "conname": "finops_control_publication_revision_not_null",
+        "contype": "n",
+        "table_name": "finops_control_publication",
+        "definition": "NOT NULL revision"
+      },
+      {
+        "conname": "finops_control_publication_scope_not_null",
+        "contype": "n",
+        "table_name": "finops_control_publication",
+        "definition": "NOT NULL scope"
+      },
+      {
+        "conname": "finops_control_publication_selection_not_null",
+        "contype": "n",
+        "table_name": "finops_control_publication",
+        "definition": "NOT NULL selection"
+      },
+      {
+        "conname": "finops_forecast_backtest_generation_body_not_null",
+        "contype": "n",
+        "table_name": "finops_forecast_backtest_generation",
+        "definition": "NOT NULL body"
+      },
+      {
+        "conname": "finops_forecast_backtest_generation_environment_not_null",
+        "contype": "n",
+        "table_name": "finops_forecast_backtest_generation",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "finops_forecast_backtest_generation_forecast_not_null",
+        "contype": "n",
+        "table_name": "finops_forecast_backtest_generation",
+        "definition": "NOT NULL forecast"
+      },
+      {
+        "conname": "finops_forecast_backtest_generation_identity_not_null",
+        "contype": "n",
+        "table_name": "finops_forecast_backtest_generation",
+        "definition": "NOT NULL identity"
+      },
+      {
+        "conname": "finops_forecast_backtest_generation_known_at_not_null",
+        "contype": "n",
+        "table_name": "finops_forecast_backtest_generation",
+        "definition": "NOT NULL known_at"
+      },
+      {
+        "conname": "finops_forecast_backtest_generation_pkey",
+        "contype": "p",
+        "table_name": "finops_forecast_backtest_generation",
+        "definition": "PRIMARY KEY (identity)"
+      },
+      {
+        "conname": "finops_forecast_backtest_generation_scope_not_null",
+        "contype": "n",
+        "table_name": "finops_forecast_backtest_generation",
+        "definition": "NOT NULL scope"
+      },
+      {
+        "conname": "finops_forecast_backtest_generation_scoring_version_not_null",
+        "contype": "n",
+        "table_name": "finops_forecast_backtest_generation",
+        "definition": "NOT NULL scoring_version"
+      },
+      {
+        "conname": "finops_forecast_backtest_generation_truth_not_null",
+        "contype": "n",
+        "table_name": "finops_forecast_backtest_generation",
+        "definition": "NOT NULL truth"
+      },
+      {
+        "conname": "finops_reconciliation_generation_billing_input_fkey",
+        "contype": "f",
+        "table_name": "finops_reconciliation_generation",
+        "definition": "FOREIGN KEY (billing_input) REFERENCES finops_reconciliation_input(identity)"
+      },
+      {
+        "conname": "finops_reconciliation_generation_billing_input_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_generation",
+        "definition": "NOT NULL billing_input"
+      },
+      {
+        "conname": "finops_reconciliation_generation_body_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_generation",
+        "definition": "NOT NULL body"
+      },
+      {
+        "conname": "finops_reconciliation_generation_identity_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_generation",
+        "definition": "NOT NULL identity"
+      },
+      {
+        "conname": "finops_reconciliation_generation_pkey",
+        "contype": "p",
+        "table_name": "finops_reconciliation_generation",
+        "definition": "PRIMARY KEY (identity)"
+      },
+      {
+        "conname": "finops_reconciliation_generation_pricing_input_fkey",
+        "contype": "f",
+        "table_name": "finops_reconciliation_generation",
+        "definition": "FOREIGN KEY (pricing_input) REFERENCES finops_reconciliation_input(identity)"
+      },
+      {
+        "conname": "finops_reconciliation_generation_pricing_input_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_generation",
+        "definition": "NOT NULL pricing_input"
+      },
+      {
+        "conname": "finops_reconciliation_generation_published_at_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_generation",
+        "definition": "NOT NULL published_at"
+      },
+      {
+        "conname": "finops_reconciliation_generation_registry_fkey",
+        "contype": "f",
+        "table_name": "finops_reconciliation_generation",
+        "definition": "FOREIGN KEY (registry) REFERENCES finops_reconciliation_registry(identity)"
+      },
+      {
+        "conname": "finops_reconciliation_generation_registry_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_generation",
+        "definition": "NOT NULL registry"
+      },
+      {
+        "conname": "finops_reconciliation_generation_runtime_input_fkey",
+        "contype": "f",
+        "table_name": "finops_reconciliation_generation",
+        "definition": "FOREIGN KEY (runtime_input) REFERENCES finops_reconciliation_input(identity)"
+      },
+      {
+        "conname": "finops_reconciliation_generation_runtime_input_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_generation",
+        "definition": "NOT NULL runtime_input"
+      },
+      {
+        "conname": "finops_reconciliation_input_body_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_input",
+        "definition": "NOT NULL body"
+      },
+      {
+        "conname": "finops_reconciliation_input_environment_check",
+        "contype": "c",
+        "table_name": "finops_reconciliation_input",
+        "definition": "CHECK (((environment)::text = ANY ((ARRAY['local'::character varying, 'development'::character varying, 'staging'::character varying, 'production'::character varying])::text[])))"
+      },
+      {
+        "conname": "finops_reconciliation_input_environment_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_input",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "finops_reconciliation_input_identity_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_input",
+        "definition": "NOT NULL identity"
+      },
+      {
+        "conname": "finops_reconciliation_input_kind_check",
+        "contype": "c",
+        "table_name": "finops_reconciliation_input",
+        "definition": "CHECK (((kind)::text = ANY ((ARRAY['BILLING'::character varying, 'RUNTIME'::character varying, 'PRICING'::character varying])::text[])))"
+      },
+      {
+        "conname": "finops_reconciliation_input_kind_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_input",
+        "definition": "NOT NULL kind"
+      },
+      {
+        "conname": "finops_reconciliation_input_period_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_input",
+        "definition": "NOT NULL period"
+      },
+      {
+        "conname": "finops_reconciliation_input_pkey",
+        "contype": "p",
+        "table_name": "finops_reconciliation_input",
+        "definition": "PRIMARY KEY (identity)"
+      },
+      {
+        "conname": "finops_reconciliation_input_scope_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_input",
+        "definition": "NOT NULL scope"
+      },
+      {
+        "conname": "finops_reconciliation_registry_body_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_registry",
+        "definition": "NOT NULL body"
+      },
+      {
+        "conname": "finops_reconciliation_registry_environment_check",
+        "contype": "c",
+        "table_name": "finops_reconciliation_registry",
+        "definition": "CHECK (((environment)::text = ANY ((ARRAY['local'::character varying, 'development'::character varying, 'staging'::character varying, 'production'::character varying])::text[])))"
+      },
+      {
+        "conname": "finops_reconciliation_registry_environment_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_registry",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "finops_reconciliation_registry_identity_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_registry",
+        "definition": "NOT NULL identity"
+      },
+      {
+        "conname": "finops_reconciliation_registry_ownership_version_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_registry",
+        "definition": "NOT NULL ownership_version"
+      },
+      {
+        "conname": "finops_reconciliation_registry_pkey",
+        "contype": "p",
+        "table_name": "finops_reconciliation_registry",
+        "definition": "PRIMARY KEY (identity)"
+      },
+      {
+        "conname": "finops_reconciliation_registry_version_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_registry",
+        "definition": "NOT NULL version"
+      },
+      {
+        "conname": "finops_reconciliation_state_environment_check",
+        "contype": "c",
+        "table_name": "finops_reconciliation_state",
+        "definition": "CHECK (((environment)::text = ANY ((ARRAY['local'::character varying, 'development'::character varying, 'staging'::character varying, 'production'::character varying])::text[])))"
+      },
+      {
+        "conname": "finops_reconciliation_state_environment_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_state",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "finops_reconciliation_state_generation_fkey",
+        "contype": "f",
+        "table_name": "finops_reconciliation_state",
+        "definition": "FOREIGN KEY (generation) REFERENCES finops_reconciliation_generation(identity)"
+      },
+      {
+        "conname": "finops_reconciliation_state_key_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_state",
+        "definition": "NOT NULL key"
+      },
+      {
+        "conname": "finops_reconciliation_state_period_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_state",
+        "definition": "NOT NULL period"
+      },
+      {
+        "conname": "finops_reconciliation_state_pkey",
+        "contype": "p",
+        "table_name": "finops_reconciliation_state",
+        "definition": "PRIMARY KEY (key)"
+      },
+      {
+        "conname": "finops_reconciliation_state_revision_check",
+        "contype": "c",
+        "table_name": "finops_reconciliation_state",
+        "definition": "CHECK ((revision >= 0))"
+      },
+      {
+        "conname": "finops_reconciliation_state_revision_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_state",
+        "definition": "NOT NULL revision"
+      },
+      {
+        "conname": "finops_reconciliation_state_scope_not_null",
+        "contype": "n",
+        "table_name": "finops_reconciliation_state",
+        "definition": "NOT NULL scope"
+      },
+      {
+        "conname": "finops_runtime_attempt_admitted_at_not_null",
+        "contype": "n",
+        "table_name": "finops_runtime_attempt",
+        "definition": "NOT NULL admitted_at"
+      },
+      {
+        "conname": "finops_runtime_attempt_attempt_id_not_null",
+        "contype": "n",
+        "table_name": "finops_runtime_attempt",
+        "definition": "NOT NULL attempt_id"
+      },
+      {
+        "conname": "finops_runtime_attempt_deadline_at_not_null",
+        "contype": "n",
+        "table_name": "finops_runtime_attempt",
+        "definition": "NOT NULL deadline_at"
+      },
+      {
+        "conname": "finops_runtime_attempt_environment_check",
+        "contype": "c",
+        "table_name": "finops_runtime_attempt",
+        "definition": "CHECK (((environment)::text = ANY ((ARRAY['local'::character varying, 'development'::character varying, 'staging'::character varying, 'production'::character varying])::text[])))"
+      },
+      {
+        "conname": "finops_runtime_attempt_environment_not_null",
+        "contype": "n",
+        "table_name": "finops_runtime_attempt",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "finops_runtime_attempt_identity_not_null",
+        "contype": "n",
+        "table_name": "finops_runtime_attempt",
+        "definition": "NOT NULL identity"
+      },
+      {
+        "conname": "finops_runtime_attempt_pkey",
+        "contype": "p",
+        "table_name": "finops_runtime_attempt",
+        "definition": "PRIMARY KEY (environment, attempt_id)"
+      },
+      {
+        "conname": "finops_runtime_attempt_state_check",
+        "contype": "c",
+        "table_name": "finops_runtime_attempt",
+        "definition": "CHECK (((state)::text = ANY ((ARRAY['ADMITTED'::character varying, 'STARTED'::character varying, 'PROVIDER_FINISHED'::character varying, 'USAGE_CAPTURED'::character varying, 'NOT_STARTED'::character varying, 'FINAL_CAPTURE_PENDING'::character varying, 'FINAL_CAPTURE_FAILED'::character varying, 'OUTCOME_UNKNOWN'::character varying, 'CONFLICT'::character varying])::text[])))"
+      },
+      {
+        "conname": "finops_runtime_attempt_state_not_null",
+        "contype": "n",
+        "table_name": "finops_runtime_attempt",
+        "definition": "NOT NULL state"
+      },
+      {
+        "conname": "finops_unit_definition_version_body_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_definition_version",
+        "definition": "NOT NULL body"
+      },
+      {
+        "conname": "finops_unit_definition_version_identity_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_definition_version",
+        "definition": "NOT NULL identity"
+      },
+      {
+        "conname": "finops_unit_definition_version_pkey",
+        "contype": "p",
+        "table_name": "finops_unit_definition_version",
+        "definition": "PRIMARY KEY (identity)"
+      },
+      {
+        "conname": "finops_unit_definition_version_version_key",
+        "contype": "u",
+        "table_name": "finops_unit_definition_version",
+        "definition": "UNIQUE (version)"
+      },
+      {
+        "conname": "finops_unit_definition_version_version_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_definition_version",
+        "definition": "NOT NULL version"
+      },
+      {
+        "conname": "finops_unit_denominator_snapshot_body_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_denominator_snapshot",
+        "definition": "NOT NULL body"
+      },
+      {
+        "conname": "finops_unit_denominator_snapshot_captured_at_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_denominator_snapshot",
+        "definition": "NOT NULL captured_at"
+      },
+      {
+        "conname": "finops_unit_denominator_snapshot_environment_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_denominator_snapshot",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "finops_unit_denominator_snapshot_identity_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_denominator_snapshot",
+        "definition": "NOT NULL identity"
+      },
+      {
+        "conname": "finops_unit_denominator_snapshot_period_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_denominator_snapshot",
+        "definition": "NOT NULL period"
+      },
+      {
+        "conname": "finops_unit_denominator_snapshot_pkey",
+        "contype": "p",
+        "table_name": "finops_unit_denominator_snapshot",
+        "definition": "PRIMARY KEY (identity)"
+      },
+      {
+        "conname": "finops_unit_denominator_snapshot_source_check",
+        "contype": "c",
+        "table_name": "finops_unit_denominator_snapshot",
+        "definition": "CHECK (((source)::text = ANY ((ARRAY['M9'::character varying, 'M10'::character varying])::text[])))"
+      },
+      {
+        "conname": "finops_unit_denominator_snapshot_source_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_denominator_snapshot",
+        "definition": "NOT NULL source"
+      },
+      {
+        "conname": "finops_unit_driver_version_body_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_driver_version",
+        "definition": "NOT NULL body"
+      },
+      {
+        "conname": "finops_unit_driver_version_environment_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_driver_version",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "finops_unit_driver_version_identity_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_driver_version",
+        "definition": "NOT NULL identity"
+      },
+      {
+        "conname": "finops_unit_driver_version_pkey",
+        "contype": "p",
+        "table_name": "finops_unit_driver_version",
+        "definition": "PRIMARY KEY (identity)"
+      },
+      {
+        "conname": "finops_unit_driver_version_scope_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_driver_version",
+        "definition": "NOT NULL scope"
+      },
+      {
+        "conname": "finops_unit_driver_version_version_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_driver_version",
+        "definition": "NOT NULL version"
+      },
+      {
+        "conname": "finops_unit_economics_generation_body_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_economics_generation",
+        "definition": "NOT NULL body"
+      },
+      {
+        "conname": "finops_unit_economics_generation_definitions_fkey",
+        "contype": "f",
+        "table_name": "finops_unit_economics_generation",
+        "definition": "FOREIGN KEY (definitions) REFERENCES finops_unit_definition_version(identity)"
+      },
+      {
+        "conname": "finops_unit_economics_generation_definitions_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_economics_generation",
+        "definition": "NOT NULL definitions"
+      },
+      {
+        "conname": "finops_unit_economics_generation_drivers_fkey",
+        "contype": "f",
+        "table_name": "finops_unit_economics_generation",
+        "definition": "FOREIGN KEY (drivers) REFERENCES finops_unit_driver_version(identity)"
+      },
+      {
+        "conname": "finops_unit_economics_generation_drivers_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_economics_generation",
+        "definition": "NOT NULL drivers"
+      },
+      {
+        "conname": "finops_unit_economics_generation_identity_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_economics_generation",
+        "definition": "NOT NULL identity"
+      },
+      {
+        "conname": "finops_unit_economics_generation_model_snapshot_fkey",
+        "contype": "f",
+        "table_name": "finops_unit_economics_generation",
+        "definition": "FOREIGN KEY (model_snapshot) REFERENCES finops_unit_denominator_snapshot(identity)"
+      },
+      {
+        "conname": "finops_unit_economics_generation_pkey",
+        "contype": "p",
+        "table_name": "finops_unit_economics_generation",
+        "definition": "PRIMARY KEY (identity)"
+      },
+      {
+        "conname": "finops_unit_economics_generation_published_at_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_economics_generation",
+        "definition": "NOT NULL published_at"
+      },
+      {
+        "conname": "finops_unit_economics_generation_reconciliation_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_economics_generation",
+        "definition": "NOT NULL reconciliation"
+      },
+      {
+        "conname": "finops_unit_economics_generation_turn_snapshot_fkey",
+        "contype": "f",
+        "table_name": "finops_unit_economics_generation",
+        "definition": "FOREIGN KEY (turn_snapshot) REFERENCES finops_unit_denominator_snapshot(identity)"
+      },
+      {
+        "conname": "finops_unit_economics_publication_environment_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_economics_publication",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "finops_unit_economics_publication_generation_fkey",
+        "contype": "f",
+        "table_name": "finops_unit_economics_publication",
+        "definition": "FOREIGN KEY (generation) REFERENCES finops_unit_economics_generation(identity)"
+      },
+      {
+        "conname": "finops_unit_economics_publication_key_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_economics_publication",
+        "definition": "NOT NULL key"
+      },
+      {
+        "conname": "finops_unit_economics_publication_kind_check",
+        "contype": "c",
+        "table_name": "finops_unit_economics_publication",
+        "definition": "CHECK (((kind)::text = ANY ((ARRAY['M9'::character varying, 'M10'::character varying, 'ECONOMICS'::character varying])::text[])))"
+      },
+      {
+        "conname": "finops_unit_economics_publication_kind_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_economics_publication",
+        "definition": "NOT NULL kind"
+      },
+      {
+        "conname": "finops_unit_economics_publication_period_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_economics_publication",
+        "definition": "NOT NULL period"
+      },
+      {
+        "conname": "finops_unit_economics_publication_pkey",
+        "contype": "p",
+        "table_name": "finops_unit_economics_publication",
+        "definition": "PRIMARY KEY (key)"
+      },
+      {
+        "conname": "finops_unit_economics_publication_revision_check",
+        "contype": "c",
+        "table_name": "finops_unit_economics_publication",
+        "definition": "CHECK ((revision >= 0))"
+      },
+      {
+        "conname": "finops_unit_economics_publication_revision_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_economics_publication",
+        "definition": "NOT NULL revision"
+      },
+      {
+        "conname": "finops_unit_economics_publication_scope_not_null",
+        "contype": "n",
+        "table_name": "finops_unit_economics_publication",
+        "definition": "NOT NULL scope"
+      },
+      {
+        "conname": "finops_unit_economics_publication_snapshot_fkey",
+        "contype": "f",
+        "table_name": "finops_unit_economics_publication",
+        "definition": "FOREIGN KEY (snapshot) REFERENCES finops_unit_denominator_snapshot(identity)"
+      },
+      {
+        "conname": "finops_usage_bucket_agent_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL agent"
+      },
+      {
+        "conname": "finops_usage_bucket_at_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL at"
+      },
+      {
+        "conname": "finops_usage_bucket_bad_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL bad"
+      },
+      {
+        "conname": "finops_usage_bucket_billable_characters_known_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL billable_characters_known"
+      },
+      {
+        "conname": "finops_usage_bucket_billable_characters_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL billable_characters"
+      },
+      {
+        "conname": "finops_usage_bucket_cached_tokens_known_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL cached_tokens_known"
+      },
+      {
+        "conname": "finops_usage_bucket_cached_tokens_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL cached_tokens"
+      },
+      {
+        "conname": "finops_usage_bucket_candidate_tokens_known_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL candidate_tokens_known"
+      },
+      {
+        "conname": "finops_usage_bucket_candidate_tokens_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL candidate_tokens"
+      },
+      {
+        "conname": "finops_usage_bucket_check",
+        "contype": "c",
+        "table_name": "finops_usage_bucket",
+        "definition": "CHECK (((good >= 0) AND (bad >= 0) AND (quantity_known >= 0) AND (quantity_partial >= 0)))"
+      },
+      {
+        "conname": "finops_usage_bucket_environment_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "finops_usage_bucket_good_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL good"
+      },
+      {
+        "conname": "finops_usage_bucket_input_tokens_known_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL input_tokens_known"
+      },
+      {
+        "conname": "finops_usage_bucket_input_tokens_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL input_tokens"
+      },
+      {
+        "conname": "finops_usage_bucket_model_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL model"
+      },
+      {
+        "conname": "finops_usage_bucket_operation_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL operation"
+      },
+      {
+        "conname": "finops_usage_bucket_operation_type_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL operation_type"
+      },
+      {
+        "conname": "finops_usage_bucket_output_tokens_known_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL output_tokens_known"
+      },
+      {
+        "conname": "finops_usage_bucket_output_tokens_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL output_tokens"
+      },
+      {
+        "conname": "finops_usage_bucket_pkey",
+        "contype": "p",
+        "table_name": "finops_usage_bucket",
+        "definition": "PRIMARY KEY (environment, at, provider, model, agent, workload, operation, operation_type)"
+      },
+      {
+        "conname": "finops_usage_bucket_provider_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL provider"
+      },
+      {
+        "conname": "finops_usage_bucket_quantity_known_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL quantity_known"
+      },
+      {
+        "conname": "finops_usage_bucket_quantity_partial_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL quantity_partial"
+      },
+      {
+        "conname": "finops_usage_bucket_thought_tokens_known_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL thought_tokens_known"
+      },
+      {
+        "conname": "finops_usage_bucket_thought_tokens_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL thought_tokens"
+      },
+      {
+        "conname": "finops_usage_bucket_tool_input_tokens_known_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL tool_input_tokens_known"
+      },
+      {
+        "conname": "finops_usage_bucket_tool_input_tokens_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL tool_input_tokens"
+      },
+      {
+        "conname": "finops_usage_bucket_total_tokens_known_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL total_tokens_known"
+      },
+      {
+        "conname": "finops_usage_bucket_total_tokens_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL total_tokens"
+      },
+      {
+        "conname": "finops_usage_bucket_workload_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_bucket",
+        "definition": "NOT NULL workload"
+      },
+      {
+        "conname": "finops_usage_inbox_attempt_id_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_inbox",
+        "definition": "NOT NULL attempt_id"
+      },
+      {
+        "conname": "finops_usage_inbox_attempts_check",
+        "contype": "c",
+        "table_name": "finops_usage_inbox",
+        "definition": "CHECK ((attempts >= 0))"
+      },
+      {
+        "conname": "finops_usage_inbox_attempts_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_inbox",
+        "definition": "NOT NULL attempts"
+      },
+      {
+        "conname": "finops_usage_inbox_created_at_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_inbox",
+        "definition": "NOT NULL created_at"
+      },
+      {
+        "conname": "finops_usage_inbox_delivered_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_inbox",
+        "definition": "NOT NULL delivered"
+      },
+      {
+        "conname": "finops_usage_inbox_environment_attempt_id_fkey",
+        "contype": "f",
+        "table_name": "finops_usage_inbox",
+        "definition": "FOREIGN KEY (environment, attempt_id) REFERENCES finops_runtime_attempt(environment, attempt_id)"
+      },
+      {
+        "conname": "finops_usage_inbox_environment_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_inbox",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "finops_usage_inbox_event_id_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_inbox",
+        "definition": "NOT NULL event_id"
+      },
+      {
+        "conname": "finops_usage_inbox_exhausted_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_inbox",
+        "definition": "NOT NULL exhausted"
+      },
+      {
+        "conname": "finops_usage_inbox_next_attempt_at_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_inbox",
+        "definition": "NOT NULL next_attempt_at"
+      },
+      {
+        "conname": "finops_usage_inbox_payload_hash_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_inbox",
+        "definition": "NOT NULL payload_hash"
+      },
+      {
+        "conname": "finops_usage_inbox_payload_not_null",
+        "contype": "n",
+        "table_name": "finops_usage_inbox",
+        "definition": "NOT NULL payload"
+      },
+      {
+        "conname": "finops_usage_inbox_pkey",
+        "contype": "p",
+        "table_name": "finops_usage_inbox",
+        "definition": "PRIMARY KEY (event_id)"
+      },
+      {
+        "conname": "observability_agent_projecti_latest_event_processed_at_not_null",
+        "contype": "n",
+        "table_name": "observability_agent_projection",
+        "definition": "NOT NULL latest_event_processed_at"
+      },
+      {
+        "conname": "observability_agent_projectio_latest_event_occurred_at_not_null",
+        "contype": "n",
+        "table_name": "observability_agent_projection",
+        "definition": "NOT NULL latest_event_occurred_at"
+      },
+      {
+        "conname": "observability_agent_projectio_model_attempts_completed_not_null",
+        "contype": "n",
+        "table_name": "observability_agent_projection",
+        "definition": "NOT NULL model_attempts_completed"
+      },
+      {
+        "conname": "observability_agent_projection_agent_not_null",
+        "contype": "n",
+        "table_name": "observability_agent_projection",
+        "definition": "NOT NULL agent"
+      },
+      {
+        "conname": "observability_agent_projection_check",
+        "contype": "c",
+        "table_name": "observability_agent_projection",
+        "definition": "CHECK (((model_attempts_started >= 0) AND (model_attempts_completed >= 0) AND (usage_records_captured >= 0) AND (projection_lag >= (0)::double precision)))"
+      },
+      {
+        "conname": "observability_agent_projection_environment_not_null",
+        "contype": "n",
+        "table_name": "observability_agent_projection",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "observability_agent_projection_model_attempts_started_not_null",
+        "contype": "n",
+        "table_name": "observability_agent_projection",
+        "definition": "NOT NULL model_attempts_started"
+      },
+      {
+        "conname": "observability_agent_projection_pkey",
+        "contype": "p",
+        "table_name": "observability_agent_projection",
+        "definition": "PRIMARY KEY (environment, agent)"
+      },
+      {
+        "conname": "observability_agent_projection_projection_lag_not_null",
+        "contype": "n",
+        "table_name": "observability_agent_projection",
+        "definition": "NOT NULL projection_lag"
+      },
+      {
+        "conname": "observability_agent_projection_usage_records_captured_not_null",
+        "contype": "n",
+        "table_name": "observability_agent_projection",
+        "definition": "NOT NULL usage_records_captured"
+      },
+      {
+        "conname": "observability_archive_receipt_environment_not_null",
+        "contype": "n",
+        "table_name": "observability_archive_receipt",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "observability_archive_receipt_expected_spans_check",
+        "contype": "c",
+        "table_name": "observability_archive_receipt",
+        "definition": "CHECK (((expected_spans >= 0) AND (expected_spans <= 10000)))"
+      },
+      {
+        "conname": "observability_archive_receipt_expected_spans_not_null",
+        "contype": "n",
+        "table_name": "observability_archive_receipt",
+        "definition": "NOT NULL expected_spans"
+      },
+      {
+        "conname": "observability_archive_receipt_pkey",
+        "contype": "p",
+        "table_name": "observability_archive_receipt",
+        "definition": "PRIMARY KEY (environment, trace_id)"
+      },
+      {
+        "conname": "observability_archive_receipt_policy_version_not_null",
+        "contype": "n",
+        "table_name": "observability_archive_receipt",
+        "definition": "NOT NULL policy_version"
+      },
+      {
+        "conname": "observability_archive_receipt_population_closed_not_null",
+        "contype": "n",
+        "table_name": "observability_archive_receipt",
+        "definition": "NOT NULL population_closed"
+      },
+      {
+        "conname": "observability_archive_receipt_terminal_at_not_null",
+        "contype": "n",
+        "table_name": "observability_archive_receipt",
+        "definition": "NOT NULL terminal_at"
+      },
+      {
+        "conname": "observability_archive_receipt_trace_class_not_null",
+        "contype": "n",
+        "table_name": "observability_archive_receipt",
+        "definition": "NOT NULL trace_class"
+      },
+      {
+        "conname": "observability_archive_receipt_trace_id_not_null",
+        "contype": "n",
+        "table_name": "observability_archive_receipt",
+        "definition": "NOT NULL trace_id"
+      },
+      {
+        "conname": "observability_audit_outbox_aggregate_id_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL aggregate_id"
+      },
+      {
+        "conname": "observability_audit_outbox_aggregate_type_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL aggregate_type"
+      },
+      {
+        "conname": "observability_audit_outbox_aggregate_version_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL aggregate_version"
+      },
+      {
+        "conname": "observability_audit_outbox_attempt_count_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL attempt_count"
+      },
+      {
+        "conname": "observability_audit_outbox_available_at_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL available_at"
+      },
+      {
+        "conname": "observability_audit_outbox_check",
+        "contype": "c",
+        "table_name": "observability_audit_outbox",
+        "definition": "CHECK (((((publication_state)::text = 'PUBLISHED'::text) AND (published_at IS NOT NULL)) OR (((publication_state)::text <> 'PUBLISHED'::text) AND (published_at IS NULL))))"
+      },
+      {
+        "conname": "observability_audit_outbox_check1",
+        "contype": "c",
+        "table_name": "observability_audit_outbox",
+        "definition": "CHECK (((((publication_state)::text = 'LEASED'::text) AND (lease_owner IS NOT NULL) AND (lease_expires_at IS NOT NULL)) OR (((publication_state)::text <> 'LEASED'::text) AND (lease_owner IS NULL) AND (lease_expires_at IS NULL))))"
+      },
+      {
+        "conname": "observability_audit_outbox_check2",
+        "contype": "c",
+        "table_name": "observability_audit_outbox",
+        "definition": "CHECK (((event_schema_version = 1) AND ((event_class)::text = 'AUDIT'::text) AND (aggregate_version >= 1) AND (attempt_count >= 0)))"
+      },
+      {
+        "conname": "observability_audit_outbox_created_at_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL created_at"
+      },
+      {
+        "conname": "observability_audit_outbox_environment_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "observability_audit_outbox_event_class_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL event_class"
+      },
+      {
+        "conname": "observability_audit_outbox_event_id_fkey",
+        "contype": "f",
+        "table_name": "observability_audit_outbox",
+        "definition": "FOREIGN KEY (event_id) REFERENCES observability_critical_audit(event_id)"
+      },
+      {
+        "conname": "observability_audit_outbox_event_id_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL event_id"
+      },
+      {
+        "conname": "observability_audit_outbox_event_schema_version_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL event_schema_version"
+      },
+      {
+        "conname": "observability_audit_outbox_event_type_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL event_type"
+      },
+      {
+        "conname": "observability_audit_outbox_occurred_at_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL occurred_at"
+      },
+      {
+        "conname": "observability_audit_outbox_payload_hash_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL payload_hash"
+      },
+      {
+        "conname": "observability_audit_outbox_pkey",
+        "contype": "p",
+        "table_name": "observability_audit_outbox",
+        "definition": "PRIMARY KEY (event_id)"
+      },
+      {
+        "conname": "observability_audit_outbox_producer_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL producer"
+      },
+      {
+        "conname": "observability_audit_outbox_publication_state_check",
+        "contype": "c",
+        "table_name": "observability_audit_outbox",
+        "definition": "CHECK (((publication_state)::text = ANY ((ARRAY['PENDING'::character varying, 'LEASED'::character varying, 'RETRYING'::character varying, 'DEAD'::character varying, 'PUBLISHED'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_audit_outbox_publication_state_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL publication_state"
+      },
+      {
+        "conname": "observability_audit_outbox_safe_payload_not_null",
+        "contype": "n",
+        "table_name": "observability_audit_outbox",
+        "definition": "NOT NULL safe_payload"
+      },
+      {
+        "conname": "observability_critical_audit_aggregate_id_not_null",
+        "contype": "n",
+        "table_name": "observability_critical_audit",
+        "definition": "NOT NULL aggregate_id"
+      },
+      {
+        "conname": "observability_critical_audit_aggregate_type_not_null",
+        "contype": "n",
+        "table_name": "observability_critical_audit",
+        "definition": "NOT NULL aggregate_type"
+      },
+      {
+        "conname": "observability_critical_audit_aggregate_version_not_null",
+        "contype": "n",
+        "table_name": "observability_critical_audit",
+        "definition": "NOT NULL aggregate_version"
+      },
+      {
+        "conname": "observability_critical_audit_check",
+        "contype": "c",
+        "table_name": "observability_critical_audit",
+        "definition": "CHECK (((event_schema_version = 1) AND ((event_class)::text = 'AUDIT'::text) AND (aggregate_version >= 1)))"
+      },
+      {
+        "conname": "observability_critical_audit_created_at_not_null",
+        "contype": "n",
+        "table_name": "observability_critical_audit",
+        "definition": "NOT NULL created_at"
+      },
+      {
+        "conname": "observability_critical_audit_environment_not_null",
+        "contype": "n",
+        "table_name": "observability_critical_audit",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "observability_critical_audit_event_class_not_null",
+        "contype": "n",
+        "table_name": "observability_critical_audit",
+        "definition": "NOT NULL event_class"
+      },
+      {
+        "conname": "observability_critical_audit_event_id_not_null",
+        "contype": "n",
+        "table_name": "observability_critical_audit",
+        "definition": "NOT NULL event_id"
+      },
+      {
+        "conname": "observability_critical_audit_event_schema_version_not_null",
+        "contype": "n",
+        "table_name": "observability_critical_audit",
+        "definition": "NOT NULL event_schema_version"
+      },
+      {
+        "conname": "observability_critical_audit_event_type_not_null",
+        "contype": "n",
+        "table_name": "observability_critical_audit",
+        "definition": "NOT NULL event_type"
+      },
+      {
+        "conname": "observability_critical_audit_occurred_at_not_null",
+        "contype": "n",
+        "table_name": "observability_critical_audit",
+        "definition": "NOT NULL occurred_at"
+      },
+      {
+        "conname": "observability_critical_audit_payload_hash_not_null",
+        "contype": "n",
+        "table_name": "observability_critical_audit",
+        "definition": "NOT NULL payload_hash"
+      },
+      {
+        "conname": "observability_critical_audit_pkey",
+        "contype": "p",
+        "table_name": "observability_critical_audit",
+        "definition": "PRIMARY KEY (event_id)"
+      },
+      {
+        "conname": "observability_critical_audit_producer_not_null",
+        "contype": "n",
+        "table_name": "observability_critical_audit",
+        "definition": "NOT NULL producer"
+      },
+      {
+        "conname": "observability_critical_audit_safe_payload_not_null",
+        "contype": "n",
+        "table_name": "observability_critical_audit",
+        "definition": "NOT NULL safe_payload"
+      },
+      {
+        "conname": "observability_projection_failure_attempts_not_null",
+        "contype": "n",
+        "table_name": "observability_projection_failure",
+        "definition": "NOT NULL attempts"
+      },
+      {
+        "conname": "observability_projection_failure_check",
+        "contype": "c",
+        "table_name": "observability_projection_failure",
+        "definition": "CHECK ((((failure_code)::text = ANY ((ARRAY['INVALID'::character varying, 'CONFLICT'::character varying, 'PROCESSING_FAILED'::character varying])::text[])) AND ((processing_state)::text = ANY ((ARRAY['RETRY'::character varying, 'DEAD'::character varying, 'RESOLVED'::character varying])::text[])) AND (attempts >= 1)))"
+      },
+      {
+        "conname": "observability_projection_failure_environment_not_null",
+        "contype": "n",
+        "table_name": "observability_projection_failure",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "observability_projection_failure_failure_code_not_null",
+        "contype": "n",
+        "table_name": "observability_projection_failure",
+        "definition": "NOT NULL failure_code"
+      },
+      {
+        "conname": "observability_projection_failure_failure_key_not_null",
+        "contype": "n",
+        "table_name": "observability_projection_failure",
+        "definition": "NOT NULL failure_key"
+      },
+      {
+        "conname": "observability_projection_failure_last_at_not_null",
+        "contype": "n",
+        "table_name": "observability_projection_failure",
+        "definition": "NOT NULL last_at"
+      },
+      {
+        "conname": "observability_projection_failure_pkey",
+        "contype": "p",
+        "table_name": "observability_projection_failure",
+        "definition": "PRIMARY KEY (environment, failure_key)"
+      },
+      {
+        "conname": "observability_projection_failure_processing_state_not_null",
+        "contype": "n",
+        "table_name": "observability_projection_failure",
+        "definition": "NOT NULL processing_state"
+      },
+      {
+        "conname": "observability_projection_receipt_duplicate_count_check",
+        "contype": "c",
+        "table_name": "observability_projection_receipt",
+        "definition": "CHECK ((duplicate_count >= 0))"
+      },
+      {
+        "conname": "observability_projection_receipt_duplicate_count_not_null",
+        "contype": "n",
+        "table_name": "observability_projection_receipt",
+        "definition": "NOT NULL duplicate_count"
+      },
+      {
+        "conname": "observability_projection_receipt_environment_not_null",
+        "contype": "n",
+        "table_name": "observability_projection_receipt",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "observability_projection_receipt_event_id_not_null",
+        "contype": "n",
+        "table_name": "observability_projection_receipt",
+        "definition": "NOT NULL event_id"
+      },
+      {
+        "conname": "observability_projection_receipt_occurred_at_not_null",
+        "contype": "n",
+        "table_name": "observability_projection_receipt",
+        "definition": "NOT NULL occurred_at"
+      },
+      {
+        "conname": "observability_projection_receipt_payload_hash_not_null",
+        "contype": "n",
+        "table_name": "observability_projection_receipt",
+        "definition": "NOT NULL payload_hash"
+      },
+      {
+        "conname": "observability_projection_receipt_pkey",
+        "contype": "p",
+        "table_name": "observability_projection_receipt",
+        "definition": "PRIMARY KEY (environment, event_id)"
+      },
+      {
+        "conname": "observability_projection_receipt_processed_at_not_null",
+        "contype": "n",
+        "table_name": "observability_projection_receipt",
+        "definition": "NOT NULL processed_at"
+      },
+      {
+        "conname": "observability_retention_checkpoint_complete_not_null",
+        "contype": "n",
+        "table_name": "observability_retention_checkpoint",
+        "definition": "NOT NULL complete"
+      },
+      {
+        "conname": "observability_retention_checkpoint_cutoff_not_null",
+        "contype": "n",
+        "table_name": "observability_retention_checkpoint",
+        "definition": "NOT NULL cutoff"
+      },
+      {
+        "conname": "observability_retention_checkpoint_dataset_not_null",
+        "contype": "n",
+        "table_name": "observability_retention_checkpoint",
+        "definition": "NOT NULL dataset"
+      },
+      {
+        "conname": "observability_retention_checkpoint_environment_not_null",
+        "contype": "n",
+        "table_name": "observability_retention_checkpoint",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "observability_retention_checkpoint_generation_check",
+        "contype": "c",
+        "table_name": "observability_retention_checkpoint",
+        "definition": "CHECK ((generation >= 0))"
+      },
+      {
+        "conname": "observability_retention_checkpoint_generation_not_null",
+        "contype": "n",
+        "table_name": "observability_retention_checkpoint",
+        "definition": "NOT NULL generation"
+      },
+      {
+        "conname": "observability_retention_checkpoint_pkey",
+        "contype": "p",
+        "table_name": "observability_retention_checkpoint",
+        "definition": "PRIMARY KEY (environment, dataset)"
+      },
+      {
+        "conname": "observability_retention_checkpoint_policy_version_not_null",
+        "contype": "n",
+        "table_name": "observability_retention_checkpoint",
+        "definition": "NOT NULL policy_version"
+      },
+      {
+        "conname": "observability_run_event_check",
+        "contype": "c",
+        "table_name": "observability_run_event",
+        "definition": "CHECK (((event_seq >= 0) AND (state_version >= 0) AND (elapsed_ms >= (0)::double precision)))"
+      },
+      {
+        "conname": "observability_run_event_elapsed_ms_not_null",
+        "contype": "n",
+        "table_name": "observability_run_event",
+        "definition": "NOT NULL elapsed_ms"
+      },
+      {
+        "conname": "observability_run_event_event_seq_not_null",
+        "contype": "n",
+        "table_name": "observability_run_event",
+        "definition": "NOT NULL event_seq"
+      },
+      {
+        "conname": "observability_run_event_event_type_check",
+        "contype": "c",
+        "table_name": "observability_run_event",
+        "definition": "CHECK (((event_type)::text = ANY ((ARRAY['started'::character varying, 'stage'::character varying, 'agent'::character varying, 'tool'::character varying, 'dependency'::character varying, 'stalled'::character varying, 'resumed'::character varying, 'terminal'::character varying, 'cleanup'::character varying, 'delivery'::character varying, 'identity'::character varying, 'deadline'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_run_event_event_type_not_null",
+        "contype": "n",
+        "table_name": "observability_run_event",
+        "definition": "NOT NULL event_type"
+      },
+      {
+        "conname": "observability_run_event_pkey",
+        "contype": "p",
+        "table_name": "observability_run_event",
+        "definition": "PRIMARY KEY (run_id, event_seq)"
+      },
+      {
+        "conname": "observability_run_event_run_id_not_null",
+        "contype": "n",
+        "table_name": "observability_run_event",
+        "definition": "NOT NULL run_id"
+      },
+      {
+        "conname": "observability_run_event_stage_check",
+        "contype": "c",
+        "table_name": "observability_run_event",
+        "definition": "CHECK (((stage)::text = ANY ((ARRAY['request.received'::character varying, 'request.validated'::character varying, 'session.load.started'::character varying, 'session.load.completed'::character varying, 'attachments.started'::character varying, 'attachments.completed'::character varying, 'planning.started'::character varying, 'planning.model.started'::character varying, 'planning.model.completed'::character varying, 'planning.completed'::character varying, 'planning.failed'::character varying, 'thread.resolve.started'::character varying, 'thread.resolve.completed'::character varying, 'pending_interaction.resolve.started'::character varying, 'pending_interaction.resolve.completed'::character varying, 'source_requirements.completed'::character varying, 'context.selection.started'::character varying, 'context.selection.completed'::character varying, 'context.item.selected'::character varying, 'context.item.excluded'::character varying, 'agent.started'::character varying, 'agent.completed'::character varying, 'agent.failed'::character varying, 'agent.team_manager'::character varying, 'agent.technical_authority'::character varying, 'agent.incident_manager'::character varying, 'agent.problem_manager'::character varying, 'agent.automated_operations'::character varying, 'model.request.started'::character varying, 'model.first_token'::character varying, 'model.request.completed'::character varying, 'model.request.failed'::character varying, 'model.request.timeout'::character varying, 'tool.started'::character varying, 'tool.completed'::character varying, 'tool.failed'::character varying, 'tool.timeout'::character varying, 'knowledge.search.started'::character varying, 'knowledge.search.completed'::character varying, 'teams.list_chats.started'::character varying, 'teams.list_chats.completed'::character varying, 'teams.read_messages.started'::character varying, 'teams.read_messages.completed'::character varying, 'database.query.started'::character varying, 'database.query.completed'::character varying, 'storage.operation.started'::character varying, 'storage.operation.completed'::character varying, 'knowledge.selection.completed'::character varying, 'procedure_action.resolved'::character varying, 'command_authority.completed'::character varying, 'approval.requested'::character varying, 'approval.completed'::character varying, 'authority.selected'::character varying, 'provenance.completed'::character varying, 'command_egress.completed'::character varying, 'synthesis.started'::character varying, 'synthesis.completed'::character varying, 'persistence.started'::character varying, 'persistence.completed'::character varying, 'sse.started'::character varying, 'sse.completed'::character varying, 'turn.completed'::character varying, 'turn.failed'::character varying, 'turn.timeout'::character varying, 'turn.cancelled'::character varying, 'run.stalled'::character varying, 'heartbeat'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_run_event_stage_not_null",
+        "contype": "n",
+        "table_name": "observability_run_event",
+        "definition": "NOT NULL stage"
+      },
+      {
+        "conname": "observability_run_event_state_version_not_null",
+        "contype": "n",
+        "table_name": "observability_run_event",
+        "definition": "NOT NULL state_version"
+      },
+      {
+        "conname": "observability_run_event_status_check",
+        "contype": "c",
+        "table_name": "observability_run_event",
+        "definition": "CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'RUNNING'::character varying, 'COMPLETED'::character varying, 'FAILED'::character varying, 'TIMEOUT'::character varying, 'CANCELLED'::character varying, 'STALLED'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_run_event_status_not_null",
+        "contype": "n",
+        "table_name": "observability_run_event",
+        "definition": "NOT NULL status"
+      },
+      {
+        "conname": "observability_run_event_timestamp_not_null",
+        "contype": "n",
+        "table_name": "observability_run_event",
+        "definition": "NOT NULL \"timestamp\""
+      },
+      {
+        "conname": "observability_run_projection_aggregate_version_not_null",
+        "contype": "n",
+        "table_name": "observability_run_projection",
+        "definition": "NOT NULL aggregate_version"
+      },
+      {
+        "conname": "observability_run_projection_check",
+        "contype": "c",
+        "table_name": "observability_run_projection",
+        "definition": "CHECK (((aggregate_version >= 1) AND (projection_lag >= (0)::double precision)))"
+      },
+      {
+        "conname": "observability_run_projection_environment_not_null",
+        "contype": "n",
+        "table_name": "observability_run_projection",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "observability_run_projection_latest_event_occurred_at_not_null",
+        "contype": "n",
+        "table_name": "observability_run_projection",
+        "definition": "NOT NULL latest_event_occurred_at"
+      },
+      {
+        "conname": "observability_run_projection_latest_event_processed_at_not_null",
+        "contype": "n",
+        "table_name": "observability_run_projection",
+        "definition": "NOT NULL latest_event_processed_at"
+      },
+      {
+        "conname": "observability_run_projection_pkey",
+        "contype": "p",
+        "table_name": "observability_run_projection",
+        "definition": "PRIMARY KEY (environment, run_id)"
+      },
+      {
+        "conname": "observability_run_projection_projection_lag_not_null",
+        "contype": "n",
+        "table_name": "observability_run_projection",
+        "definition": "NOT NULL projection_lag"
+      },
+      {
+        "conname": "observability_run_projection_run_id_not_null",
+        "contype": "n",
+        "table_name": "observability_run_projection",
+        "definition": "NOT NULL run_id"
+      },
+      {
+        "conname": "observability_run_projection_status_check",
+        "contype": "c",
+        "table_name": "observability_run_projection",
+        "definition": "CHECK (((status)::text = ANY ((ARRAY['RUNNING'::character varying, 'COMPLETED'::character varying, 'FAILED'::character varying, 'TIMEOUT'::character varying, 'CANCELLED'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_run_projection_status_not_null",
+        "contype": "n",
+        "table_name": "observability_run_projection",
+        "definition": "NOT NULL status"
+      },
+      {
+        "conname": "observability_run_status_check",
+        "contype": "c",
+        "table_name": "observability_run_status",
+        "definition": "CHECK (((((status)::text = ANY ((ARRAY['COMPLETED'::character varying, 'FAILED'::character varying, 'TIMEOUT'::character varying, 'CANCELLED'::character varying])::text[])) AND (terminal_at IS NOT NULL)) OR (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'RUNNING'::character varying, 'STALLED'::character varying])::text[])) AND (terminal_at IS NULL))))"
+      },
+      {
+        "conname": "observability_run_status_check1",
+        "contype": "c",
+        "table_name": "observability_run_status",
+        "definition": "CHECK (((state_version >= 0) AND (elapsed_ms >= (0)::double precision) AND (timeline_truncated_count >= 0)))"
+      },
+      {
+        "conname": "observability_run_status_check2",
+        "contype": "c",
+        "table_name": "observability_run_status",
+        "definition": "CHECK ((((status)::text <> ALL ((ARRAY['COMPLETED'::character varying, 'FAILED'::character varying, 'TIMEOUT'::character varying, 'CANCELLED'::character varying])::text[])) OR ((current_agent IS NULL) AND (current_tool IS NULL))))"
+      },
+      {
+        "conname": "observability_run_status_check3",
+        "contype": "c",
+        "table_name": "observability_run_status",
+        "definition": "CHECK (((telemetry_schema_version = 1) AND (projection_schema_version = 1)))"
+      },
+      {
+        "conname": "observability_run_status_cleanup_status_check",
+        "contype": "c",
+        "table_name": "observability_run_status",
+        "definition": "CHECK (((cleanup_status)::text = ANY ((ARRAY['pending'::character varying, 'running'::character varying, 'completed'::character varying, 'failed'::character varying, 'timeout'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_run_status_cleanup_status_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL cleanup_status"
+      },
+      {
+        "conname": "observability_run_status_current_stage_check",
+        "contype": "c",
+        "table_name": "observability_run_status",
+        "definition": "CHECK (((current_stage)::text = ANY ((ARRAY['request.received'::character varying, 'request.validated'::character varying, 'session.load.started'::character varying, 'session.load.completed'::character varying, 'attachments.started'::character varying, 'attachments.completed'::character varying, 'planning.started'::character varying, 'planning.model.started'::character varying, 'planning.model.completed'::character varying, 'planning.completed'::character varying, 'planning.failed'::character varying, 'thread.resolve.started'::character varying, 'thread.resolve.completed'::character varying, 'pending_interaction.resolve.started'::character varying, 'pending_interaction.resolve.completed'::character varying, 'source_requirements.completed'::character varying, 'context.selection.started'::character varying, 'context.selection.completed'::character varying, 'context.item.selected'::character varying, 'context.item.excluded'::character varying, 'agent.started'::character varying, 'agent.completed'::character varying, 'agent.failed'::character varying, 'agent.team_manager'::character varying, 'agent.technical_authority'::character varying, 'agent.incident_manager'::character varying, 'agent.problem_manager'::character varying, 'agent.automated_operations'::character varying, 'model.request.started'::character varying, 'model.first_token'::character varying, 'model.request.completed'::character varying, 'model.request.failed'::character varying, 'model.request.timeout'::character varying, 'tool.started'::character varying, 'tool.completed'::character varying, 'tool.failed'::character varying, 'tool.timeout'::character varying, 'knowledge.search.started'::character varying, 'knowledge.search.completed'::character varying, 'teams.list_chats.started'::character varying, 'teams.list_chats.completed'::character varying, 'teams.read_messages.started'::character varying, 'teams.read_messages.completed'::character varying, 'database.query.started'::character varying, 'database.query.completed'::character varying, 'storage.operation.started'::character varying, 'storage.operation.completed'::character varying, 'knowledge.selection.completed'::character varying, 'procedure_action.resolved'::character varying, 'command_authority.completed'::character varying, 'approval.requested'::character varying, 'approval.completed'::character varying, 'authority.selected'::character varying, 'provenance.completed'::character varying, 'command_egress.completed'::character varying, 'synthesis.started'::character varying, 'synthesis.completed'::character varying, 'persistence.started'::character varying, 'persistence.completed'::character varying, 'sse.started'::character varying, 'sse.completed'::character varying, 'turn.completed'::character varying, 'turn.failed'::character varying, 'turn.timeout'::character varying, 'turn.cancelled'::character varying, 'run.stalled'::character varying, 'heartbeat'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_run_status_current_stage_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL current_stage"
+      },
+      {
+        "conname": "observability_run_status_delivery_status_check",
+        "contype": "c",
+        "table_name": "observability_run_status",
+        "definition": "CHECK (((delivery_status)::text = ANY ((ARRAY['pending'::character varying, 'relayed'::character varying, 'disconnected'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_run_status_delivery_status_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL delivery_status"
+      },
+      {
+        "conname": "observability_run_status_dependencies_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL dependencies"
+      },
+      {
+        "conname": "observability_run_status_elapsed_ms_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL elapsed_ms"
+      },
+      {
+        "conname": "observability_run_status_environment_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "observability_run_status_ever_stalled_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL ever_stalled"
+      },
+      {
+        "conname": "observability_run_status_expiry_at_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL expiry_at"
+      },
+      {
+        "conname": "observability_run_status_heartbeat_at_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL heartbeat_at"
+      },
+      {
+        "conname": "observability_run_status_last_progress_at_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL last_progress_at"
+      },
+      {
+        "conname": "observability_run_status_observed_at_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL observed_at"
+      },
+      {
+        "conname": "observability_run_status_pkey",
+        "contype": "p",
+        "table_name": "observability_run_status",
+        "definition": "PRIMARY KEY (run_id)"
+      },
+      {
+        "conname": "observability_run_status_producer_instance_id_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL producer_instance_id"
+      },
+      {
+        "conname": "observability_run_status_projection_schema_version_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL projection_schema_version"
+      },
+      {
+        "conname": "observability_run_status_retention_class_check",
+        "contype": "c",
+        "table_name": "observability_run_status",
+        "definition": "CHECK (((retention_class)::text = ANY ((ARRAY['normal'::character varying, 'exceptional'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_run_status_retention_class_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL retention_class"
+      },
+      {
+        "conname": "observability_run_status_run_id_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL run_id"
+      },
+      {
+        "conname": "observability_run_status_session_detached_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL session_detached"
+      },
+      {
+        "conname": "observability_run_status_stage_started_at_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL stage_started_at"
+      },
+      {
+        "conname": "observability_run_status_stalled_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL stalled"
+      },
+      {
+        "conname": "observability_run_status_started_at_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL started_at"
+      },
+      {
+        "conname": "observability_run_status_state_version_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL state_version"
+      },
+      {
+        "conname": "observability_run_status_status_check",
+        "contype": "c",
+        "table_name": "observability_run_status",
+        "definition": "CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'RUNNING'::character varying, 'COMPLETED'::character varying, 'FAILED'::character varying, 'TIMEOUT'::character varying, 'CANCELLED'::character varying, 'STALLED'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_run_status_status_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL status"
+      },
+      {
+        "conname": "observability_run_status_telemetry_schema_version_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL telemetry_schema_version"
+      },
+      {
+        "conname": "observability_run_status_timeline_truncated_count_not_null",
+        "contype": "n",
+        "table_name": "observability_run_status",
+        "definition": "NOT NULL timeline_truncated_count"
+      },
+      {
+        "conname": "observability_sre_bucket_at_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_bucket",
+        "definition": "NOT NULL at"
+      },
+      {
+        "conname": "observability_sre_bucket_bad_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_bucket",
+        "definition": "NOT NULL bad"
+      },
+      {
+        "conname": "observability_sre_bucket_environment_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_bucket",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "observability_sre_bucket_excluded_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_bucket",
+        "definition": "NOT NULL excluded"
+      },
+      {
+        "conname": "observability_sre_bucket_good_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_bucket",
+        "definition": "NOT NULL good"
+      },
+      {
+        "conname": "observability_sre_bucket_pkey",
+        "contype": "p",
+        "table_name": "observability_sre_bucket",
+        "definition": "PRIMARY KEY (environment, slo_id, at)"
+      },
+      {
+        "conname": "observability_sre_bucket_slo_id_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_bucket",
+        "definition": "NOT NULL slo_id"
+      },
+      {
+        "conname": "observability_sre_bucket_unknown_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_bucket",
+        "definition": "NOT NULL unknown"
+      },
+      {
+        "conname": "observability_sre_receipt_contribution_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_receipt",
+        "definition": "NOT NULL contribution"
+      },
+      {
+        "conname": "observability_sre_receipt_due_at_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_receipt",
+        "definition": "NOT NULL due_at"
+      },
+      {
+        "conname": "observability_sre_receipt_environment_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_receipt",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "observability_sre_receipt_payload_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_receipt",
+        "definition": "NOT NULL payload"
+      },
+      {
+        "conname": "observability_sre_receipt_pkey",
+        "contype": "p",
+        "table_name": "observability_sre_receipt",
+        "definition": "PRIMARY KEY (run_id)"
+      },
+      {
+        "conname": "observability_sre_receipt_run_id_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_receipt",
+        "definition": "NOT NULL run_id"
+      },
+      {
+        "conname": "observability_sre_receipt_settled_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_receipt",
+        "definition": "NOT NULL settled"
+      },
+      {
+        "conname": "observability_sre_source_capture_complete_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_source",
+        "definition": "NOT NULL capture_complete"
+      },
+      {
+        "conname": "observability_sre_source_coverage_start_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_source",
+        "definition": "NOT NULL coverage_start"
+      },
+      {
+        "conname": "observability_sre_source_environment_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_source",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "observability_sre_source_pkey",
+        "contype": "p",
+        "table_name": "observability_sre_source",
+        "definition": "PRIMARY KEY (environment)"
+      },
+      {
+        "conname": "observability_sre_source_updated_at_not_null",
+        "contype": "n",
+        "table_name": "observability_sre_source",
+        "definition": "NOT NULL updated_at"
+      },
+      {
+        "conname": "observability_turn_check",
+        "contype": "c",
+        "table_name": "observability_turn",
+        "definition": "CHECK (((((status)::text = ANY ((ARRAY['COMPLETED'::character varying, 'FAILED'::character varying, 'TIMEOUT'::character varying, 'CANCELLED'::character varying])::text[])) AND (terminal_at IS NOT NULL)) OR (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'RUNNING'::character varying, 'STALLED'::character varying])::text[])) AND (terminal_at IS NULL))))"
+      },
+      {
+        "conname": "observability_turn_check1",
+        "contype": "c",
+        "table_name": "observability_turn",
+        "definition": "CHECK (((state_version >= 0) AND (elapsed_ms >= (0)::double precision) AND (timeline_truncated_count >= 0)))"
+      },
+      {
+        "conname": "observability_turn_check2",
+        "contype": "c",
+        "table_name": "observability_turn",
+        "definition": "CHECK (((telemetry_schema_version = 1) AND (projection_schema_version = 1)))"
+      },
+      {
+        "conname": "observability_turn_cleanup_status_check",
+        "contype": "c",
+        "table_name": "observability_turn",
+        "definition": "CHECK (((cleanup_status)::text = ANY ((ARRAY['pending'::character varying, 'running'::character varying, 'completed'::character varying, 'failed'::character varying, 'timeout'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_turn_cleanup_status_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL cleanup_status"
+      },
+      {
+        "conname": "observability_turn_current_stage_check",
+        "contype": "c",
+        "table_name": "observability_turn",
+        "definition": "CHECK (((current_stage)::text = ANY ((ARRAY['request.received'::character varying, 'request.validated'::character varying, 'session.load.started'::character varying, 'session.load.completed'::character varying, 'attachments.started'::character varying, 'attachments.completed'::character varying, 'planning.started'::character varying, 'planning.model.started'::character varying, 'planning.model.completed'::character varying, 'planning.completed'::character varying, 'planning.failed'::character varying, 'thread.resolve.started'::character varying, 'thread.resolve.completed'::character varying, 'pending_interaction.resolve.started'::character varying, 'pending_interaction.resolve.completed'::character varying, 'source_requirements.completed'::character varying, 'context.selection.started'::character varying, 'context.selection.completed'::character varying, 'context.item.selected'::character varying, 'context.item.excluded'::character varying, 'agent.started'::character varying, 'agent.completed'::character varying, 'agent.failed'::character varying, 'agent.team_manager'::character varying, 'agent.technical_authority'::character varying, 'agent.incident_manager'::character varying, 'agent.problem_manager'::character varying, 'agent.automated_operations'::character varying, 'model.request.started'::character varying, 'model.first_token'::character varying, 'model.request.completed'::character varying, 'model.request.failed'::character varying, 'model.request.timeout'::character varying, 'tool.started'::character varying, 'tool.completed'::character varying, 'tool.failed'::character varying, 'tool.timeout'::character varying, 'knowledge.search.started'::character varying, 'knowledge.search.completed'::character varying, 'teams.list_chats.started'::character varying, 'teams.list_chats.completed'::character varying, 'teams.read_messages.started'::character varying, 'teams.read_messages.completed'::character varying, 'database.query.started'::character varying, 'database.query.completed'::character varying, 'storage.operation.started'::character varying, 'storage.operation.completed'::character varying, 'knowledge.selection.completed'::character varying, 'procedure_action.resolved'::character varying, 'command_authority.completed'::character varying, 'approval.requested'::character varying, 'approval.completed'::character varying, 'authority.selected'::character varying, 'provenance.completed'::character varying, 'command_egress.completed'::character varying, 'synthesis.started'::character varying, 'synthesis.completed'::character varying, 'persistence.started'::character varying, 'persistence.completed'::character varying, 'sse.started'::character varying, 'sse.completed'::character varying, 'turn.completed'::character varying, 'turn.failed'::character varying, 'turn.timeout'::character varying, 'turn.cancelled'::character varying, 'run.stalled'::character varying, 'heartbeat'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_turn_current_stage_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL current_stage"
+      },
+      {
+        "conname": "observability_turn_delivery_status_check",
+        "contype": "c",
+        "table_name": "observability_turn",
+        "definition": "CHECK (((delivery_status)::text = ANY ((ARRAY['pending'::character varying, 'relayed'::character varying, 'disconnected'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_turn_delivery_status_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL delivery_status"
+      },
+      {
+        "conname": "observability_turn_elapsed_ms_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL elapsed_ms"
+      },
+      {
+        "conname": "observability_turn_environment_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL environment"
+      },
+      {
+        "conname": "observability_turn_ever_stalled_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL ever_stalled"
+      },
+      {
+        "conname": "observability_turn_expiry_at_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL expiry_at"
+      },
+      {
+        "conname": "observability_turn_pkey",
+        "contype": "p",
+        "table_name": "observability_turn",
+        "definition": "PRIMARY KEY (run_id)"
+      },
+      {
+        "conname": "observability_turn_producer_instance_id_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL producer_instance_id"
+      },
+      {
+        "conname": "observability_turn_projection_schema_version_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL projection_schema_version"
+      },
+      {
+        "conname": "observability_turn_retention_class_check",
+        "contype": "c",
+        "table_name": "observability_turn",
+        "definition": "CHECK (((retention_class)::text = ANY ((ARRAY['normal'::character varying, 'exceptional'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_turn_retention_class_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL retention_class"
+      },
+      {
+        "conname": "observability_turn_run_id_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL run_id"
+      },
+      {
+        "conname": "observability_turn_session_detached_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL session_detached"
+      },
+      {
+        "conname": "observability_turn_started_at_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL started_at"
+      },
+      {
+        "conname": "observability_turn_state_version_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL state_version"
+      },
+      {
+        "conname": "observability_turn_status_check",
+        "contype": "c",
+        "table_name": "observability_turn",
+        "definition": "CHECK (((status)::text = ANY ((ARRAY['COMPLETED'::character varying, 'FAILED'::character varying, 'TIMEOUT'::character varying, 'CANCELLED'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_turn_status_check1",
+        "contype": "c",
+        "table_name": "observability_turn",
+        "definition": "CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'RUNNING'::character varying, 'COMPLETED'::character varying, 'FAILED'::character varying, 'TIMEOUT'::character varying, 'CANCELLED'::character varying, 'STALLED'::character varying])::text[])))"
+      },
+      {
+        "conname": "observability_turn_status_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL status"
+      },
+      {
+        "conname": "observability_turn_telemetry_schema_version_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL telemetry_schema_version"
+      },
+      {
+        "conname": "observability_turn_timeline_truncated_count_not_null",
+        "contype": "n",
+        "table_name": "observability_turn",
+        "definition": "NOT NULL timeline_truncated_count"
+      },
+      {
+        "conname": "slopanoc_case_context_items_case_id_fkey",
+        "contype": "f",
+        "table_name": "slopanoc_case_context_items",
+        "definition": "FOREIGN KEY (case_id) REFERENCES slopanoc_cases(case_id)"
+      },
+      {
+        "conname": "slopanoc_case_context_items_case_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_context_items",
+        "definition": "NOT NULL case_id"
+      },
+      {
+        "conname": "slopanoc_case_context_items_content_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_context_items",
+        "definition": "NOT NULL content"
+      },
+      {
+        "conname": "slopanoc_case_context_items_created_at_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_context_items",
+        "definition": "NOT NULL created_at"
+      },
+      {
+        "conname": "slopanoc_case_context_items_item_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_context_items",
+        "definition": "NOT NULL item_id"
+      },
+      {
+        "conname": "slopanoc_case_context_items_kind_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_context_items",
+        "definition": "NOT NULL kind"
+      },
+      {
+        "conname": "slopanoc_case_context_items_pkey",
+        "contype": "p",
+        "table_name": "slopanoc_case_context_items",
+        "definition": "PRIMARY KEY (item_id)"
+      },
+      {
+        "conname": "slopanoc_case_context_items_source_type_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_context_items",
+        "definition": "NOT NULL source_type"
+      },
+      {
+        "conname": "slopanoc_case_context_items_supporting_item_ids_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_context_items",
+        "definition": "NOT NULL supporting_item_ids"
+      },
+      {
+        "conname": "slopanoc_case_memberships_case_id_fkey",
+        "contype": "f",
+        "table_name": "slopanoc_case_memberships",
+        "definition": "FOREIGN KEY (case_id) REFERENCES slopanoc_cases(case_id)"
+      },
+      {
+        "conname": "slopanoc_case_memberships_case_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_memberships",
+        "definition": "NOT NULL case_id"
+      },
+      {
+        "conname": "slopanoc_case_memberships_created_at_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_memberships",
+        "definition": "NOT NULL created_at"
+      },
+      {
+        "conname": "slopanoc_case_memberships_pkey",
+        "contype": "p",
+        "table_name": "slopanoc_case_memberships",
+        "definition": "PRIMARY KEY (case_id, user_id)"
+      },
+      {
+        "conname": "slopanoc_case_memberships_role_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_memberships",
+        "definition": "NOT NULL role"
+      },
+      {
+        "conname": "slopanoc_case_memberships_user_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_memberships",
+        "definition": "NOT NULL user_id"
+      },
+      {
+        "conname": "slopanoc_case_session_links_case_id_fkey",
+        "contype": "f",
+        "table_name": "slopanoc_case_session_links",
+        "definition": "FOREIGN KEY (case_id) REFERENCES slopanoc_cases(case_id)"
+      },
+      {
+        "conname": "slopanoc_case_session_links_case_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_session_links",
+        "definition": "NOT NULL case_id"
+      },
+      {
+        "conname": "slopanoc_case_session_links_linked_at_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_session_links",
+        "definition": "NOT NULL linked_at"
+      },
+      {
+        "conname": "slopanoc_case_session_links_linked_by_user_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_session_links",
+        "definition": "NOT NULL linked_by_user_id"
+      },
+      {
+        "conname": "slopanoc_case_session_links_pkey",
+        "contype": "p",
+        "table_name": "slopanoc_case_session_links",
+        "definition": "PRIMARY KEY (session_id)"
+      },
+      {
+        "conname": "slopanoc_case_session_links_session_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_session_links",
+        "definition": "NOT NULL session_id"
+      },
+      {
+        "conname": "slopanoc_case_session_links_session_user_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_session_links",
+        "definition": "NOT NULL session_user_id"
+      },
+      {
+        "conname": "slopanoc_case_troubleshooting_progressi_schema_version_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_troubleshooting_progressions",
+        "definition": "NOT NULL schema_version"
+      },
+      {
+        "conname": "slopanoc_case_troubleshooting_progressions_case_id_fkey",
+        "contype": "f",
+        "table_name": "slopanoc_case_troubleshooting_progressions",
+        "definition": "FOREIGN KEY (case_id) REFERENCES slopanoc_cases(case_id)"
+      },
+      {
+        "conname": "slopanoc_case_troubleshooting_progressions_case_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_troubleshooting_progressions",
+        "definition": "NOT NULL case_id"
+      },
+      {
+        "conname": "slopanoc_case_troubleshooting_progressions_created_at_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_troubleshooting_progressions",
+        "definition": "NOT NULL created_at"
+      },
+      {
+        "conname": "slopanoc_case_troubleshooting_progressions_pkey",
+        "contype": "p",
+        "table_name": "slopanoc_case_troubleshooting_progressions",
+        "definition": "PRIMARY KEY (case_id)"
+      },
+      {
+        "conname": "slopanoc_case_troubleshooting_progressions_progression_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_troubleshooting_progressions",
+        "definition": "NOT NULL progression"
+      },
+      {
+        "conname": "slopanoc_case_troubleshooting_progressions_updated_at_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_troubleshooting_progressions",
+        "definition": "NOT NULL updated_at"
+      },
+      {
+        "conname": "slopanoc_case_troubleshooting_progressions_version_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_case_troubleshooting_progressions",
+        "definition": "NOT NULL version"
+      },
+      {
+        "conname": "slopanoc_cases_case_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_cases",
+        "definition": "NOT NULL case_id"
+      },
+      {
+        "conname": "slopanoc_cases_created_at_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_cases",
+        "definition": "NOT NULL created_at"
+      },
+      {
+        "conname": "slopanoc_cases_created_by_user_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_cases",
+        "definition": "NOT NULL created_by_user_id"
+      },
+      {
+        "conname": "slopanoc_cases_pkey",
+        "contype": "p",
+        "table_name": "slopanoc_cases",
+        "definition": "PRIMARY KEY (case_id)"
+      },
+      {
+        "conname": "slopanoc_cases_problem_statement_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_cases",
+        "definition": "NOT NULL problem_statement"
+      },
+      {
+        "conname": "slopanoc_cases_status_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_cases",
+        "definition": "NOT NULL status"
+      },
+      {
+        "conname": "slopanoc_cases_title_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_cases",
+        "definition": "NOT NULL title"
+      },
+      {
+        "conname": "slopanoc_cases_updated_at_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_cases",
+        "definition": "NOT NULL updated_at"
+      },
+      {
+        "conname": "slopanoc_chat_attachments_attachment_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "NOT NULL attachment_id"
+      },
+      {
+        "conname": "slopanoc_chat_attachments_created_at_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "NOT NULL created_at"
+      },
+      {
+        "conname": "slopanoc_chat_attachments_mime_type_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "NOT NULL mime_type"
+      },
+      {
+        "conname": "slopanoc_chat_attachments_original_filename_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "NOT NULL original_filename"
+      },
+      {
+        "conname": "slopanoc_chat_attachments_owner_user_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "NOT NULL owner_user_id"
+      },
+      {
+        "conname": "slopanoc_chat_attachments_pkey",
+        "contype": "p",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "PRIMARY KEY (attachment_id)"
+      },
+      {
+        "conname": "slopanoc_chat_attachments_session_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "NOT NULL session_id"
+      },
+      {
+        "conname": "slopanoc_chat_attachments_sha256_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "NOT NULL sha256"
+      },
+      {
+        "conname": "slopanoc_chat_attachments_size_bytes_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "NOT NULL size_bytes"
+      },
+      {
+        "conname": "slopanoc_chat_attachments_status_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "NOT NULL status"
+      },
+      {
+        "conname": "slopanoc_chat_attachments_storage_object_name_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_chat_attachments",
+        "definition": "NOT NULL storage_object_name"
+      },
+      {
+        "conname": "slopanoc_experience_records_content_fingerprint_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_experience_records",
+        "definition": "NOT NULL content_fingerprint"
+      },
+      {
+        "conname": "slopanoc_experience_records_evidence_references_json_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_experience_records",
+        "definition": "NOT NULL evidence_references_json"
+      },
+      {
+        "conname": "slopanoc_experience_records_experience_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_experience_records",
+        "definition": "NOT NULL experience_id"
+      },
+      {
+        "conname": "slopanoc_experience_records_experience_schema_version_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_experience_records",
+        "definition": "NOT NULL experience_schema_version"
+      },
+      {
+        "conname": "slopanoc_experience_records_experience_type_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_experience_records",
+        "definition": "NOT NULL experience_type"
+      },
+      {
+        "conname": "slopanoc_experience_records_lifecycle_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_experience_records",
+        "definition": "NOT NULL lifecycle"
+      },
+      {
+        "conname": "slopanoc_experience_records_metadata_json_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_experience_records",
+        "definition": "NOT NULL metadata_json"
+      },
+      {
+        "conname": "slopanoc_experience_records_observed_facts_json_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_experience_records",
+        "definition": "NOT NULL observed_facts_json"
+      },
+      {
+        "conname": "slopanoc_experience_records_outcome_summary_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_experience_records",
+        "definition": "NOT NULL outcome_summary"
+      },
+      {
+        "conname": "slopanoc_experience_records_owner_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_experience_records",
+        "definition": "NOT NULL owner_id"
+      },
+      {
+        "conname": "slopanoc_experience_records_pkey",
+        "contype": "p",
+        "table_name": "slopanoc_experience_records",
+        "definition": "PRIMARY KEY (experience_id)"
+      },
+      {
+        "conname": "slopanoc_experience_records_recorded_at_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_experience_records",
+        "definition": "NOT NULL recorded_at"
+      },
+      {
+        "conname": "slopanoc_experience_records_source_event_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_experience_records",
+        "definition": "NOT NULL source_event_id"
+      },
+      {
+        "conname": "slopanoc_experience_records_source_namespace_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_experience_records",
+        "definition": "NOT NULL source_namespace"
+      },
+      {
+        "conname": "slopanoc_experience_records_source_origin_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_experience_records",
+        "definition": "NOT NULL source_origin"
+      },
+      {
+        "conname": "slopanoc_knowledge_evidence_index_content_hash_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_knowledge_evidence_index",
+        "definition": "NOT NULL content_hash"
+      },
+      {
+        "conname": "slopanoc_knowledge_evidence_index_created_at_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_knowledge_evidence_index",
+        "definition": "NOT NULL created_at"
+      },
+      {
+        "conname": "slopanoc_knowledge_evidence_index_evidence_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_knowledge_evidence_index",
+        "definition": "NOT NULL evidence_id"
+      },
+      {
+        "conname": "slopanoc_knowledge_evidence_index_indexable_text_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_knowledge_evidence_index",
+        "definition": "NOT NULL indexable_text"
+      },
+      {
+        "conname": "slopanoc_knowledge_evidence_index_is_derived_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_knowledge_evidence_index",
+        "definition": "NOT NULL is_derived"
+      },
+      {
+        "conname": "slopanoc_knowledge_evidence_index_knowledge_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_knowledge_evidence_index",
+        "definition": "NOT NULL knowledge_id"
+      },
+      {
+        "conname": "slopanoc_knowledge_evidence_index_pkey",
+        "contype": "p",
+        "table_name": "slopanoc_knowledge_evidence_index",
+        "definition": "PRIMARY KEY (evidence_id)"
+      },
+      {
+        "conname": "slopanoc_knowledge_evidence_index_section_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_knowledge_evidence_index",
+        "definition": "NOT NULL section_id"
+      },
+      {
+        "conname": "slopanoc_knowledge_evidence_index_updated_at_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_knowledge_evidence_index",
+        "definition": "NOT NULL updated_at"
+      },
+      {
+        "conname": "slopanoc_knowledge_evidence_index_version_label_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_knowledge_evidence_index",
+        "definition": "NOT NULL version_label"
+      },
+      {
+        "conname": "slopanoc_knowledge_objects_knowledge_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_knowledge_objects",
+        "definition": "NOT NULL knowledge_id"
+      },
+      {
+        "conname": "slopanoc_knowledge_objects_payload_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_knowledge_objects",
+        "definition": "NOT NULL payload"
+      },
+      {
+        "conname": "slopanoc_knowledge_objects_pkey",
+        "contype": "p",
+        "table_name": "slopanoc_knowledge_objects",
+        "definition": "PRIMARY KEY (knowledge_id, version_label)"
+      },
+      {
+        "conname": "slopanoc_knowledge_objects_version_label_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_knowledge_objects",
+        "definition": "NOT NULL version_label"
+      },
+      {
+        "conname": "slopanoc_telco_context_assertions_assertion_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_telco_context_assertions",
+        "definition": "NOT NULL assertion_id"
+      },
+      {
+        "conname": "slopanoc_telco_context_assertions_created_at_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_telco_context_assertions",
+        "definition": "NOT NULL created_at"
+      },
+      {
+        "conname": "slopanoc_telco_context_assertions_dimension_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_telco_context_assertions",
+        "definition": "NOT NULL dimension"
+      },
+      {
+        "conname": "slopanoc_telco_context_assertions_kind_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_telco_context_assertions",
+        "definition": "NOT NULL kind"
+      },
+      {
+        "conname": "slopanoc_telco_context_assertions_origin_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_telco_context_assertions",
+        "definition": "NOT NULL origin"
+      },
+      {
+        "conname": "slopanoc_telco_context_assertions_pkey",
+        "contype": "p",
+        "table_name": "slopanoc_telco_context_assertions",
+        "definition": "PRIMARY KEY (assertion_id)"
+      },
+      {
+        "conname": "slopanoc_telco_context_assertions_profile_id_fkey",
+        "contype": "f",
+        "table_name": "slopanoc_telco_context_assertions",
+        "definition": "FOREIGN KEY (profile_id) REFERENCES slopanoc_telco_context_profiles(profile_id)"
+      },
+      {
+        "conname": "slopanoc_telco_context_assertions_profile_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_telco_context_assertions",
+        "definition": "NOT NULL profile_id"
+      },
+      {
+        "conname": "slopanoc_telco_context_profiles_created_at_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_telco_context_profiles",
+        "definition": "NOT NULL created_at"
+      },
+      {
+        "conname": "slopanoc_telco_context_profiles_owner_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_telco_context_profiles",
+        "definition": "NOT NULL owner_id"
+      },
+      {
+        "conname": "slopanoc_telco_context_profiles_owner_kind_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_telco_context_profiles",
+        "definition": "NOT NULL owner_kind"
+      },
+      {
+        "conname": "slopanoc_telco_context_profiles_pkey",
+        "contype": "p",
+        "table_name": "slopanoc_telco_context_profiles",
+        "definition": "PRIMARY KEY (profile_id)"
+      },
+      {
+        "conname": "slopanoc_telco_context_profiles_profile_id_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_telco_context_profiles",
+        "definition": "NOT NULL profile_id"
+      },
+      {
+        "conname": "slopanoc_telco_context_profiles_updated_at_not_null",
+        "contype": "n",
+        "table_name": "slopanoc_telco_context_profiles",
+        "definition": "NOT NULL updated_at"
+      },
+      {
+        "conname": "uq_telco_context_profile_owner",
+        "contype": "u",
+        "table_name": "slopanoc_telco_context_profiles",
+        "definition": "UNIQUE (owner_kind, owner_id)"
+      }
+    ]
+  },
+  "second_upgrade": "NO_OP",
+  "application_observability_tables": [
+    "ai_usage_ledger",
+    "finops_accounting_source",
+    "finops_anomaly_transition",
+    "finops_billing_ingest_state",
+    "finops_billing_projection_cache",
+    "finops_billing_publication",
+    "finops_budget_definition_version",
+    "finops_control_generation",
+    "finops_control_input",
+    "finops_control_publication",
+    "finops_forecast_backtest_generation",
+    "finops_reconciliation_generation",
+    "finops_reconciliation_input",
+    "finops_reconciliation_registry",
+    "finops_reconciliation_state",
+    "finops_runtime_attempt",
+    "finops_unit_definition_version",
+    "finops_unit_denominator_snapshot",
+    "finops_unit_driver_version",
+    "finops_unit_economics_generation",
+    "finops_unit_economics_publication",
+    "finops_usage_bucket",
+    "finops_usage_inbox",
+    "observability_agent_projection",
+    "observability_archive_receipt",
+    "observability_audit_outbox",
+    "observability_critical_audit",
+    "observability_projection_failure",
+    "observability_projection_receipt",
+    "observability_retention_checkpoint",
+    "observability_run_event",
+    "observability_run_projection",
+    "observability_run_status",
+    "observability_sre_bucket",
+    "observability_sre_receipt",
+    "observability_sre_source",
+    "observability_turn"
+  ],
+  "runtime_role_attributes": [
+    {
+      "rolname": "slopanoc_hybrid_anoc",
+      "rolcanlogin": false,
+      "rolsuper": false,
+      "rolcreatedb": false,
+      "rolcreaterole": false,
+      "rolreplication": false,
+      "rolbypassrls": false
+    },
+    {
+      "rolname": "slopanoc_hybrid_projector",
+      "rolcanlogin": false,
+      "rolsuper": false,
+      "rolcreatedb": false,
+      "rolcreaterole": false,
+      "rolreplication": false,
+      "rolbypassrls": false
+    },
+    {
+      "rolname": "slopanoc_hybrid_publisher",
+      "rolcanlogin": false,
+      "rolsuper": false,
+      "rolcreatedb": false,
+      "rolcreaterole": false,
+      "rolreplication": false,
+      "rolbypassrls": false
+    },
+    {
+      "rolname": "slopanoc_hybrid_reader",
+      "rolcanlogin": false,
+      "rolsuper": false,
+      "rolcreatedb": false,
+      "rolcreaterole": false,
+      "rolreplication": false,
+      "rolbypassrls": false
+    }
+  ],
+  "roles": "PASS",
+  "role_denials": [
+    {
+      "role": "anoc",
+      "operation": "CREATE",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "anoc",
+      "operation": "DELETE",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "anoc",
+      "operation": "SELECT",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "publisher",
+      "operation": "CREATE",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "publisher",
+      "operation": "DELETE",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "publisher",
+      "operation": "SELECT",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "projector",
+      "operation": "CREATE",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "projector",
+      "operation": "DELETE",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "projector",
+      "operation": "SELECT",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "reader",
+      "operation": "CREATE",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "reader",
+      "operation": "DELETE",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "reader",
+      "operation": "SELECT",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "anoc",
+      "operation": "UPDATE",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "publisher",
+      "operation": "UPDATE",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "projector",
+      "operation": "UPDATE",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "reader",
+      "operation": "UPDATE",
+      "sqlstate": "42501"
+    },
+    {
+      "role": "reader",
+      "operation": "INSERT",
+      "sqlstate": "42501"
+    }
+  ],
+  "real_runtime_capture_delivery_projection": "PASS",
+  "rollback": "PASS",
+  "duplicate_capture_and_projection": "PASS",
+  "constraints": "PASS",
+  "role_sql_sha256": "5a2c408c09ffe4021f4d168314ba38808c41c18557b519cfa808c32c8776b9e2",
+  "owned_container_and_volume_removed": true,
+  "finished_at": "2026-10-11T15:24:59Z"
+}

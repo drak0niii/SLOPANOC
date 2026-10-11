@@ -1,0 +1,2478 @@
+{
+  "sha256": "fca850228ccaed481dbd3fa31fd785cca494aa36122eefe0f7e1b1b277df9d09",
+  "live_revision": [
+    {
+      "version_num": "d3f8b1c6a942"
+    }
+  ],
+  "tables": {
+    "adk_internal_metadata": {
+      "columns": [
+        {
+          "name": "key",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "value",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "adk_internal_metadata_pkey",
+          "definition": "CREATE UNIQUE INDEX adk_internal_metadata_pkey ON public.adk_internal_metadata USING btree (key)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "adk_internal_metadata_key_not_null",
+          "type": "n",
+          "definition": "NOT NULL key"
+        },
+        {
+          "name": "adk_internal_metadata_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (key)"
+        },
+        {
+          "name": "adk_internal_metadata_value_not_null",
+          "type": "n",
+          "definition": "NOT NULL value"
+        }
+      ]
+    },
+    "alembic_version": {
+      "columns": [
+        {
+          "name": "version_num",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "alembic_version_pkc",
+          "definition": "CREATE UNIQUE INDEX alembic_version_pkc ON public.alembic_version USING btree (version_num)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "alembic_version_pkc",
+          "type": "p",
+          "definition": "PRIMARY KEY (version_num)"
+        },
+        {
+          "name": "alembic_version_version_num_not_null",
+          "type": "n",
+          "definition": "NOT NULL version_num"
+        }
+      ]
+    },
+    "app_states": {
+      "columns": [
+        {
+          "name": "app_name",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "state",
+          "data_type": "jsonb",
+          "udt_name": "jsonb",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "update_time",
+          "data_type": "timestamp without time zone",
+          "udt_name": "timestamp",
+          "is_nullable": "NO",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "app_states_pkey",
+          "definition": "CREATE UNIQUE INDEX app_states_pkey ON public.app_states USING btree (app_name)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "app_states_app_name_not_null",
+          "type": "n",
+          "definition": "NOT NULL app_name"
+        },
+        {
+          "name": "app_states_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (app_name)"
+        },
+        {
+          "name": "app_states_state_not_null",
+          "type": "n",
+          "definition": "NOT NULL state"
+        },
+        {
+          "name": "app_states_update_time_not_null",
+          "type": "n",
+          "definition": "NOT NULL update_time"
+        }
+      ]
+    },
+    "events": {
+      "columns": [
+        {
+          "name": "app_name",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "event_data",
+          "data_type": "jsonb",
+          "udt_name": "jsonb",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "invocation_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "session_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "timestamp",
+          "data_type": "timestamp without time zone",
+          "udt_name": "timestamp",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "user_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "events_pkey",
+          "definition": "CREATE UNIQUE INDEX events_pkey ON public.events USING btree (id, app_name, user_id, session_id)"
+        },
+        {
+          "name": "idx_events_app_user_session_ts",
+          "definition": "CREATE INDEX idx_events_app_user_session_ts ON public.events USING btree (app_name, user_id, session_id, \"timestamp\" DESC)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "events_app_name_not_null",
+          "type": "n",
+          "definition": "NOT NULL app_name"
+        },
+        {
+          "name": "events_app_name_user_id_session_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (app_name, user_id, session_id) REFERENCES sessions(app_name, user_id, id) ON DELETE CASCADE"
+        },
+        {
+          "name": "events_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL id"
+        },
+        {
+          "name": "events_invocation_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL invocation_id"
+        },
+        {
+          "name": "events_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (id, app_name, user_id, session_id)"
+        },
+        {
+          "name": "events_session_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL session_id"
+        },
+        {
+          "name": "events_timestamp_not_null",
+          "type": "n",
+          "definition": "NOT NULL \"timestamp\""
+        },
+        {
+          "name": "events_user_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL user_id"
+        }
+      ]
+    },
+    "sessions": {
+      "columns": [
+        {
+          "name": "app_name",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "create_time",
+          "data_type": "timestamp without time zone",
+          "udt_name": "timestamp",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "state",
+          "data_type": "jsonb",
+          "udt_name": "jsonb",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "update_time",
+          "data_type": "timestamp without time zone",
+          "udt_name": "timestamp",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "user_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "sessions_pkey",
+          "definition": "CREATE UNIQUE INDEX sessions_pkey ON public.sessions USING btree (app_name, user_id, id)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "sessions_app_name_not_null",
+          "type": "n",
+          "definition": "NOT NULL app_name"
+        },
+        {
+          "name": "sessions_create_time_not_null",
+          "type": "n",
+          "definition": "NOT NULL create_time"
+        },
+        {
+          "name": "sessions_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL id"
+        },
+        {
+          "name": "sessions_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (app_name, user_id, id)"
+        },
+        {
+          "name": "sessions_state_not_null",
+          "type": "n",
+          "definition": "NOT NULL state"
+        },
+        {
+          "name": "sessions_update_time_not_null",
+          "type": "n",
+          "definition": "NOT NULL update_time"
+        },
+        {
+          "name": "sessions_user_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL user_id"
+        }
+      ]
+    },
+    "slopanoc_case_context_items": {
+      "columns": [
+        {
+          "name": "case_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "confidence",
+          "data_type": "double precision",
+          "udt_name": "float8",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "content",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "udt_name": "timestamptz",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "created_by_agent",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "created_by_user_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "item_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "kind",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "source_author",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "source_ref",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "source_timestamp",
+          "data_type": "timestamp with time zone",
+          "udt_name": "timestamptz",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "source_type",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "supporting_item_ids",
+          "data_type": "json",
+          "udt_name": "json",
+          "is_nullable": "NO",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "slopanoc_case_context_items_pkey",
+          "definition": "CREATE UNIQUE INDEX slopanoc_case_context_items_pkey ON public.slopanoc_case_context_items USING btree (item_id)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "slopanoc_case_context_items_case_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (case_id) REFERENCES slopanoc_cases(case_id)"
+        },
+        {
+          "name": "slopanoc_case_context_items_case_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL case_id"
+        },
+        {
+          "name": "slopanoc_case_context_items_content_not_null",
+          "type": "n",
+          "definition": "NOT NULL content"
+        },
+        {
+          "name": "slopanoc_case_context_items_created_at_not_null",
+          "type": "n",
+          "definition": "NOT NULL created_at"
+        },
+        {
+          "name": "slopanoc_case_context_items_item_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL item_id"
+        },
+        {
+          "name": "slopanoc_case_context_items_kind_not_null",
+          "type": "n",
+          "definition": "NOT NULL kind"
+        },
+        {
+          "name": "slopanoc_case_context_items_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (item_id)"
+        },
+        {
+          "name": "slopanoc_case_context_items_source_type_not_null",
+          "type": "n",
+          "definition": "NOT NULL source_type"
+        },
+        {
+          "name": "slopanoc_case_context_items_supporting_item_ids_not_null",
+          "type": "n",
+          "definition": "NOT NULL supporting_item_ids"
+        }
+      ]
+    },
+    "slopanoc_case_memberships": {
+      "columns": [
+        {
+          "name": "case_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "udt_name": "timestamptz",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "role",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "user_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "slopanoc_case_memberships_pkey",
+          "definition": "CREATE UNIQUE INDEX slopanoc_case_memberships_pkey ON public.slopanoc_case_memberships USING btree (case_id, user_id)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "slopanoc_case_memberships_case_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (case_id) REFERENCES slopanoc_cases(case_id)"
+        },
+        {
+          "name": "slopanoc_case_memberships_case_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL case_id"
+        },
+        {
+          "name": "slopanoc_case_memberships_created_at_not_null",
+          "type": "n",
+          "definition": "NOT NULL created_at"
+        },
+        {
+          "name": "slopanoc_case_memberships_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (case_id, user_id)"
+        },
+        {
+          "name": "slopanoc_case_memberships_role_not_null",
+          "type": "n",
+          "definition": "NOT NULL role"
+        },
+        {
+          "name": "slopanoc_case_memberships_user_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL user_id"
+        }
+      ]
+    },
+    "slopanoc_case_session_links": {
+      "columns": [
+        {
+          "name": "case_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "linked_at",
+          "data_type": "timestamp with time zone",
+          "udt_name": "timestamptz",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "linked_by_user_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "session_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "session_user_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "slopanoc_case_session_links_pkey",
+          "definition": "CREATE UNIQUE INDEX slopanoc_case_session_links_pkey ON public.slopanoc_case_session_links USING btree (session_id)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "slopanoc_case_session_links_case_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (case_id) REFERENCES slopanoc_cases(case_id)"
+        },
+        {
+          "name": "slopanoc_case_session_links_case_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL case_id"
+        },
+        {
+          "name": "slopanoc_case_session_links_linked_at_not_null",
+          "type": "n",
+          "definition": "NOT NULL linked_at"
+        },
+        {
+          "name": "slopanoc_case_session_links_linked_by_user_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL linked_by_user_id"
+        },
+        {
+          "name": "slopanoc_case_session_links_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (session_id)"
+        },
+        {
+          "name": "slopanoc_case_session_links_session_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL session_id"
+        },
+        {
+          "name": "slopanoc_case_session_links_session_user_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL session_user_id"
+        }
+      ]
+    },
+    "slopanoc_cases": {
+      "columns": [
+        {
+          "name": "case_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "udt_name": "timestamptz",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "created_by_user_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "external_reference",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "problem_statement",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "status",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "title",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "udt_name": "timestamptz",
+          "is_nullable": "NO",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "slopanoc_cases_pkey",
+          "definition": "CREATE UNIQUE INDEX slopanoc_cases_pkey ON public.slopanoc_cases USING btree (case_id)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "slopanoc_cases_case_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL case_id"
+        },
+        {
+          "name": "slopanoc_cases_created_at_not_null",
+          "type": "n",
+          "definition": "NOT NULL created_at"
+        },
+        {
+          "name": "slopanoc_cases_created_by_user_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL created_by_user_id"
+        },
+        {
+          "name": "slopanoc_cases_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (case_id)"
+        },
+        {
+          "name": "slopanoc_cases_problem_statement_not_null",
+          "type": "n",
+          "definition": "NOT NULL problem_statement"
+        },
+        {
+          "name": "slopanoc_cases_status_not_null",
+          "type": "n",
+          "definition": "NOT NULL status"
+        },
+        {
+          "name": "slopanoc_cases_title_not_null",
+          "type": "n",
+          "definition": "NOT NULL title"
+        },
+        {
+          "name": "slopanoc_cases_updated_at_not_null",
+          "type": "n",
+          "definition": "NOT NULL updated_at"
+        }
+      ]
+    },
+    "slopanoc_chat_attachments": {
+      "columns": [
+        {
+          "name": "attachment_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp with time zone",
+          "udt_name": "timestamptz",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "deleted_at",
+          "data_type": "timestamp with time zone",
+          "udt_name": "timestamptz",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "linked_at",
+          "data_type": "timestamp with time zone",
+          "udt_name": "timestamptz",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "message_id",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "mime_type",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "original_filename",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "owner_user_id",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "session_id",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "sha256",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "size_bytes",
+          "data_type": "integer",
+          "udt_name": "int4",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "status",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "storage_object_name",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_slopanoc_chat_attachments_owner_session",
+          "definition": "CREATE INDEX ix_slopanoc_chat_attachments_owner_session ON public.slopanoc_chat_attachments USING btree (owner_user_id, session_id)"
+        },
+        {
+          "name": "ix_slopanoc_chat_attachments_session_message",
+          "definition": "CREATE INDEX ix_slopanoc_chat_attachments_session_message ON public.slopanoc_chat_attachments USING btree (session_id, message_id)"
+        },
+        {
+          "name": "ix_slopanoc_chat_attachments_status_created",
+          "definition": "CREATE INDEX ix_slopanoc_chat_attachments_status_created ON public.slopanoc_chat_attachments USING btree (status, created_at)"
+        },
+        {
+          "name": "slopanoc_chat_attachments_pkey",
+          "definition": "CREATE UNIQUE INDEX slopanoc_chat_attachments_pkey ON public.slopanoc_chat_attachments USING btree (attachment_id)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "ck_slopanoc_chat_attachments_filename_nonempty",
+          "type": "c",
+          "definition": "CHECK ((length(original_filename) > 0))"
+        },
+        {
+          "name": "ck_slopanoc_chat_attachments_mime_type_nonempty",
+          "type": "c",
+          "definition": "CHECK ((length(mime_type) > 0))"
+        },
+        {
+          "name": "ck_slopanoc_chat_attachments_sha256_nonempty",
+          "type": "c",
+          "definition": "CHECK ((length(sha256) > 0))"
+        },
+        {
+          "name": "ck_slopanoc_chat_attachments_size_bytes_positive",
+          "type": "c",
+          "definition": "CHECK ((size_bytes > 0))"
+        },
+        {
+          "name": "ck_slopanoc_chat_attachments_storage_object_name_nonempty",
+          "type": "c",
+          "definition": "CHECK ((length(storage_object_name) > 0))"
+        },
+        {
+          "name": "slopanoc_chat_attachments_attachment_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL attachment_id"
+        },
+        {
+          "name": "slopanoc_chat_attachments_created_at_not_null",
+          "type": "n",
+          "definition": "NOT NULL created_at"
+        },
+        {
+          "name": "slopanoc_chat_attachments_mime_type_not_null",
+          "type": "n",
+          "definition": "NOT NULL mime_type"
+        },
+        {
+          "name": "slopanoc_chat_attachments_original_filename_not_null",
+          "type": "n",
+          "definition": "NOT NULL original_filename"
+        },
+        {
+          "name": "slopanoc_chat_attachments_owner_user_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL owner_user_id"
+        },
+        {
+          "name": "slopanoc_chat_attachments_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (attachment_id)"
+        },
+        {
+          "name": "slopanoc_chat_attachments_session_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL session_id"
+        },
+        {
+          "name": "slopanoc_chat_attachments_sha256_not_null",
+          "type": "n",
+          "definition": "NOT NULL sha256"
+        },
+        {
+          "name": "slopanoc_chat_attachments_size_bytes_not_null",
+          "type": "n",
+          "definition": "NOT NULL size_bytes"
+        },
+        {
+          "name": "slopanoc_chat_attachments_status_not_null",
+          "type": "n",
+          "definition": "NOT NULL status"
+        },
+        {
+          "name": "slopanoc_chat_attachments_storage_object_name_not_null",
+          "type": "n",
+          "definition": "NOT NULL storage_object_name"
+        }
+      ]
+    },
+    "slopanoc_experience_records": {
+      "columns": [
+        {
+          "name": "case_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "content_fingerprint",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "context_fingerprint",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "evidence_references_json",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "experience_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "experience_schema_version",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "experience_type",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "invalidated_at",
+          "data_type": "timestamp with time zone",
+          "udt_name": "timestamptz",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "invalidation_reason",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "lifecycle",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "metadata_json",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "observed_facts_json",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "outcome_summary",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "owner_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "recorded_at",
+          "data_type": "timestamp with time zone",
+          "udt_name": "timestamptz",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "session_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "skill_fingerprint",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "skill_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "skill_version",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "source_event_at",
+          "data_type": "timestamp with time zone",
+          "udt_name": "timestamptz",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "source_event_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "source_namespace",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "source_origin",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "source_reference",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_experience_owner",
+          "definition": "CREATE INDEX ix_experience_owner ON public.slopanoc_experience_records USING btree (owner_id)"
+        },
+        {
+          "name": "ix_experience_owner_case",
+          "definition": "CREATE INDEX ix_experience_owner_case ON public.slopanoc_experience_records USING btree (owner_id, case_id)"
+        },
+        {
+          "name": "ix_experience_owner_recorded_at",
+          "definition": "CREATE INDEX ix_experience_owner_recorded_at ON public.slopanoc_experience_records USING btree (owner_id, recorded_at)"
+        },
+        {
+          "name": "ix_experience_owner_skill",
+          "definition": "CREATE INDEX ix_experience_owner_skill ON public.slopanoc_experience_records USING btree (owner_id, skill_id)"
+        },
+        {
+          "name": "ix_experience_owner_type",
+          "definition": "CREATE INDEX ix_experience_owner_type ON public.slopanoc_experience_records USING btree (owner_id, experience_type)"
+        },
+        {
+          "name": "slopanoc_experience_records_pkey",
+          "definition": "CREATE UNIQUE INDEX slopanoc_experience_records_pkey ON public.slopanoc_experience_records USING btree (experience_id)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "slopanoc_experience_records_content_fingerprint_not_null",
+          "type": "n",
+          "definition": "NOT NULL content_fingerprint"
+        },
+        {
+          "name": "slopanoc_experience_records_evidence_references_json_not_null",
+          "type": "n",
+          "definition": "NOT NULL evidence_references_json"
+        },
+        {
+          "name": "slopanoc_experience_records_experience_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL experience_id"
+        },
+        {
+          "name": "slopanoc_experience_records_experience_schema_version_not_null",
+          "type": "n",
+          "definition": "NOT NULL experience_schema_version"
+        },
+        {
+          "name": "slopanoc_experience_records_experience_type_not_null",
+          "type": "n",
+          "definition": "NOT NULL experience_type"
+        },
+        {
+          "name": "slopanoc_experience_records_lifecycle_not_null",
+          "type": "n",
+          "definition": "NOT NULL lifecycle"
+        },
+        {
+          "name": "slopanoc_experience_records_metadata_json_not_null",
+          "type": "n",
+          "definition": "NOT NULL metadata_json"
+        },
+        {
+          "name": "slopanoc_experience_records_observed_facts_json_not_null",
+          "type": "n",
+          "definition": "NOT NULL observed_facts_json"
+        },
+        {
+          "name": "slopanoc_experience_records_outcome_summary_not_null",
+          "type": "n",
+          "definition": "NOT NULL outcome_summary"
+        },
+        {
+          "name": "slopanoc_experience_records_owner_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL owner_id"
+        },
+        {
+          "name": "slopanoc_experience_records_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (experience_id)"
+        },
+        {
+          "name": "slopanoc_experience_records_recorded_at_not_null",
+          "type": "n",
+          "definition": "NOT NULL recorded_at"
+        },
+        {
+          "name": "slopanoc_experience_records_source_event_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL source_event_id"
+        },
+        {
+          "name": "slopanoc_experience_records_source_namespace_not_null",
+          "type": "n",
+          "definition": "NOT NULL source_namespace"
+        },
+        {
+          "name": "slopanoc_experience_records_source_origin_not_null",
+          "type": "n",
+          "definition": "NOT NULL source_origin"
+        }
+      ]
+    },
+    "slopanoc_knowledge_evidence_index": {
+      "columns": [
+        {
+          "name": "artifact_id",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "content_hash",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp without time zone",
+          "udt_name": "timestamp",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "embedding",
+          "data_type": "USER-DEFINED",
+          "udt_name": "vector",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "embedding_dimensions",
+          "data_type": "integer",
+          "udt_name": "int4",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "embedding_generated_at",
+          "data_type": "timestamp without time zone",
+          "udt_name": "timestamp",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "embedding_model",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "embedding_model_version",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "evidence_id",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "indexable_text",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "is_derived",
+          "data_type": "boolean",
+          "udt_name": "bool",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "knowledge_id",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "section_id",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "text_search_vector",
+          "data_type": "tsvector",
+          "udt_name": "tsvector",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "updated_at",
+          "data_type": "timestamp without time zone",
+          "udt_name": "timestamp",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "version_label",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_evidence_index_content_hash",
+          "definition": "CREATE INDEX ix_evidence_index_content_hash ON public.slopanoc_knowledge_evidence_index USING btree (content_hash)"
+        },
+        {
+          "name": "ix_evidence_index_knowledge_id",
+          "definition": "CREATE INDEX ix_evidence_index_knowledge_id ON public.slopanoc_knowledge_evidence_index USING btree (knowledge_id)"
+        },
+        {
+          "name": "ix_evidence_index_text_search_vector",
+          "definition": "CREATE INDEX ix_evidence_index_text_search_vector ON public.slopanoc_knowledge_evidence_index USING gin (text_search_vector)"
+        },
+        {
+          "name": "slopanoc_knowledge_evidence_index_pkey",
+          "definition": "CREATE UNIQUE INDEX slopanoc_knowledge_evidence_index_pkey ON public.slopanoc_knowledge_evidence_index USING btree (evidence_id)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "slopanoc_knowledge_evidence_index_content_hash_not_null",
+          "type": "n",
+          "definition": "NOT NULL content_hash"
+        },
+        {
+          "name": "slopanoc_knowledge_evidence_index_created_at_not_null",
+          "type": "n",
+          "definition": "NOT NULL created_at"
+        },
+        {
+          "name": "slopanoc_knowledge_evidence_index_evidence_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL evidence_id"
+        },
+        {
+          "name": "slopanoc_knowledge_evidence_index_indexable_text_not_null",
+          "type": "n",
+          "definition": "NOT NULL indexable_text"
+        },
+        {
+          "name": "slopanoc_knowledge_evidence_index_is_derived_not_null",
+          "type": "n",
+          "definition": "NOT NULL is_derived"
+        },
+        {
+          "name": "slopanoc_knowledge_evidence_index_knowledge_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL knowledge_id"
+        },
+        {
+          "name": "slopanoc_knowledge_evidence_index_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (evidence_id)"
+        },
+        {
+          "name": "slopanoc_knowledge_evidence_index_section_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL section_id"
+        },
+        {
+          "name": "slopanoc_knowledge_evidence_index_updated_at_not_null",
+          "type": "n",
+          "definition": "NOT NULL updated_at"
+        },
+        {
+          "name": "slopanoc_knowledge_evidence_index_version_label_not_null",
+          "type": "n",
+          "definition": "NOT NULL version_label"
+        }
+      ]
+    },
+    "slopanoc_knowledge_objects": {
+      "columns": [
+        {
+          "name": "knowledge_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "payload",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "version_label",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "slopanoc_knowledge_objects_pkey",
+          "definition": "CREATE UNIQUE INDEX slopanoc_knowledge_objects_pkey ON public.slopanoc_knowledge_objects USING btree (knowledge_id, version_label)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "slopanoc_knowledge_objects_knowledge_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL knowledge_id"
+        },
+        {
+          "name": "slopanoc_knowledge_objects_payload_not_null",
+          "type": "n",
+          "definition": "NOT NULL payload"
+        },
+        {
+          "name": "slopanoc_knowledge_objects_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (knowledge_id, version_label)"
+        },
+        {
+          "name": "slopanoc_knowledge_objects_version_label_not_null",
+          "type": "n",
+          "definition": "NOT NULL version_label"
+        }
+      ]
+    },
+    "slopanoc_telco_context_assertions": {
+      "columns": [
+        {
+          "name": "asserted_at",
+          "data_type": "timestamp without time zone",
+          "udt_name": "timestamp",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "assertion_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "canonical_value",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "created_at",
+          "data_type": "timestamp without time zone",
+          "udt_name": "timestamp",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "dimension",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "kind",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "origin",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "profile_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "raw_value",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "source_reference",
+          "data_type": "text",
+          "udt_name": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "slopanoc_telco_context_assertions_pkey",
+          "definition": "CREATE UNIQUE INDEX slopanoc_telco_context_assertions_pkey ON public.slopanoc_telco_context_assertions USING btree (assertion_id)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "slopanoc_telco_context_assertions_assertion_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL assertion_id"
+        },
+        {
+          "name": "slopanoc_telco_context_assertions_created_at_not_null",
+          "type": "n",
+          "definition": "NOT NULL created_at"
+        },
+        {
+          "name": "slopanoc_telco_context_assertions_dimension_not_null",
+          "type": "n",
+          "definition": "NOT NULL dimension"
+        },
+        {
+          "name": "slopanoc_telco_context_assertions_kind_not_null",
+          "type": "n",
+          "definition": "NOT NULL kind"
+        },
+        {
+          "name": "slopanoc_telco_context_assertions_origin_not_null",
+          "type": "n",
+          "definition": "NOT NULL origin"
+        },
+        {
+          "name": "slopanoc_telco_context_assertions_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (assertion_id)"
+        },
+        {
+          "name": "slopanoc_telco_context_assertions_profile_id_fkey",
+          "type": "f",
+          "definition": "FOREIGN KEY (profile_id) REFERENCES slopanoc_telco_context_profiles(profile_id)"
+        },
+        {
+          "name": "slopanoc_telco_context_assertions_profile_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL profile_id"
+        }
+      ]
+    },
+    "slopanoc_telco_context_profiles": {
+      "columns": [
+        {
+          "name": "created_at",
+          "data_type": "timestamp without time zone",
+          "udt_name": "timestamp",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "created_by_user_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "name": "owner_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "owner_kind",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "profile_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "updated_at",
+          "data_type": "timestamp without time zone",
+          "udt_name": "timestamp",
+          "is_nullable": "NO",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "slopanoc_telco_context_profiles_pkey",
+          "definition": "CREATE UNIQUE INDEX slopanoc_telco_context_profiles_pkey ON public.slopanoc_telco_context_profiles USING btree (profile_id)"
+        },
+        {
+          "name": "uq_telco_context_profile_owner",
+          "definition": "CREATE UNIQUE INDEX uq_telco_context_profile_owner ON public.slopanoc_telco_context_profiles USING btree (owner_kind, owner_id)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "slopanoc_telco_context_profiles_created_at_not_null",
+          "type": "n",
+          "definition": "NOT NULL created_at"
+        },
+        {
+          "name": "slopanoc_telco_context_profiles_owner_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL owner_id"
+        },
+        {
+          "name": "slopanoc_telco_context_profiles_owner_kind_not_null",
+          "type": "n",
+          "definition": "NOT NULL owner_kind"
+        },
+        {
+          "name": "slopanoc_telco_context_profiles_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (profile_id)"
+        },
+        {
+          "name": "slopanoc_telco_context_profiles_profile_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL profile_id"
+        },
+        {
+          "name": "slopanoc_telco_context_profiles_updated_at_not_null",
+          "type": "n",
+          "definition": "NOT NULL updated_at"
+        },
+        {
+          "name": "uq_telco_context_profile_owner",
+          "type": "u",
+          "definition": "UNIQUE (owner_kind, owner_id)"
+        }
+      ]
+    },
+    "user_states": {
+      "columns": [
+        {
+          "name": "app_name",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "state",
+          "data_type": "jsonb",
+          "udt_name": "jsonb",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "update_time",
+          "data_type": "timestamp without time zone",
+          "udt_name": "timestamp",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "name": "user_id",
+          "data_type": "character varying",
+          "udt_name": "varchar",
+          "is_nullable": "NO",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "name": "user_states_pkey",
+          "definition": "CREATE UNIQUE INDEX user_states_pkey ON public.user_states USING btree (app_name, user_id)"
+        }
+      ],
+      "constraints": [
+        {
+          "name": "user_states_app_name_not_null",
+          "type": "n",
+          "definition": "NOT NULL app_name"
+        },
+        {
+          "name": "user_states_pkey",
+          "type": "p",
+          "definition": "PRIMARY KEY (app_name, user_id)"
+        },
+        {
+          "name": "user_states_state_not_null",
+          "type": "n",
+          "definition": "NOT NULL state"
+        },
+        {
+          "name": "user_states_update_time_not_null",
+          "type": "n",
+          "definition": "NOT NULL update_time"
+        },
+        {
+          "name": "user_states_user_id_not_null",
+          "type": "n",
+          "definition": "NOT NULL user_id"
+        }
+      ]
+    }
+  },
+  "historical_chain": [
+    "d2081e4fd455",
+    "b85242503972",
+    "3e59584b1012",
+    "9b6df6490c0e",
+    "a1f3c9e07b21",
+    "c7e2a4f9b83d",
+    "d3f8b1c6a942"
+  ],
+  "comparison": {
+    "slopanoc_cases": {
+      "expected_columns": {
+        "case_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "title": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "problem_statement": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "external_reference": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "status": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "created_by_user_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "updated_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "column_differences": [],
+      "constraints": [
+        {
+          "expected": "PRIMARY KEY (case_id)",
+          "matched": true
+        }
+      ],
+      "indexes": []
+    },
+    "slopanoc_case_context_items": {
+      "expected_columns": {
+        "item_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "case_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "kind": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "content": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "source_type": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "source_ref": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "source_timestamp": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        "source_author": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "confidence": {
+          "type": "FLOAT",
+          "nullable": true,
+          "default": null
+        },
+        "created_by_user_id": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "created_by_agent": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "supporting_item_ids": {
+          "type": "JSON",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "column_differences": [],
+      "constraints": [
+        {
+          "expected": "PRIMARY KEY (item_id)",
+          "matched": true
+        },
+        {
+          "expected": "FOREIGN KEY (case_id) REFERENCES slopanoc_cases(case_id)",
+          "matched": true
+        }
+      ],
+      "indexes": []
+    },
+    "slopanoc_case_memberships": {
+      "expected_columns": {
+        "case_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "user_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "role": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "column_differences": [],
+      "constraints": [
+        {
+          "expected": "PRIMARY KEY (case_id, user_id)",
+          "matched": true
+        },
+        {
+          "expected": "FOREIGN KEY (case_id) REFERENCES slopanoc_cases(case_id)",
+          "matched": true
+        }
+      ],
+      "indexes": []
+    },
+    "slopanoc_case_session_links": {
+      "expected_columns": {
+        "session_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "case_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "session_user_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "linked_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "linked_by_user_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "column_differences": [],
+      "constraints": [
+        {
+          "expected": "FOREIGN KEY (case_id) REFERENCES slopanoc_cases(case_id)",
+          "matched": true
+        },
+        {
+          "expected": "PRIMARY KEY (session_id)",
+          "matched": true
+        }
+      ],
+      "indexes": []
+    },
+    "slopanoc_knowledge_objects": {
+      "expected_columns": {
+        "knowledge_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "version_label": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "payload": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "column_differences": [],
+      "constraints": [
+        {
+          "expected": "PRIMARY KEY (knowledge_id, version_label)",
+          "matched": true
+        }
+      ],
+      "indexes": []
+    },
+    "slopanoc_chat_attachments": {
+      "expected_columns": {
+        "attachment_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "owner_user_id": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "session_id": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "message_id": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "original_filename": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "mime_type": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "size_bytes": {
+          "type": "INTEGER",
+          "nullable": false,
+          "default": null
+        },
+        "sha256": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "storage_object_name": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "status": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "linked_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        "deleted_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        }
+      },
+      "column_differences": [],
+      "constraints": [
+        {
+          "expected": "CHECK ((length(sha256) > 0))",
+          "matched": true
+        },
+        {
+          "expected": "CHECK ((length(original_filename) > 0))",
+          "matched": true
+        },
+        {
+          "expected": "CHECK ((length(storage_object_name) > 0))",
+          "matched": true
+        },
+        {
+          "expected": "PRIMARY KEY (attachment_id)",
+          "matched": true
+        },
+        {
+          "expected": "CHECK ((length(mime_type) > 0))",
+          "matched": true
+        },
+        {
+          "expected": "CHECK ((size_bytes > 0))",
+          "matched": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_slopanoc_chat_attachments_status_created",
+          "expected": "CREATE INDEX ix_slopanoc_chat_attachments_status_created ON slopanoc_chat_attachments (status, created_at)",
+          "actual": "CREATE INDEX ix_slopanoc_chat_attachments_status_created ON public.slopanoc_chat_attachments USING btree (status, created_at)",
+          "matched": true
+        },
+        {
+          "name": "ix_slopanoc_chat_attachments_owner_session",
+          "expected": "CREATE INDEX ix_slopanoc_chat_attachments_owner_session ON slopanoc_chat_attachments (owner_user_id, session_id)",
+          "actual": "CREATE INDEX ix_slopanoc_chat_attachments_owner_session ON public.slopanoc_chat_attachments USING btree (owner_user_id, session_id)",
+          "matched": true
+        },
+        {
+          "name": "ix_slopanoc_chat_attachments_session_message",
+          "expected": "CREATE INDEX ix_slopanoc_chat_attachments_session_message ON slopanoc_chat_attachments (session_id, message_id)",
+          "actual": "CREATE INDEX ix_slopanoc_chat_attachments_session_message ON public.slopanoc_chat_attachments USING btree (session_id, message_id)",
+          "matched": true
+        }
+      ]
+    },
+    "slopanoc_telco_context_profiles": {
+      "expected_columns": {
+        "profile_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "owner_kind": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "owner_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "created_by_user_id": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "updated_at": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "column_differences": [],
+      "constraints": [
+        {
+          "expected": "UNIQUE (owner_kind, owner_id)",
+          "matched": true
+        },
+        {
+          "expected": "PRIMARY KEY (profile_id)",
+          "matched": true
+        }
+      ],
+      "indexes": []
+    },
+    "slopanoc_telco_context_assertions": {
+      "expected_columns": {
+        "assertion_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "profile_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "dimension": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "kind": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "raw_value": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "canonical_value": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "origin": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "source_reference": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "asserted_at": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "column_differences": [],
+      "constraints": [
+        {
+          "expected": "FOREIGN KEY (profile_id) REFERENCES slopanoc_telco_context_profiles(profile_id)",
+          "matched": true
+        },
+        {
+          "expected": "PRIMARY KEY (assertion_id)",
+          "matched": true
+        }
+      ],
+      "indexes": []
+    },
+    "slopanoc_knowledge_evidence_index": {
+      "expected_columns": {
+        "evidence_id": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "knowledge_id": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "version_label": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "section_id": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "artifact_id": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "is_derived": {
+          "type": "BOOLEAN",
+          "nullable": false,
+          "default": null
+        },
+        "indexable_text": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "content_hash": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "embedding": {
+          "type": "VECTOR(768)",
+          "nullable": true,
+          "default": null
+        },
+        "embedding_model": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "embedding_model_version": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "embedding_dimensions": {
+          "type": "INTEGER",
+          "nullable": true,
+          "default": null
+        },
+        "embedding_generated_at": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        "text_search_vector": {
+          "type": "TSVECTOR",
+          "nullable": true,
+          "default": null
+        },
+        "created_at": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "updated_at": {
+          "type": "TIMESTAMP WITHOUT TIME ZONE",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "column_differences": [],
+      "constraints": [
+        {
+          "expected": "PRIMARY KEY (evidence_id)",
+          "matched": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_evidence_index_knowledge_id",
+          "expected": "CREATE INDEX ix_evidence_index_knowledge_id ON slopanoc_knowledge_evidence_index (knowledge_id)",
+          "actual": "CREATE INDEX ix_evidence_index_knowledge_id ON public.slopanoc_knowledge_evidence_index USING btree (knowledge_id)",
+          "matched": true
+        },
+        {
+          "name": "ix_evidence_index_content_hash",
+          "expected": "CREATE INDEX ix_evidence_index_content_hash ON slopanoc_knowledge_evidence_index (content_hash)",
+          "actual": "CREATE INDEX ix_evidence_index_content_hash ON public.slopanoc_knowledge_evidence_index USING btree (content_hash)",
+          "matched": true
+        },
+        {
+          "name": "ix_evidence_index_text_search_vector",
+          "expected": "CREATE INDEX ix_evidence_index_text_search_vector ON slopanoc_knowledge_evidence_index USING gin (text_search_vector)",
+          "actual": "CREATE INDEX ix_evidence_index_text_search_vector ON public.slopanoc_knowledge_evidence_index USING gin (text_search_vector)",
+          "matched": true
+        }
+      ]
+    },
+    "slopanoc_experience_records": {
+      "expected_columns": {
+        "experience_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "experience_schema_version": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "experience_type": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "lifecycle": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "owner_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "source_origin": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "source_reference": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "source_event_id": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "source_event_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        "case_id": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "session_id": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "context_fingerprint": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "skill_id": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "skill_version": {
+          "type": "VARCHAR",
+          "nullable": true,
+          "default": null
+        },
+        "skill_fingerprint": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "evidence_references_json": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "observed_facts_json": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "outcome_summary": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "metadata_json": {
+          "type": "TEXT",
+          "nullable": false,
+          "default": null
+        },
+        "content_fingerprint": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        },
+        "recorded_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": false,
+          "default": null
+        },
+        "invalidated_at": {
+          "type": "TIMESTAMP WITH TIME ZONE",
+          "nullable": true,
+          "default": null
+        },
+        "invalidation_reason": {
+          "type": "TEXT",
+          "nullable": true,
+          "default": null
+        },
+        "source_namespace": {
+          "type": "VARCHAR",
+          "nullable": false,
+          "default": null
+        }
+      },
+      "column_differences": [],
+      "constraints": [
+        {
+          "expected": "PRIMARY KEY (experience_id)",
+          "matched": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_experience_owner_recorded_at",
+          "expected": "CREATE INDEX ix_experience_owner_recorded_at ON slopanoc_experience_records (owner_id, recorded_at)",
+          "actual": "CREATE INDEX ix_experience_owner_recorded_at ON public.slopanoc_experience_records USING btree (owner_id, recorded_at)",
+          "matched": true
+        },
+        {
+          "name": "ix_experience_owner",
+          "expected": "CREATE INDEX ix_experience_owner ON slopanoc_experience_records (owner_id)",
+          "actual": "CREATE INDEX ix_experience_owner ON public.slopanoc_experience_records USING btree (owner_id)",
+          "matched": true
+        },
+        {
+          "name": "ix_experience_owner_type",
+          "expected": "CREATE INDEX ix_experience_owner_type ON slopanoc_experience_records (owner_id, experience_type)",
+          "actual": "CREATE INDEX ix_experience_owner_type ON public.slopanoc_experience_records USING btree (owner_id, experience_type)",
+          "matched": true
+        },
+        {
+          "name": "ix_experience_owner_skill",
+          "expected": "CREATE INDEX ix_experience_owner_skill ON slopanoc_experience_records (owner_id, skill_id)",
+          "actual": "CREATE INDEX ix_experience_owner_skill ON public.slopanoc_experience_records USING btree (owner_id, skill_id)",
+          "matched": true
+        },
+        {
+          "name": "ix_experience_owner_case",
+          "expected": "CREATE INDEX ix_experience_owner_case ON slopanoc_experience_records (owner_id, case_id)",
+          "actual": "CREATE INDEX ix_experience_owner_case ON public.slopanoc_experience_records USING btree (owner_id, case_id)",
+          "matched": true
+        }
+      ]
+    }
+  },
+  "limits": [
+    "Six ADK/Alembic tables are outside application migration declarations; snapshot retained in full.",
+    "PostgreSQL catalog does not establish creation timestamps."
+  ]
+}

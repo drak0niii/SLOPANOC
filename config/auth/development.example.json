@@ -1,0 +1,10 @@
+{
+  "default_subject": "api-user",
+  "users": {
+    "api-user": {
+      "role": "Operator",
+      "capabilities": ["own_progress", "operational_metadata"],
+      "environments": ["development"]
+    }
+  }
+}

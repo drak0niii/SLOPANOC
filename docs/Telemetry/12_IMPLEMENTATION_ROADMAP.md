@@ -334,3 +334,24 @@ All applicable checks in `15_DEFINITION_OF_DONE.md` pass.
 - FinOps can compare cost/latency against available quality outcomes;
 - profile data correlates with release/revision;
 - profiling overhead measured.
+
+## Separate architecture workstream — Observability Console + Read Plane
+
+Introduced after the M16 validation baseline; **not M17** and not a new numbered
+milestone. Doc [25](25_OBSERVABILITY_CONSOLE_AND_READ_PLANE.md) defines a
+documentation-only decision and future gated phases for GET composition, isolated
+reads, transport, console/Settings migration, integrated qualification and reviewed
+production handoff. Application implementation requires subsequent authorization.
+M0–M19 sequence and M16 exit criteria remain unchanged. M16 is incomplete; C41 and
+C42 remain FAIL; Ready for Next Milestone NO. Final unchanged CPU/regression
+acceptance must be rerun after integration. This workstream cannot bypass the CPU
+defect or authorize M17/cloud mutation.
+
+## Hybrid event architecture workstream — no milestone advancement
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) records the user's authorized architecture/local-scaffolding pass. It adds
+neither M17 production implementation nor permission to bypass M16. Future integration
+of atomic audit outbox, separate publisher/projector and Collector operational branch
+must undergo crash/duplicate/conflict/backpressure/privacy/authority validation and
+final unchanged C41/C42 CPU/regression qualification. M16 INCOMPLETE; M17 UNSTARTED;
+Ready for Next Milestone NO. Cloud operations remain separately approval-gated.

@@ -18,7 +18,9 @@ def receiver(status=200):
             with condition:
                 records.append((self.path,data,dict(self.headers)))
                 condition.notify_all()
-            self.send_response(status)
+            # Callable status supports deterministic M16 outage/recovery while
+            # preserving the existing fixed-status capture fixture.
+            self.send_response(status() if callable(status) else status)
             self.send_header('Content-Type','application/x-protobuf')
             self.send_header('Content-Length','0')
             self.end_headers()

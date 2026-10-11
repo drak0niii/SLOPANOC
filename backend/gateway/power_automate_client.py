@@ -192,6 +192,8 @@ class PowerAutomateClient:
         return self._call("teams.sendMessage", {"chatId": chat_id, "message": message})
 
     def _call(self, operation: str, extra_payload: Optional[dict[str, Any]] = None) -> GatewayPayload:
+        from backend.execution_audit.egress import gateway_guard
+        gateway_guard(operation)
         with synchronous_boundary(Category.GATEWAY):
             return self._call_with_budget(operation, extra_payload)
 
@@ -208,9 +210,10 @@ class PowerAutomateClient:
                 "The Teams connector is not configured on this backend."
             ) from None
 
+        from backend.execution_audit.egress import gateway_request_id
         body: dict[str, Any] = {
             "version": _API_VERSION,
-            "requestId": str(uuid.uuid4()),
+            "requestId": gateway_request_id(operation),
             "operation": operation,
         }
         if extra_payload:
@@ -223,6 +226,8 @@ class PowerAutomateClient:
         }) as scope:
             request_started_at = time.monotonic()
             try:
+                from backend.execution_audit.egress import gateway_entered
+                gateway_entered(operation)
                 response = requests.post(
                     gateway_url,
                     json=body,

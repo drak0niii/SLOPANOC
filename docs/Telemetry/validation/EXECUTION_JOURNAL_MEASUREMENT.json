@@ -1,0 +1,351 @@
+{
+  "scope": "local SQLite/no provider/no transport; profiled capture arms separate from clean retrieval owner arms",
+  "domains": {
+    "session": {
+      "operations": 30,
+      "wall_ms_per_fact": 2.5453597384815416,
+      "cpu_ms_per_fact": 2.1917666666666666,
+      "scope": "capture fixture; not a claimed business transition"
+    },
+    "agent": {
+      "operations": 30,
+      "wall_ms_per_fact": 2.4323097352559366,
+      "cpu_ms_per_fact": 2.0231333333333343,
+      "scope": "capture fixture; not a claimed business transition"
+    },
+    "retrieval": {
+      "operations": 30,
+      "wall_ms_per_fact": 2.1410749992355704,
+      "cpu_ms_per_fact": 1.882499999999998,
+      "scope": "capture fixture; not a claimed business transition"
+    },
+    "evidence": {
+      "operations": 30,
+      "wall_ms_per_fact": 2.609190298244357,
+      "cpu_ms_per_fact": 1.9878666666666676,
+      "scope": "capture fixture; not a claimed business transition"
+    },
+    "tool": {
+      "operations": 30,
+      "wall_ms_per_fact": 2.3700999949748316,
+      "cpu_ms_per_fact": 2.032400000000001,
+      "scope": "capture fixture; not a claimed business transition"
+    },
+    "approval": {
+      "operations": 30,
+      "wall_ms_per_fact": 2.5780694636826715,
+      "cpu_ms_per_fact": 2.255233333333336,
+      "scope": "capture fixture; not a claimed business transition"
+    },
+    "authorization": {
+      "operations": 30,
+      "wall_ms_per_fact": 2.338191665088137,
+      "cpu_ms_per_fact": 2.1117666666666666,
+      "scope": "capture fixture; not a claimed business transition"
+    },
+    "action": {
+      "operations": 30,
+      "wall_ms_per_fact": 2.3297555278986692,
+      "cpu_ms_per_fact": 2.0849666666666655,
+      "scope": "capture fixture; not a claimed business transition"
+    }
+  },
+  "phases": {
+    "session.construction": {
+      "calls": 30,
+      "wall_ms": 1.412709942087531,
+      "cpu_ms": 1.412999999999942,
+      "wall_ms_per_call": 0.047090331402917705,
+      "cpu_ms_per_call": 0.04709999999999807
+    },
+    "session.validation": {
+      "calls": 30,
+      "wall_ms": 5.492501193657517,
+      "cpu_ms": 4.085999999999867,
+      "wall_ms_per_call": 0.18308337312191725,
+      "cpu_ms_per_call": 0.13619999999999557
+    },
+    "session.serialization_hash": {
+      "calls": 30,
+      "wall_ms": 1.1474990751594305,
+      "cpu_ms": 1.1490000000000666,
+      "wall_ms_per_call": 0.038249969171981014,
+      "cpu_ms_per_call": 0.03830000000000222
+    },
+    "session.observability_critical_audit": {
+      "calls": 30,
+      "wall_ms": 24.162626592442393,
+      "cpu_ms": 23.15900000000015,
+      "wall_ms_per_call": 0.8054208864147464,
+      "cpu_ms_per_call": 0.7719666666666717
+    },
+    "session.observability_audit_outbox": {
+      "calls": 30,
+      "wall_ms": 13.2497891318053,
+      "cpu_ms": 12.450000000000014,
+      "wall_ms_per_call": 0.44165963772684336,
+      "cpu_ms_per_call": 0.4150000000000004
+    },
+    "agent.construction": {
+      "calls": 30,
+      "wall_ms": 1.3654979411512613,
+      "cpu_ms": 1.3630000000001141,
+      "wall_ms_per_call": 0.04551659803837538,
+      "cpu_ms_per_call": 0.045433333333337135
+    },
+    "agent.validation": {
+      "calls": 30,
+      "wall_ms": 1.5858777333050966,
+      "cpu_ms": 1.5859999999998653,
+      "wall_ms_per_call": 0.05286259111016989,
+      "cpu_ms_per_call": 0.052866666666662177
+    },
+    "agent.serialization_hash": {
+      "calls": 30,
+      "wall_ms": 1.1428724974393845,
+      "cpu_ms": 1.1319999999997998,
+      "wall_ms_per_call": 0.03809574991464615,
+      "cpu_ms_per_call": 0.03773333333332666
+    },
+    "agent.observability_critical_audit": {
+      "calls": 30,
+      "wall_ms": 28.041914803907275,
+      "cpu_ms": 20.49499999999988,
+      "wall_ms_per_call": 0.9347304934635758,
+      "cpu_ms_per_call": 0.6831666666666627
+    },
+    "agent.observability_audit_outbox": {
+      "calls": 30,
+      "wall_ms": 13.43375351279974,
+      "cpu_ms": 12.631000000000004,
+      "wall_ms_per_call": 0.44779178375999135,
+      "cpu_ms_per_call": 0.4210333333333335
+    },
+    "retrieval.construction": {
+      "calls": 30,
+      "wall_ms": 1.2079542502760887,
+      "cpu_ms": 1.2180000000003854,
+      "wall_ms_per_call": 0.04026514167586962,
+      "cpu_ms_per_call": 0.04060000000001285
+    },
+    "retrieval.validation": {
+      "calls": 30,
+      "wall_ms": 1.4789167325943708,
+      "cpu_ms": 1.4830000000003452,
+      "wall_ms_per_call": 0.04929722441981236,
+      "cpu_ms_per_call": 0.04943333333334484
+    },
+    "retrieval.serialization_hash": {
+      "calls": 30,
+      "wall_ms": 1.0692905634641647,
+      "cpu_ms": 1.0719999999999619,
+      "wall_ms_per_call": 0.035643018782138824,
+      "cpu_ms_per_call": 0.03573333333333206
+    },
+    "retrieval.observability_critical_audit": {
+      "calls": 30,
+      "wall_ms": 19.732499960809946,
+      "cpu_ms": 18.71499999999981,
+      "wall_ms_per_call": 0.6577499986936649,
+      "cpu_ms_per_call": 0.623833333333327
+    },
+    "retrieval.observability_audit_outbox": {
+      "calls": 30,
+      "wall_ms": 12.603038921952248,
+      "cpu_ms": 11.822999999999697,
+      "wall_ms_per_call": 0.42010129739840824,
+      "cpu_ms_per_call": 0.3940999999999899
+    },
+    "evidence.construction": {
+      "calls": 30,
+      "wall_ms": 1.2712916359305382,
+      "cpu_ms": 1.2759999999999438,
+      "wall_ms_per_call": 0.04237638786435127,
+      "cpu_ms_per_call": 0.04253333333333146
+    },
+    "evidence.validation": {
+      "calls": 30,
+      "wall_ms": 1.4949582982808352,
+      "cpu_ms": 1.495000000000135,
+      "wall_ms_per_call": 0.049831943276027836,
+      "cpu_ms_per_call": 0.04983333333333784
+    },
+    "evidence.serialization_hash": {
+      "calls": 30,
+      "wall_ms": 1.109584467485547,
+      "cpu_ms": 1.1099999999996113,
+      "wall_ms_per_call": 0.0369861489161849,
+      "cpu_ms_per_call": 0.03699999999998704
+    },
+    "evidence.observability_critical_audit": {
+      "calls": 30,
+      "wall_ms": 25.446375599130988,
+      "cpu_ms": 19.899999999999473,
+      "wall_ms_per_call": 0.848212519971033,
+      "cpu_ms_per_call": 0.6633333333333158
+    },
+    "evidence.observability_audit_outbox": {
+      "calls": 30,
+      "wall_ms": 16.5095420088619,
+      "cpu_ms": 12.270000000000113,
+      "wall_ms_per_call": 0.5503180669620633,
+      "cpu_ms_per_call": 0.40900000000000375
+    },
+    "tool.construction": {
+      "calls": 30,
+      "wall_ms": 1.3533744495362043,
+      "cpu_ms": 1.3559999999996908,
+      "wall_ms_per_call": 0.045112481651206814,
+      "cpu_ms_per_call": 0.04519999999998969
+    },
+    "tool.validation": {
+      "calls": 30,
+      "wall_ms": 1.5541224274784327,
+      "cpu_ms": 1.5539999999996112,
+      "wall_ms_per_call": 0.05180408091594776,
+      "cpu_ms_per_call": 0.051799999999987044
+    },
+    "tool.serialization_hash": {
+      "calls": 30,
+      "wall_ms": 1.1159186251461506,
+      "cpu_ms": 1.1190000000002032,
+      "wall_ms_per_call": 0.03719728750487169,
+      "cpu_ms_per_call": 0.03730000000000677
+    },
+    "tool.observability_critical_audit": {
+      "calls": 30,
+      "wall_ms": 22.3672513384372,
+      "cpu_ms": 19.952000000000638,
+      "wall_ms_per_call": 0.7455750446145734,
+      "cpu_ms_per_call": 0.6650666666666879
+    },
+    "tool.observability_audit_outbox": {
+      "calls": 30,
+      "wall_ms": 13.339255237951875,
+      "cpu_ms": 12.486000000000221,
+      "wall_ms_per_call": 0.4446418412650625,
+      "cpu_ms_per_call": 0.41620000000000734
+    },
+    "approval.construction": {
+      "calls": 30,
+      "wall_ms": 1.5119588933885098,
+      "cpu_ms": 1.5039999999997278,
+      "wall_ms_per_call": 0.05039862977961699,
+      "cpu_ms_per_call": 0.05013333333332426
+    },
+    "approval.validation": {
+      "calls": 30,
+      "wall_ms": 1.6246619634330273,
+      "cpu_ms": 1.6240000000001809,
+      "wall_ms_per_call": 0.05415539878110091,
+      "cpu_ms_per_call": 0.05413333333333936
+    },
+    "approval.serialization_hash": {
+      "calls": 30,
+      "wall_ms": 1.1994175147265196,
+      "cpu_ms": 1.1929999999999996,
+      "wall_ms_per_call": 0.03998058382421732,
+      "cpu_ms_per_call": 0.03976666666666665
+    },
+    "approval.observability_critical_audit": {
+      "calls": 30,
+      "wall_ms": 23.179539246484637,
+      "cpu_ms": 22.037000000000198,
+      "wall_ms_per_call": 0.7726513082161546,
+      "cpu_ms_per_call": 0.7345666666666733
+    },
+    "approval.observability_audit_outbox": {
+      "calls": 30,
+      "wall_ms": 15.428292332217097,
+      "cpu_ms": 14.687999999999924,
+      "wall_ms_per_call": 0.5142764110739032,
+      "cpu_ms_per_call": 0.4895999999999975
+    },
+    "authorization.construction": {
+      "calls": 30,
+      "wall_ms": 1.5168336685746908,
+      "cpu_ms": 1.5220000000001344,
+      "wall_ms_per_call": 0.050561122285823025,
+      "cpu_ms_per_call": 0.050733333333337814
+    },
+    "authorization.validation": {
+      "calls": 30,
+      "wall_ms": 1.6388741787523031,
+      "cpu_ms": 1.6420000000001433,
+      "wall_ms_per_call": 0.054629139291743435,
+      "cpu_ms_per_call": 0.05473333333333811
+    },
+    "authorization.serialization_hash": {
+      "calls": 30,
+      "wall_ms": 1.1480844113975763,
+      "cpu_ms": 1.1489999999998446,
+      "wall_ms_per_call": 0.03826948037991921,
+      "cpu_ms_per_call": 0.03829999999999482
+    },
+    "authorization.observability_critical_audit": {
+      "calls": 30,
+      "wall_ms": 22.043209057301283,
+      "cpu_ms": 21.013000000000275,
+      "wall_ms_per_call": 0.7347736352433761,
+      "cpu_ms_per_call": 0.7004333333333425
+    },
+    "authorization.observability_audit_outbox": {
+      "calls": 30,
+      "wall_ms": 13.608705019578338,
+      "cpu_ms": 12.875000000000082,
+      "wall_ms_per_call": 0.45362350065261126,
+      "cpu_ms_per_call": 0.4291666666666694
+    },
+    "action.construction": {
+      "calls": 30,
+      "wall_ms": 1.4362460933625698,
+      "cpu_ms": 1.4420000000002764,
+      "wall_ms_per_call": 0.04787486977875233,
+      "cpu_ms_per_call": 0.04806666666667588
+    },
+    "action.validation": {
+      "calls": 30,
+      "wall_ms": 1.590248430147767,
+      "cpu_ms": 1.59499999999968,
+      "wall_ms_per_call": 0.05300828100492557,
+      "cpu_ms_per_call": 0.053166666666656
+    },
+    "action.serialization_hash": {
+      "calls": 30,
+      "wall_ms": 1.13662239164114,
+      "cpu_ms": 1.1409999999999476,
+      "wall_ms_per_call": 0.037887413054704666,
+      "cpu_ms_per_call": 0.03803333333333159
+    },
+    "action.observability_critical_audit": {
+      "calls": 30,
+      "wall_ms": 21.609122632071376,
+      "cpu_ms": 20.62200000000003,
+      "wall_ms_per_call": 0.7203040877357125,
+      "cpu_ms_per_call": 0.6874000000000009
+    },
+    "action.observability_audit_outbox": {
+      "calls": 30,
+      "wall_ms": 13.17533291876316,
+      "cpu_ms": 12.418000000000152,
+      "wall_ms_per_call": 0.439177763958772,
+      "cpu_ms_per_call": 0.4139333333333384
+    }
+  },
+  "retrieval_owner_baseline": {
+    "wall_ms_per_operation": 0.23932541953399777,
+    "cpu_ms_per_operation": 0.23932999999999982
+  },
+  "retrieval_owner_enabled": {
+    "wall_ms_per_operation": 5.747593748383224,
+    "cpu_ms_per_operation": 4.78024
+  },
+  "retrieval_owner_added": {
+    "wall_ms_per_operation": 5.508268328849226,
+    "cpu_ms_per_operation": 4.54091
+  },
+  "limits": "Overlapping phase timings are not additive. Domain capture fixtures do not include real business owner cost. Only actual empty-corpus retrieval owner baseline is compared. No GCP/SQL WAL/load proof.",
+  "C41": "NOT PASS",
+  "C42": "NOT PASS",
+  "cloud_changes": "NONE"
+}

@@ -1,4 +1,5 @@
-import { getJson, ApiError } from './client';
+import { getObservabilityJson } from './observabilityClient';
+import { ApiError } from './client';
 import { ContractError } from '../components/shell/settings/observability/contract';
 export type ControlKind='budgets'|'forecasts'|'anomalies';
 export interface FinancialControl {
@@ -50,6 +51,6 @@ export function decodeControls(value:unknown):ControlPage {
 export async function getControls(kind:ControlKind,signal?:AbortSignal,cursor?:string,detail?:string):Promise<ControlPage>{
  if(detail&&!/^[A-Za-z0-9_.-]{1,64}$/.test(detail))throw new ContractError();
  const query=cursor?'?cursor='+encodeURIComponent(cursor):'';
- try{return decodeControls(await getJson('/api/observability/finops/'+kind+(detail?'/'+encodeURIComponent(detail):'')+query,signal))}
+ try{return decodeControls(await getObservabilityJson('/api/observability/finops/'+kind+(detail?'/'+encodeURIComponent(detail):'')+query,signal))}
  catch(e){if(e instanceof ApiError)throw new ApiError('Financial controls unavailable.',e.status);if(e instanceof SyntaxError)throw new ContractError();throw e}
 }

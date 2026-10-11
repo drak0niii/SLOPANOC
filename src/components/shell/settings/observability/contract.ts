@@ -62,9 +62,35 @@ export function decodeHealth(v: unknown): HealthView {
     const r = object(v);
     if (r.telemetry_schema_version !== undefined)
         schema(r.telemetry_schema_version);
-    if (r.writer_scope !== 'process_local' || r.durable_scope !== 'authorized_environments')
+    if (!['process_local', 'process_local_anoc_unavailable'].includes(String(r.writer_scope)) || r.durable_scope !== 'authorized_environments')
         throw new ContractError();
-    return { persistence: choice(r.persistence, ['disabled', 'healthy', 'degraded', 'unavailable']), writer_scope: 'process_local', durable_scope: 'authorized_environments', as_of: timestamp(r.as_of), pending: number(r.pending, true), admitted: number(r.admitted, true), terminal_pending: number(r.terminal_pending, true), stale_records: optional(r.stale_records, v => number(v, true)), exporter_state: choice(r.exporter_state, ['disabled', 'healthy', 'degraded', 'unknown']), collector_configured: bool(r.collector_configured), last_success: optional(r.last_success, timestamp), accepted: number(r.accepted ?? 0, true), coalesced: number(r.coalesced ?? 0, true), attempts: number(r.attempts ?? 0, true), persisted: number(r.persisted ?? 0, true), failed: number(r.failed ?? 0, true), retries: number(r.retries ?? 0, true), rejected: number(r.rejected ?? 0, true), terminal_unpersisted: number(r.terminal_unpersisted ?? 0, true), shutdown_incomplete: number(r.shutdown_incomplete ?? 0, true), invalid: number(r.invalid ?? 0, true) };
+    const nullableCount = (v: unknown) => v === null ? null : number(v, true);
+    const reader = r.writer_scope === 'process_local_anoc_unavailable';
+    const counters = ['accepted', 'coalesced', 'attempts', 'persisted', 'failed', 'retries', 'rejected', 'terminal_unpersisted', 'shutdown_incomplete', 'invalid'] as const;
+    const counts = Object.fromEntries(counters.map(key => {
+        const value = nullableCount(r[key]);
+        if (reader && value !== null) throw new ContractError();
+        return [key, value];
+    })) as Pick<HealthView, typeof counters[number]>;
+    const unknownState = (v: unknown): 'unknown' => {
+        if (v !== 'unknown') throw new ContractError();
+        return v;
+    };
+    return {
+        ...counts,
+        read_plane_state: optional(r.read_plane_state, v => choice(v, ['healthy', 'unavailable'] as const)),
+        anoc_state: optional(r.anoc_state, unknownState),
+        collector_state: optional(r.collector_state, unknownState),
+        archive_state: optional(r.archive_state, unknownState),
+        source_freshness: optional(r.source_freshness, unknownState),
+        persistence: choice(r.persistence, ['disabled', 'healthy', 'degraded', 'unavailable']),
+        writer_scope: r.writer_scope as HealthView['writer_scope'], durable_scope: 'authorized_environments',
+        as_of: timestamp(r.as_of), pending: nullableCount(r.pending), admitted: nullableCount(r.admitted),
+        terminal_pending: nullableCount(r.terminal_pending), stale_records: optional(r.stale_records, v => number(v, true)),
+        exporter_state: choice(r.exporter_state, ['disabled', 'healthy', 'degraded', 'unknown']),
+        collector_configured: r.collector_configured === null ? null : bool(r.collector_configured),
+        last_success: optional(r.last_success, timestamp),
+    };
 }
 export function decodeConfig(v: unknown): EffectiveConfiguration[] {
     const result: EffectiveConfiguration[] = [];

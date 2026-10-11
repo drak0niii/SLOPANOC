@@ -148,3 +148,12 @@ Tag synthetic usage so it is excluded from business unit economics or shown sepa
 ## Infrastructure observability
 
 Infrastructure metrics and alerts in `17_INFRASTRUCTURE_OBSERVABILITY.md` are mandatory parts of the SRE dashboard.
+
+## Reactive event evaluation and transport health
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) adds audit publication debt, oldest unpublished age, projector lag/conflicts,
+DLQ/backlog and operational coverage loss to backend health. Separate audit and
+telemetry capacity prevents starvation. Reactive means backend alert-state/approved
+Monitoring metric/policy evaluation, not UI animation or automatic remediation.
+Existing M9 definitions/evaluators remain owners; no unmeasured near-real-time SLO
+is added. No run/turn/session/event IDs become metric labels.

@@ -176,3 +176,13 @@ connection_acquire_duration covers pool wait + connect + pre_ping; pure pool wai
 is unavailable. Pool gauges describe only supported process-local pool state,
 aggregated per DB role, and are not Cloud SQL instance metrics. No new retries,
 circuit breakers, deadlines, dashboards or provider configuration are introduced.
+
+## Hybrid infrastructure and complementary audit
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) adds Pub/Sub topics/subscriptions/DLQs, outbox publisher, projector, read-plane
+compute and their SQL contention to coverage. Monitor debt age, event lag/coverage,
+retry/DLQ/memory/queue/connection saturation with finite dimensions. Cloud SQL
+pgAudit -> Logging (initial WRITE/DDL/ROLE, parameters off and literal masking review)
+audits DB access; Cloud Audit Logs covers GCP resource/admin operations. Application
+audit remains independent. Enabling cloudsql.enable_pgaudit restarts the instance
+and requires separately approved maintenance. No flags/resources are changed here.

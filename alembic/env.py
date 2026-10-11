@@ -52,6 +52,8 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from backend.observability.hybrid.models import HybridBase
+from backend.execution_audit import models as execution_audit_models
 from backend.observability.finops.models import FinOpsBase
 from backend.observability.finops.billing_models import BillingBase
 from backend.observability.finops.reconciliation_models import ReconciliationBase
@@ -73,7 +75,7 @@ if config.config_file_name is not None:
 # All SLOPANOC-owned metadata collections, never ADK's own session schema.
 # POST-5.1 B1 adds AttachmentBase (backend/attachments/models.py) alongside
 # the two established since POST-5.1 A2.
-target_metadata = [CaseBase.metadata, KnowledgeBase.metadata, AttachmentBase.metadata, ObservabilityBase.metadata, FinOpsBase.metadata, BillingBase.metadata, ReconciliationBase.metadata, UnitEconomicsBase.metadata, ControlBase.metadata]
+target_metadata = [CaseBase.metadata, KnowledgeBase.metadata, AttachmentBase.metadata, ObservabilityBase.metadata, FinOpsBase.metadata, BillingBase.metadata, ReconciliationBase.metadata, UnitEconomicsBase.metadata, ControlBase.metadata, HybridBase.metadata]
 
 # POST-5.1 A4: derived (never hand-duplicated) from target_metadata itself
 # -- the exact set of table names Alembic is actually allowed to compare

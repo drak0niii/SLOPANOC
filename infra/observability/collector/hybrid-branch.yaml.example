@@ -1,0 +1,36 @@
+# OPTIONAL / SCALE-TRIGGERED / DISABLED; never a Phase-1 requirement.
+# DORMANT design input, never loaded by existing Collector launchers.
+# Full OTLP replication is NOT approved. Activation additionally requires a
+# measured use case and curated subset filter/adapter, not just a sink change.
+# Compose explicitly with hybrid_collector_config.py; default sink is nop.
+connectors:
+  forward/operational: {}
+exporters:
+  nop/operational-disabled: {}
+  googlecloudpubsub/operational-future:
+    project: ${env:HYBRID_TELEMETRY_PROJECT}
+    topic: ${env:HYBRID_TELEMETRY_TOPIC}
+    timeout: 2s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 2s
+      max_elapsed_time: 5s
+    sending_queue:
+      enabled: true
+      num_consumers: 1
+      queue_size: 128
+    traces:
+      attributes: {slopanoc-event-class: TELEMETRY, slopanoc-wire-version: '1'}
+    metrics:
+      attributes: {slopanoc-event-class: TELEMETRY, slopanoc-wire-version: '1'}
+    logs:
+      attributes: {slopanoc-event-class: TELEMETRY, slopanoc-wire-version: '1'}
+# Activation requires exact-operation approval and native/live qualification.
+# The composer does NOT include the future exporter or activate Pub/Sub.
+service:
+  pipelines:
+    traces/operational:
+      receivers: [forward/operational]
+      processors: [batch]
+      exporters: [nop/operational-disabled]

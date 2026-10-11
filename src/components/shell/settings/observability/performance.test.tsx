@@ -1,8 +1,9 @@
+import { RouterProvider } from '../../../../lib/router';
 import { it, expect, vi, afterEach } from 'vitest';
 import { render, cleanup, screen } from '@testing-library/react';
 import { AppStateProvider } from '../../../../state/AppState';
 import { SettingsModal } from '../SettingsModal';
-import ObservabilitySettings from './ObservabilitySettings';
+import ObservabilityConfiguration from '../../../observability/ObservabilityConfiguration';
 import { RunTable } from './RunTable';
 import { RunDetail } from './RunDetail';
 import { mockApi, run, runId, at } from './fixtures.test-support';
@@ -13,14 +14,15 @@ it('records five local render repetitions with bounded 25-row fixtures', async (
     for (let i = 0; i < 5; i++) {
         let start = performance.now();
         const before = api.mock.calls.length;
-        render(<AppStateProvider><SettingsModal open onOpenChange={() => { }}/></AppStateProvider>);
+        render(<AppStateProvider><SettingsModal open onOpenChange={() => { }}/></AppStateProvider>, { wrapper: RouterProvider });
         await screen.findByRole('heading', { name: 'Settings' });
         times.settings.push(performance.now() - start);
         expect(api.mock.calls.slice(before).filter(c => String(c[0]).includes('/observability/'))).toHaveLength(0);
         cleanup();
         start = performance.now();
-        render(<ObservabilitySettings />);
-        await screen.findAllByRole('button', { name: /Open run/ });
+        window.history.replaceState({}, '', '/resources/observability/configuration');
+        render(<ObservabilityConfiguration />, { wrapper: RouterProvider });
+        await screen.findByRole('heading', { name: 'Data & Retention' });
         times.observability.push(performance.now() - start);
         cleanup();
         start = performance.now();
@@ -30,7 +32,7 @@ it('records five local render repetitions with bounded 25-row fixtures', async (
         cleanup();
         start = performance.now();
         render(<RunDetail runId={runId}/>);
-        await screen.findByText('Operational timeline');
+        await screen.findByText('Execution Timeline');
         times.detail.push(performance.now() - start);
         cleanup();
     }

@@ -554,3 +554,39 @@ views and new root timing. Existing seconds units and names remain. Manifest rec
 histogram_contract_version=2. Do not merge historical distributions across the
 rollout boundary as if they shared buckets. Formal SLOs use exact event counts,
 independent of histogram interpolation; descriptive p95 charts are context only.
+
+## Event transport contracts
+
+[26 — Hybrid Event-Driven Observability + Auditability](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) specifies separate versioned AUDIT/TELEMETRY envelopes with stable event ID,
+environment, timestamp, run/turn/trace correlation, finite producer/type and safe
+payload. Local `hybrid/contracts.py` reuses strict Contract/Stage/RunStatus/ErrorCode
+and ModelAgent. Audit events reference source records; M10 remains token authority.
+Native Collector Pub/Sub uses OTLP protobuf/CloudEvents, requiring a future bounded
+safe normalization adapter; it is not JSON event-envelope output. Random batch
+ce-id is not stable dedup identity across rebatching. Counts from lossy operational
+sources cannot certify full accounting coverage. New schema version is scoped to
+hybrid envelopes; existing telemetry/cost schema versions remain unchanged.
+
+
+## Local Phase-1 hybrid refinement — 2026-10-11
+
+[Doc 26](26_HYBRID_EVENT_DRIVEN_OBSERVABILITY.md) defines the locally implemented
+authoritative owner transaction → audit/outbox → bounded publisher → fake transport
+→ projector → durable projection → independent GET reader. Additive revision
+`d26a1b7c9e40` descends from `c16f4a8b2d90`; no shared schema was changed.
+`GET /api/observability/hybrid/activity` exposes bounded safe lifecycle/freshness/debt
+DTOs with server RBAC/environment scope; no worker runs on reads. M15 policy applies
+to typed audit fields; projections do not duplicate M10–M14 financial truth.
+Operational Telemetry Pub/Sub is **OPTIONAL / SCALE-TRIGGERED**, disabled, limited
+to a future curated measured subset. Full unsampled OTLP replication is not Phase-1
+minimum. Existing OTLP/cloud/archive pathways remain unchanged. Local SQLite/fake
+validation is not PostgreSQL/Pub/Sub qualification. M16 remains INCOMPLETE; C41/C42
+are not PASS; M17 remains UNSTARTED. No cloud mutation or deployment authorization.
+
+## Phase-1 production-readiness update — 2026-10-11
+
+Nine canonical reference events and optional real session/attempt references now have a strict production message boundary; see AUDIT_COVERAGE_MATRIX.md and HYBRID_PHASE1_PRODUCTION_READINESS.md. No raw body or financial quantity duplication.
+
+## Execution journal status — 2026-10-11
+
+The nine legacy events plus 24 strict execution facts use actual owner/handle IDs, finite outcomes and consistency classes. Optional agent execution references omit null values to preserve historical financial/event hashes. See [implementation](27_EXECUTION_AUDIT_JOURNAL_AND_CONTROLLED_EGRESS.md), [coverage](AUDIT_COVERAGE_MATRIX.md) and [remaining gaps](AUDIT_OWNERSHIP_GAP_DESIGN.md).

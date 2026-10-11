@@ -1,0 +1,2769 @@
+{
+  "identity": [
+    {
+      "database": "slopanoc",
+      "schema": "public",
+      "transaction_read_only": "on",
+      "server_version": "18.4"
+    }
+  ],
+  "revision": [
+    {
+      "version_num": "d3f8b1c6a942"
+    }
+  ],
+  "schemas": [
+    {
+      "name": "information_schema"
+    },
+    {
+      "name": "pg_catalog"
+    },
+    {
+      "name": "pg_toast"
+    },
+    {
+      "name": "public"
+    }
+  ],
+  "extensions": [
+    {
+      "name": "plpgsql",
+      "version": "1.0",
+      "schema": "pg_catalog"
+    },
+    {
+      "name": "vector",
+      "version": "0.8.5",
+      "schema": "public"
+    }
+  ],
+  "tables": [
+    {
+      "schema": "public",
+      "name": "adk_internal_metadata",
+      "type": "BASE TABLE"
+    },
+    {
+      "schema": "public",
+      "name": "alembic_version",
+      "type": "BASE TABLE"
+    },
+    {
+      "schema": "public",
+      "name": "app_states",
+      "type": "BASE TABLE"
+    },
+    {
+      "schema": "public",
+      "name": "events",
+      "type": "BASE TABLE"
+    },
+    {
+      "schema": "public",
+      "name": "sessions",
+      "type": "BASE TABLE"
+    },
+    {
+      "schema": "public",
+      "name": "slopanoc_case_context_items",
+      "type": "BASE TABLE"
+    },
+    {
+      "schema": "public",
+      "name": "slopanoc_case_memberships",
+      "type": "BASE TABLE"
+    },
+    {
+      "schema": "public",
+      "name": "slopanoc_case_session_links",
+      "type": "BASE TABLE"
+    },
+    {
+      "schema": "public",
+      "name": "slopanoc_cases",
+      "type": "BASE TABLE"
+    },
+    {
+      "schema": "public",
+      "name": "slopanoc_chat_attachments",
+      "type": "BASE TABLE"
+    },
+    {
+      "schema": "public",
+      "name": "slopanoc_experience_records",
+      "type": "BASE TABLE"
+    },
+    {
+      "schema": "public",
+      "name": "slopanoc_knowledge_evidence_index",
+      "type": "BASE TABLE"
+    },
+    {
+      "schema": "public",
+      "name": "slopanoc_knowledge_objects",
+      "type": "BASE TABLE"
+    },
+    {
+      "schema": "public",
+      "name": "slopanoc_telco_context_assertions",
+      "type": "BASE TABLE"
+    },
+    {
+      "schema": "public",
+      "name": "slopanoc_telco_context_profiles",
+      "type": "BASE TABLE"
+    },
+    {
+      "schema": "public",
+      "name": "user_states",
+      "type": "BASE TABLE"
+    }
+  ],
+  "columns": [
+    {
+      "schema": "public",
+      "table": "adk_internal_metadata",
+      "name": "key",
+      "position": 1,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "adk_internal_metadata",
+      "name": "value",
+      "position": 2,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "alembic_version",
+      "name": "version_num",
+      "position": 1,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "app_states",
+      "name": "app_name",
+      "position": 1,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "app_states",
+      "name": "state",
+      "position": 2,
+      "data_type": "jsonb",
+      "udt_name": "jsonb",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "app_states",
+      "name": "update_time",
+      "position": 3,
+      "data_type": "timestamp without time zone",
+      "udt_name": "timestamp",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "id",
+      "position": 1,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "app_name",
+      "position": 2,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "user_id",
+      "position": 3,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "session_id",
+      "position": 4,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "invocation_id",
+      "position": 5,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "timestamp",
+      "position": 6,
+      "data_type": "timestamp without time zone",
+      "udt_name": "timestamp",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "event_data",
+      "position": 7,
+      "data_type": "jsonb",
+      "udt_name": "jsonb",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "sessions",
+      "name": "app_name",
+      "position": 1,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "sessions",
+      "name": "user_id",
+      "position": 2,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "sessions",
+      "name": "id",
+      "position": 3,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "sessions",
+      "name": "state",
+      "position": 4,
+      "data_type": "jsonb",
+      "udt_name": "jsonb",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "sessions",
+      "name": "create_time",
+      "position": 5,
+      "data_type": "timestamp without time zone",
+      "udt_name": "timestamp",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "sessions",
+      "name": "update_time",
+      "position": 6,
+      "data_type": "timestamp without time zone",
+      "udt_name": "timestamp",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "item_id",
+      "position": 1,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "case_id",
+      "position": 2,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "kind",
+      "position": 3,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "content",
+      "position": 4,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "source_type",
+      "position": 5,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "source_ref",
+      "position": 6,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "source_timestamp",
+      "position": 7,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "source_author",
+      "position": 8,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "confidence",
+      "position": 9,
+      "data_type": "double precision",
+      "udt_name": "float8",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "created_by_user_id",
+      "position": 10,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "created_by_agent",
+      "position": 11,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "created_at",
+      "position": 12,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "supporting_item_ids",
+      "position": 13,
+      "data_type": "json",
+      "udt_name": "json",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_memberships",
+      "name": "case_id",
+      "position": 1,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_memberships",
+      "name": "user_id",
+      "position": 2,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_memberships",
+      "name": "role",
+      "position": 3,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_memberships",
+      "name": "created_at",
+      "position": 4,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_session_links",
+      "name": "session_id",
+      "position": 1,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_session_links",
+      "name": "case_id",
+      "position": 2,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_session_links",
+      "name": "session_user_id",
+      "position": 3,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_session_links",
+      "name": "linked_at",
+      "position": 4,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_session_links",
+      "name": "linked_by_user_id",
+      "position": 5,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "case_id",
+      "position": 1,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "title",
+      "position": 2,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "problem_statement",
+      "position": 3,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "external_reference",
+      "position": 4,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "status",
+      "position": 5,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "created_by_user_id",
+      "position": 6,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "created_at",
+      "position": 7,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "updated_at",
+      "position": 8,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "attachment_id",
+      "position": 1,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "owner_user_id",
+      "position": 2,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "session_id",
+      "position": 3,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "message_id",
+      "position": 4,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "original_filename",
+      "position": 5,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "mime_type",
+      "position": 6,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "size_bytes",
+      "position": 7,
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "sha256",
+      "position": 8,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "storage_object_name",
+      "position": 9,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "status",
+      "position": 10,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "created_at",
+      "position": 11,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "linked_at",
+      "position": 12,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "deleted_at",
+      "position": 13,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "experience_id",
+      "position": 1,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "experience_schema_version",
+      "position": 2,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "experience_type",
+      "position": 3,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "lifecycle",
+      "position": 4,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "owner_id",
+      "position": 5,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "source_origin",
+      "position": 6,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "source_reference",
+      "position": 7,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "source_event_id",
+      "position": 8,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "source_event_at",
+      "position": 9,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "case_id",
+      "position": 10,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "session_id",
+      "position": 11,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "context_fingerprint",
+      "position": 12,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "skill_id",
+      "position": 13,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "skill_version",
+      "position": 14,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "skill_fingerprint",
+      "position": 15,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "evidence_references_json",
+      "position": 16,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "observed_facts_json",
+      "position": 17,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "outcome_summary",
+      "position": 18,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "metadata_json",
+      "position": 19,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "content_fingerprint",
+      "position": 20,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "recorded_at",
+      "position": 21,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "invalidated_at",
+      "position": 22,
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "invalidation_reason",
+      "position": 23,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "source_namespace",
+      "position": 24,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "evidence_id",
+      "position": 1,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "knowledge_id",
+      "position": 2,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "version_label",
+      "position": 3,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "section_id",
+      "position": 4,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "artifact_id",
+      "position": 5,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "is_derived",
+      "position": 6,
+      "data_type": "boolean",
+      "udt_name": "bool",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "indexable_text",
+      "position": 7,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "content_hash",
+      "position": 8,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "embedding",
+      "position": 9,
+      "data_type": "USER-DEFINED",
+      "udt_name": "vector",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "embedding_model",
+      "position": 10,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "embedding_model_version",
+      "position": 11,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "embedding_dimensions",
+      "position": 12,
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "embedding_generated_at",
+      "position": 13,
+      "data_type": "timestamp without time zone",
+      "udt_name": "timestamp",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "text_search_vector",
+      "position": 14,
+      "data_type": "tsvector",
+      "udt_name": "tsvector",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "created_at",
+      "position": 15,
+      "data_type": "timestamp without time zone",
+      "udt_name": "timestamp",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "updated_at",
+      "position": 16,
+      "data_type": "timestamp without time zone",
+      "udt_name": "timestamp",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_objects",
+      "name": "knowledge_id",
+      "position": 1,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_objects",
+      "name": "version_label",
+      "position": 2,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_objects",
+      "name": "payload",
+      "position": 3,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "assertion_id",
+      "position": 1,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "profile_id",
+      "position": 2,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "dimension",
+      "position": 3,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "kind",
+      "position": 4,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "raw_value",
+      "position": 5,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "canonical_value",
+      "position": 6,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "origin",
+      "position": 7,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "source_reference",
+      "position": 8,
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "asserted_at",
+      "position": 9,
+      "data_type": "timestamp without time zone",
+      "udt_name": "timestamp",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "created_at",
+      "position": 10,
+      "data_type": "timestamp without time zone",
+      "udt_name": "timestamp",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_profiles",
+      "name": "profile_id",
+      "position": 1,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_profiles",
+      "name": "owner_kind",
+      "position": 2,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_profiles",
+      "name": "owner_id",
+      "position": 3,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_profiles",
+      "name": "created_by_user_id",
+      "position": 4,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_profiles",
+      "name": "created_at",
+      "position": 5,
+      "data_type": "timestamp without time zone",
+      "udt_name": "timestamp",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_profiles",
+      "name": "updated_at",
+      "position": 6,
+      "data_type": "timestamp without time zone",
+      "udt_name": "timestamp",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "user_states",
+      "name": "app_name",
+      "position": 1,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "user_states",
+      "name": "user_id",
+      "position": 2,
+      "data_type": "character varying",
+      "udt_name": "varchar",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "user_states",
+      "name": "state",
+      "position": 3,
+      "data_type": "jsonb",
+      "udt_name": "jsonb",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "schema": "public",
+      "table": "user_states",
+      "name": "update_time",
+      "position": 4,
+      "data_type": "timestamp without time zone",
+      "udt_name": "timestamp",
+      "is_nullable": "NO",
+      "column_default": null
+    }
+  ],
+  "indexes": [
+    {
+      "schema": "public",
+      "table": "adk_internal_metadata",
+      "name": "adk_internal_metadata_pkey",
+      "definition": "CREATE UNIQUE INDEX adk_internal_metadata_pkey ON public.adk_internal_metadata USING btree (key)"
+    },
+    {
+      "schema": "public",
+      "table": "alembic_version",
+      "name": "alembic_version_pkc",
+      "definition": "CREATE UNIQUE INDEX alembic_version_pkc ON public.alembic_version USING btree (version_num)"
+    },
+    {
+      "schema": "public",
+      "table": "app_states",
+      "name": "app_states_pkey",
+      "definition": "CREATE UNIQUE INDEX app_states_pkey ON public.app_states USING btree (app_name)"
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "events_pkey",
+      "definition": "CREATE UNIQUE INDEX events_pkey ON public.events USING btree (id, app_name, user_id, session_id)"
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "idx_events_app_user_session_ts",
+      "definition": "CREATE INDEX idx_events_app_user_session_ts ON public.events USING btree (app_name, user_id, session_id, \"timestamp\" DESC)"
+    },
+    {
+      "schema": "public",
+      "table": "sessions",
+      "name": "sessions_pkey",
+      "definition": "CREATE UNIQUE INDEX sessions_pkey ON public.sessions USING btree (app_name, user_id, id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "slopanoc_case_context_items_pkey",
+      "definition": "CREATE UNIQUE INDEX slopanoc_case_context_items_pkey ON public.slopanoc_case_context_items USING btree (item_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_memberships",
+      "name": "slopanoc_case_memberships_pkey",
+      "definition": "CREATE UNIQUE INDEX slopanoc_case_memberships_pkey ON public.slopanoc_case_memberships USING btree (case_id, user_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_session_links",
+      "name": "slopanoc_case_session_links_pkey",
+      "definition": "CREATE UNIQUE INDEX slopanoc_case_session_links_pkey ON public.slopanoc_case_session_links USING btree (session_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "slopanoc_cases_pkey",
+      "definition": "CREATE UNIQUE INDEX slopanoc_cases_pkey ON public.slopanoc_cases USING btree (case_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "ix_slopanoc_chat_attachments_owner_session",
+      "definition": "CREATE INDEX ix_slopanoc_chat_attachments_owner_session ON public.slopanoc_chat_attachments USING btree (owner_user_id, session_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "ix_slopanoc_chat_attachments_session_message",
+      "definition": "CREATE INDEX ix_slopanoc_chat_attachments_session_message ON public.slopanoc_chat_attachments USING btree (session_id, message_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "ix_slopanoc_chat_attachments_status_created",
+      "definition": "CREATE INDEX ix_slopanoc_chat_attachments_status_created ON public.slopanoc_chat_attachments USING btree (status, created_at)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "slopanoc_chat_attachments_pkey",
+      "definition": "CREATE UNIQUE INDEX slopanoc_chat_attachments_pkey ON public.slopanoc_chat_attachments USING btree (attachment_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "ix_experience_owner",
+      "definition": "CREATE INDEX ix_experience_owner ON public.slopanoc_experience_records USING btree (owner_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "ix_experience_owner_case",
+      "definition": "CREATE INDEX ix_experience_owner_case ON public.slopanoc_experience_records USING btree (owner_id, case_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "ix_experience_owner_recorded_at",
+      "definition": "CREATE INDEX ix_experience_owner_recorded_at ON public.slopanoc_experience_records USING btree (owner_id, recorded_at)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "ix_experience_owner_skill",
+      "definition": "CREATE INDEX ix_experience_owner_skill ON public.slopanoc_experience_records USING btree (owner_id, skill_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "ix_experience_owner_type",
+      "definition": "CREATE INDEX ix_experience_owner_type ON public.slopanoc_experience_records USING btree (owner_id, experience_type)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_pkey",
+      "definition": "CREATE UNIQUE INDEX slopanoc_experience_records_pkey ON public.slopanoc_experience_records USING btree (experience_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "ix_evidence_index_content_hash",
+      "definition": "CREATE INDEX ix_evidence_index_content_hash ON public.slopanoc_knowledge_evidence_index USING btree (content_hash)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "ix_evidence_index_knowledge_id",
+      "definition": "CREATE INDEX ix_evidence_index_knowledge_id ON public.slopanoc_knowledge_evidence_index USING btree (knowledge_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "ix_evidence_index_text_search_vector",
+      "definition": "CREATE INDEX ix_evidence_index_text_search_vector ON public.slopanoc_knowledge_evidence_index USING gin (text_search_vector)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "slopanoc_knowledge_evidence_index_pkey",
+      "definition": "CREATE UNIQUE INDEX slopanoc_knowledge_evidence_index_pkey ON public.slopanoc_knowledge_evidence_index USING btree (evidence_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_objects",
+      "name": "slopanoc_knowledge_objects_pkey",
+      "definition": "CREATE UNIQUE INDEX slopanoc_knowledge_objects_pkey ON public.slopanoc_knowledge_objects USING btree (knowledge_id, version_label)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "slopanoc_telco_context_assertions_pkey",
+      "definition": "CREATE UNIQUE INDEX slopanoc_telco_context_assertions_pkey ON public.slopanoc_telco_context_assertions USING btree (assertion_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_profiles",
+      "name": "slopanoc_telco_context_profiles_pkey",
+      "definition": "CREATE UNIQUE INDEX slopanoc_telco_context_profiles_pkey ON public.slopanoc_telco_context_profiles USING btree (profile_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_profiles",
+      "name": "uq_telco_context_profile_owner",
+      "definition": "CREATE UNIQUE INDEX uq_telco_context_profile_owner ON public.slopanoc_telco_context_profiles USING btree (owner_kind, owner_id)"
+    },
+    {
+      "schema": "public",
+      "table": "user_states",
+      "name": "user_states_pkey",
+      "definition": "CREATE UNIQUE INDEX user_states_pkey ON public.user_states USING btree (app_name, user_id)"
+    }
+  ],
+  "constraints": [
+    {
+      "schema": "public",
+      "table": "adk_internal_metadata",
+      "name": "adk_internal_metadata_key_not_null",
+      "type": "n",
+      "definition": "NOT NULL key"
+    },
+    {
+      "schema": "public",
+      "table": "adk_internal_metadata",
+      "name": "adk_internal_metadata_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (key)"
+    },
+    {
+      "schema": "public",
+      "table": "adk_internal_metadata",
+      "name": "adk_internal_metadata_value_not_null",
+      "type": "n",
+      "definition": "NOT NULL value"
+    },
+    {
+      "schema": "public",
+      "table": "alembic_version",
+      "name": "alembic_version_pkc",
+      "type": "p",
+      "definition": "PRIMARY KEY (version_num)"
+    },
+    {
+      "schema": "public",
+      "table": "alembic_version",
+      "name": "alembic_version_version_num_not_null",
+      "type": "n",
+      "definition": "NOT NULL version_num"
+    },
+    {
+      "schema": "public",
+      "table": "app_states",
+      "name": "app_states_app_name_not_null",
+      "type": "n",
+      "definition": "NOT NULL app_name"
+    },
+    {
+      "schema": "public",
+      "table": "app_states",
+      "name": "app_states_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (app_name)"
+    },
+    {
+      "schema": "public",
+      "table": "app_states",
+      "name": "app_states_state_not_null",
+      "type": "n",
+      "definition": "NOT NULL state"
+    },
+    {
+      "schema": "public",
+      "table": "app_states",
+      "name": "app_states_update_time_not_null",
+      "type": "n",
+      "definition": "NOT NULL update_time"
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "events_app_name_not_null",
+      "type": "n",
+      "definition": "NOT NULL app_name"
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "events_app_name_user_id_session_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (app_name, user_id, session_id) REFERENCES sessions(app_name, user_id, id) ON DELETE CASCADE"
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "events_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "events_invocation_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL invocation_id"
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "events_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (id, app_name, user_id, session_id)"
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "events_session_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL session_id"
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "events_timestamp_not_null",
+      "type": "n",
+      "definition": "NOT NULL \"timestamp\""
+    },
+    {
+      "schema": "public",
+      "table": "events",
+      "name": "events_user_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL user_id"
+    },
+    {
+      "schema": "public",
+      "table": "sessions",
+      "name": "sessions_app_name_not_null",
+      "type": "n",
+      "definition": "NOT NULL app_name"
+    },
+    {
+      "schema": "public",
+      "table": "sessions",
+      "name": "sessions_create_time_not_null",
+      "type": "n",
+      "definition": "NOT NULL create_time"
+    },
+    {
+      "schema": "public",
+      "table": "sessions",
+      "name": "sessions_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "schema": "public",
+      "table": "sessions",
+      "name": "sessions_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (app_name, user_id, id)"
+    },
+    {
+      "schema": "public",
+      "table": "sessions",
+      "name": "sessions_state_not_null",
+      "type": "n",
+      "definition": "NOT NULL state"
+    },
+    {
+      "schema": "public",
+      "table": "sessions",
+      "name": "sessions_update_time_not_null",
+      "type": "n",
+      "definition": "NOT NULL update_time"
+    },
+    {
+      "schema": "public",
+      "table": "sessions",
+      "name": "sessions_user_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL user_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "slopanoc_case_context_items_case_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (case_id) REFERENCES slopanoc_cases(case_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "slopanoc_case_context_items_case_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL case_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "slopanoc_case_context_items_content_not_null",
+      "type": "n",
+      "definition": "NOT NULL content"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "slopanoc_case_context_items_created_at_not_null",
+      "type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "slopanoc_case_context_items_item_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL item_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "slopanoc_case_context_items_kind_not_null",
+      "type": "n",
+      "definition": "NOT NULL kind"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "slopanoc_case_context_items_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (item_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "slopanoc_case_context_items_source_type_not_null",
+      "type": "n",
+      "definition": "NOT NULL source_type"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_context_items",
+      "name": "slopanoc_case_context_items_supporting_item_ids_not_null",
+      "type": "n",
+      "definition": "NOT NULL supporting_item_ids"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_memberships",
+      "name": "slopanoc_case_memberships_case_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (case_id) REFERENCES slopanoc_cases(case_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_memberships",
+      "name": "slopanoc_case_memberships_case_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL case_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_memberships",
+      "name": "slopanoc_case_memberships_created_at_not_null",
+      "type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_memberships",
+      "name": "slopanoc_case_memberships_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (case_id, user_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_memberships",
+      "name": "slopanoc_case_memberships_role_not_null",
+      "type": "n",
+      "definition": "NOT NULL role"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_memberships",
+      "name": "slopanoc_case_memberships_user_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL user_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_session_links",
+      "name": "slopanoc_case_session_links_case_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (case_id) REFERENCES slopanoc_cases(case_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_session_links",
+      "name": "slopanoc_case_session_links_case_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL case_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_session_links",
+      "name": "slopanoc_case_session_links_linked_at_not_null",
+      "type": "n",
+      "definition": "NOT NULL linked_at"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_session_links",
+      "name": "slopanoc_case_session_links_linked_by_user_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL linked_by_user_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_session_links",
+      "name": "slopanoc_case_session_links_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (session_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_session_links",
+      "name": "slopanoc_case_session_links_session_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL session_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_case_session_links",
+      "name": "slopanoc_case_session_links_session_user_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL session_user_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "slopanoc_cases_case_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL case_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "slopanoc_cases_created_at_not_null",
+      "type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "slopanoc_cases_created_by_user_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL created_by_user_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "slopanoc_cases_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (case_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "slopanoc_cases_problem_statement_not_null",
+      "type": "n",
+      "definition": "NOT NULL problem_statement"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "slopanoc_cases_status_not_null",
+      "type": "n",
+      "definition": "NOT NULL status"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "slopanoc_cases_title_not_null",
+      "type": "n",
+      "definition": "NOT NULL title"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_cases",
+      "name": "slopanoc_cases_updated_at_not_null",
+      "type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "ck_slopanoc_chat_attachments_filename_nonempty",
+      "type": "c",
+      "definition": "CHECK ((length(original_filename) > 0))"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "ck_slopanoc_chat_attachments_mime_type_nonempty",
+      "type": "c",
+      "definition": "CHECK ((length(mime_type) > 0))"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "ck_slopanoc_chat_attachments_sha256_nonempty",
+      "type": "c",
+      "definition": "CHECK ((length(sha256) > 0))"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "ck_slopanoc_chat_attachments_size_bytes_positive",
+      "type": "c",
+      "definition": "CHECK ((size_bytes > 0))"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "ck_slopanoc_chat_attachments_storage_object_name_nonempty",
+      "type": "c",
+      "definition": "CHECK ((length(storage_object_name) > 0))"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "slopanoc_chat_attachments_attachment_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL attachment_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "slopanoc_chat_attachments_created_at_not_null",
+      "type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "slopanoc_chat_attachments_mime_type_not_null",
+      "type": "n",
+      "definition": "NOT NULL mime_type"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "slopanoc_chat_attachments_original_filename_not_null",
+      "type": "n",
+      "definition": "NOT NULL original_filename"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "slopanoc_chat_attachments_owner_user_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL owner_user_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "slopanoc_chat_attachments_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (attachment_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "slopanoc_chat_attachments_session_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL session_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "slopanoc_chat_attachments_sha256_not_null",
+      "type": "n",
+      "definition": "NOT NULL sha256"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "slopanoc_chat_attachments_size_bytes_not_null",
+      "type": "n",
+      "definition": "NOT NULL size_bytes"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "slopanoc_chat_attachments_status_not_null",
+      "type": "n",
+      "definition": "NOT NULL status"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_chat_attachments",
+      "name": "slopanoc_chat_attachments_storage_object_name_not_null",
+      "type": "n",
+      "definition": "NOT NULL storage_object_name"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_content_fingerprint_not_null",
+      "type": "n",
+      "definition": "NOT NULL content_fingerprint"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_evidence_references_json_not_null",
+      "type": "n",
+      "definition": "NOT NULL evidence_references_json"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_experience_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL experience_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_experience_schema_version_not_null",
+      "type": "n",
+      "definition": "NOT NULL experience_schema_version"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_experience_type_not_null",
+      "type": "n",
+      "definition": "NOT NULL experience_type"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_lifecycle_not_null",
+      "type": "n",
+      "definition": "NOT NULL lifecycle"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_metadata_json_not_null",
+      "type": "n",
+      "definition": "NOT NULL metadata_json"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_observed_facts_json_not_null",
+      "type": "n",
+      "definition": "NOT NULL observed_facts_json"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_outcome_summary_not_null",
+      "type": "n",
+      "definition": "NOT NULL outcome_summary"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_owner_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL owner_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (experience_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_recorded_at_not_null",
+      "type": "n",
+      "definition": "NOT NULL recorded_at"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_source_event_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL source_event_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_source_namespace_not_null",
+      "type": "n",
+      "definition": "NOT NULL source_namespace"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_experience_records",
+      "name": "slopanoc_experience_records_source_origin_not_null",
+      "type": "n",
+      "definition": "NOT NULL source_origin"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "slopanoc_knowledge_evidence_index_content_hash_not_null",
+      "type": "n",
+      "definition": "NOT NULL content_hash"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "slopanoc_knowledge_evidence_index_created_at_not_null",
+      "type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "slopanoc_knowledge_evidence_index_evidence_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL evidence_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "slopanoc_knowledge_evidence_index_indexable_text_not_null",
+      "type": "n",
+      "definition": "NOT NULL indexable_text"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "slopanoc_knowledge_evidence_index_is_derived_not_null",
+      "type": "n",
+      "definition": "NOT NULL is_derived"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "slopanoc_knowledge_evidence_index_knowledge_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL knowledge_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "slopanoc_knowledge_evidence_index_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (evidence_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "slopanoc_knowledge_evidence_index_section_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL section_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "slopanoc_knowledge_evidence_index_updated_at_not_null",
+      "type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_evidence_index",
+      "name": "slopanoc_knowledge_evidence_index_version_label_not_null",
+      "type": "n",
+      "definition": "NOT NULL version_label"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_objects",
+      "name": "slopanoc_knowledge_objects_knowledge_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL knowledge_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_objects",
+      "name": "slopanoc_knowledge_objects_payload_not_null",
+      "type": "n",
+      "definition": "NOT NULL payload"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_objects",
+      "name": "slopanoc_knowledge_objects_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (knowledge_id, version_label)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_knowledge_objects",
+      "name": "slopanoc_knowledge_objects_version_label_not_null",
+      "type": "n",
+      "definition": "NOT NULL version_label"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "slopanoc_telco_context_assertions_assertion_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL assertion_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "slopanoc_telco_context_assertions_created_at_not_null",
+      "type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "slopanoc_telco_context_assertions_dimension_not_null",
+      "type": "n",
+      "definition": "NOT NULL dimension"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "slopanoc_telco_context_assertions_kind_not_null",
+      "type": "n",
+      "definition": "NOT NULL kind"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "slopanoc_telco_context_assertions_origin_not_null",
+      "type": "n",
+      "definition": "NOT NULL origin"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "slopanoc_telco_context_assertions_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (assertion_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "slopanoc_telco_context_assertions_profile_id_fkey",
+      "type": "f",
+      "definition": "FOREIGN KEY (profile_id) REFERENCES slopanoc_telco_context_profiles(profile_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_assertions",
+      "name": "slopanoc_telco_context_assertions_profile_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL profile_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_profiles",
+      "name": "slopanoc_telco_context_profiles_created_at_not_null",
+      "type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_profiles",
+      "name": "slopanoc_telco_context_profiles_owner_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL owner_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_profiles",
+      "name": "slopanoc_telco_context_profiles_owner_kind_not_null",
+      "type": "n",
+      "definition": "NOT NULL owner_kind"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_profiles",
+      "name": "slopanoc_telco_context_profiles_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (profile_id)"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_profiles",
+      "name": "slopanoc_telco_context_profiles_profile_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL profile_id"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_profiles",
+      "name": "slopanoc_telco_context_profiles_updated_at_not_null",
+      "type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "schema": "public",
+      "table": "slopanoc_telco_context_profiles",
+      "name": "uq_telco_context_profile_owner",
+      "type": "u",
+      "definition": "UNIQUE (owner_kind, owner_id)"
+    },
+    {
+      "schema": "public",
+      "table": "user_states",
+      "name": "user_states_app_name_not_null",
+      "type": "n",
+      "definition": "NOT NULL app_name"
+    },
+    {
+      "schema": "public",
+      "table": "user_states",
+      "name": "user_states_pkey",
+      "type": "p",
+      "definition": "PRIMARY KEY (app_name, user_id)"
+    },
+    {
+      "schema": "public",
+      "table": "user_states",
+      "name": "user_states_state_not_null",
+      "type": "n",
+      "definition": "NOT NULL state"
+    },
+    {
+      "schema": "public",
+      "table": "user_states",
+      "name": "user_states_update_time_not_null",
+      "type": "n",
+      "definition": "NOT NULL update_time"
+    },
+    {
+      "schema": "public",
+      "table": "user_states",
+      "name": "user_states_user_id_not_null",
+      "type": "n",
+      "definition": "NOT NULL user_id"
+    }
+  ],
+  "views": [],
+  "triggers": [],
+  "known_local_baseline_comparison": {
+    "known_expected_columns": {
+      "slopanoc_cases": {
+        "columns": {
+          "case_id": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": true
+          },
+          "title": {
+            "type": "TEXT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "problem_statement": {
+            "type": "TEXT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "external_reference": {
+            "type": "TEXT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "status": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": false
+          },
+          "created_by_user_id": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": false
+          },
+          "created_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "updated_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "case_id"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "slopanoc_case_context_items": {
+        "columns": {
+          "item_id": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": true
+          },
+          "case_id": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": false
+          },
+          "kind": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": false
+          },
+          "content": {
+            "type": "TEXT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "source_type": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": false
+          },
+          "source_ref": {
+            "type": "TEXT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "source_timestamp": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "source_author": {
+            "type": "VARCHAR",
+            "nullable": true,
+            "primary_key": false
+          },
+          "confidence": {
+            "type": "FLOAT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "created_by_user_id": {
+            "type": "VARCHAR",
+            "nullable": true,
+            "primary_key": false
+          },
+          "created_by_agent": {
+            "type": "VARCHAR",
+            "nullable": true,
+            "primary_key": false
+          },
+          "created_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "supporting_item_ids": {
+            "type": "JSON",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "case_id"
+            ],
+            "references": [
+              "slopanoc_cases.case_id"
+            ]
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "item_id"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "slopanoc_case_memberships": {
+        "columns": {
+          "case_id": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": true
+          },
+          "user_id": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": true
+          },
+          "role": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": false
+          },
+          "created_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "case_id",
+              "user_id"
+            ]
+          },
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "case_id"
+            ],
+            "references": [
+              "slopanoc_cases.case_id"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "slopanoc_case_session_links": {
+        "columns": {
+          "session_id": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": true
+          },
+          "case_id": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": false
+          },
+          "session_user_id": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": false
+          },
+          "linked_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "linked_by_user_id": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "ForeignKeyConstraint",
+            "name": null,
+            "columns": [
+              "case_id"
+            ],
+            "references": [
+              "slopanoc_cases.case_id"
+            ]
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "session_id"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "slopanoc_knowledge_objects": {
+        "columns": {
+          "knowledge_id": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": true
+          },
+          "version_label": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": true
+          },
+          "payload": {
+            "type": "TEXT",
+            "nullable": false,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "knowledge_id",
+              "version_label"
+            ]
+          }
+        ],
+        "indexes": []
+      },
+      "slopanoc_chat_attachments": {
+        "columns": {
+          "attachment_id": {
+            "type": "VARCHAR",
+            "nullable": false,
+            "primary_key": true
+          },
+          "owner_user_id": {
+            "type": "TEXT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "session_id": {
+            "type": "TEXT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "message_id": {
+            "type": "TEXT",
+            "nullable": true,
+            "primary_key": false
+          },
+          "original_filename": {
+            "type": "TEXT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "mime_type": {
+            "type": "TEXT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "size_bytes": {
+            "type": "INTEGER",
+            "nullable": false,
+            "primary_key": false
+          },
+          "sha256": {
+            "type": "TEXT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "storage_object_name": {
+            "type": "TEXT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "status": {
+            "type": "TEXT",
+            "nullable": false,
+            "primary_key": false
+          },
+          "created_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": false,
+            "primary_key": false
+          },
+          "linked_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          },
+          "deleted_at": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "nullable": true,
+            "primary_key": false
+          }
+        },
+        "constraints": [
+          {
+            "type": "CheckConstraint",
+            "name": "ck_slopanoc_chat_attachments_filename_nonempty",
+            "columns": [],
+            "expression": "length(original_filename) > 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": "ck_slopanoc_chat_attachments_mime_type_nonempty",
+            "columns": [],
+            "expression": "length(mime_type) > 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": "ck_slopanoc_chat_attachments_storage_object_name_nonempty",
+            "columns": [],
+            "expression": "length(storage_object_name) > 0"
+          },
+          {
+            "type": "CheckConstraint",
+            "name": "ck_slopanoc_chat_attachments_sha256_nonempty",
+            "columns": [],
+            "expression": "length(sha256) > 0"
+          },
+          {
+            "type": "PrimaryKeyConstraint",
+            "name": null,
+            "columns": [
+              "attachment_id"
+            ]
+          },
+          {
+            "type": "CheckConstraint",
+            "name": "ck_slopanoc_chat_attachments_size_bytes_positive",
+            "columns": [],
+            "expression": "size_bytes > 0"
+          }
+        ],
+        "indexes": []
+      }
+    },
+    "column_differences": []
+  }
+}
